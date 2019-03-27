@@ -1,4 +1,4 @@
-# Stateful Serverless
+# Stateful Serverless With Akka and Knative
 
 ## Scalable Compute needs Scalable State
 Bringing stateful microservices, and the power of reactive technologies to the Cloud Native ecosystem breaks down the final impediment standing in the way of a Serverless platform for general-purpose application development, true elastic scalability, and global deployment in the Kubernetes ecosystem. The marriage of Knative and Akka Cluster on Kubernetes allows applications to not only scale efficiently, but to manage distributed state reliably at scale while maintaining its global or local level of data consistency, opening up for a whole range of new addressable use-cases.
