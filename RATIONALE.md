@@ -1,19 +1,14 @@
 # Towards Stateful Serverless
 
-Jonas Bonér & Karl Wehden — March, 2019
-
 _"We predict that serverless computing will grow to dominate the future of cloud computing."_
 
 —Jonas et al, ['Cloud computing simplified: a Berkeley view on serverless computing'](https://arxiv.org/abs/1902.03383)
 
-
 # Elevator Pitch
-
 
 ## Scalable Compute needs Scalable State
 
 Bringing _stateful_ microservices, and the power of _reactive_ technologies to the Cloud Native ecosystem breaks down the final impediment standing in the way of a _Serverless platform for general-purpose application development_, true elastic scalability, and global deployment in the Kubernetes ecosystem. The marriage of Knative and Akka Cluster on Kubernetes allows applications to not only scale efficiently, but to manage distributed state reliably at scale while maintaining its global or local level of data consistency, opening up for a whole range of new addressable use-cases.
-
 
 ## TL;DR
 
