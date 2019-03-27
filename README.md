@@ -11,3 +11,7 @@ Bringing stateful microservices, and the power of reactive technologies to the C
   * One that lets us implement use cases such as: shopping carts, user sessions, transactions, ML models training, low-latency prediction serving, job scheduling, and more.  
   * What is missing is support for long-lived virtual stateful services, a way to manage distributed state in a scalable and available fashion, and options for choosing the right consistency model for the job. 
 * This next generation Serverless can be built on Knative/Kubernetes, gRPC, and Akka (Cluster, Persistence, etc.).
+
+See the [rationale](RATIONALE.md) document for a more context.
+
+Read the current [documentation](documentation/README.md).
