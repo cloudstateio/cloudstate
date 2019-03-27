@@ -14,4 +14,4 @@ Bringing stateful microservices, and the power of reactive technologies to the C
 
 See the [rationale](RATIONALE.md) document for a more context.
 
-Read the current [documentation](documentation/README.md).
+Read the current [documentation](documentation/README.md) and [spec](SPEC.md).
