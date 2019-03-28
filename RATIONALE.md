@@ -40,7 +40,7 @@ The current incarnation of Serverless, the so-called Function-as-as Service (Faa
 We, however, believe that Serverless is more than FaaS (which is only the first step on the journey). It's not about a specific implementation but all about the Developer Experience—a new way of building and running applications, and it's about time that we expand on its scope and supported use-cases. 
 
 
-## The limitations of FaaS** **
+## The limitations of FaaS
 
 One limitation of FaaS is that its functions are ephemeral, stateless, and short-lived[^1]. This makes it problematic to build general-purpose data-centric cloud-native applications since it is simply too costly — in terms of performance, latency, and throughput — to lose the computational context (locality of reference) and being forced to load and store the state from the backend storage over and over again. 
 
@@ -56,9 +56,6 @@ Functions is a great tool that has its place in the cloud computing toolkit, but
 If Serverless is conceptually about how to remove humans from the equation and solve developers' hardest problems with reasoning about systems in production, then they need declarative APIs and high-level abstractions with rich and easily understood semantics (beyond low-level primitives like functions) for working with never-ending streams of data, manage complex distributed data workflows, and managing distributed state in a reliable, resilient, scalable, and performant way. 
 
 What we need support for is: 
-
-
-
 *   _Stateful_ long-lived virtual _addressable_ components.[^3] 
     *   As discussed by [Hellerstein et al](https://blog.acolyer.org/2019/01/14/serverless-computing-one-step-forward-two-steps-back/): _"If the platform pays a cost to create an affinity (e.g. moving data), it should recoup that cost across multiple requests. This motivates the ability for programmers to establish software agents— call them functions, actors, services, etc.— that persist over time in the cloud, with known identities."_
 *   A wider range of options for _coordination_ and _communication_ patterns (beyond event-based pub-sub over a broker), including _fine-grained sharing of state_ using common patterns like point-to-point, broadcast, aggregation, merging, shuffling, etc.
@@ -82,7 +79,7 @@ Define your data model, choose its consistency mode and resolution method, and a
 
 ## Developer Experience
 
-TODO
+TODO @viktorklang
 
 
 ## High-level design
