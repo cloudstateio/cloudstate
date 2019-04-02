@@ -7,7 +7,7 @@ import akka.http.scaladsl.{ Http, HttpConnectionContext, UseHttp2 }
 import akka.http.scaladsl.Http.ServerBinding
 import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
-//import com.lightbend.statefulserverless.grpc.StatefulServerlessServiceHandler
+import com.lightbend.statefulserverless.grpc.EntityHandler
 
 import scala.concurrent.{ Await, Future }
 import scala.concurrent.duration._
@@ -29,7 +29,7 @@ object StatefulServerlessServer {
 
     Future.unit.flatMap({ _ =>
       val httpServerFuture = Http().bindAndHandleAsync(
-        StatefulServerlessServiceHandler(new StatefulServerlessServiceImpl(system)), // TODO Implement
+        EntityHandler(new EntityImpl(system)),
         interface = httpInterface,
         port = httpPort,
         connectionContext = HttpConnectionContext(http2 = UseHttp2.Always))

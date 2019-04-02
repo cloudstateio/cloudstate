@@ -18,7 +18,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
   "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
   "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion,
-  "com.google.protobuf" % "protobuf-java" % "3.5.1" % "protobuf"
+  "com.google.protobuf" % "protobuf-java" % "3.5.1" % "protobuf" // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
 )
 
 javaAgents += "org.mortbay.jetty.alpn" % "jetty-alpn-agent" % "2.0.9" % "runtime;test"
