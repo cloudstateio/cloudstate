@@ -82,8 +82,44 @@ Define your data model, choose its consistency mode and resolution method, and a
 
 ## Developer Experience
 
-TODO
+The goal of the DX is to let the user be as comfortable as possible.
+This means that they should, to the largest extent possible iwthout compromising integrity or functionality, be able to use tools they are previously familiar, and therefor productive, with.
 
+For a smooth start and ramp-up, discoverability and structure needs to be immediately clear.
+
+* Developer Workflow
+    - Start from a template in a selected language
+        + Cuts down on boilerplate
+        + Increases discoverability
+        + Allows for showing (commented out) examples
+        + Allows for generating test harness & sample tests?
+    - Edit
+        + User can use their favorite & familiar editor/IDE
+        + User can add any dependencies they want / need
+        + User can use any build tool they need?
+    - Save
+        + Do we require to add to source-control for automatic test + build?
+    - Reload
+        + Should we have a browser-based client to interact?
+            * Would be possible to have a Play-like experience
+    - Deploy
+        + Deployment needs to be signed off by the user so they don't risk deploying new code accidentally as a part of their dev loop.
+* Configuration
+    - Is configuration tied to the code, or is it overlaid?
+    - Who configures what and when?
+* Integration
+    - How to discover & call other stateful serverless functions?
+        + Schema management & data formats?
+    - How to integrate with external APIs?
+        + Just call them with your favorite API?
+    - How to integrate with Lightbend Platform functionality?
+* Observability & Debugging
+    - How to obtain metadata about a deployed service?
+    - How to obtain metrics about a deployed service?
+* Production Upgrades
+    - How are new versions of a Service rolled out?
+* Data Management
+    - Backups, deletion (think GDPR) or pruning (think GC), format upgrades/rewrites?
 
 ## High-level design
 
