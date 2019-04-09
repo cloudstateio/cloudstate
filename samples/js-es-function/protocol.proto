@@ -6,6 +6,7 @@ syntax = "proto3";
 // Any is used so that domain events defined according to the functions business domain can be embedded inside
 // the protocol.
 import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
 
 // The init message. This will always be the first message sent to the entity when
 // it is loaded.
@@ -44,8 +45,11 @@ message Command {
     // A command id.
     int64 id = 1;
 
+    // Command name
+    string name = 2;
+
     // The command payload.
-    google.protobuf.Any payload = 2;
+    google.protobuf.Any payload = 3;
 }
 
 // A reply to a command.
@@ -97,4 +101,8 @@ service Entity {
     // persisted the entity should handle itself, applying them to its own state, as if they had
     // arrived as events when the event stream was being replayed on load.
     rpc handle(stream EntityStreamIn) returns (stream EntityStreamOut) {}
+
+    // Readiness check. When the entity service is ready to start receiving commands, it should
+    // return true from this call, otherwise it should return false.
+    rpc ready(google.protobuf.Empty) returns (bool) {}
 }
