@@ -2,23 +2,28 @@
 syntax = "proto3";
 
 import "google/protobuf/empty.proto";
+import "google/protobuf/descriptor.proto";
 
 package com.example.shoppingcart;
 
+extend google.protobuf.FieldOptions {
+    bool entity_key = 50002;
+}
+
 message AddLineItem {
-    string user_id = 1;
+    string user_id = 1 [entity_key = true];
     string product_id = 2;
     string name = 3;
     int32 quantity = 4;
 }
 
 message RemoveLineItem {
-    string user_id = 1;
+    string user_id = 1 [entity_key = true];
     string product_id = 2;
 }
 
 message GetCart {
-    string user_id = 1;
+    string user_id = 1 [entity_key = true];
 }
 
 message LineItem {

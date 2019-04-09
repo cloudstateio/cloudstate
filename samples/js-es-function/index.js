@@ -74,6 +74,7 @@ function addItem(addItem, cart, ctx) {
   });
   // Emit the event.
   ctx.emit(itemAdded);
+  return {};
 }
 
 /**
@@ -95,6 +96,7 @@ function removeItem(removeItem, cart, ctx) {
       productId: removeItem.productId
     });
     ctx.emit(itemRemoved);
+    return {};
   }
 }
 
@@ -126,6 +128,9 @@ function itemAdded(added, cart) {
   return cart;
 }
 
+/**
+ * Handler for item removed events.
+ */
 function itemRemoved(removed, cart) {
   // Filter the removed item from the items by product id.
   cart.items = cart.items.filter(item => {

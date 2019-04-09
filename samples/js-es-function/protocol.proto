@@ -71,6 +71,17 @@ message Reply {
     google.protobuf.Any snapshot = 4;
 }
 
+// A failure reply. If this is returned, it will be translated into a gRPC unknown
+// error with the corresponding description if supplied.
+message Failure {
+
+    // The id of the command being replied to. Must match the input command.
+    int64 command_id = 1;
+
+    // A description of the error.
+    string description = 2;
+}
+
 // Input message type for the gRPC stream in.
 message EntityStreamIn {
     oneof message {
@@ -84,7 +95,13 @@ message EntityStreamIn {
 message EntityStreamOut {
     oneof message {
         Reply reply = 1;
+        Failure failure = 2;
     }
+}
+
+message EntitySpec {
+    google.protobuf.FileDescriptorProto proto = 1;
+    string service_name = 2;
 }
 
 // The Entity service
@@ -104,5 +121,5 @@ service Entity {
 
     // Readiness check. When the entity service is ready to start receiving commands, it should
     // return true from this call, otherwise it should return false.
-    rpc ready(google.protobuf.Empty) returns (bool) {}
+    rpc ready(google.protobuf.Empty) returns (EntitySpec) {}
 }
