@@ -16,7 +16,7 @@ import akka.util.{ ByteString, Timeout }
 import akka.pattern.{ ask, pipe }
 import akka.stream.Materializer
 
-import com.google.protobuf.DynamicMessage
+import com.google.protobuf.{ DynamicMessage, DescriptorProtos }
 import com.google.protobuf.Descriptors.{ Descriptor, FileDescriptor, ServiceDescriptor }
 import com.lightbend.statefulserverless.grpc._
 
@@ -32,7 +32,10 @@ object Serve {
   }
 
   def createRoute(stateManager: ActorRef)(spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] =
-    compileInterface(stateManager)(FileDescriptor.buildFrom(??? /*spec.getProto*/, Array()).findServiceByName(spec.serviceName))
+    compileInterface(stateManager)(
+      FileDescriptor.buildFrom(DescriptorProtos.FileDescriptorProto.parseFrom(spec.proto.get.toByteArray), Array()). // FIXME avoid this weird conversion
+      findServiceByName(spec.serviceName)
+    )
 
   def compileInterface(stateManager: ActorRef)(serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     import GrpcMarshalling.{ marshalStream, unmarshalStream }
