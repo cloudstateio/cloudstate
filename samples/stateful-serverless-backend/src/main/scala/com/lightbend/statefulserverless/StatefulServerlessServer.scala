@@ -7,7 +7,10 @@ import akka.http.scaladsl.{ Http, HttpConnectionContext, UseHttp2 }
 import akka.http.scaladsl.Http.ServerBinding
 import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
-import com.lightbend.statefulserverless.grpc.EntityHandler
+
+import com.lightbend.statefulserverless.grpc._
+import com.google.protobuf.empty.Empty
+import akka.grpc.GrpcClientSettings
 
 import scala.concurrent.{ Await, Future }
 import scala.concurrent.duration._
@@ -27,9 +30,14 @@ object StatefulServerlessServer {
     val httpInterface = "127.0.0.1" // TODO Make configurable?
     val httpPort = config.getInt("http.port")
 
-    Future.unit.flatMap({ _ =>
+    Future.unit.flatMap({_ =>
+      val clientSettings = GrpcClientSettings.fromConfig(Entity.name)
+      val client = EntityClient(clientSettings)
+      // FIXME introduce some kind of retry policy here
+      client.ready(Empty.of()).map(Serve.createRoute)
+    }).flatMap({ handler =>
       val httpServerFuture = Http().bindAndHandleAsync(
-        EntityHandler(new EntityImpl(system)),
+        handler,
         interface = httpInterface,
         port = httpPort,
         connectionContext = HttpConnectionContext(http2 = UseHttp2.Always))
