@@ -10,7 +10,7 @@ import io.grpc.Status
 import akka.http.scaladsl.model.{ HttpRequest, HttpResponse, StatusCodes }
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.Uri.Path.Segment
-import akka.actor.ActorSystem
+import akka.actor.{ ActorSystem, ActorRef }
 import akka.stream.Materializer
 
 import com.google.protobuf.descriptor._
@@ -18,10 +18,10 @@ import com.lightbend.statefulserverless.grpc._
 
 object Serve {
 
-  def createRoute(spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] =
-    spec.proto.flatMap(_.service.find(_.getName == spec.serviceName).map(Serve.compileInterface)).get
+  def createRoute(stateManager: ActorRef)(spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] =
+    spec.proto.flatMap(_.service.find(_.getName == spec.serviceName).map(Serve.compileInterface(stateManager))).get
 
-  def compileInterface(serviceDesc: ServiceDescriptorProto)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+  def compileInterface(stateManager: ActorRef)(serviceDesc: ServiceDescriptorProto)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     def relay(req: HttpRequest, method: String): Future[HttpResponse] = {
       // 3. on request
       //    * verify inbound request against the service descriptor

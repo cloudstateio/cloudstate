@@ -1,16 +1,19 @@
 package com.lightbend.statefulserverless
 
-import akka.actor.ActorSystem
+import akka.actor.{ ActorSystem, Props }
 import akka.stream.ActorMaterializer
 
 import akka.http.scaladsl.{ Http, HttpConnectionContext, UseHttp2 }
 import akka.http.scaladsl.Http.ServerBinding
+
+import akka.cluster.sharding._
+
 import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
+import akka.grpc.GrpcClientSettings
 
 import com.lightbend.statefulserverless.grpc._
 import com.google.protobuf.empty.Empty
-import akka.grpc.GrpcClientSettings
 
 import scala.concurrent.{ Await, Future }
 import scala.concurrent.duration._
@@ -30,22 +33,29 @@ object StatefulServerlessServer {
     val httpInterface = "127.0.0.1" // TODO Make configurable?
     val httpPort = config.getInt("http.port")
 
-    Future.unit.flatMap({_ =>
-      val clientSettings = GrpcClientSettings.fromConfig(Entity.name)
-      val client = EntityClient(clientSettings)
+    val clientSettings = GrpcClientSettings.fromConfig(Entity.name)
+    val client = EntityClient(clientSettings)
+
+    Future.unit.map({ _ =>
+      AkkaManagement(system).start()
+
+      ClusterBootstrap(system).start()
+
+      ClusterSharding(system).start(
+        typeName = "StateManager",
+        entityProps = Props[StateManager], // FIXME pass in client or settings
+        settings = ClusterShardingSettings(system),
+        extractEntityId = ???,
+        extractShardId = ???)
+    }).flatMap({ stateManager =>
       // FIXME introduce some kind of retry policy here
-      client.ready(Empty.of()).map(Serve.createRoute)
-    }).flatMap({ handler =>
+      client.ready(Empty.of()).map(Serve.createRoute(stateManager)) // FIXME pass in the stateManager
+    }).flatMap({ route =>
       val httpServerFuture = Http().bindAndHandleAsync(
-        handler,
+        route,
         interface = httpInterface,
         port = httpPort,
         connectionContext = HttpConnectionContext(http2 = UseHttp2.Always))
-
-      if (!config.getBoolean("dev")) { // TODO move away from configuring this explicitly?
-        AkkaManagement(system).start()
-        ClusterBootstrap(system).start()
-      }
 
       httpServerFuture
     }).transform(Success(_)).foreach {
@@ -53,7 +63,7 @@ object StatefulServerlessServer {
         println(s"StatefulServerless backend online at $localAddress")
       case Failure(t) => 
         t.printStackTrace()
-        scala.sys.exit(1)
+        scala.sys.exit(1) // FIXME figure out what the cleanest exist looks like
     }
   }
 }
