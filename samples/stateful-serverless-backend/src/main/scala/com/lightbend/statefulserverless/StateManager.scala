@@ -1,7 +1,7 @@
 package com.lightbend.statefulserverless
 
 import akka.persistence.PersistentActor
-import com.lightbend.statefulserverless.grpc.EntityClient
+import com.lightbend.statefulserverless.grpc.{ Command, EntityClient }
 
 //FIXME IMPLEMENT
 final class StateManager(client: EntityClient) extends PersistentActor {

@@ -1,59 +1,67 @@
 package com.lightbend.statefulserverless
 
+import scala.collection.JavaConverters._
 import scala.concurrent.{ ExecutionContext, Future }
+import scala.concurrent.duration._
 
 import akka.grpc.scaladsl
 import akka.grpc.scaladsl.{ GrpcExceptionHandler, GrpcMarshalling, ScalapbProtobufSerializer, Metadata, MetadataImpl }
-import akka.grpc.{Codecs, GrpcServiceException }
-import io.grpc.Status
+import akka.grpc.{ Codecs, GrpcServiceException, ProtobufSerializer }
 
 import akka.http.scaladsl.model.{ HttpRequest, HttpResponse, StatusCodes }
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.Uri.Path.Segment
 import akka.actor.{ ActorSystem, ActorRef }
+import akka.util.{ ByteString, Timeout }
+import akka.pattern.{ ask, pipe }
 import akka.stream.Materializer
 
-import com.google.protobuf.descriptor._
+import com.google.protobuf.DynamicMessage
+import com.google.protobuf.Descriptors.{ Descriptor, FileDescriptor, ServiceDescriptor }
 import com.lightbend.statefulserverless.grpc._
 
 object Serve {
+  private final object ByteArraySerializer extends ProtobufSerializer[Array[Byte]] {
+    override final def serialize(ab: Array[Byte]): ByteString = ByteString(ab)
+    override final def deserialize(bytes: ByteString): Array[Byte] = bytes.toArray
+  }
+
+  private final class DynamicSerializer(private[this] final val desc: Descriptor) extends ProtobufSerializer[DynamicMessage] {
+    override final def serialize(dm: DynamicMessage): ByteString = ByteString(dm.toByteArray)
+    override final def deserialize(bytes: ByteString): DynamicMessage = DynamicMessage.parseFrom(desc, bytes.iterator.asInputStream)
+  }
 
   def createRoute(stateManager: ActorRef)(spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] =
-    spec.proto.flatMap(_.service.find(_.getName == spec.serviceName).map(Serve.compileInterface(stateManager))).get
+    compileInterface(stateManager)(FileDescriptor.buildFrom(??? /*spec.getProto*/, Array()).findServiceByName(spec.serviceName))
 
-  def compileInterface(stateManager: ActorRef)(serviceDesc: ServiceDescriptorProto)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    def relay(req: HttpRequest, method: String): Future[HttpResponse] = {
-      // 3. on request
-      //    * verify inbound request against the service descriptor
-      //    * extract key and package the payload
-      //    * forward (ask) the payload to Cluster Sharding
-      // 4. establish call to handle-method of user container using Sink.actorRef
-      //    * Actor needs to establish stream to user function (HOW ARE THESE SHARED?)
-      // 5. forward snapshot (Init) + Events at postStart to the ActorRef
-      // 6. forward Command to the ActorRef
-      // 7. assume that responses are 1-to-1 to Commands, track outstanding responses
-      // 8. as Responses come back, store any events enclosed, optionally store any snapshot enclosed, then respond with the payload
-      /*
-        GrpcMarshalling.unmarshalStream(request)(EntityStreamInSerializer, mat)
-          .map(implementation.handle(_))
-          .map(e => GrpcMarshalling.marshalStream(e, eHandler)(EntityStreamOutSerializer, mat, responseCodec, system))
-      */
-      val responseCodec = Codecs.negotiate(req)
+  def compileInterface(stateManager: ActorRef)(serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+    import GrpcMarshalling.{ marshalStream, unmarshalStream }
+    val serviceName = serviceDesc.getName
+    val implementedEndpoints = serviceDesc.
+                                 getMethods.
+                                 iterator.
+                                 asScala.
+                                 map(d => (d.getName, new DynamicSerializer(d.getInputType))).
+                                 foldLeft(Map[String, DynamicSerializer]()) { _ + _ }
+    
+    implicit val timeout = Timeout(5.seconds) // FIXME load from config
 
-      // How do we make sure that requests *typically* hit the right shard?
-
-
-      ???
+    def relayMessage(endpoint: String)(msg: DynamicMessage): Future[Array[Byte]] = {
+      val id = ???// FIXME extract id from msg
+      val ep = endpoint
+      val pl = ??? // FIXME extract payload from msg
+      (stateManager ? Command.of(id, ep, Some(pl))).mapTo[Array[Byte]]
     }
 
-    {
-      val serviceName = serviceDesc.getName
-      val implementedEndpoints = serviceDesc.method.iterator.map(_.getName).toSet
+    (req: HttpRequest) => req.uri.path match {
+      case Path.Slash(Segment(`serviceName`, Path.Slash(Segment(endpoint, Path.Empty)))) if implementedEndpoints.keySet.contains(endpoint) ⇒
+        val responseCodec = Codecs.negotiate(req)
+        val serializer = implementedEndpoints(endpoint)
 
-      (req: HttpRequest) => req.uri.path match {
-        case Path.Slash(Segment(`serviceName`, Path.Slash(Segment(method, Path.Empty)))) if implementedEndpoints.contains(method) ⇒
-          relay(req, method).recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
-      }
+        unmarshalStream(req)(serializer, mat).
+          map(_.mapAsync(1)(relayMessage(endpoint))).
+          map(e => marshalStream(e)(ByteArraySerializer, mat, responseCodec, sys)).
+          recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
     }
   }
 }
