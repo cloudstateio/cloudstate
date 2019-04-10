@@ -34,7 +34,7 @@ object StatefulServerlessServer {
     val httpPort = config.getInt("http.port")
 
     val clientSettings = GrpcClientSettings.fromConfig(Entity.name)
-    val client = EntityClient(clientSettings)
+    val client = EntityClient(clientSettings) // FIXME configure some sort of retries?
 
     Future.unit.map({ _ =>
       AkkaManagement(system).start()
@@ -43,21 +43,18 @@ object StatefulServerlessServer {
 
       ClusterSharding(system).start(
         typeName = "StateManager",
-        entityProps = Props[StateManager], // FIXME pass in client or settings
+        entityProps = Props(classOf[StateManager], client), // FIXME investigate dispatcher config
         settings = ClusterShardingSettings(system),
         extractEntityId = ???,
         extractShardId = ???)
     }).flatMap({ stateManager =>
-      // FIXME introduce some kind of retry policy here
-      client.ready(Empty.of()).map(Serve.createRoute(stateManager)) // FIXME pass in the stateManager
+      client.ready(Empty.of()).map(Serve.createRoute(stateManager)) // FIXME introduce some kind of retry policy here
     }).flatMap({ route =>
-      val httpServerFuture = Http().bindAndHandleAsync(
-        route,
+      Http().bindAndHandleAsync(
+        route, // FIXME Add some extra routing?
         interface = httpInterface,
         port = httpPort,
         connectionContext = HttpConnectionContext(http2 = UseHttp2.Always))
-
-      httpServerFuture
     }).transform(Success(_)).foreach {
       case Success(ServerBinding(localAddress)) =>
         println(s"StatefulServerless backend online at $localAddress")
