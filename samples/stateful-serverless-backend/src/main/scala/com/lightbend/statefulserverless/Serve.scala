@@ -65,13 +65,8 @@ object Serve {
     )
 
   def compileInterface(stateManager: ActorRef)(serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext, requestTimeout: Timeout): PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    val serviceName = serviceDesc.getName
-    val implementedEndpoints = serviceDesc.
-                                 getMethods.
-                                 iterator.
-                                 asScala.
-                                 map(d => (d.getName, new LoadedEndpoint(d))).
-                                 toMap
+    val serviceName          = serviceDesc.getName
+    val implementedEndpoints = serviceDesc.getMethods.iterator.asScala.map(d => (d.getName, new LoadedEndpoint(d))).toMap
 
     (req: HttpRequest) => req.uri.path match {
       // FIXME verify that path matching is compatible with different permutations of service declarations

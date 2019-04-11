@@ -48,7 +48,7 @@ object StatefulServerlessServer {
       ClusterBootstrap(system).start()
 
       ClusterSharding(system).start(
-        typeName = "StateManager",
+        typeName = "StateManager", // FIXME derive name from the actual proxied service?
         entityProps = Props(classOf[StateManager], client), // FIXME investigate dispatcher config
         settings = ClusterShardingSettings(system),
         messageExtractor = new Serve.CommandMessageExtractor(shards))
