@@ -21,6 +21,7 @@ import com.google.protobuf.Descriptors.{ Descriptor, MethodDescriptor, FileDescr
 import com.lightbend.statefulserverless.grpc._
 
 import akka.cluster.sharding.ShardRegion
+import akka.cluster.sharding.ShardRegion.HashCodeMessageExtractor
 
 object Serve {
 
@@ -34,13 +35,8 @@ object Serve {
     override final def deserialize(bytes: ByteString): DynamicMessage = DynamicMessage.parseFrom(desc, bytes.iterator.asInputStream)
   }
 
-  final val commandIdExtractor: ShardRegion.ExtractEntityId = {
-    case cmd: Command => (cmd.entityId, cmd) // TODO validate this assumption
-  }
-
-  final val commandShardIdResolver: ShardRegion.ExtractShardId = {
-    case cmd: Command => cmd.entityId // FIXME use something else?
-    // case ShardRegion.StartEntity(id) => FIXME use `rememberEntities = true` when booting the sharding?
+  final class CommandMessageExtractor(shards: Int) extends HashCodeMessageExtractor(shards) {
+    override def entityId(message: Any): String = message.asInstanceOf[Command].entityId
   }
 
   private trait Endpoint {

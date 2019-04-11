@@ -40,6 +40,7 @@ object StatefulServerlessServer {
     val client           = EntityClient(clientSettings) // FIXME configure some sort of retries?
 
     implicit val timeout = Timeout(5.seconds) // FIXME load from `config`
+    val shards           = 100 // FIZME load from `config`
 
     Future.unit.map({ _ =>
       AkkaManagement(system).start()
@@ -50,8 +51,7 @@ object StatefulServerlessServer {
         typeName = "StateManager",
         entityProps = Props(classOf[StateManager], client), // FIXME investigate dispatcher config
         settings = ClusterShardingSettings(system),
-        extractEntityId = Serve.commandIdExtractor,
-        extractShardId = Serve.commandShardIdResolver)
+        messageExtractor = new Serve.CommandMessageExtractor(shards))
     }).flatMap({ stateManager =>
       client.ready(Empty.of()).map(Serve.createRoute(stateManager)) // FIXME introduce some kind of retry policy here
     }).flatMap({ route =>
