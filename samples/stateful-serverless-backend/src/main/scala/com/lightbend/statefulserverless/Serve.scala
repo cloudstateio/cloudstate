@@ -63,9 +63,10 @@ object Serve {
                                  iterator.
                                  asScala.
                                  map(d => (d.getName, new LoadedEndpoint(d))).
-                                 foldLeft(Map[String, Endpoint]()) { _ + _ }
+                                 toMap
 
     (req: HttpRequest) => req.uri.path match {
+      // FIXME verify that path matching is compatible with different permutations of service declarations
       case Path.Slash(Segment(`serviceName`, Path.Slash(Segment(endpointName, Path.Empty)))) if implementedEndpoints.keySet.contains(endpointName) ⇒
         import GrpcMarshalling.{ marshalStream, unmarshalStream }
         val responseCodec = Codecs.negotiate(req)
