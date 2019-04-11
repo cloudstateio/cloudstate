@@ -65,7 +65,11 @@ object StatefulServerlessServer {
         println(s"StatefulServerless backend online at $localAddress")
       case Failure(t) => 
         t.printStackTrace()
-        scala.sys.exit(1) // FIXME figure out what the cleanest exist looks like
+        // FIXME figure out what the cleanest exist looks like
+        materializer.shutdown()
+        system.terminate().andThen({
+          case _ => scala.sys.exit(1)
+        })
     }
   }
 }
