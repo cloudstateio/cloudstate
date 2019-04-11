@@ -20,15 +20,26 @@ import com.google.protobuf.{ DynamicMessage, DescriptorProtos }
 import com.google.protobuf.Descriptors.{ Descriptor, MethodDescriptor, FileDescriptor, ServiceDescriptor }
 import com.lightbend.statefulserverless.grpc._
 
+import akka.cluster.sharding.ShardRegion
+
 object Serve {
-  private final object ByteArraySerializer extends ProtobufSerializer[Array[Byte]] {
+
+  private[this] final object ByteArraySerializer extends ProtobufSerializer[Array[Byte]] {
     override final def serialize(ab: Array[Byte]): ByteString = ByteString(ab)
     override final def deserialize(bytes: ByteString): Array[Byte] = bytes.toArray
   }
 
-  private final class DynamicSerializer(private[this] final val desc: Descriptor) extends ProtobufSerializer[DynamicMessage] {
+  private[this] final class DynamicSerializer(private[this] final val desc: Descriptor) extends ProtobufSerializer[DynamicMessage] {
     override final def serialize(dm: DynamicMessage): ByteString = ByteString(dm.toByteArray)
     override final def deserialize(bytes: ByteString): DynamicMessage = DynamicMessage.parseFrom(desc, bytes.iterator.asInputStream)
+  }
+
+  final val commandIdExtractor: ShardRegion.ExtractEntityId = {
+    case cmd: Command => (cmd.entityId, cmd) // TODO validate this assumption
+  }
+
+  final val commandShardIdResolver: ShardRegion.ExtractShardId = {
+    case cmd: Command => cmd.entityId // FIXME use something else?
   }
 
   private trait Endpoint {
@@ -43,20 +54,20 @@ object Serve {
     override final val marshaller: ProtobufSerializer[Array[Byte]]) extends Endpoint {
     final def this(method: MethodDescriptor) = this(method.getName, new DynamicSerializer(method.getInputType), ByteArraySerializer)
     final override def toCommand(msg: DynamicMessage): Command = {
-      val id = ??? // FIXME extract id from msg
-      val pl = ??? // FIXME extract payload from msg
-      Command.of(id, name, Some(pl))
+      val cid = ??? // FIXME extract id from msg or potentially generate ID?
+      val eid = ??? // FIXME extract entity identifier from msg
+      val pay = ??? // FIXME extract payload from msg
+      Command.of(eid, cid, name, Some(pay))
     }
   }
 
-  def createRoute(stateManager: ActorRef)(spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] =
+  def createRoute(stateManager: ActorRef)(spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext, requestTimeout: Timeout): PartialFunction[HttpRequest, Future[HttpResponse]] =
     compileInterface(stateManager)(
       FileDescriptor.buildFrom(DescriptorProtos.FileDescriptorProto.parseFrom(spec.proto.get.toByteArray), Array()). // FIXME avoid this weird conversion
       findServiceByName(spec.serviceName)
     )
 
-  def compileInterface(stateManager: ActorRef)(serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    implicit val timeout = Timeout(5.seconds) // FIXME load from config
+  def compileInterface(stateManager: ActorRef)(serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext, requestTimeout: Timeout): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val serviceName = serviceDesc.getName
     val implementedEndpoints = serviceDesc.
                                  getMethods.

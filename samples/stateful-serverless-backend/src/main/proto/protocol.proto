@@ -45,14 +45,17 @@ message Event {
 // A command. For each command received, a reply must be sent with a matching command id.
 message Command {
 
+    // The ID of the entity.
+    string entity_id = 1;
+
     // A command id.
-    int64 id = 1;
+    int64 id = 2;
 
     // Command name
-    string name = 2;
+    string name = 3;
 
     // The command payload.
-    google.protobuf.Any payload = 3;
+    google.protobuf.Any payload = 4;
 }
 
 // A reply to a command.

@@ -1,6 +1,7 @@
 package com.lightbend.statefulserverless
 
 import akka.actor.{ ActorSystem, Props }
+import akka.util.Timeout
 import akka.stream.ActorMaterializer
 
 import akka.http.scaladsl.{ Http, HttpConnectionContext, UseHttp2 }
@@ -33,6 +34,8 @@ object StatefulServerlessServer {
     val httpInterface = "127.0.0.1" // TODO Make configurable?
     val httpPort = config.getInt("http.port")
 
+    implicit val timeout = Timeout(5.seconds) // FIXME load from `config`
+
     val clientSettings = GrpcClientSettings.fromConfig(Entity.name)
     val client = EntityClient(clientSettings) // FIXME configure some sort of retries?
 
@@ -45,13 +48,13 @@ object StatefulServerlessServer {
         typeName = "StateManager",
         entityProps = Props(classOf[StateManager], client), // FIXME investigate dispatcher config
         settings = ClusterShardingSettings(system),
-        extractEntityId = ???,
-        extractShardId = ???)
+        extractEntityId = Serve.commandIdExtractor,
+        extractShardId = Serve.commandShardIdResolver)
     }).flatMap({ stateManager =>
       client.ready(Empty.of()).map(Serve.createRoute(stateManager)) // FIXME introduce some kind of retry policy here
     }).flatMap({ route =>
       Http().bindAndHandleAsync(
-        route, // FIXME Add some extra routing?
+        route,
         interface = httpInterface,
         port = httpPort,
         connectionContext = HttpConnectionContext(http2 = UseHttp2.Always))
