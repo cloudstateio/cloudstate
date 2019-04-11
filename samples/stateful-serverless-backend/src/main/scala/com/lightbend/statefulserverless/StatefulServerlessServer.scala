@@ -27,17 +27,19 @@ object StatefulServerlessServer {
     implicit val materializer = ActorMaterializer()
     implicit val executionContext = system.dispatcher
 
+    // FIXME go over and supply appropriate values for Cluster Sharding
+    // https://doc.akka.io/docs/akka/current/cluster-sharding.html?language=scala#configuration
     val config = system.settings.config
 
     scala.sys.addShutdownHook { Await.ready(system.terminate(), 30.seconds) } // TODO make timeout configurable
 
-    val httpInterface = "127.0.0.1" // TODO Make configurable?
-    val httpPort = config.getInt("http.port")
+    val httpInterface    = "127.0.0.1" // FIXME Make configurable
+    val httpPort         = config.getInt("http.port")
+
+    val clientSettings   = GrpcClientSettings.fromConfig(Entity.name)
+    val client           = EntityClient(clientSettings) // FIXME configure some sort of retries?
 
     implicit val timeout = Timeout(5.seconds) // FIXME load from `config`
-
-    val clientSettings = GrpcClientSettings.fromConfig(Entity.name)
-    val client = EntityClient(clientSettings) // FIXME configure some sort of retries?
 
     Future.unit.map({ _ =>
       AkkaManagement(system).start()

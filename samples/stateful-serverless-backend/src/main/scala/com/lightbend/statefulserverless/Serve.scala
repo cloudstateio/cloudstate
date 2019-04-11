@@ -40,6 +40,7 @@ object Serve {
 
   final val commandShardIdResolver: ShardRegion.ExtractShardId = {
     case cmd: Command => cmd.entityId // FIXME use something else?
+    // case ShardRegion.StartEntity(id) => FIXME use `rememberEntities = true` when booting the sharding?
   }
 
   private trait Endpoint {
