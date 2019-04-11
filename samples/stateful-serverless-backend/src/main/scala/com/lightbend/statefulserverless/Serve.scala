@@ -17,7 +17,7 @@ import akka.pattern.{ ask, pipe }
 import akka.stream.Materializer
 
 import com.google.protobuf.{ DynamicMessage, DescriptorProtos }
-import com.google.protobuf.Descriptors.{ Descriptor, FileDescriptor, ServiceDescriptor }
+import com.google.protobuf.Descriptors.{ Descriptor, MethodDescriptor, FileDescriptor, ServiceDescriptor }
 import com.lightbend.statefulserverless.grpc._
 
 object Serve {
@@ -31,6 +31,24 @@ object Serve {
     override final def deserialize(bytes: ByteString): DynamicMessage = DynamicMessage.parseFrom(desc, bytes.iterator.asInputStream)
   }
 
+  private trait Endpoint {
+    def name: String
+    def unmarshaller: ProtobufSerializer[DynamicMessage]
+    def marshaller: ProtobufSerializer[Array[Byte]]
+    def toCommand(msg: DynamicMessage): Command
+  }
+
+  private final class LoadedEndpoint(override final val name: String,
+    override final val unmarshaller: ProtobufSerializer[DynamicMessage],
+    override final val marshaller: ProtobufSerializer[Array[Byte]]) extends Endpoint {
+    final def this(method: MethodDescriptor) = this(method.getName, new DynamicSerializer(method.getInputType), ByteArraySerializer)
+    final override def toCommand(msg: DynamicMessage): Command = {
+      val id = ??? // FIXME extract id from msg
+      val pl = ??? // FIXME extract payload from msg
+      Command.of(id, name, Some(pl))
+    }
+  }
+
   def createRoute(stateManager: ActorRef)(spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] =
     compileInterface(stateManager)(
       FileDescriptor.buildFrom(DescriptorProtos.FileDescriptorProto.parseFrom(spec.proto.get.toByteArray), Array()). // FIXME avoid this weird conversion
@@ -38,32 +56,24 @@ object Serve {
     )
 
   def compileInterface(stateManager: ActorRef)(serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    import GrpcMarshalling.{ marshalStream, unmarshalStream }
+    implicit val timeout = Timeout(5.seconds) // FIXME load from config
     val serviceName = serviceDesc.getName
     val implementedEndpoints = serviceDesc.
                                  getMethods.
                                  iterator.
                                  asScala.
-                                 map(d => (d.getName, new DynamicSerializer(d.getInputType))).
-                                 foldLeft(Map[String, DynamicSerializer]()) { _ + _ }
-    
-    implicit val timeout = Timeout(5.seconds) // FIXME load from config
-
-    def relayMessage(endpoint: String)(msg: DynamicMessage): Future[Array[Byte]] = {
-      val id = ???// FIXME extract id from msg
-      val ep = endpoint
-      val pl = ??? // FIXME extract payload from msg
-      (stateManager ? Command.of(id, ep, Some(pl))).mapTo[Array[Byte]]
-    }
+                                 map(d => (d.getName, new LoadedEndpoint(d))).
+                                 foldLeft(Map[String, Endpoint]()) { _ + _ }
 
     (req: HttpRequest) => req.uri.path match {
-      case Path.Slash(Segment(`serviceName`, Path.Slash(Segment(endpoint, Path.Empty)))) if implementedEndpoints.keySet.contains(endpoint) ⇒
+      case Path.Slash(Segment(`serviceName`, Path.Slash(Segment(endpointName, Path.Empty)))) if implementedEndpoints.keySet.contains(endpointName) ⇒
+        import GrpcMarshalling.{ marshalStream, unmarshalStream }
         val responseCodec = Codecs.negotiate(req)
-        val serializer = implementedEndpoints(endpoint)
+        val endpoint = implementedEndpoints(endpointName)
 
-        unmarshalStream(req)(serializer, mat).
-          map(_.mapAsync(1)(relayMessage(endpoint))).
-          map(e => marshalStream(e)(ByteArraySerializer, mat, responseCodec, sys)).
+        unmarshalStream(req)(endpoint.unmarshaller, mat).
+          map(_.mapAsync(1)(dm => (stateManager ? endpoint.toCommand(dm)).mapTo[Array[Byte]])).
+          map(e => marshalStream(e)(endpoint.marshaller, mat, responseCodec, sys)).
           recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
     }
   }

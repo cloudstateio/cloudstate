@@ -103,6 +103,7 @@ message EntityStreamOut {
 }
 
 message EntitySpec {
+    // FIXME How do we generate this code? protoc --descriptor_set_out ?
     google.protobuf.FileDescriptorProto proto = 1;
     string service_name = 2;
 }
