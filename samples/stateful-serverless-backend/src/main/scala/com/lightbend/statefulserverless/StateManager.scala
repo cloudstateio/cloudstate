@@ -45,9 +45,8 @@ final class StateManager(client: EntityClient) extends PersistentActor {
 
   override final def receiveCommand: PartialFunction[Any, Unit] = {
     case c: Command =>
+      relay ! EntityStreamIn(EntityStreamIn.Message.Command(c))
       /* TODOs
-        * Forward command to user logic
-          - val response = client.handle(???)
         * Receive reply
           - persist any resulting events
           - persist any resulting snapshot
@@ -66,9 +65,11 @@ final class StateManager(client: EntityClient) extends PersistentActor {
   override final def receiveRecover: PartialFunction[Any, Unit] = {
     case SnapshotOffer(metadata, offeredSnapshot: pbAny) =>
       currentEntity = offeredSnapshot
+      // FIXME: metadata.persistenceId in the line below is likely not the right thing here, should we store entityId somewhere?
+      relay ! EntityStreamIn(EntityStreamIn.Message.Init(Init(metadata.persistenceId, Some(Snapshot(metadata.sequenceNr, Some(currentEntity))))))
     case RecoveryCompleted                               =>
       // FIXME send to stream?
-    case _ =>
-      // FIXME send to stream?
+    case e: Event /* FIXME event: pbAny */               =>
+      relay ! EntityStreamIn(EntityStreamIn.Message.Event(Event(lastSequenceNr, e.payload)))
   }
 }
