@@ -1,10 +1,15 @@
 package com.lightbend.statefulserverless
 
 import scala.concurrent.duration._
+import akka.NotUsed
 import akka.actor._
-import akka.persistence.PersistentActor
+import akka.event.Logging.LogLevel
+import akka.stream.OverflowStrategy
+import akka.stream.scaladsl._
+import akka.persistence.{ PersistentActor, SaveSnapshotSuccess, SaveSnapshotFailure, SnapshotOffer, RecoveryCompleted }
 import akka.cluster.sharding.ShardRegion
-import com.lightbend.statefulserverless.grpc.{ Command, EntityClient }
+import com.lightbend.statefulserverless.grpc._
+import com.google.protobuf.any.{Any => pbAny}
 
 object StateManager {
   final case object Stop
@@ -21,6 +26,23 @@ final class StateManager(client: EntityClient) extends PersistentActor {
   // TODO make configurable
   context.setReceiveTimeout(15.minutes)
 
+  @volatile private[this] final var relay: ActorRef/*[EntityStreamIn]*/ =
+    connect().to(Sink.foreach({ val s = context.self; event => s ! event})).run()(???) //FIXME use a child-actor to deal with responses?
+
+  private[this] def connect(): Source[EntityStreamOut, ActorRef] = {
+    @volatile var hackery: ActorRef = null // FIXME after this gets fixed https://github.com/akka/akka-grpc/issues/571
+    val source = Source.actorRef[EntityStreamIn](100, OverflowStrategy.fail).mapMaterializedValue {
+      ref =>
+        if (hackery eq null)
+          hackery = ref
+        NotUsed
+    }
+    // FIXME should we add a graceful termination signal or KillSwitch to the stream to the user function?
+    client.handle(source).mapMaterializedValue(_ => hackery)
+  }
+
+  private[this] final var currentEntity: pbAny = null
+
   override final def receiveCommand: PartialFunction[Any, Unit] = {
     case c: Command =>
       /* TODOs
@@ -33,6 +55,8 @@ final class StateManager(client: EntityClient) extends PersistentActor {
         * Respond
           - sender() ! response.payload
       */
+    case SaveSnapshotSuccess(metadata) => // FIXME specify behavior here?
+    case SaveSnapshotFailure(metadata, cause) => // FIXME specify behavior here?
     case ReceiveTimeout =>
       context.parent ! Passivate(stopMessage = Stop)
     case Stop           =>
@@ -40,6 +64,11 @@ final class StateManager(client: EntityClient) extends PersistentActor {
   }
 
   override final def receiveRecover: PartialFunction[Any, Unit] = {
-    case _ => ??? // FIXME define and use events?
+    case SnapshotOffer(metadata, offeredSnapshot: pbAny) =>
+      currentEntity = offeredSnapshot
+    case RecoveryCompleted                               =>
+      // FIXME send to stream?
+    case _ =>
+      // FIXME send to stream?
   }
 }
