@@ -33,14 +33,17 @@ object StatefulServerlessServer {
 
     scala.sys.addShutdownHook { Await.ready(system.terminate(), 30.seconds) } // TODO make timeout configurable
 
-    val httpInterface    = "127.0.0.1" // FIXME Make configurable
-    val httpPort         = config.getInt("http.port")
+    val httpInterface      = "127.0.0.1" // FIXME Make configurable
+    val httpPort           = config.getInt("http.port")
 
-    val clientSettings   = GrpcClientSettings.fromConfig(Entity.name)
-    val client           = EntityClient(clientSettings) // FIXME configure some sort of retries?
+    val clientSettings     = GrpcClientSettings.fromConfig(Entity.name)
+    val client             = EntityClient(clientSettings) // FIXME configure some sort of retries?
 
-    implicit val timeout = Timeout(5.seconds) // FIXME load from `config`
-    val shards           = 100 // FIZME load from `config`
+    implicit val timeout   = Timeout(5.seconds) // FIXME load from `config`
+    val shards             = 100 // FIXME load from `config`
+    val userFunctionName   = "user-function" // FIXME load from `config`
+
+    val stateManagerConfig = StateManager.Configuration(userFunctionName, 15.minutes, 100) // FIXME load from `config`
 
     Future.unit.map({ _ =>
       AkkaManagement(system).start()
@@ -49,7 +52,7 @@ object StatefulServerlessServer {
 
       ClusterSharding(system).start(
         typeName = "StateManager", // FIXME derive name from the actual proxied service?
-        entityProps = Props(classOf[StateManager], client), // FIXME investigate dispatcher config
+        entityProps = Props(classOf[StateManager], client, stateManagerConfig), // FIXME investigate dispatcher config
         settings = ClusterShardingSettings(system),
         messageExtractor = new Serve.CommandMessageExtractor(shards))
     }).flatMap({ stateManager =>
