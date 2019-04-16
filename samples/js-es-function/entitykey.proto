@@ -1,0 +1,7 @@
+import "google/protobuf/descriptor.proto";
+
+package com.lightbend.akka;
+
+extend google.protobuf.FieldOptions {
+    optional bool entity_key = 50002;
+}

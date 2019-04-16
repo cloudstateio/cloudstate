@@ -3,12 +3,9 @@ syntax = "proto3";
 
 import "google/protobuf/empty.proto";
 import "google/protobuf/descriptor.proto";
+import "./entitykey.proto";
 
 package com.example.shoppingcart;
-
-extend google.protobuf.FieldOptions {
-    bool entity_key = 50002;
-}
 
 message AddLineItem {
     string user_id = 1 [entity_key = true];

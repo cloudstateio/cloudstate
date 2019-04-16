@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+import "google/protobuf/any.proto";
+
+package foo;
+
+message MyMessage {
+    google.protobuf.Any any = 1;
+    string string = 2;
+}
+
+message Empty {
+}
+
+service Foo {
+    rpc bar(Empty) returns (MyMessage);
+}
