@@ -66,9 +66,19 @@ final class StateManager(client: EntityClient, configuration: StateManager.Confi
         case ESOMsg.Reply(r) =>
           if (r.commandId != stableRequest.commandId) ??? // FIXME handle validation
           else {
-            persistAll(r.events.toVector) { _ => }
-            r.snapshot.foreach(s => defer(s)(saveSnapshot))
-            defer(r.getPayload.toByteArray)(stableRequest.replyTo !) // FIXME should we not respond with a pbAny?
+            val events = r.events.toVector
+            if (events.isEmpty) stableRequest.replyTo ! Array[Byte]() // FIXME what is the appropriate course of action here?
+            else {
+              var eventsLeft = events.size
+              persistAll(events) { _ =>
+                eventsLeft -= 1
+                if (eventsLeft <= 0) { // Remove this hack when switching to Akka Persistence Typed
+                  r.snapshot.foreach(saveSnapshot)
+                  stableRequest.replyTo ! r.getPayload.toByteArray // FIXME should we not respond with a pbAny?
+                }
+              }
+            }
+
           }
         case ESOMsg.Failure(f) =>
           if (f.commandId != stableRequest.commandId) ??? // FIXME handle validation
