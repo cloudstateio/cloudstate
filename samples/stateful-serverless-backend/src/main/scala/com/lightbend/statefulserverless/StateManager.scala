@@ -1,5 +1,6 @@
 package com.lightbend.statefulserverless
 
+import scala.annotation.unchecked
 import scala.concurrent.duration._
 import akka.NotUsed
 import akka.actor._
@@ -23,20 +24,25 @@ object StateManager {
     passivationTimeout: Timeout,
     sendQueueSize: Int,
     )
+
+  final case class Request(
+      final val commandId: Long,
+      final val replyTo: ActorRef
+    )
 }
 
 //FIXME IMPLEMENT
 final class StateManager(client: EntityClient, configuration: StateManager.Configuration) extends PersistentActor {
-  override final def persistenceId: String = configuration.userFunctionName + self.path.name
+  override final def persistenceId: String = configuration.userFunctionName + self.path.name // FIXME is this right?
 
   context.setReceiveTimeout(configuration.passivationTimeout.duration)
 
-  private[this] implicit final val mat = ActorMaterializer()
+  private[this] implicit final val mat = ActorMaterializer() // FIXME does this need explicit shutdown() or do we rely on child termination?
 
-  @volatile private[this] final var relay: ActorRef/*[EntityStreamIn]*/ =
-    connect().to(Sink.actorRef(self, StateManager.StreamClosed)).run()
+  @volatile private[this] final var relay: ActorRef/*[EntityStreamIn]*/ = connect().run()
+  private[this] final var currentRequest: StateManager.Request = null
 
-  private[this] def connect(): Source[EntityStreamOut, ActorRef] = {
+  private[this] def connect(): RunnableGraph[ActorRef] = {
     @volatile var hackery: ActorRef = null // FIXME after this gets fixed https://github.com/akka/akka-grpc/issues/571
     val source = Source.actorRef[EntityStreamIn](configuration.sendQueueSize, OverflowStrategy.fail).mapMaterializedValue {
       ref =>
@@ -45,32 +51,35 @@ final class StateManager(client: EntityClient, configuration: StateManager.Confi
         NotUsed
     }
     // FIXME should we add a graceful termination signal or KillSwitch to the stream to the user function?
-    client.handle(source).mapMaterializedValue(_ => hackery)
+    client.handle(source).mapMaterializedValue(_ => hackery).to(Sink.actorRef(self, StateManager.StreamClosed))
   }
 
   override final def receiveCommand: PartialFunction[Any, Unit] = {
     case c: Command =>
+      currentRequest = StateManager.Request(c.id, sender())
       relay ! EntityStreamIn(ESIMsg.Command(c))
       // FIXME switch to stashing behavior
     case EntityStreamOut(m) =>
       import EntityStreamOut.{Message => ESOMsg}
+      val stableRequest = currentRequest
       m match {
         case ESOMsg.Reply(r) =>
-          /* FIXME
-            validate r.commandId
-            (optionally) store r.events
-            (optionally) store r.snapshot
-            reply with r.payload
-          */
+          if (r.commandId != stableRequest.commandId) ??? // FIXME handle validation
+          else {
+            persistAll(r.events.toVector) { _ => }
+            r.snapshot.foreach(s => defer(s)(saveSnapshot))
+            defer(r.getPayload.toByteArray)(stableRequest.replyTo !) // FIXME should we not respond with a pbAny?
+          }
         case ESOMsg.Failure(f) =>
-          /* FIXME
-             validate f.commandId
-             handle failure
-             reply with f.description?
-             unstash
-          */
+          if (f.commandId != stableRequest.commandId) ??? // FIXME handle validation
+          else {
+            // FIXME how to deal with failures?
+            stableRequest.replyTo ! Status.Failure(new Exception(f.description))
+          }
         case ESOMsg.Empty =>
+          stableRequest.replyTo ! Array[Byte]() // FIXME what is the appropriate course of action here?
       }
+      currentRequest = null
       // FIXME unstash
     case StateManager.StreamClosed => // FIXME what does this mean?
     case SaveSnapshotSuccess(metadata) => // FIXME specify behavior here?
@@ -86,8 +95,8 @@ final class StateManager(client: EntityClient, configuration: StateManager.Confi
     case SnapshotOffer(metadata, offeredSnapshot: pbAny) =>
       // FIXME: metadata.persistenceId in the line below is likely not the right thing here, should we store entityId somewhere?
       relay ! EntityStreamIn(ESIMsg.Init(Init(metadata.persistenceId, Some(Snapshot(metadata.sequenceNr, Some(offeredSnapshot))))))
-    case RecoveryCompleted                               => // TODO figure out if we need to do something here
-    case e: Event /* FIXME event: pbAny */               =>
-      relay ! EntityStreamIn(ESIMsg.Event(Event(lastSequenceNr, e.payload)))
+    case RecoveryCompleted => // TODO figure out if we need to do something here
+    case event: pbAny =>
+      relay ! EntityStreamIn(ESIMsg.Event(Event(lastSequenceNr, Some(event))))
   }
 }
