@@ -65,6 +65,7 @@ object Serve {
     )
 
   def compileInterface(stateManager: ActorRef)(serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext, requestTimeout: Timeout): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+    // FIXME DISCOVER AND CREATE AN ACCESSOR FOR THE ENTITY_KEY FROM THE OBTAINED SERVICE DESCRIPTOR
     val serviceName          = serviceDesc.getName
     val implementedEndpoints = serviceDesc.getMethods.iterator.asScala.map(d => (d.getName, new LoadedEndpoint(d))).toMap
 
