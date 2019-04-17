@@ -1,155 +1,52 @@
-const protocolPath = "protocol.proto";
+
+
+const path = require("path");
 const grpc = require("grpc");
 const protoLoader = require("@grpc/proto-loader");
-
 const protobuf = require("protobufjs");
+const AnySupport = require("./protobuf-any");
+const DescriptorSupport = require("./protobuf-descriptor");
 
-const packageDefinition = protoLoader.loadSync(protocolPath, {});
-const descriptor = grpc.loadPackageDefinition(packageDefinition);
-const protocol = protobuf.loadSync(protocolPath);
+const includeDirs = [
+  path.join(__dirname, "..", "proto"),
+  path.join(__dirname, "..", "proto-ext")
+];
+const packageDefinition = protoLoader.loadSync("protocol.proto", {
+  includeDirs: includeDirs
+});
+const grpcDescriptor = grpc.loadPackageDefinition(packageDefinition);
 
-const Any = protocol.lookupType("google.protobuf.Any");
-
-// Support for doing this exists here:
-// https://github.com/protobufjs/protobuf.js/tree/master/ext/descriptor
-// However that has been found to be quite buggy, so we're doing it manually.
-function serviceToDescriptor(root, serviceName) {
-  const service = root.lookupService(serviceName);
-  const pkg = fullNameOf(service.parent);
-  const typeNames = new Set(Object.keys(service.methods).map(key => {
-    const requestType = service.methods[key].requestType;
-    if (requestType.includes(".")) {
-      return requestType;
-    } else if (pkg) {
-      return pkg + "." + requestType;
-    } else {
-      return requestType;
-    }
-  }));
-
-  const types = Array.from(typeNames).map(name => {
-    const type = root.lookupType(name);
-
-    // Only include the entity_key fields, that's all that's needed
-    const fieldKeys = Object.keys(type.fields).filter(key => {
-      return type.fields[key].options && type.fields[key].options.hasOwnProperty("entity_key");
-    });
-
-    function toLabel(rule) {
-      switch (rule) {
-        case "repeated": return 3;
-        case "required": return 2;
-        default: return 1;
-      }
-    }
-
-    function toType(type) {
-      switch (type) {
-        case "double": return 1;
-        case "float": return 2;
-        case "int64": return 3;
-        case "uint64": return 4;
-        case "int32": return 5;
-        case "fixed64": return 6;
-        case "fixed32": return 7;
-        case "bool": return 8;
-        case "string": return 9;
-        case "bytes": return 12;
-        case "uint32": return 13;
-        case "sfixed32": return 15;
-        case "sfixed64": return 16;
-        case "sint32": return 17;
-        case "sint64": return 18;
-      }
-    }
-
-    // DescriptorProto
-    return {
-      name: type.name,
-      field: fieldKeys.map(key => {
-        const field = type.fields[key];
-
-        // FieldDescriptorProto
-        return {
-          name: field.name,
-          number: field.id,
-          label: toLabel(field.rule),
-          type: toType(field.type),
-          defaultValue: field.defaultValue,
-          options: {
-            ".com.lightbend.statefulserverless.grpc.entityKey": true
-          }
-        }
-      })
-    };
-
-  });
-
-  const fdpDesc = protocol.lookupType("google.protobuf.FileDescriptorProto");
-
-  // FileDescriptorProto
-  const fdp = {
-    name: service.filename,
-    package: pkg,
-    // ServiceDescriptorProto
-    service: [{
-      name: service.name,
-      method: Object.keys(service.methods).map(key => {
-        const method = service.methods[key];
-        // MethodDescriptorProto
-        return {
-          name: method.name,
-          inputType: method.requestType,
-          outputType: "google.protobuf.Empty",
-          clientStreaming: method.requestStream,
-          serverStreaming: method.responseStream
-        };
-      })
-    }],
-    messageType: types
-  };
-
-  const error = fdpDesc.verify(fdp);
-  if (error) {
-    throw new Error(error);
-  }
-
-  return fdp;
-}
-
-function fullNameOf(descriptor) {
-  function namespace(desc) {
-    if (desc.name === "") {
-      return "";
-    } else {
-      return namespace(desc.parent) + desc.name + ".";
+const protocol = new protobuf.Root();
+// Copied from @grpc/proto-loader
+protocol.resolvePath = function (origin, target) {
+  for (let i = 0; i < includeDirs.length; i++) {
+    const directory = includeDirs[i];
+    const fullPath = path.join(directory, target);
+    try {
+      fs.accessSync(fullPath, fs.constants.R_OK);
+      return fullPath;
+    } catch (err) {
     }
   }
-  return namespace(descriptor.parent) + descriptor.name;
-}
-
-function stripHostName(url) {
-  const idx = url.indexOf("/");
-  if (url.indexOf("/") >= 0) {
-    return url.substr(idx + 1);
-  } else {
-    // fail?
-    return url;
-  }
-}
+  return null;
+};
+protocol.loadSync("protocol.proto");
+protocol.resolveAll();
 
 function setup(entity) {
 
+  const anySupport = new AnySupport(entity.root);
+
   // Get the service
   const server = new grpc.Server();
-  server.addService(descriptor.com.lightbend.statefulserverless.grpc.Entity.service, {
+  server.addService(grpcDescriptor.com.lightbend.statefulserverless.grpc.Entity.service, {
     ready: ready,
     handle: handle
   });
 
   function ready(call, callback) {
     callback(null, {
-      proto: serviceToDescriptor(entity.root, entity.serviceName),
+      proto: DescriptorSupport.serviceToDescriptor(entity.root, entity.serviceName),
       serviceName: entity.serviceName
     });
   }
@@ -167,18 +64,10 @@ function setup(entity) {
     // The current sequence number
     let sequence = 0;
 
-    function serializeAny(any) {
-      // todo validate that its a protobuf object
-      const msg = any.constructor;
-      return Any.create({
-        type_url: "type.googleapis.com/" + fullNameOf(msg.$type),
-        value: msg.encode(any).finish()
-      });
-    }
 
     function updateState(stateObj) {
       stateDescriptor = stateObj.constructor;
-      anyState = serializeAny(stateObj);
+      anyState = anySupport.serialize(stateObj);
     }
 
     function withBehaviorAndState(callback) {
@@ -190,23 +79,11 @@ function setup(entity) {
       callback(behavior, stateObj);
     }
 
-    function lookupDescriptorForAny(any) {
-      return entity.root.lookupType(stripHostName(any.type_url));
-    }
-
-    function deserializeAny(any) {
-      const desc = lookupDescriptorForAny(any);
-      let bytes = any.value;
-      if (!bytes) {
-        bytes = new Buffer(0);
-      }
-      return desc.decode(bytes);
-    }
 
     function handleEvent(event) {
-      const deserEvent = deserializeAny(event);
+      const deserEvent = anySupport.deserialize(event);
       withBehaviorAndState((behavior, state) => {
-        const fqName = stripHostName(event.type_url);
+        const fqName = AnySupport.stripHostName(event.type_url);
         let handler;
         if (behavior.eventHandlers.hasOwnProperty(fqName)) {
           handler = behavior.eventHandlers[fqName];
@@ -239,7 +116,7 @@ function setup(entity) {
         if (entityStreamIn.init.snapshot) {
           const snapshot = entityStreamIn.init.snapshot;
           // todo handle error if type not found
-          stateDescriptor = lookupDescriptorForAny(any);
+          stateDescriptor = anySupport.lookupDescriptor(any);
           anyState = snapshot.snapshot;
           sequence = snapshot.snapshotSequence;
         }
@@ -278,17 +155,13 @@ function setup(entity) {
                     throw new Error("Command context no longer active!");
                   }
 
-                  const serEvent = serializeAny(event);
+                  const serEvent = anySupport.serialize(event);
                   events.push(serEvent);
                 }
               });
               active = false;
 
-              const serReply = grpcMethod.resolvedResponseType.encode(reply).finish();
-              const anyReply = {
-                type_url: "type.googleapis.com/" + fullNameOf(grpcMethod.resolvedResponseType),
-                value: serReply
-              };
+              const anyReply = anySupport.serialize(grpcMethod.resolvedResponseType.create(reply));
 
               // Invoke event handlers first
               events.forEach(handleEvent);
@@ -324,7 +197,7 @@ function setup(entity) {
 
 module.exports = class Entity {
 
-  constructor(desc, serviceName, protobufLoadOptions) {
+  constructor(desc, serviceName) {
 
     // Protobuf may be one of the following:
     //  * A protobufjs root object
@@ -332,7 +205,7 @@ module.exports = class Entity {
     //  * Multiple protobuf files
     let root;
     if (Array.isArray(desc) || typeof desc === "string") {
-      root = protobuf.loadSync(desc, protobufLoadOptions).resolveAll();
+      root = protobuf.loadSync(desc).resolveAll();
     } else if (typeof desc === "object") {
       root = desc.resolveAll();
     } else {

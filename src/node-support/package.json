@@ -1,16 +1,16 @@
 {
-  "name": "js-es-function",
+  "name": "stateful-serverless-event-sourcing",
   "version": "0.1.0",
   "dependencies": {
     "@grpc/proto-loader": "^0.1.0",
-    "async": "^1.5.2",
     "google-protobuf": "^3.0.0",
-    "grpc": "^1.11.0",
-    "lodash": "^4.6.1",
-    "minimist": "^1.2.0"
+    "grpc": "^1.11.0"
   },
   "devDependencies": {
     "mocha": "6.1.2",
     "chai": "4.2.0"
+  },
+  "scripts": {
+    "prepare": "cp -r ../stateful-serverless-backend/src/main/proto ."
   }
 }

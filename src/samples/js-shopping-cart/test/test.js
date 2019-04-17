@@ -1,15 +1,16 @@
+const path = require("path");
 const should = require('chai').should();
-const protocolPath = "protocol.proto";
 const grpc = require("grpc");
 const protoLoader = require("@grpc/proto-loader");
 
 const protobuf = require("protobufjs");
 require("protobufjs/ext/descriptor");
 
-const packageDefinition = protoLoader.loadSync(protocolPath, {});
+const ssesPath = path.dirname(require.resolve("stateful-serverless-event-sourcing"));
+const packageDefinition = protoLoader.loadSync("protocol.proto", {
+  includeDirs: [path.join(ssesPath, "proto"), path.join(ssesPath, "proto-ext")]
+});
 const descriptor = grpc.loadPackageDefinition(packageDefinition);
-const protocol = protobuf.loadSync(protocolPath);
-protocol.resolveAll();
 
 const shoppingcart = protobuf.loadSync("shoppingcart.proto");
 shoppingcart.resolveAll();

@@ -1,0 +1,18 @@
+{
+  "name": "js-shopping-cart",
+  "version": "0.1.0",
+  "//": "https://npm.community/t/npm-install-does-not-install-transitive-dependencies-of-local-dependency/2264",
+  "dependencies": {
+    "stateful-serverless-event-sourcing": "file:../../node-support",
+    "@grpc/proto-loader": "^0.1.0",
+    "google-protobuf": "^3.0.0",
+    "grpc": "^1.11.0"
+  },
+  "devDependencies": {
+    "mocha": "6.1.2",
+    "chai": "4.2.0"
+  },
+  "scripts": {
+    "test": "mocha"
+  }
+}

@@ -1,5 +1,5 @@
 let protobuf = require("protobufjs");
-let Entity = require("./library.js");
+let Entity = require("stateful-serverless-event-sourcing");
 
 let domain = protobuf.loadSync(["domain.proto", "shoppingcart.proto"]);
 
@@ -8,7 +8,7 @@ let domain = protobuf.loadSync(["domain.proto", "shoppingcart.proto"]);
  * protobuf message objects, not just ordinary JavaScript objects, so that the framework can
  * know how to serialize these objects when they are persisted.
  *
- * Note this shows loading them dynamically, they could also be loaded asynchronously.
+ * Note this shows loading them dynamically, they could also be compiled and statically loaded.
  */
 let pkg = "com.example.shoppingcart.persistence.";
 let ItemAdded = domain.lookupType(pkg + "ItemAdded");
