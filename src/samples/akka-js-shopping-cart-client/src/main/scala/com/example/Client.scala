@@ -41,6 +41,7 @@ object Client {
         case Failure(t) => t.printStackTrace()
       }
       .andThen { case _ =>
+        client.close()
         materializer.shutdown()
         system.terminate().andThen({
           case _ => scala.sys.exit(1)

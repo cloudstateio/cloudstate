@@ -6,7 +6,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import akka.grpc.scaladsl.{GrpcExceptionHandler, GrpcMarshalling}
 import akka.grpc.{Codecs, ProtobufSerializer}
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
+import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes}
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.Uri.Path.Segment
 import akka.actor.{ActorRef, ActorSystem}
@@ -116,21 +116,30 @@ object Serve {
     val serviceName = serviceDesc.getName
     val implementedEndpoints = serviceDesc.getMethods.iterator.asScala.map(d => (d.getName, new ExposedEndpoint(d))).toMap
 
+    println(implementedEndpoints)
+
     Function.unlift { req: HttpRequest =>
       req.uri.path match {
         // FIXME verify that path matching is compatible with different permutations of service declarations
-        case Path.Slash(Segment(`serviceName`, Path.Slash(Segment(endpointName, Path.Empty)))) if implementedEndpoints.keySet.contains(endpointName) ⇒
-          import GrpcMarshalling.{marshalStream, unmarshalStream}
-          val responseCodec = Codecs.negotiate(req)
-          val endpoint = implementedEndpoints(endpointName)
-          implicit val askTimeout = relayTimeout
+        case Path.Slash(Segment(`serviceName`, Path.Slash(Segment(endpointName, Path.Empty)))) ⇒
+        val future =
+          if(implementedEndpoints.keySet.contains(endpointName)) {
+            println("foo")
+            import GrpcMarshalling.{marshalStream, unmarshalStream}
+            val responseCodec = Codecs.negotiate(req)
+            val endpoint = implementedEndpoints(endpointName)
+            implicit val askTimeout = relayTimeout
 
-          Some(unmarshalStream(req)(endpoint.unmarshaller, mat).
-            map(_.mapAsync(proxyParallelism)(command => (stateManager ? command).mapTo[ProtobufByteString])).
-            map(e => marshalStream(e)(endpoint.marshaller, mat, responseCodec, sys)).
-            recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys))))
+            unmarshalStream(req)(endpoint.unmarshaller, mat).
+              map(_.mapAsync(proxyParallelism)(command => (stateManager ? command).mapTo[ProtobufByteString])).
+              map(e => marshalStream(e)(endpoint.marshaller, mat, responseCodec, sys))
+          } else {
+            Future.failed(new NotImplementedError(s"Not implemented: $endpointName"))
+          }
+
+          Some(future.recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys))))
         case _ => None
       }
-    }
+    } orElse { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }
   }
 }
