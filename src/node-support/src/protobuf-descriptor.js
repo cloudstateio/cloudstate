@@ -29,7 +29,8 @@ module.exports.serviceToDescriptor = function serviceToDescriptor(root, serviceN
 
     // Only include the entity_key fields, that's all that's needed
     const fieldKeys = Object.keys(type.fields).filter(key => {
-      return type.fields[key].options && type.fields[key].options.hasOwnProperty("entity_key");
+      return type.fields[key].options &&
+        type.fields[key].options.hasOwnProperty("(com.lightbend.statefulserverless.grpc.entity_key)");
     });
 
     function toLabel(rule) {

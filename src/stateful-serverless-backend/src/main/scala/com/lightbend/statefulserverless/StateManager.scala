@@ -3,7 +3,7 @@ package com.lightbend.statefulserverless
 import akka.NotUsed
 import akka.actor._
 import akka.util.Timeout
-import akka.stream.{ActorMaterializer, OverflowStrategy}
+import akka.stream.{Materializer, OverflowStrategy}
 import akka.stream.scaladsl._
 import akka.persistence.{PersistentActor, RecoveryCompleted, SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer}
 import akka.cluster.sharding.ShardRegion
@@ -13,6 +13,59 @@ import com.google.protobuf.any.{Any => pbAny}
 import com.google.protobuf.{ByteString => pbByteString}
 
 import scala.collection.immutable.Queue
+
+object StateManagerSupervisor {
+  final case class Relay(actorRef: ActorRef)
+
+  def props(client: EntityClient, configuration: StateManager.Configuration)(implicit mat: Materializer): Props =
+    Props(new StateManagerSupervisor(client, configuration))
+}
+
+/**
+  * This serves two purposes.
+  *
+  * Firstly, when the StateManager crashes, we don't want it restarted. Cluster sharding restarts, and there's no way
+  * to customise that.
+  *
+  * Secondly, we need to ensure that we have an Akka Streams actorRef source to publish messages two before Akka
+  * persistence starts feeding us events. There's a race condition if we do this in the same persistent actor. This
+  * establishes that connection first.
+  */
+final class StateManagerSupervisor(client: EntityClient, configuration: StateManager.Configuration)(implicit mat: Materializer)
+    extends Actor with Stash {
+
+  import StateManagerSupervisor._
+
+  override def receive: Receive = PartialFunction.empty
+
+  override def preStart(): Unit = {
+    client.handle(Source.actorRef[EntityStreamIn](configuration.sendQueueSize, OverflowStrategy.fail)
+      .mapMaterializedValue { ref =>
+        self ! Relay(ref)
+        NotUsed
+      }).runWith(Sink.actorRef(self, StateManager.StreamClosed))
+    context.become(waitingForRelay)
+  }
+
+  private def waitingForRelay: Receive = {
+    case Relay(actorRef) =>
+      val manager = context.watch(context.actorOf(StateManager.props(configuration, self.path.name, actorRef)))
+      context.become(forwarding(manager))
+      unstashAll()
+    case _ => stash()
+  }
+
+  private def forwarding(manager: ActorRef): Receive = {
+    case Terminated(_) =>
+      context.stop(self)
+    case toParent if sender() == manager =>
+      context.parent ! toParent
+    case msg =>
+      manager forward msg
+  }
+
+  override def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
+}
 
 object StateManager {
   final case object Stop
@@ -28,30 +81,21 @@ object StateManager {
       final val commandId: Long,
       final val replyTo: ActorRef
     )
+
+  def props(configuration: Configuration, entityId: String, relay: ActorRef): Props =
+    Props(new StateManager(configuration, entityId, relay))
 }
 
-final class StateManager(client: EntityClient, configuration: StateManager.Configuration)(implicit mat: ActorMaterializer) extends PersistentActor with ActorLogging {
-  override final def persistenceId: String = configuration.userFunctionName + self.path.name
+final class StateManager(configuration: StateManager.Configuration, entityId: String, relay: ActorRef) extends PersistentActor with ActorLogging {
+  override final def persistenceId: String = configuration.userFunctionName + entityId
 
   context.setReceiveTimeout(configuration.passivationTimeout.duration)
 
-  @volatile private var relay: ActorRef/*[EntityStreamIn]*/ = connect().run()
   private var stashedCommands = Queue.empty[(Command, ActorRef)]
   private var currentRequest: StateManager.Request = null
   private var stopped = false
   private var idCounter = 0l
-
-  private[this] def connect(): RunnableGraph[ActorRef] = {
-    @volatile var hackery: ActorRef = null // FIXME after this gets fixed https://github.com/akka/akka-grpc/issues/571
-    val source = Source.actorRef[EntityStreamIn](configuration.sendQueueSize, OverflowStrategy.fail).mapMaterializedValue {
-      ref =>
-        if (hackery eq null)
-          hackery = ref
-        NotUsed
-    }
-    client.handle(source).mapMaterializedValue(_ => hackery).to(Sink.actorRef(self, StateManager.StreamClosed))
-  }
-
+  private var inited = false
 
   override def postStop(): Unit = {
     // This will shutdown the stream (if not already shut down)
@@ -95,6 +139,7 @@ final class StateManager(client: EntityClient, configuration: StateManager.Confi
       relay ! EntityStreamIn(ESIMsg.Command(commandWithId))
 
     case EntityStreamOut(m) =>
+
       import EntityStreamOut.{Message => ESOMsg}
       m match {
 
@@ -145,6 +190,10 @@ final class StateManager(client: EntityClient, configuration: StateManager.Confi
       notifyOutstandingRequests("Unexpected entity termination")
       context.stop(self)
 
+    case Status.Failure(error) =>
+      notifyOutstandingRequests("Unexpected entity termination")
+      throw error
+
     case SaveSnapshotSuccess(metadata) =>
       // Nothing to do
 
@@ -159,17 +208,28 @@ final class StateManager(client: EntityClient, configuration: StateManager.Confi
         context.stop(self)
       } else {
         stopped = true // FIXME do we need to set a ReceiveTimeout to time out a request?
+        // jroper: I don't think so, I think cluster sharding does that for us.
       }
   }
 
+  private def maybeInit(snapshot: Option[SnapshotOffer]): Unit = {
+    if (!inited) {
+      relay ! EntityStreamIn(ESIMsg.Init(Init(entityId, snapshot.map {
+        case SnapshotOffer(metadata, offeredSnapshot: pbAny) => Snapshot(metadata.sequenceNr, Some(offeredSnapshot))
+      })))
+      inited = true
+    }
+  }
+
   override final def receiveRecover: PartialFunction[Any, Unit] = {
-    case SnapshotOffer(metadata, offeredSnapshot: pbAny) =>
-      relay ! EntityStreamIn(ESIMsg.Init(Init(self.path.name, Some(Snapshot(metadata.sequenceNr, Some(offeredSnapshot))))))
+    case offer: SnapshotOffer =>
+      maybeInit(Some(offer))
 
     case RecoveryCompleted =>
-      // For now, the protocol doesn't require this, so we can ignore
+      maybeInit(None)
 
     case event: pbAny =>
+      maybeInit(None)
       relay ! EntityStreamIn(ESIMsg.Event(Event(lastSequenceNr, Some(event))))
   }
 }

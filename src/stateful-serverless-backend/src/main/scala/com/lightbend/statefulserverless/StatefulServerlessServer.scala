@@ -1,6 +1,6 @@
 package com.lightbend.statefulserverless
 
-import akka.actor.{ActorSystem, Props}
+import akka.actor.ActorSystem
 import akka.cluster.Cluster
 import akka.util.Timeout
 import akka.stream.ActorMaterializer
@@ -14,9 +14,8 @@ import com.typesafe.config.Config
 import com.lightbend.statefulserverless.grpc._
 import com.google.protobuf.empty.Empty
 
-import scala.concurrent.{Await, Future}
+import scala.concurrent.{Await, Future, Promise}
 import scala.concurrent.duration._
-import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 
 object StatefulServerlessServer {
@@ -26,7 +25,6 @@ object StatefulServerlessServer {
     httpPort: Int,
     userFunctionInterface: String,
     userFunctionPort: Int,
-    userFunctionName: String,
     relayTimeout: Timeout,
     relayOutputBufferSize: Int,
     passivationTimeout: Timeout,
@@ -39,7 +37,6 @@ object StatefulServerlessServer {
           httpPort              = config.getInt("http-port"),
           userFunctionInterface = config.getString("user-function-interface"),
           userFunctionPort      = config.getInt("user-function-port"),
-          userFunctionName      = config.getString("user-function-name"),
           relayTimeout          = Timeout(config.getDuration("relay-timeout").toMillis.millis),
           relayOutputBufferSize = config.getInt("relay-buffer-size"),
           passivationTimeout    = Timeout(config.getDuration("passivation-timeout").toMillis.millis),
@@ -68,40 +65,50 @@ object StatefulServerlessServer {
 
     val clientSettings     = GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
     val client             = EntityClient(clientSettings) // FIXME configure some sort of retries?
-
-    val stateManagerConfig = StateManager.Configuration(config.userFunctionName, config.passivationTimeout, config.relayOutputBufferSize)
-
+    val cluster            = Cluster(system)
 
     // Bootstrap the cluster
     if (config.devMode) {
       // In development, we just have a cluster of one, so we join ourself.
-      val cluster = Cluster(system)
       cluster.join(cluster.selfAddress)
     } else {
       AkkaManagement(system).start()
       ClusterBootstrap(system).start()
     }
 
-    Future.unit.map({ _ =>
-      ClusterSharding(system).start(
-        typeName = config.userFunctionName, // FIXME derive name from the actual proxied service?
-        entityProps = Props(new StateManager(client, stateManagerConfig)), // FIXME investigate dispatcher config
-        settings = ClusterShardingSettings(system),
-        messageExtractor = new Serve.CommandMessageExtractor(config.numberOfShards))
-    }).flatMap({ stateManager =>
-      // FIXME introduce some kind of retry policy here
-      client.ready(Empty.of()).map(reply => Serve.createRoute(stateManager, config.proxyParallelism, config.relayTimeout, reply))
-    }).flatMap({ route =>
-      Http().bindAndHandleAsync(
-        route,
-        interface = config.httpInterface,
-        port = config.httpPort,
-        connectionContext = HttpConnectionContext(http2 = UseHttp2.Always))
+    // FIXME introduce some kind of retry policy here
+    client.ready(Empty.of()).flatMap({ reply =>
+
+      val promise = Promise[ServerBinding]()
+
+      cluster.registerOnMemberUp {
+
+        promise.completeWith(Future({
+          val stateManagerConfig = StateManager.Configuration(reply.persistenceId, config.passivationTimeout, config.relayOutputBufferSize)
+
+          val stateManager = ClusterSharding(system).start(
+            typeName = reply.persistenceId, // FIXME derive name from the actual proxied service?
+            entityProps = StateManagerSupervisor.props(client, stateManagerConfig), // FIXME investigate dispatcher config
+            settings = ClusterShardingSettings(system),
+            messageExtractor = new Serve.CommandMessageExtractor(config.numberOfShards))
+
+          Serve.createRoute(stateManager, config.proxyParallelism, config.relayTimeout, reply)
+        }).flatMap({ route =>
+          Http().bindAndHandleAsync(
+            route,
+            interface = config.httpInterface,
+            port = config.httpPort,
+            connectionContext = HttpConnectionContext(http2 = UseHttp2.Always)
+          )
+        }))
+      }
+
+      promise.future
+
     }).transform(Success(_)).foreach {
       case Success(ServerBinding(localAddress)) =>
-        println(config.httpPort)
         println(s"StatefulServerless backend online at $localAddress")
-      case Failure(t) => 
+      case Failure(t) =>
         t.printStackTrace()
         // FIXME figure out what the cleanest exist looks like
         materializer.shutdown()

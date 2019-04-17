@@ -17,3 +17,19 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
   "com.google.protobuf" % "protobuf-java" % "3.5.1" % "protobuf" // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
 )
+
+val copyShoppingCartProtos = taskKey[File]("Copy the shopping cart protobufs")
+target in copyShoppingCartProtos := target.value / "js-shopping-cart-protos"
+copyShoppingCartProtos := {
+  val toDir = (target in copyShoppingCartProtos).value
+  val fromDir = baseDirectory.value.getParentFile / "js-shopping-cart" / "proto"
+  val toSync = (fromDir * "*.proto").get.map(file => file -> toDir / file.getName)
+  Sync.sync(streams.value.cacheStoreFactory.make(copyShoppingCartProtos.toString()))(toSync)
+  toDir
+}
+
+PB.protoSources in Compile += (target in copyShoppingCartProtos).value
+(PB.unpackDependencies in Compile) := {
+  copyShoppingCartProtos.value
+  (PB.unpackDependencies in Compile).value
+}

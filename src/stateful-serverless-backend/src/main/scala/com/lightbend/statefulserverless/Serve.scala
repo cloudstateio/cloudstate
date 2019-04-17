@@ -1,7 +1,5 @@
 package com.lightbend.statefulserverless
 
-import java.util.concurrent.ThreadLocalRandom
-
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import akka.grpc.scaladsl.{GrpcExceptionHandler, GrpcMarshalling}
@@ -15,7 +13,7 @@ import akka.pattern.ask
 import akka.stream.Materializer
 import com.google.protobuf.{DescriptorProtos, DynamicMessage, ByteString => ProtobufByteString}
 import com.google.protobuf.any.{Any => ProtobufAny}
-import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor, MethodDescriptor, ServiceDescriptor, FieldDescriptor}
+import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor, MethodDescriptor, ServiceDescriptor}
 import com.lightbend.statefulserverless.grpc._
 import akka.cluster.sharding.ShardRegion.HashCodeMessageExtractor
 
@@ -42,7 +40,7 @@ object Serve {
       }
   }
 
-  private final class CommandSerializer(private[this] final val desc: Descriptor) extends ProtobufSerializer[Command] {
+  private final class CommandSerializer(commandName: String, desc: Descriptor) extends ProtobufSerializer[Command] {
     private[this] final val commandTypeUrl = AnyTypeUrlHostName + desc.getFullName
     private[this] final val entityKeys = desc.getFields.asScala.filter(
       _.getOptions.getUnknownFields.hasField(EntityKeyOptionNumber) // todo do we need to check if the value is true?
@@ -54,15 +52,12 @@ object Serve {
       case Some(payload) => ByteString(payload.value.asReadOnlyByteBuffer())
     }
 
-    private[this] final def entityIdFrom(field: FieldDescriptor, dm: DynamicMessage): String =
-      "(" + field + "," + dm.getField(field) + ")" // FIXME: Is this correct?
-
     override final def deserialize(bytes: ByteString): Command = {
       val dm = DynamicMessage.parseFrom(desc, bytes.iterator.asInputStream)
 
-      val entityId = 
-        if (entityKeys.length == 1) entityIdFrom(entityKeys(0), dm) // Fast path 
-        else entityKeys.iterator.map(k => entityIdFrom(k, dm)).mkString(EntityKeyValueSeparator)
+      val entityId =
+        if (entityKeys.length == 1) dm.getField(entityKeys(0)).toString // Fast path
+        else entityKeys.iterator.map(dm.getField).mkString(EntityKeyValueSeparator)
 
       val payload = ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer))
 
@@ -70,7 +65,7 @@ object Serve {
       // order of fields changes, that could silently break this code
       // Note, we're not setting the command id. We'll leave it up to the StateManager actor
       // to generate an id that is unique per session.
-      Command(entityId = entityId, name = desc.getName, payload = Some(payload))
+      Command(entityId = entityId, name = commandName, payload = Some(payload))
     }
   }
 
@@ -84,7 +79,7 @@ object Serve {
     final val name: String,
     final val unmarshaller: ProtobufSerializer[Command],
     final val marshaller: ProtobufSerializer[ProtobufByteString]) {
-    def this(method: MethodDescriptor) = this(method.getName, new CommandSerializer(method.getInputType), ReplySerializer)
+    def this(method: MethodDescriptor) = this(method.getName, new CommandSerializer(method.getName, method.getInputType), ReplySerializer)
   }
 
   private[this] final def extractService(serviceName: String, descriptor: FileDescriptor): Option[ServiceDescriptor] = {
@@ -113,10 +108,8 @@ object Serve {
   }
 
   def compileInterface(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    val serviceName = serviceDesc.getName
+    val serviceName = serviceDesc.getFullName
     val implementedEndpoints = serviceDesc.getMethods.iterator.asScala.map(d => (d.getName, new ExposedEndpoint(d))).toMap
-
-    println(implementedEndpoints)
 
     Function.unlift { req: HttpRequest =>
       req.uri.path match {
@@ -124,7 +117,6 @@ object Serve {
         case Path.Slash(Segment(`serviceName`, Path.Slash(Segment(endpointName, Path.Empty)))) ⇒
         val future =
           if(implementedEndpoints.keySet.contains(endpointName)) {
-            println("foo")
             import GrpcMarshalling.{marshalStream, unmarshalStream}
             val responseCodec = Codecs.negotiate(req)
             val endpoint = implementedEndpoints(endpointName)

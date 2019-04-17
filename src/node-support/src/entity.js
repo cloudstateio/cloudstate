@@ -1,6 +1,7 @@
 
 
 const path = require("path");
+const debug = require("debug")("stateserve-event-sourcing");
 const grpc = require("grpc");
 const protoLoader = require("@grpc/proto-loader");
 const protobuf = require("protobufjs");
@@ -45,9 +46,11 @@ function setup(entity) {
   });
 
   function ready(call, callback) {
+    debug("Received ready, sending descriptor with service name '" + entity.serviceName + "' and persistenceId '" + entity.options.persistenceId + "'");
     callback(null, {
       proto: DescriptorSupport.serviceToDescriptor(entity.root, entity.serviceName),
-      serviceName: entity.serviceName
+      serviceName: entity.serviceName,
+      persistenceId: entity.options.persistenceId
     });
   }
 
@@ -64,6 +67,17 @@ function setup(entity) {
     // The current sequence number
     let sequence = 0;
 
+    const streamId = Math.random().toString(16).substr(2, 7);
+
+    function streamDebug(msg) {
+      if (entityId) {
+        debug(streamId + " [" + entityId + "] - " + msg);
+      } else {
+        debug(streamId + " - " + msg);
+      }
+    }
+
+    streamDebug("Received new stream");
 
     function updateState(stateObj) {
       stateDescriptor = stateObj.constructor;
@@ -113,18 +127,25 @@ function setup(entity) {
         // todo validate that we have not already received init
         // validate init fields
         entityId = entityStreamIn.init.entityId;
+
+        streamDebug("Received init message");
+
         if (entityStreamIn.init.snapshot) {
           const snapshot = entityStreamIn.init.snapshot;
-          // todo handle error if type not found
-          stateDescriptor = anySupport.lookupDescriptor(any);
-          anyState = snapshot.snapshot;
           sequence = snapshot.snapshotSequence;
+          streamDebug("Handling snapshot with type " + snapshot.snapshot.type_url + " at sequence " + sequence);
+          // todo handle error if type not found
+          stateDescriptor = anySupport.lookupDescriptor(snapshot.snapshot);
+          anyState = snapshot.snapshot;
         }
       } else if (entityStreamIn.event) {
 
         // todo validate
         const event = entityStreamIn.event;
         sequence = event.sequence;
+
+        streamDebug("Received event " + sequence + " with type '" + event.payload.type_url + "'");
+
         handleEvent(event.payload);
 
       } else if (entityStreamIn.command) {
@@ -132,8 +153,20 @@ function setup(entity) {
         // todo validate
         const command = entityStreamIn.command;
 
+        function commandDebug(msg) {
+          debug(streamId + " [" + entityId + "] (" + command.id + ") - " + msg);
+        }
+
+        commandDebug("Received command '" + command.name + "' with type '" + command.payload.type_url + "'");
+
         if (!entity.service.methods.hasOwnProperty(command.name)) {
-          // todo error
+          commandDebug("Command '" + command.name + "' unknown.");
+          call.write({
+            failure: {
+              commandId: command.id,
+              description: "Unknown command named " + command.name
+            }
+          })
         } else {
 
           const grpcMethod = entity.service.methods[command.name];
@@ -157,6 +190,7 @@ function setup(entity) {
 
                   const serEvent = anySupport.serialize(event);
                   events.push(serEvent);
+                  commandDebug("Emitting event '" + serEvent.type_url + "'");
                 }
               });
               active = false;
@@ -164,16 +198,27 @@ function setup(entity) {
               const anyReply = anySupport.serialize(grpcMethod.resolvedResponseType.create(reply));
 
               // Invoke event handlers first
-              events.forEach(handleEvent);
-              sequence += events.length;
-
-              // todo snapshot handling
-              call.write({
-                reply: {
-                  commandId: command.id,
-                  payload: anyReply,
-                  events: events
+              let snapshot = false;
+              events.forEach(event => {
+                handleEvent(event);
+                sequence++;
+                if (sequence % entity.options.snapshotEvery === 0) {
+                  snapshot = true;
                 }
+              });
+
+              const msgReply = {
+                commandId: command.id,
+                payload: anyReply,
+                events: events
+              };
+              if (snapshot) {
+                commandDebug("Snapshotting current state with type '" + anyState.type_url + "'");
+                msgReply.snapshot = anyState
+              }
+              commandDebug("Sending reply with " + msgReply.events.length + " events and reply type '" + anyReply.type_url + "'");
+              call.write({
+                reply: msgReply
               });
 
             } else {
@@ -187,6 +232,7 @@ function setup(entity) {
     });
 
     call.on("end", function () {
+      streamDebug("Stream terminating");
       call.end();
     });
   }
@@ -197,7 +243,7 @@ function setup(entity) {
 
 module.exports = class Entity {
 
-  constructor(desc, serviceName) {
+  constructor(desc, serviceName, options) {
 
     // Protobuf may be one of the following:
     //  * A protobufjs root object
@@ -212,6 +258,13 @@ module.exports = class Entity {
       throw new Error("Unknown descriptor type: " + typeof desc)
     }
 
+    this.options = {
+      ...{
+        persistenceId: "entity",
+        snapshotEvery: 100
+      },
+      ...options
+    };
     this.root = root;
     this.serviceName = serviceName;
     // Eagerly lookup the service to fail early

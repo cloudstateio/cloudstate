@@ -108,7 +108,13 @@ message EntityStreamOut {
 message EntitySpec {
     // FIXME How do we generate this code? protoc --descriptor_set_out ?
     google.protobuf.FileDescriptorProto proto = 1;
+
+    // The name of the service to load from the protobuf file.
     string service_name = 2;
+
+    // The ID to persist events with. This will be used as an identifier to persist events in
+    // the event journal, it must never change.
+    string persistence_id = 3;
 }
 
 // The Entity service

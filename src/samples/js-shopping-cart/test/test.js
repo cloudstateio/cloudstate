@@ -12,10 +12,10 @@ const packageDefinition = protoLoader.loadSync("protocol.proto", {
 });
 const descriptor = grpc.loadPackageDefinition(packageDefinition);
 
-const shoppingcart = protobuf.loadSync("shoppingcart.proto");
+const shoppingcart = protobuf.loadSync("proto/shoppingcart.proto");
 shoppingcart.resolveAll();
 
-const domain = protobuf.loadSync("domain.proto");
+const domain = protobuf.loadSync("proto/domain.proto");
 domain.resolveAll();
 const ItemAdded = domain.lookupType("com.example.shoppingcart.persistence.ItemAdded");
 const ItemRemoved = domain.lookupType("com.example.shoppingcart.persistence.ItemRemoved");
@@ -160,7 +160,7 @@ function sendEvent(call, sequence, event) {
 }
 
 function getCart(call) {
-  return sendCommand(call, "GetCart", shoppingcart.lookupType("com.example.shoppingcart.GetCart").create({
+  return sendCommand(call, "GetCart", shoppingcart.lookupType("com.example.shoppingcart.GetShoppingCart").create({
     userId: "123"
   }));
 }
@@ -185,6 +185,8 @@ describe("shopping cart", () => {
       spec.serviceName.should.equal("com.example.shoppingcart.ShoppingCart");
       const service = spec.root.lookupService(spec.serviceName);
       service.should.have.property("name", "ShoppingCart");
+      const GetShoppingCart = spec.root.lookupType("com.example.shoppingcart.GetShoppingCart");
+      GetShoppingCart.fields.should.have.property("userId");
     });
   });
 

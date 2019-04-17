@@ -1,7 +1,7 @@
 let protobuf = require("protobufjs");
 let Entity = require("stateful-serverless-event-sourcing");
 
-let domain = protobuf.loadSync(["domain.proto", "shoppingcart.proto"]);
+let domain = protobuf.loadSync(["proto/domain.proto", "proto/shoppingcart.proto"]);
 
 /*
  * Here we load the Protobuf types. When emitting events or setting state, we need to return
@@ -15,7 +15,10 @@ let ItemAdded = domain.lookupType(pkg + "ItemAdded");
 let ItemRemoved = domain.lookupType(pkg + "ItemRemoved");
 let Cart = domain.lookupType(pkg + "Cart");
 
-let entity = new Entity(domain, "com.example.shoppingcart.ShoppingCart");
+let entity = new Entity(domain, "com.example.shoppingcart.ShoppingCart", {
+  persistenceId: "shopping-cart",
+  snapshotEvery: 5 // Usually you wouldn't snapshot this frequently, but this helps to demonstrate snapshotting
+});
 
 /*
  * Set a callback to create the initial state. This is what is created if there is no
@@ -129,7 +132,7 @@ function itemAdded(added, cart) {
 function itemRemoved(removed, cart) {
   // Filter the removed item from the items by product id.
   cart.items = cart.items.filter(item => {
-    return item.productId === removed.productId;
+    return item.productId !== removed.productId;
   });
 
   // And return the new state.
