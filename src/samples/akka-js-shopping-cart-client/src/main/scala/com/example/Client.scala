@@ -1,11 +1,10 @@
-package com.lightbend.statefulserverless
+package com.example
 
 import akka.actor.{ActorSystem}
 import akka.util.Timeout
 import akka.stream.ActorMaterializer
 import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
-import akka.cluster.sharding._
 import akka.grpc.GrpcClientSettings
 import com.typesafe.config.Config
 import com.example.shoppingcart._
@@ -21,7 +20,7 @@ object Client {
     implicit val system           = ActorSystem("client")
     implicit val materializer     = ActorMaterializer()
     implicit val executionContext = system.dispatcher
-    val clientSettings            = GrpcClientSettings.connectToServiceAt("localhost", 9000).withTls(false)
+    val clientSettings            = GrpcClientSettings.connectToServiceAt("127.0.0.1", 9000).withTls(false)
     val client                    = ShoppingCartClient(clientSettings)
 
     val userId = "viktor"
@@ -36,11 +35,16 @@ object Client {
       r <- client.removeItem(RemoveLineItem(userId, productId))
     } yield u
 
-    future.andThen { case _ =>
-      materializer.shutdown()
-      system.terminate().andThen({
-        case _ => scala.sys.exit(1)
-      })
+    future
+      .andThen {
+        case Success(s) => println(s.toString)
+        case Failure(t) => t.printStackTrace()
+      }
+      .andThen { case _ =>
+        materializer.shutdown()
+        system.terminate().andThen({
+          case _ => scala.sys.exit(1)
+        })
     }
   }
 }
