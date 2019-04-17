@@ -157,7 +157,7 @@ final class StateManager(client: EntityClient, configuration: StateManager.Confi
       if (currentRequest == null) {
         context.stop(self)
       } else {
-        stopped = true
+        stopped = true // FIXME do we need to set a ReceiveTimeout to time out a request?
       }
   }
 

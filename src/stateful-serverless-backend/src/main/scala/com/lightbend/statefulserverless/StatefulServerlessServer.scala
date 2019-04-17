@@ -10,6 +10,7 @@ import akka.cluster.sharding._
 import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
 import akka.grpc.GrpcClientSettings
+import com.typesafe.config.Config
 import com.lightbend.statefulserverless.grpc._
 import com.google.protobuf.empty.Empty
 
@@ -19,6 +20,32 @@ import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 
 object StatefulServerlessServer {
+  private final case class Configuration private (
+    devMode: Boolean,
+    httpInterface: String,
+    httpPort: Int,
+    userFunctionInterface: String,
+    userFunctionPort: Int,
+    userFunctionName: String,
+    relayTimeout: Timeout,
+    relayOutputBufferSize: Int,
+    passivationTimeout: Timeout,
+    numberOfShards: Int) {
+      def this(config: Config) =
+        this(
+          devMode               = config.getBoolean("dev-mode-enabled"),
+          httpInterface         = config.getString("http-interface"),
+          httpPort              = config.getInt("http-port"),
+          userFunctionInterface = config.getString("user-function-interface"),
+          userFunctionPort      = config.getInt("user-function-port"),
+          userFunctionName      = config.getString("user-function-name"),
+          relayTimeout          = Timeout(config.getDuration("relay-timeout").toMillis.millis),
+          relayOutputBufferSize = config.getInt("relay-buffer-size"),
+          passivationTimeout    = Timeout(config.getDuration("passivation-timeout").toMillis.millis),
+          numberOfShards        = config.getInt("number-of-shards")
+        )
+    }
+
   def main(args: Array[String]): Unit = {
     implicit val system = ActorSystem("statefulserverless-backend")
     implicit val materializer = ActorMaterializer()
@@ -26,27 +53,18 @@ object StatefulServerlessServer {
 
     // FIXME go over and supply appropriate values for Cluster Sharding
     // https://doc.akka.io/docs/akka/current/cluster-sharding.html?language=scala#configuration
-    val config = system.settings.config
+    val config = new Configuration(system.settings.config.getConfig("stateful-serverless"))
 
     scala.sys.addShutdownHook { Await.ready(system.terminate(), 30.seconds) } // TODO make timeout configurable
 
-    val httpInterface      = "127.0.0.1" // FIXME Make configurable
-    val httpPort           = config.getInt("http.port")
-
-    val userFunctionPort   = 8080 // FIXME Make configurable
-    val clientSettings     = GrpcClientSettings.connectToServiceAt("localhost", userFunctionPort)
-      .withTls(false)
+    val clientSettings     = GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
     val client             = EntityClient(clientSettings) // FIXME configure some sort of retries?
 
-    implicit val timeout   = Timeout(5.seconds) // FIXME load from `config`
-    val shards             = 100 // FIXME load from `config`
-    val userFunctionName   = "user-function" // FIXME load from `config`
-
-    val stateManagerConfig = StateManager.Configuration(userFunctionName, 15.minutes, 100) // FIXME load from `config`
+    val stateManagerConfig = StateManager.Configuration(config.userFunctionName, config.passivationTimeout, config.relayOutputBufferSize)
 
 
     // Bootstrap the cluster
-    if (config.getBoolean("dev")) {
+    if (config.devMode) {
       // In development, we just have a cluster of one, so we join ourself.
       val cluster = Cluster(system)
       cluster.join(cluster.selfAddress)
@@ -57,21 +75,22 @@ object StatefulServerlessServer {
 
     Future.unit.map({ _ =>
       ClusterSharding(system).start(
-        typeName = "StateManager", // FIXME derive name from the actual proxied service?
+        typeName = config.userFunctionName, // FIXME derive name from the actual proxied service?
         entityProps = Props(new StateManager(client, stateManagerConfig)), // FIXME investigate dispatcher config
         settings = ClusterShardingSettings(system),
-        messageExtractor = new Serve.CommandMessageExtractor(shards))
+        messageExtractor = new Serve.CommandMessageExtractor(config.numberOfShards))
     }).flatMap({ stateManager =>
-      client.ready(Empty.of()).map(Serve.createRoute(stateManager)) // FIXME introduce some kind of retry policy here
+      // FIXME introduce some kind of retry policy here
+      client.ready(Empty.of()).map(reply => Serve.createRoute(stateManager, config.relayTimeout, reply))
     }).flatMap({ route =>
       Http().bindAndHandleAsync(
         route,
-        interface = httpInterface,
-        port = httpPort,
+        interface = config.httpInterface,
+        port = config.httpPort,
         connectionContext = HttpConnectionContext(http2 = UseHttp2.Always))
     }).transform(Success(_)).foreach {
       case Success(ServerBinding(localAddress)) =>
-        println(httpPort)
+        println(config.httpPort)
         println(s"StatefulServerless backend online at $localAddress")
       case Failure(t) => 
         t.printStackTrace()
