@@ -10,6 +10,7 @@ import akka.cluster.sharding.ShardRegion
 import com.lightbend.statefulserverless.grpc._
 import EntityStreamIn.{Message => ESIMsg}
 import com.google.protobuf.any.{Any => pbAny}
+import com.google.protobuf.{ByteString => pbByteString}
 
 import scala.collection.immutable.Queue
 
@@ -107,7 +108,7 @@ final class StateManager(client: EntityClient, configuration: StateManager.Confi
           val commandId = currentRequest.commandId
           val events = r.events.toVector
           if (events.isEmpty) {
-            currentRequest.replyTo ! r.getPayload
+            currentRequest.replyTo ! r.getPayload.value
             commandHandled()
           } else {
             var eventsLeft = events.size
@@ -119,7 +120,7 @@ final class StateManager(client: EntityClient, configuration: StateManager.Confi
                 if (currentRequest == null || currentRequest.commandId != commandId) {
                   crash("Internal error - currentRequest changed before all events were persisted")
                 }
-                currentRequest.replyTo ! r.getPayload
+                currentRequest.replyTo ! r.getPayload.value
                 commandHandled()
               }
             }

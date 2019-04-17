@@ -27,9 +27,19 @@ object Serve {
   private val EntityKeyValueSeparator = "-"
   private val AnyTypeUrlHostName = "type.googleapis.com/"
 
-  private final object ByteStringSerializer extends ProtobufSerializer[ByteString] {
-    override final def serialize(bytes: ByteString): ByteString = bytes
-    override final def deserialize(bytes: ByteString): ByteString = bytes
+  private final object ReplySerializer extends ProtobufSerializer[ProtobufByteString] {
+    override final def serialize(pbBytes: ProtobufByteString): ByteString =
+      if (pbBytes.isEmpty) {
+        ByteString.empty
+      } else {
+        ByteString.fromArrayUnsafe(pbBytes.toByteArray())
+      }
+    override final def deserialize(bytes: ByteString): ProtobufByteString =
+      if (bytes.isEmpty) {
+        ProtobufByteString.EMPTY
+      } else {
+        ProtobufByteString.readFrom(bytes.iterator.asInputStream)
+      }
   }
 
   private final class CommandSerializer(private[this] final val desc: Descriptor) extends ProtobufSerializer[Command] {
@@ -73,8 +83,8 @@ object Serve {
   private final class ExposedEndpoint private[this](
     final val name: String,
     final val unmarshaller: ProtobufSerializer[Command],
-    final val marshaller: ProtobufSerializer[ByteString]) {
-    def this(method: MethodDescriptor) = this(method.getName, new CommandSerializer(method.getInputType), ByteStringSerializer)
+    final val marshaller: ProtobufSerializer[ProtobufByteString]) {
+    def this(method: MethodDescriptor) = this(method.getName, new CommandSerializer(method.getInputType), ReplySerializer)
   }
 
   private[this] final def extractService(serviceName: String, descriptor: FileDescriptor): Option[ServiceDescriptor] = {
@@ -116,7 +126,7 @@ object Serve {
           implicit val askTimeout = relayTimeout
 
           Some(unmarshalStream(req)(endpoint.unmarshaller, mat).
-            map(_.mapAsync(proxyParallelism)(command => (stateManager ? command).mapTo[ByteString])).
+            map(_.mapAsync(proxyParallelism)(command => (stateManager ? command).mapTo[ProtobufByteString])).
             map(e => marshalStream(e)(endpoint.marshaller, mat, responseCodec, sys)).
             recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys))))
         case _ => None
