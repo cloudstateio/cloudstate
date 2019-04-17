@@ -82,6 +82,20 @@ module.exports.serviceToDescriptor = function serviceToDescriptor(root, serviceN
 
   });
 
+  types.push(
+    // DescriptorProto
+    {
+      name: "Empty",
+      field: []
+    }
+  );
+
+  // Empty output type
+  let outputType = "Empty";
+  if (pkg) {
+    outputType = pkg + ".Empty";
+  }
+
   // FileDescriptorProto
   const fdp = {
     name: service.filename,
@@ -95,7 +109,7 @@ module.exports.serviceToDescriptor = function serviceToDescriptor(root, serviceN
         return {
           name: method.name,
           inputType: method.requestType,
-          outputType: "google.protobuf.Empty",
+          outputType: outputType,
           clientStreaming: method.requestStream,
           serverStreaming: method.responseStream
         };

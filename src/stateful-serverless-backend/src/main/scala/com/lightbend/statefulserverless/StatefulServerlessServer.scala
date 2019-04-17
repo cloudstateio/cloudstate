@@ -1,25 +1,22 @@
 package com.lightbend.statefulserverless
 
-import akka.actor.{ ActorSystem, Props }
+import akka.actor.{ActorSystem, Props}
+import akka.cluster.Cluster
 import akka.util.Timeout
 import akka.stream.ActorMaterializer
-
-import akka.http.scaladsl.{ Http, HttpConnectionContext, UseHttp2 }
+import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
-
 import akka.cluster.sharding._
-
 import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
 import akka.grpc.GrpcClientSettings
-
 import com.lightbend.statefulserverless.grpc._
 import com.google.protobuf.empty.Empty
 
-import scala.concurrent.{ Await, Future }
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
-import scala.util.{ Success, Failure }
+import scala.util.{Failure, Success}
 
 object StatefulServerlessServer {
   def main(args: Array[String]): Unit = {
@@ -36,7 +33,9 @@ object StatefulServerlessServer {
     val httpInterface      = "127.0.0.1" // FIXME Make configurable
     val httpPort           = config.getInt("http.port")
 
-    val clientSettings     = GrpcClientSettings.fromConfig(Entity.name)
+    val userFunctionPort   = 8080 // FIXME Make configurable
+    val clientSettings     = GrpcClientSettings.connectToServiceAt("localhost", userFunctionPort)
+      .withTls(false)
     val client             = EntityClient(clientSettings) // FIXME configure some sort of retries?
 
     implicit val timeout   = Timeout(5.seconds) // FIXME load from `config`
@@ -45,14 +44,21 @@ object StatefulServerlessServer {
 
     val stateManagerConfig = StateManager.Configuration(userFunctionName, 15.minutes, 100) // FIXME load from `config`
 
-    Future.unit.map({ _ =>
+
+    // Bootstrap the cluster
+    if (config.getBoolean("dev")) {
+      // In development, we just have a cluster of one, so we join ourself.
+      val cluster = Cluster(system)
+      cluster.join(cluster.selfAddress)
+    } else {
       AkkaManagement(system).start()
-
       ClusterBootstrap(system).start()
+    }
 
+    Future.unit.map({ _ =>
       ClusterSharding(system).start(
         typeName = "StateManager", // FIXME derive name from the actual proxied service?
-        entityProps = Props(classOf[StateManager], client, stateManagerConfig), // FIXME investigate dispatcher config
+        entityProps = Props(new StateManager(client, stateManagerConfig)), // FIXME investigate dispatcher config
         settings = ClusterShardingSettings(system),
         messageExtractor = new Serve.CommandMessageExtractor(shards))
     }).flatMap({ stateManager =>
@@ -65,6 +71,7 @@ object StatefulServerlessServer {
         connectionContext = HttpConnectionContext(http2 = UseHttp2.Always))
     }).transform(Success(_)).foreach {
       case Success(ServerBinding(localAddress)) =>
+        println(httpPort)
         println(s"StatefulServerless backend online at $localAddress")
       case Failure(t) => 
         t.printStackTrace()

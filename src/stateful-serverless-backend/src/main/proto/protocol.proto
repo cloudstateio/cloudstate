@@ -12,8 +12,6 @@ import "google/protobuf/empty.proto";
 import "google/protobuf/descriptor.proto";
 import "entitykey.proto";
 
-package com.lightbend.statefulserverless.grpc;
-
 // The init message. This will always be the first message sent to the entity when
 // it is loaded.
 message Init {

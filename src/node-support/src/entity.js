@@ -238,6 +238,8 @@ module.exports = class Entity {
     this.server = setup(this);
     const boundPort = this.server.bind(options.bindAddress + ":" + options.bindPort, grpc.ServerCredentials.createInsecure());
     this.server.start();
+    console.log("Entity gRPC server started on " + options.bindAddress + ":" + boundPort);
+
     return boundPort;
   }
 

@@ -58,7 +58,7 @@ function invokeReady() {
         resolve({
           root: protobuf.Root.fromDescriptor({
             file: [descriptor.proto]
-          }),
+          }).resolveAll(),
           serviceName: descriptor.serviceName
         });
       }
