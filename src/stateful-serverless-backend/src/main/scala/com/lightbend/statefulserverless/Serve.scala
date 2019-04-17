@@ -93,16 +93,16 @@ object Serve {
     }
   }
 
-  def createRoute(stateManager: ActorRef, relayTimeout: Timeout, spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+  def createRoute(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val descriptor = FileDescriptor.buildFrom(DescriptorProtos.FileDescriptorProto.parseFrom(spec.proto.get.toByteArray), Array())
 
     extractService(spec.serviceName, descriptor) match {
       case None => throw new Exception(s"Service ${spec.serviceName} not found in descriptor!")
-      case Some(service) => compileInterface(stateManager, relayTimeout, service)
+      case Some(service) => compileInterface(stateManager, proxyParallelism, relayTimeout, service)
     }
   }
 
-  def compileInterface(stateManager: ActorRef, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+  def compileInterface(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val serviceName = serviceDesc.getName
     val implementedEndpoints = serviceDesc.getMethods.iterator.asScala.map(d => (d.getName, new ExposedEndpoint(d))).toMap
 
@@ -116,8 +116,7 @@ object Serve {
           implicit val askTimeout = relayTimeout
 
           Some(unmarshalStream(req)(endpoint.unmarshaller, mat).
-            // mapAsync 1? I don't think it's necessary to force commands to be handled one at a time.
-            map(_.mapAsync(1)(command => (stateManager ? command).mapTo[ByteString])).
+            map(_.mapAsync(proxyParallelism)(command => (stateManager ? command).mapTo[ByteString])).
             map(e => marshalStream(e)(endpoint.marshaller, mat, responseCodec, sys)).
             recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys))))
         case _ => None

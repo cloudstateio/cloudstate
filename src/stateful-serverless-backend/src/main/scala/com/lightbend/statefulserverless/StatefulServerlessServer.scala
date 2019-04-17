@@ -30,8 +30,9 @@ object StatefulServerlessServer {
     relayTimeout: Timeout,
     relayOutputBufferSize: Int,
     passivationTimeout: Timeout,
-    numberOfShards: Int) {
-      def this(config: Config) =
+    numberOfShards: Int,
+    proxyParallelism: Int) {
+      def this(config: Config) = {
         this(
           devMode               = config.getBoolean("dev-mode-enabled"),
           httpInterface         = config.getString("http-interface"),
@@ -42,8 +43,16 @@ object StatefulServerlessServer {
           relayTimeout          = Timeout(config.getDuration("relay-timeout").toMillis.millis),
           relayOutputBufferSize = config.getInt("relay-buffer-size"),
           passivationTimeout    = Timeout(config.getDuration("passivation-timeout").toMillis.millis),
-          numberOfShards        = config.getInt("number-of-shards")
+          numberOfShards        = config.getInt("number-of-shards"),
+          proxyParallelism      = config.getInt("proxy-parallelism")
         )
+        validate()
+      }
+
+      private[this] def validate(): Unit = {
+        require(proxyParallelism > 0)
+        // TODO add more config validation here
+      }
     }
 
   def main(args: Array[String]): Unit = {
@@ -81,7 +90,7 @@ object StatefulServerlessServer {
         messageExtractor = new Serve.CommandMessageExtractor(config.numberOfShards))
     }).flatMap({ stateManager =>
       // FIXME introduce some kind of retry policy here
-      client.ready(Empty.of()).map(reply => Serve.createRoute(stateManager, config.relayTimeout, reply))
+      client.ready(Empty.of()).map(reply => Serve.createRoute(stateManager, config.proxyParallelism, config.relayTimeout, reply))
     }).flatMap({ route =>
       Http().bindAndHandleAsync(
         route,
