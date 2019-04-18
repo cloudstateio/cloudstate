@@ -104,3 +104,25 @@ Next we'll take a look at the Akka backend, which can be found in [`src/backend/
 * [`Serve.scala`](../src/stateful-serverless-backend/src/main/scala/com/lightbend/statefulserverless/Serve.scala) - This provides the dynamically implemented gRPC interface as specified by the user function. Requests are forwarded as commands to the cluster sharded persistent entities.
 * [`StateManager.scala`](../src/backend/core/src/main/scala/com/lightbend/statefulserverless/StateManager.scala) - This is an Akka persistent actor that talks to the user function via the event sourcing gRPC protocol.
 * [`StatefulServerlessServer.scala`](../src/backend/core/src/main/scala/com/lightbend/statefulserverless/StatefulServerlessServer.scala) - This pulls everything together, starting the Akka gRPC server, cluster sharding, and persistence.
+
+## Deploying to Kubernetes
+
+A version of the Akka backend that uses a Cassandra journal has been provided. To use it, provision Cassandra, for example, as described [here](https://github.com/GoogleCloudPlatform/click-to-deploy/tree/master/k8s/cassandra) on GKE.
+
+You'll need a docker registry that you can deploy to that your Kubernetes cluster can access. Assuming that registry is `gcr.io` with a project name of `stateserv`, run the following to deploy the Docker image for the sidecar and the shopping cart example.
+
+To deploy the Akka backend, from the `src` directory, run:
+
+```
+sbt -Ddocker.registry=gcr.io -Ddocker.username=stateserv backend-cassandra/docker:deploy
+```
+
+To deploy the shopping cart user function, from the `src` directory, run:
+
+```
+docker build -t js-shopping-cart -f Dockerfile.js-shopping-cart .
+docker tag js-shopping-cart:latest gcr.io/stateserv/js-shopping-cart:latest
+docker push gcr.io/stateserv/js-shopping-cart:latest
+```
+
+Now you need to update [`src/samples/js-shopping-cart/deploy.yaml`](../src/samples/js-shopping-cart/deploy.yaml) to match your deployment requirements - update the docker images according to your registry/username, update namespaces accordingly, update the Cassandra contact points environment variable to match your Cassandra, etc. Then `kubectl apply -f deploy.yaml`, and you should have a 3 node cluster running, using Cassandra for persistence.

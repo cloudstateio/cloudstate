@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: shopping-cart
+spec:
+  ports:
+  - port: 80
+    targetPort: 9000
+    protocol: TCP
+    name: http2
+  selector:
+    app: shopping-cart
+  type: LoadBalancer
+
+---
+
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "shopping-cart"
+spec:
+  # If changing this, ensure REQUIRED_CONTACT_POINT_NR is more than half this number, to ensure only one cluster
+  # will ever bootstrap when starting from scratch.
+  replicas: 3
+  selector:
+    matchLabels:
+      app: "shopping-cart"
+  template:
+    metadata:
+      labels:
+        app: "shopping-cart"
+    spec:
+      containers:
+      - name: "js-shopping-cart"
+        image: "gcr.io/stateserv/js-shopping-cart:latest"
+        env:
+        - name: "DEBUG"
+          value: "stateserve-event-sourcing"
+      - name: "akka-sidecar"
+        image: "gcr.io/stateserv/stateful-serverless-backend-cassandra:latest"
+
+        ports:
+        - containerPort: 8558
+          name: "management"
+
+        env:
+        - name: "APP_LABEL"
+          valueFrom:
+            fieldRef:
+              fieldPath: "metadata.labels['app']"
+        - name: "REQUIRED_CONTACT_POINT_NR"
+          value: "2"
+        - name: "JAVA_OPTS"
+          value: "-Xms256m -Xmx256m"
+        - name: "CASSANDRA_KEYSPACE"
+          value: "shoppingcart"
+        - name: "CASSANDRA_CONTACT_POINTS"
+          value: "cassandra-cassandra-0.cassandra-cassandra-svc.default.svc.cluster.local"
+
+        resources:
+          limits:
+            memory: 512Mi
+          requests:
+            cpu: 0.25
+            memory: 512Mi
+
+        readinessProbe:
+          httpGet:
+            path: "/ready"
+            port: "management"
+          periodSeconds: 10
+          failureThreshold: 10
+          initialDelaySeconds: 20
+        livenessProbe:
+          httpGet:
+            path: "/alive"
+            port: "management"
+          periodSeconds: 10
+          failureThreshold: 10
+          initialDelaySeconds: 20
+
+---
+
+# RBAC configuration for kubernetes API discovery mechanism
+kind: "Role"
+apiVersion: "rbac.authorization.k8s.io/v1"
+metadata:
+  name: "pod-reader"
+rules:
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "watch", "list"]
+
+---
+
+kind: "RoleBinding"
+apiVersion: "rbac.authorization.k8s.io/v1"
+metadata:
+  name: "read-pods"
+subjects:
+- kind: "User"
+  name: "system:serviceaccount:default:default"
+roleRef:
+  kind: "Role"
+  name: "pod-reader"
+  apiGroup: "rbac.authorization.k8s.io"

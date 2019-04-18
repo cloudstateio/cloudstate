@@ -13,6 +13,13 @@ val AkkaPersistenceCassandraVersion = "0.93"
 lazy val root = (project in file("."))
   .aggregate(`backend-core`, `backend-cassandra`, `akka-client`)
 
+def dockerSettings: Seq[Setting[_]] = Seq(
+  dockerBaseImage := "adoptopenjdk/openjdk8",
+  dockerUpdateLatest := true,
+  dockerRepository := sys.props.get("docker.registry"),
+  dockerUsername := sys.props.get("docker.username")
+)
+
 lazy val `backend-core` = (project in file("backend/core"))
   .enablePlugins(JavaAppPackaging, DockerPlugin, AkkaGrpcPlugin, JavaAgent)
   .settings(
@@ -30,8 +37,7 @@ lazy val `backend-core` = (project in file("backend/core"))
 
     javaAgents += "org.mortbay.jetty.alpn" % "jetty-alpn-agent" % "2.0.9" % "runtime;test",
 
-    dockerBaseImage := "adoptopenjdk/openjdk8",
-    dockerUpdateLatest := true,
+    dockerSettings,
 
     fork in run := true,
 
@@ -40,6 +46,7 @@ lazy val `backend-core` = (project in file("backend/core"))
   )
 
 lazy val `backend-cassandra` = (project in file("backend/cassandra"))
+  .enablePlugins(JavaAppPackaging, DockerPlugin, JavaAgent)
   .dependsOn(`backend-core`)
   .settings(
     name := "stateful-serverless-backend-cassandra",
@@ -47,10 +54,10 @@ lazy val `backend-cassandra` = (project in file("backend/cassandra"))
       "com.typesafe.akka" %% "akka-persistence-cassandra" % AkkaPersistenceCassandraVersion,
       "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test
     ),
-    dockerBaseImage := "adoptopenjdk/openjdk8",
-    dockerUpdateLatest := true,
+    dockerSettings,
 
-    fork in run := true
+    fork in run := true,
+    mainClass in Compile := Some("com.lightbend.statefulserverless.StatefulServerlessMain")
   )
 
 val copyShoppingCartProtos = taskKey[File]("Copy the shopping cart protobufs")
