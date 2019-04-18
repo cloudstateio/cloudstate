@@ -10,7 +10,7 @@ Currently, we have the Akka stateful serverless event sourcing backend component
 
 The following components exist:
 
-* [Backend](../src/stateful-serverless-backend) - The Akka backend.
+* [Backend](../src/backend/core) - The Akka backend.
 * [Node support](../src/node-support) - Node.js support library for writing user functions in Node.js.
 * [JavaScript shopping-cart example](../src/samples/js-shopping-cart) - Shopping cart user function implemented in JavaScript.
 * [Akka shopping-cart client](../src/samples/akka-js-shopping-cart-client) - Client for the shopping cart user function, implemented using akka-grpc, for testing.
@@ -49,26 +49,26 @@ You will need multiple terminals to run the different components.
     DEBUG=stateserv-event-sourcing node index.js
     ```
     
-    This starts the user function listening on port 8080. It's a gRPC service that implements the [stateful serverless event sourcing protocol](../src/stateful-serverless-backend/src/main/proto/protocol.proto). Debug is enabled so you can see the events, commands and replies sent through the protocol.
+    This starts the user function listening on port 8080. It's a gRPC service that implements the [stateful serverless event sourcing protocol](../src/backend/core/src/main/proto/protocol.proto). Debug is enabled so you can see the events, commands and replies sent through the protocol.
     
-4. In a new terminal, from the `src/stateful-serverless-backend` directory, run:
+4. In a new terminal, from the `src` directory, run:
 
     ```
-    sbt run
+    sbt backend-core/run
     ```
 
     This starts the Akka backend server running as a single node cluster on port 9000. When it starts up it asks the user function started previously for the gRPC interface that it wants to provide (which in our case is [shoppingcart.proto](../src/samples/js-shopping-cart/proto/shoppingcart.proto)) and dynamically provides an implementation of it, proxying the requests as commands through the stateful serverless event sourcing protocol.
 
-5. In a new terminal, from the `src/samples/akka-js-shopping-cart-client` directory, run:
+5. In a new terminal, from the `src` directory, run:
 
     ```
-    sbt run
+    sbt akka-client/run
     ```
     
     This will start a client and run a few commands, outputting the results. Alternatively, if you wish for a more interactive session, run:
     
     ```
-    sbt console
+    sbt akka-client/console
     ```
     
     This will drop you into the Scala REPL, and from there you can instantiate the client and use it, eg:
@@ -96,11 +96,11 @@ We'll start with the user function, which can be found in [`src/samples/js-shopp
 
 Onto the `stateful-serverless-event-sourcing` Node module, which can be found in [`src/node-support`](../src/node-support). While there's no reason why the user function couldn't implement the event sourcing protocol directly, it is a little low level. This library provides an idiomatic JavaScript API binding to the protocol. It is expected that such a library would be provided for all support languages.
 
-* [`protocol.proto`](../src/stateful-serverless-backend/src/main/proto/protocol.proto) - This is the protocol that is implemented by the library, and invoked by the Akka backend. Commands, replies, events and snapshots are serialized into `google.protobuf.Any` - the command payloads and reply payloads are the gRPC input and output messages, while the event and snapshot payloads are what gets stored to persistence. The `ready` rpc method on the `Entity` service is used by the Akka backend to ask the user function for the gRPC protobuf descriptor it wishes to be served, this uses `google.protobuf.FileDescriptorProto` to serialize the descriptor.
+* [`protocol.proto`](../src/backend/core/src/main/proto/protocol.proto) - This is the protocol that is implemented by the library, and invoked by the Akka backend. Commands, replies, events and snapshots are serialized into `google.protobuf.Any` - the command payloads and reply payloads are the gRPC input and output messages, while the event and snapshot payloads are what gets stored to persistence. The `ready` rpc method on the `Entity` service is used by the Akka backend to ask the user function for the gRPC protobuf descriptor it wishes to be served, this uses `google.protobuf.FileDescriptorProto` to serialize the descriptor.
 * [`entity.js`](../src/node-support/src/entity.js) - This is the implementation of the protocol, which adapts the protocol to the API used by the user function.
 
-Next we'll take a look at the Akka backend, which can be found in [`src/stateful-serverless-backend`](../src/stateful-serverless-backend).
+Next we'll take a look at the Akka backend, which can be found in [`src/backend/core`](../src/backend/core).
 
 * [`Serve.scala`](../src/stateful-serverless-backend/src/main/scala/com/lightbend/statefulserverless/Serve.scala) - This provides the dynamically implemented gRPC interface as specified by the user function. Requests are forwarded as commands to the cluster sharded persistent entities.
-* [`StateManager.scala`](../src/stateful-serverless-backend/src/main/scala/com/lightbend/statefulserverless/StateManager.scala) - This is an Akka persistent actor that talks to the user function via the event sourcing gRPC protocol.
-* [`StatefulServerlessServer.scala`](../src/stateful-serverless-backend/src/main/scala/com/lightbend/statefulserverless/StatefulServerlessServer.scala) - This pulls everything together, starting the Akka gRPC server, cluster sharding, and persistence.
+* [`StateManager.scala`](../src/backend/core/src/main/scala/com/lightbend/statefulserverless/StateManager.scala) - This is an Akka persistent actor that talks to the user function via the event sourcing gRPC protocol.
+* [`StatefulServerlessServer.scala`](../src/backend/core/src/main/scala/com/lightbend/statefulserverless/StatefulServerlessServer.scala) - This pulls everything together, starting the Akka gRPC server, cluster sharding, and persistence.

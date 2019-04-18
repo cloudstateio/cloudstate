@@ -12,6 +12,6 @@
     "mocha": "^6.1.3"
   },
   "scripts": {
-    "prepare": "cp -r ../stateful-serverless-backend/src/main/proto ."
+    "prepare": "cp -r ../backend/core/src/main/proto ."
   }
 }

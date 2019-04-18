@@ -41,6 +41,6 @@ object StatefulServerlessMain extends App {
       ))
 
     system.actorOf(supervisor)
-    
+
   }
 }
