@@ -36,7 +36,7 @@ lazy val `backend-core` = (project in file("backend/core"))
     fork in run := true,
 
     // In memory journal by default
-    javaOptions in run += "-Dconfig.resource=in-memory.conf"
+    javaOptions in run ++= Seq("-Dconfig.resource=in-memory.conf", "-Dstateful-serverless.dev-mode-enabled=true")
   )
 
 lazy val `backend-cassandra` = (project in file("backend/cassandra"))
