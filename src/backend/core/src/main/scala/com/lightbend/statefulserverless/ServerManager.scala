@@ -18,7 +18,6 @@ import scala.concurrent.duration._
 
 object ServerManager {
   final case class Configuration (
-    devMode: Boolean,
     httpInterface: String,
     httpPort: Int,
     userFunctionInterface: String,
@@ -28,9 +27,9 @@ object ServerManager {
     passivationTimeout: Timeout,
     numberOfShards: Int,
     proxyParallelism: Int) {
+    validate()
     def this(config: Config) = {
       this(
-        devMode               = config.getBoolean("dev-mode-enabled"),
         httpInterface         = config.getString("http-interface"),
         httpPort              = config.getInt("http-port"),
         userFunctionInterface = config.getString("user-function-interface"),
@@ -41,7 +40,6 @@ object ServerManager {
         numberOfShards        = config.getInt("number-of-shards"),
         proxyParallelism      = config.getInt("proxy-parallelism")
       )
-      validate()
     }
 
     private[this] final def validate(): Unit = {
