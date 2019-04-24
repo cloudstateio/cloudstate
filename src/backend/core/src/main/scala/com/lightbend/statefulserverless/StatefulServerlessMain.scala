@@ -11,8 +11,7 @@ import scala.concurrent.duration._
 
 object StatefulServerlessMain extends App {
   implicit val system = ActorSystem("statefulserverless-backend")
-  implicit val materializer = ActorMaterializer()
-  implicit val executionContext = system.dispatcher
+  implicit final val materializer = ActorMaterializer()
 
   // FIXME go over and supply appropriate values for Cluster Sharding
   // https://doc.akka.io/docs/akka/current/cluster-sharding.html?language=scala#configuration
@@ -30,17 +29,13 @@ object StatefulServerlessMain extends App {
   }
 
   cluster.registerOnMemberUp {
-
-    val supervisor = BackoffSupervisor.props(
+    system.actorOf(BackoffSupervisor.props(
       BackoffOpts.onFailure(
         ServerManager.props(config),
         childName = "server-manager",
-        minBackoff = 1.second,
-        maxBackoff = 10.seconds,
-        randomFactor = 0.2
-      ))
-
-    system.actorOf(supervisor)
-
+        minBackoff = 1.second,   // TODO make this configurable
+        maxBackoff = 10.seconds, // TODO make this configurable
+        randomFactor = 0.2       // TODO make this configurable
+      )))
   }
 }

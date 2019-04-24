@@ -36,27 +36,27 @@ final class StateManagerSupervisor(client: EntityClient, configuration: StateMan
 
   import StateManagerSupervisor._
 
-  override def receive: Receive = PartialFunction.empty
+  override final def receive: Receive = PartialFunction.empty
 
-  override def preStart(): Unit = {
+  override final def preStart(): Unit = {
     client.handle(Source.actorRef[EntityStreamIn](configuration.sendQueueSize, OverflowStrategy.fail)
       .mapMaterializedValue { ref =>
         self ! Relay(ref)
         NotUsed
-      }).runWith(Sink.actorRef(self, StateManager.StreamClosed))
+      }).runWith(Sink.actorRef(self, StateManager.StreamClosed)) // FIXME do we need a kill-switch here?
     context.become(waitingForRelay)
   }
 
-  private def waitingForRelay: Receive = {
-    case Relay(actorRef) =>
-      val manager = context.watch(context.actorOf(StateManager.props(configuration, self.path.name, actorRef)))
+  private[this] final def waitingForRelay: Receive = {
+    case Relay(relayRef) =>
+      val manager = context.watch(context.actorOf(StateManager.props(configuration, self.path.name, relayRef)))
       context.become(forwarding(manager))
       unstashAll()
     case _ => stash()
   }
 
-  private def forwarding(manager: ActorRef): Receive = {
-    case Terminated(_) =>
+  private[this] final def forwarding(manager: ActorRef): Receive = {
+    case Terminated(`manager`) =>
       context.stop(self)
     case toParent if sender() == manager =>
       context.parent ! toParent
@@ -82,27 +82,28 @@ object StateManager {
       final val replyTo: ActorRef
     )
 
-  def props(configuration: Configuration, entityId: String, relay: ActorRef): Props =
+  final def props(configuration: Configuration, entityId: String, relay: ActorRef): Props =
     Props(new StateManager(configuration, entityId, relay))
 }
 
 final class StateManager(configuration: StateManager.Configuration, entityId: String, relay: ActorRef) extends PersistentActor with ActorLogging {
   override final def persistenceId: String = configuration.userFunctionName + entityId
 
+  private[this] final var stashedCommands = Queue.empty[(Command, ActorRef)] // PERFORMANCE: look at options for data structures
+  private[this] final var currentRequest: StateManager.Request = null
+  private[this] final var stopped = false
+  private[this] final var idCounter = 0l
+  private[this] final var inited = false
+
+  // Set up passivation timer
   context.setReceiveTimeout(configuration.passivationTimeout.duration)
 
-  private var stashedCommands = Queue.empty[(Command, ActorRef)]
-  private var currentRequest: StateManager.Request = null
-  private var stopped = false
-  private var idCounter = 0l
-  private var inited = false
-
-  override def postStop(): Unit = {
+  override final def postStop(): Unit = {
     // This will shutdown the stream (if not already shut down)
     relay ! Status.Success(())
   }
 
-  private def commandHandled(): Unit = {
+  private[this] final def commandHandled(): Unit = {
     currentRequest = null
     if (stashedCommands.nonEmpty) {
       val (command, newStashedCommands) = stashedCommands.dequeue
@@ -113,21 +114,23 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
     }
   }
 
-  private def notifyOutstandingRequests(msg: String): Unit = {
-    if (currentRequest != null) {
-      currentRequest.replyTo ! Status.Failure(new Exception(msg))
+  private[this] final def notifyOutstandingRequests(msg: String): Unit = {
+    currentRequest match {
+      case null =>
+      case req => req.replyTo ! Status.Failure(new Exception(msg))
     }
+    val errorNotification = Status.Failure(new Exception("Entity terminated"))
     stashedCommands.foreach {
-      case (_, replyTo) => replyTo ! Status.Failure(new Exception("Entity terminated"))
+      case (_, replyTo) => replyTo ! errorNotification
     }
   }
 
-  private def crash(msg: String): Unit = {
+  private[this] final def crash(msg: String): Unit = {
     notifyOutstandingRequests(msg)
     throw new Exception(msg)
   }
 
-  override def receiveCommand: PartialFunction[Any, Unit] = {
+  override final def receiveCommand: PartialFunction[Any, Unit] = {
 
     case c: Command if currentRequest != null =>
       stashedCommands = stashedCommands.enqueue((c, sender()))
@@ -187,10 +190,12 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
       }
 
     case StateManager.StreamClosed =>
+      // FIXME Perhaps reconnect if `currentRequest == null`? Connection could have been timed out?
       notifyOutstandingRequests("Unexpected entity termination")
       context.stop(self)
 
     case Status.Failure(error) =>
+      // FIXME Perhaps reconnect if `currentRequest == null`? Connection could have been timed out?
       notifyOutstandingRequests("Unexpected entity termination")
       throw error
 
@@ -204,18 +209,17 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
       context.parent ! ShardRegion.Passivate(stopMessage = StateManager.Stop)
 
     case StateManager.Stop =>
+      stopped = true
       if (currentRequest == null) {
         context.stop(self)
-      } else {
-        stopped = true // FIXME do we need to set a ReceiveTimeout to time out a request?
-        // jroper: I don't think so, I think cluster sharding does that for us.
       }
   }
 
-  private def maybeInit(snapshot: Option[SnapshotOffer]): Unit = {
+  private[this] final def maybeInit(snapshot: Option[SnapshotOffer]): Unit = {
     if (!inited) {
       relay ! EntityStreamIn(ESIMsg.Init(Init(entityId, snapshot.map {
         case SnapshotOffer(metadata, offeredSnapshot: pbAny) => Snapshot(metadata.sequenceNr, Some(offeredSnapshot))
+        case other => throw new IllegalStateException(s"Unexpected snapshot type received: ${other.getClass}")
       })))
       inited = true
     }

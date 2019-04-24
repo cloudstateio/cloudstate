@@ -5,6 +5,7 @@ import akka.actor.{Actor, ActorLogging, CoordinatedShutdown, Props, Status}
 import akka.util.Timeout
 import akka.pattern.pipe
 import akka.stream.Materializer
+import akka.dispatch.ExecutionContexts
 import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
 import akka.cluster.sharding._
@@ -43,7 +44,7 @@ object ServerManager {
       validate()
     }
 
-    private[this] def validate(): Unit = {
+    private[this] final def validate(): Unit = {
       require(proxyParallelism > 0)
       // TODO add more config validation here
     }
@@ -53,12 +54,11 @@ object ServerManager {
 }
 
 class ServerManager(config: ServerManager.Configuration)(implicit mat: Materializer) extends Actor with ActorLogging {
-
+  import context.system
   import context.dispatcher
-  implicit private val system = context.system
 
-  private val clientSettings     = GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
-  private val client             = EntityClient(clientSettings)
+  private[this] val clientSettings = GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
+  private[this] val client         = EntityClient(clientSettings)
 
   client.ready(Empty.of()) pipeTo self
 
@@ -88,9 +88,9 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
       throw cause
   }
 
-  private def binding: Receive = {
+  private[this] final def binding: Receive = {
     case binding: ServerBinding =>
-      println(s"StatefulServerless backend online at ${binding.localAddress}")
+      log.info(s"StatefulServerless backend online at ${binding.localAddress}")
 
       // These can be removed if https://github.com/akka/akka-http/issues/1210 ever gets implemented
       val shutdown = CoordinatedShutdown(system)
@@ -100,7 +100,7 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
       }
 
       shutdown.addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "http-graceful-terminate") { () =>
-        binding.terminate(10.seconds).map(_ => Done)
+        binding.terminate(10.seconds).map(_ => Done) // TODO make configurable?
       }
 
       shutdown.addTask(CoordinatedShutdown.PhaseServiceStop, "http-shutdown") { () =>
@@ -116,9 +116,10 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
   }
 
   /** Nothing to do when running */
-  private def running: Receive = PartialFunction.empty
+  private[this] final def running: Receive = PartialFunction.empty
 
-  override def postStop(): Unit = {
+  override final def postStop(): Unit = {
+    super.postStop()
     client.close()
   }
 }
