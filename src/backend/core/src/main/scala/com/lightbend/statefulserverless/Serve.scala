@@ -130,6 +130,8 @@ object Serve {
           }
 
           Some(future.recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys))))
+        case Path.Slash(Segment("healthz", Path.Empty)) =>
+          Some(Future.successful(HttpResponse(StatusCodes.OK))) // FIXME Implement support for this
         case _ => None
       }
     } orElse { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }

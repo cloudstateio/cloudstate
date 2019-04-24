@@ -1,7 +1,7 @@
 package com.lightbend.statefulserverless
 
 import akka.Done
-import akka.actor.{Actor, ActorLogging, CoordinatedShutdown, Props, Status}
+import akka.actor.{ActorRef, Actor, ActorLogging, CoordinatedShutdown, Props, Status, Terminated }
 import akka.util.Timeout
 import akka.pattern.pipe
 import akka.stream.Materializer
@@ -57,8 +57,8 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
   import context.system
   import context.dispatcher
 
-  private[this] val clientSettings = GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
-  private[this] val client         = EntityClient(clientSettings)
+  private[this] final val clientSettings = GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
+  private[this] final val client         = EntityClient(clientSettings)
 
   client.ready(Empty.of()) pipeTo self
 
@@ -66,29 +66,27 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
     case reply: EntitySpec =>
       val stateManagerConfig = StateManager.Configuration(reply.persistenceId, config.passivationTimeout, config.relayOutputBufferSize)
 
-      val stateManager = ClusterSharding(system).start(
+      val stateManager = context.watch(ClusterSharding(system).start(
         typeName = reply.persistenceId,
         entityProps = StateManagerSupervisor.props(client, stateManagerConfig),
         settings = ClusterShardingSettings(system),
-        messageExtractor = new Serve.CommandMessageExtractor(config.numberOfShards))
-
-     val route = Serve.createRoute(stateManager, config.proxyParallelism, config.relayTimeout, reply)
+        messageExtractor = new Serve.CommandMessageExtractor(config.numberOfShards)))
 
       Http().bindAndHandleAsync(
-        route,
+        handler = Serve.createRoute(stateManager, config.proxyParallelism, config.relayTimeout, reply),
         interface = config.httpInterface,
         port = config.httpPort,
         connectionContext = HttpConnectionContext(http2 = UseHttp2.Always)
       ) pipeTo self
 
-      context.become(binding)
+      context.become(binding(stateManager))
 
     case Status.Failure(cause) =>
       // Failure to load the entity spec is not fatal, simply crash and let the backoff supervisor restart us
       throw cause
   }
 
-  private[this] final def binding: Receive = {
+  private[this] final def binding(stateManager: ActorRef): Receive = {
     case binding: ServerBinding =>
       log.info(s"StatefulServerless backend online at ${binding.localAddress}")
 
@@ -107,7 +105,11 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
         Http().shutdownAllConnectionPools().map(_ => Done)
       }
 
-      context.become(running)
+      context.become(running(stateManager))
+
+    case Terminated(`stateManager`) =>
+      log.error("StateManager terminated during initialization of server")
+      system.terminate()
 
     case Status.Failure(cause) =>
       // Failure to bind the HTTP server is fatal, terminate
@@ -116,10 +118,13 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
   }
 
   /** Nothing to do when running */
-  private[this] final def running: Receive = PartialFunction.empty
+  private[this] final def running(stateManager: ActorRef): Receive = {
+    case Terminated(`stateManager`) => // TODO How to handle the termination of the stateManager during runtime?
+  }
 
   override final def postStop(): Unit = {
     super.postStop()
     client.close()
+    // TODO do we system.terminate() here?
   }
 }
