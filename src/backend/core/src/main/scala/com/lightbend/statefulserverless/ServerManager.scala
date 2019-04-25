@@ -62,14 +62,17 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
 
   override def receive: Receive = {
     case reply: EntitySpec =>
+      log.debug("Received EntitySpec from user function")
       val stateManagerConfig = StateManager.Configuration(reply.persistenceId, config.passivationTimeout, config.relayOutputBufferSize)
 
+      log.debug("Starting StateManager for {}", reply.persistenceId)
       val stateManager = context.watch(ClusterSharding(system).start(
         typeName = reply.persistenceId,
         entityProps = StateManagerSupervisor.props(client, stateManagerConfig),
         settings = ClusterShardingSettings(system),
         messageExtractor = new Serve.CommandMessageExtractor(config.numberOfShards)))
 
+      log.debug("Starting gRPC proxy for {}", reply.persistenceId)
       Http().bindAndHandleAsync(
         handler = Serve.createRoute(stateManager, config.proxyParallelism, config.relayTimeout, reply),
         interface = config.httpInterface,
@@ -123,6 +126,7 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
   override final def postStop(): Unit = {
     super.postStop()
     client.close()
+    log.debug("shutting down")
     // TODO do we system.terminate() here?
   }
 }

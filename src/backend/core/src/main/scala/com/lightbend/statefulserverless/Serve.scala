@@ -19,11 +19,11 @@ import akka.cluster.sharding.ShardRegion.HashCodeMessageExtractor
 
 
 object Serve {
-
-  private val EntityKeyOptionNumber = 50002 // See src/main/protoentitykey.proto
+  // TODO load this value from the generated Option
+  private final val EntityKeyOptionNumber = 50002 // See src/main/protoentitykey.proto
   // When the entity key is made up of multiple fields, this is used to separate them
-  private val EntityKeyValueSeparator = "-"
-  private val AnyTypeUrlHostName = "type.googleapis.com/"
+  private final val EntityKeyValueSeparator = "-"
+  private final val AnyTypeUrlHostName = "type.googleapis.com/"
 
   private final object ReplySerializer extends ProtobufSerializer[ProtobufByteString] {
     override final def serialize(pbBytes: ProtobufByteString): ByteString =
@@ -43,8 +43,10 @@ object Serve {
   private final class CommandSerializer(commandName: String, desc: Descriptor) extends ProtobufSerializer[Command] {
     private[this] final val commandTypeUrl = AnyTypeUrlHostName + desc.getFullName
     private[this] final val entityKeys = desc.getFields.asScala.filter(
-      _.getOptions.getUnknownFields.hasField(EntityKeyOptionNumber) // todo do we need to check if the value is true?
-    ).toArray.sortBy(_.getIndex) // TODO specify order explicitly for maintainability?
+      _.getOptions.getUnknownFields.hasField(EntityKeyOptionNumber) || true // FIXME require option to be set
+    ).toArray.sortBy(_.getIndex)
+
+    require(entityKeys.nonEmpty, s"No field marked with [(com.lightbend.statefulserverless.grpc.entity_key) = true] found for $commandName")
 
     // Should not be used in practice
     override final def serialize(command: Command): ByteString = command.payload match {
@@ -91,11 +93,7 @@ object Serve {
       ("", serviceName)
     }
 
-    if (pkg == descriptor.getPackage) {
-      Some(descriptor.findServiceByName(name))
-    } else {
-      None
-    }
+    Some(descriptor).filter(_.getPackage == pkg).map(_.findServiceByName(name))
   }
 
   def createRoute(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
@@ -103,37 +101,45 @@ object Serve {
 
     extractService(spec.serviceName, descriptor) match {
       case None => throw new Exception(s"Service ${spec.serviceName} not found in descriptor!")
-      case Some(service) => compileInterface(stateManager, proxyParallelism, relayTimeout, service)
+      case Some(service) =>
+        compileProxy(stateManager, proxyParallelism, relayTimeout, service) orElse {
+          case req: HttpRequest =>
+            val status =
+              req.uri.path match {
+                case Path.Slash(Segment("health", Path.Empty)) =>
+                  StatusCodes.OK // FIXME Implement support for this
+                case _ =>
+                  StatusCodes.NotFound
+              }
+            Future.successful(HttpResponse(status))
+        }
     }
   }
 
-  def compileInterface(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+  private[this] final def compileProxy(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val serviceName = serviceDesc.getFullName
-    val implementedEndpoints = serviceDesc.getMethods.iterator.asScala.map(d => (d.getName, new ExposedEndpoint(d))).toMap
+    val implementedEndpoints = serviceDesc.getMethods.iterator.asScala.map(d => (d.getName, new ExposedEndpoint(d))).toMap.withDefault(null)
 
     Function.unlift { req: HttpRequest =>
       req.uri.path match {
-        // FIXME verify that path matching is compatible with different permutations of service declarations
         case Path.Slash(Segment(`serviceName`, Path.Slash(Segment(endpointName, Path.Empty)))) ⇒
-        val future =
-          if(implementedEndpoints.keySet.contains(endpointName)) {
-            import GrpcMarshalling.{marshalStream, unmarshalStream}
-            val responseCodec = Codecs.negotiate(req)
-            val endpoint = implementedEndpoints(endpointName)
-            implicit val askTimeout = relayTimeout
+          val future =
+            implementedEndpoints(endpointName) match {
+              case null => Future.failed(new NotImplementedError(s"Not implemented: $endpointName"))
+              case endpoint =>
+                import GrpcMarshalling.{marshalStream, unmarshalStream}
+                val responseCodec = Codecs.negotiate(req)
+                implicit val askTimeout = relayTimeout
 
-            unmarshalStream(req)(endpoint.unmarshaller, mat).
-              map(_.mapAsync(proxyParallelism)(command => (stateManager ? command).mapTo[ProtobufByteString])).
-              map(e => marshalStream(e)(endpoint.marshaller, mat, responseCodec, sys))
-          } else {
-            Future.failed(new NotImplementedError(s"Not implemented: $endpointName"))
-          }
+                unmarshalStream(req)(endpoint.unmarshaller, mat).
+                  map(_.mapAsync(proxyParallelism)(command => (stateManager ? command).mapTo[ProtobufByteString])).
+                  map(e => marshalStream(e)(endpoint.marshaller, mat, responseCodec, sys))
+            }
 
-          Some(future.recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys))))
-        case Path.Slash(Segment("healthz", Path.Empty)) =>
-          Some(Future.successful(HttpResponse(StatusCodes.OK))) // FIXME Implement support for this
-        case _ => None
+            Some(future.recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys))))
+          case _ =>
+            None
       }
-    } orElse { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }
+    }
   }
 }
