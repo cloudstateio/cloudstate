@@ -65,6 +65,23 @@ lazy val `backend-cassandra` = (project in file("backend/cassandra"))
     mainClass in Compile := Some("com.lightbend.statefulserverless.StatefulServerlessMain")
   )
 
+lazy val operator = (project in file("operator"))
+  .enablePlugins(JsonSchema2Pojo)
+  .settings(
+    name := "stateful-serverless-operator",
+    mainClass in Compile := Some("io.radanalytics.operator.Entrypoint"),
+    // libraryDependencies += "io.radanalytics" % "abstract-operator" % "0.6.5",
+    libraryDependencies += "io.skuber" %% "skuber" % "2.2.0",
+    jsonSchema2PojoConfig := JsonSchema2PojoConfig(generateBuilders = true),
+
+    assemblyMergeStrategy in assembly := {
+      case "log4j.properties" => MergeStrategy.first
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    }
+  )
+
 val copyShoppingCartProtos = taskKey[File]("Copy the shopping cart protobufs")
 
 lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"))
