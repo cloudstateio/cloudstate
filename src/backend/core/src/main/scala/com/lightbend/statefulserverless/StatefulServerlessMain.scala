@@ -7,7 +7,20 @@ import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
 import akka.pattern.{BackoffOpts, BackoffSupervisor}
 import akka.stream.ActorMaterializer
+import scala.concurrent.Future
 import scala.concurrent.duration._
+
+final class HealthCheckReady(system: ActorSystem) extends (() => Future[Boolean]) {
+  override final def apply(): Future[Boolean] = {
+    Future.successful(true) // FIXME implement
+  }
+}
+
+final class HealthCheckLive(system: ActorSystem) extends (() => Future[Boolean]) {
+  override final def apply(): Future[Boolean] = {
+    Future.successful(true) // FIXME implement
+  }
+}
 
 object StatefulServerlessMain {
   final case class Configuration (

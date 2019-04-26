@@ -103,15 +103,7 @@ object Serve {
       case None => throw new Exception(s"Service ${spec.serviceName} not found in descriptor!")
       case Some(service) =>
         compileProxy(stateManager, proxyParallelism, relayTimeout, service) orElse {
-          case req: HttpRequest =>
-            val status =
-              req.uri.path match {
-                case Path.Slash(Segment("health", Path.Empty)) =>
-                  StatusCodes.OK // FIXME Implement support for this
-                case _ =>
-                  StatusCodes.NotFound
-              }
-            Future.successful(HttpResponse(status))
+          case req: HttpRequest => Future.successful(HttpResponse(StatusCodes.NotFound)) // TODO do we need this?
         }
     }
   }
