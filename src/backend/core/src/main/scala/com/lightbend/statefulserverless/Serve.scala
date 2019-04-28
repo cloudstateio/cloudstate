@@ -97,7 +97,10 @@ object Serve {
   }
 
   def createRoute(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    val descriptor = FileDescriptor.buildFrom(DescriptorProtos.FileDescriptorProto.parseFrom(spec.proto.get.toByteArray), Array())
+    val descriptor = FileDescriptor.buildFrom(DescriptorProtos.FileDescriptorProto.parseFrom(spec.proto.get.toByteArray), Array(EntitykeyProto.javaDescriptor), true)
+
+    // Debug:
+    //println(DescriptorProtos.FileDescriptorProto.parseFrom(spec.proto.get.toByteArray).toString)
 
     extractService(spec.serviceName, descriptor) match {
       case None => throw new Exception(s"Service ${spec.serviceName} not found in descriptor!")
