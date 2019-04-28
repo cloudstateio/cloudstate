@@ -173,7 +173,7 @@ describe("shopping cart", () => {
 
   before("start shopping cart server", () => {
     const port = server.start();
-    client = new descriptor.com.lightbend.statefulserverless.grpc.Entity("localhost:" + port, grpc.credentials.createInsecure());
+    client = new descriptor.com.lightbend.statefulserverless.grpc.Entity("0.0.0.0:" + port, grpc.credentials.createInsecure());
   });
 
   after("shutdown shopping cart server", () => {
