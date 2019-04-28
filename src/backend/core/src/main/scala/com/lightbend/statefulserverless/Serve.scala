@@ -12,7 +12,8 @@ import akka.util.{ByteString, Timeout}
 import akka.pattern.ask
 import akka.stream.Materializer
 import com.google.protobuf.{DescriptorProtos, DynamicMessage, ByteString => ProtobufByteString}
-import com.google.protobuf.any.{Any => ProtobufAny}
+import com.google.protobuf.empty.{Empty => ProtobufEmpty, EmptyProto => ProtobufEmptyProto}
+import com.google.protobuf.any.{Any => ProtobufAny, AnyProto => ProtobufAnyProto}
 import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor, MethodDescriptor, ServiceDescriptor}
 import com.lightbend.statefulserverless.grpc._
 import akka.cluster.sharding.ShardRegion.HashCodeMessageExtractor
@@ -97,7 +98,13 @@ object Serve {
   }
 
   def createRoute(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    val descriptor = FileDescriptor.buildFrom(DescriptorProtos.FileDescriptorProto.parseFrom(spec.proto.get.toByteArray), Array(EntitykeyProto.javaDescriptor), true)
+    val descriptor = FileDescriptor.buildFrom(
+      DescriptorProtos.FileDescriptorProto.parseFrom(
+        spec.proto.get.toByteArray),
+        Array(EntitykeyProto.javaDescriptor,
+              ProtobufAnyProto.javaDescriptor,
+              ProtobufEmptyProto.javaDescriptor),
+      true)
 
     // Debug:
     //println(DescriptorProtos.FileDescriptorProto.parseFrom(spec.proto.get.toByteArray).toString)
