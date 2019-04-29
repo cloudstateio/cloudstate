@@ -35,6 +35,11 @@ lazy val `backend-core` = (project in file("backend/core"))
       "com.google.protobuf" % "protobuf-java" % "3.5.1" % "protobuf" // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
     ),
 
+    // Akka gRPC adds all protobuf files from the classpath to this, which we don't want because it includes
+    // all the Google protobuf files which are already compiled and on the classpath by ScalaPB. So we set it
+    // back to just our source directory.
+    PB.protoSources in Compile := Seq((sourceDirectory in Compile).value / "proto"),
+
     javaAgents += "org.mortbay.jetty.alpn" % "jetty-alpn-agent" % "2.0.9" % "runtime;test",
 
     dockerSettings,
