@@ -143,8 +143,12 @@ object Serve {
     }
   }
 
-  private def mapRequestFailureExceptions: PartialFunction[Throwable, Status] = {
-    case CommandFailure(msg) => Status.UNKNOWN.augmentDescription(msg)
+  private[this] final val mapRequestFailureExceptions: (ActorSystem => PartialFunction[Throwable, Status]) = {
+    val pf: PartialFunction[Throwable, Status] = {
+      case CommandFailure(msg) => Status.UNKNOWN.augmentDescription(msg)
+    }
+
+    _ => pf
   }
 
   private[this] final def compileProxy(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
@@ -164,7 +168,7 @@ object Serve {
 
                 unmarshalStream(req)(endpoint.unmarshaller, mat).
                   map(_.mapAsync(proxyParallelism)(command => (stateManager ? command).mapTo[ProtobufByteString])).
-                  map(e => marshalStream(e, _ => mapRequestFailureExceptions)(endpoint.marshaller, mat, responseCodec, sys))
+                  map(e => marshalStream(e, mapRequestFailureExceptions)(endpoint.marshaller, mat, responseCodec, sys))
             }
 
             Some(future.recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys))))
