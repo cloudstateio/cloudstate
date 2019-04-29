@@ -1,15 +1,17 @@
 package com.lightbend.statefulserverless.operator
 
-import akka.Done
 import akka.stream.Materializer
+import akka.stream.scaladsl.Sink
 import play.api.libs.json.JsObject
-import skuber.{Container, CustomResource, EnvVar, HTTPGetAction, LabelSelector, ObjectMeta, Pod, Probe, Resource}
-import skuber.json.format._
 
 import scala.concurrent.{ExecutionContext, Future}
 import skuber.api.client.{EventType, KubernetesClient}
-import skuber.apps.Deployment
+import skuber.apps.v1.Deployment
 import skuber.rbac._
+import skuber._
+import skuber.LabelSelector.dsl._
+//import skuber.json.format._
+import skuber.json.rbac.format._
 
 object EventSourcedServiceOperator {
   val OperatorNamespace = "statefulserverless.lightbend.com"
@@ -26,24 +28,32 @@ object EventSourcedServiceOperator {
 }
 
 class EventSourcedServiceOperator(client: KubernetesClient)(implicit mat: Materializer, ec: ExecutionContext) {
+
   import EventSourcedServiceOperator._
 
   import EventSourcedService.eventSourcedServiceResourceDefinition
 
-  val source = client.watchAllContinuously[EventSourcedService.Resource]()
+  def run(): Unit = {
+    case class EventWithState()
 
-  case class EventWithState()
-
-  source.scanAsync(Map.empty[String, EventSourcedService.Resource]) { (resources, event) =>
-    event._type match {
-      case EventType.ADDED =>
-        handleAdded(resources, event._object)
-      case EventType.DELETED =>
-      case EventType.MODIFIED =>
-      case EventType.ERROR =>
-        // Ignore?
-        Future.successful(resources)
-    }
+    client.usingNamespace("default")
+      .watchAllContinuously[EventSourcedService.Resource]()
+      .scanAsync(Map.empty[String, EventSourcedService.Resource]) { (resources, event) =>
+        println("Got event " + event)
+        event._type match {
+          case EventType.ADDED =>
+            handleAdded(resources, event._object)
+          case EventType.DELETED =>
+            handleDeleted(resources, event._object)
+          case EventType.MODIFIED =>
+            handleModified(resources, event._object)
+          case EventType.ERROR =>
+            // Ignore?
+            Future.successful(resources)
+        }
+      }.watchTermination()((_, done) => {
+      done.onComplete(println)
+    }).runWith(Sink.ignore)
   }
 
   private def handleAdded(resources: Map[String, EventSourcedService.Resource], resource: EventSourcedService.Resource) = {
@@ -55,27 +65,49 @@ class EventSourcedServiceOperator(client: KubernetesClient)(implicit mat: Materi
     }
   }
 
+  private def handleModified(resources: Map[String, EventSourcedService.Resource], resource: EventSourcedService.Resource) = {
+    // For now, just pretend it was added, and let the deployment do the change detection
+    handleAdded(resources, resource)
+  }
+
+  private def handleDeleted(resources: Map[String, EventSourcedService.Resource], resource: EventSourcedService.Resource) = {
+    val namespaced = client.usingNamespace(resource.namespace)
+    namespaced.getOption[Deployment](deploymentNameFor(resource.name)).flatMap {
+      case Some(existing) if existing.metadata.labels.get(KubernetesManagedByLabel).contains(OperatorNamespace) =>
+        namespaced.delete[Deployment](existing.name)
+      case Some(existing) =>
+        println("Event sourced function " + resource.name + " deleted but the deployment wasn't managed by us, not deleting.")
+        Future.successful(())
+      case None =>
+        println("Event sourced function " + resource.name + " deleted but no deployment found to delete.")
+        Future.successful(())
+    }.map { _ =>
+      resources - resource.name
+    }
+  }
+
   private def addDeployment(resource: EventSourcedService.Resource): Future[EventSourcedService.Resource] = {
     client.getOption[EventSourcedJournal.Resource](resource.spec.journal.name).flatMap {
       case Some(journal) =>
-        addDeploymentForJournal(resource, journal)
+        addDeploymentForJournal(resource, journal).map(_ => resource)
       case None =>
-        // Set error
+        // Todo set status to error
+        println(s"No journal found for ${resource.spec.journal}")
+        Future.successful(resource)
     }
   }
 
   private def addDeploymentForJournal(resource: EventSourcedService.Resource, journal: EventSourcedJournal.Resource) = {
-    // todo validate spec exists
-    val templateSpec = resource.spec.template.spec.get
+    val templateSpec = resource.spec.template.spec
 
     // todo handle errors appropriately
     val keyspace = resource.spec.journal.config.flatMap(obj => (obj \ "keyspace").asOpt[String]).getOrElse(sys.error("No Cassandra keyspace!"))
 
     // todo this should come from the validated journal status, and handle errors appropriately
-    val contactPoints = (journal.spec.journal.config.getOrElse(JsObject.empty) \ "service").as[String]
+    val contactPoints = (journal.spec.config.getOrElse(JsObject.empty) \ "service").as[String]
 
-    val injectedSpec = templateSpec
-      .copy(containers = templateSpec.containers.map {
+    val injectedSpec = Pod.Spec(
+      containers = templateSpec.containers.map {
         case container if container.name == "" => container.copy(name = resource.name)
         case container => container
       })
@@ -128,7 +160,7 @@ class EventSourcedServiceOperator(client: KubernetesClient)(implicit mat: Materi
     // Create the deployment
     val deployment = Deployment(
       metadata = ObjectMeta(
-        name = "event-sourced-service-" + resource.name,
+        name = deploymentNameFor(resource.name),
         labels = Map(
           KubernetesManagedByLabel -> OperatorNamespace,
           EventSourcedLabel -> resource.name,
@@ -136,6 +168,9 @@ class EventSourcedServiceOperator(client: KubernetesClient)(implicit mat: Materi
         )
       )
     ).withReplicas(resource.spec.replicas)
+      .withLabelSelector(
+        EventSourcedLabel is resource.name
+      )
       .withTemplate(Pod.Template.Spec(
         metadata = ObjectMeta(
           labels = Map(
@@ -145,8 +180,6 @@ class EventSourcedServiceOperator(client: KubernetesClient)(implicit mat: Materi
         ),
         spec = Some(injectedSpec)
       ))
-
-
 
 
     client.create(deployment)
@@ -246,5 +279,6 @@ class EventSourcedServiceOperator(client: KubernetesClient)(implicit mat: Materi
     }
   }
 
+  private def deploymentNameFor(name: String) = "event-sourced-service-" + name
 
 }

@@ -66,13 +66,9 @@ lazy val `backend-cassandra` = (project in file("backend/cassandra"))
   )
 
 lazy val operator = (project in file("operator"))
-  .enablePlugins(JsonSchema2Pojo)
   .settings(
     name := "stateful-serverless-operator",
-    mainClass in Compile := Some("io.radanalytics.operator.Entrypoint"),
-    // libraryDependencies += "io.radanalytics" % "abstract-operator" % "0.6.5",
     libraryDependencies += "io.skuber" %% "skuber" % "2.2.0",
-    jsonSchema2PojoConfig := JsonSchema2PojoConfig(generateBuilders = true),
 
     assemblyMergeStrategy in assembly := {
       case "log4j.properties" => MergeStrategy.first
