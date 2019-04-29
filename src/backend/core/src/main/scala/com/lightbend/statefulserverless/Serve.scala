@@ -66,11 +66,20 @@ object Serve {
 
   private final class CommandSerializer(commandName: String, desc: Descriptor) extends ProtobufSerializer[Command] {
     private[this] final val commandTypeUrl = AnyTypeUrlHostName + desc.getFullName
-    private[this] final val entityKeys = desc.getFields.asScala
-      .filter(field => EntitykeyProto.entityKey.get(convertFieldOptions(field)))
-      .toArray.sortBy(_.getIndex)
+    private[this] final val extractId = {
+      val fields = desc.getFields.iterator.asScala.
+                     filter(field => EntitykeyProto.entityKey.get(convertFieldOptions(field))).
+                     toArray.sortBy(_.getIndex)
 
-    require(entityKeys.nonEmpty, s"No field marked with [(com.lightbend.statefulserverless.grpc.entity_key) = true] found for $commandName")
+      fields.length match {
+        case 0 => throw new IllegalStateException(s"No field marked with [(com.lightbend.statefulserverless.grpc.entity_key) = true] found for $commandName")
+        case 1 =>
+          val f = fields(0)
+          (dm: DynamicMessage) => dm.getField(f).toString
+        case _ =>
+          (dm: DynamicMessage) => fields.iterator.map(dm.getField).mkString(EntityKeyValueSeparator)
+      }
+    }
 
     // Should not be used in practice
     override final def serialize(command: Command): ByteString = command.payload match {
@@ -79,19 +88,13 @@ object Serve {
     }
 
     override final def deserialize(bytes: ByteString): Command = {
-      val dm = DynamicMessage.parseFrom(desc, bytes.iterator.asInputStream)
-
-      val entityId =
-        if (entityKeys.length == 1) dm.getField(entityKeys(0)).toString // Fast path
-        else entityKeys.iterator.map(dm.getField).mkString(EntityKeyValueSeparator)
-
-      val payload = ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer))
-
       // Use of named parameters here is important, Command is a generated class and if the
       // order of fields changes, that could silently break this code
       // Note, we're not setting the command id. We'll leave it up to the StateManager actor
       // to generate an id that is unique per session.
-      Command(entityId = entityId, name = commandName, payload = Some(payload))
+      Command(entityId = extractId(DynamicMessage.parseFrom(desc, bytes.iterator.asInputStream)),
+              name = commandName,
+              payload = Some(ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer))))
     }
   }
 
