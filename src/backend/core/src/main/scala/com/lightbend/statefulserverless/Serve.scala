@@ -18,6 +18,8 @@ import com.google.protobuf.Descriptors.{Descriptor, FieldDescriptor, FileDescrip
 import com.google.protobuf.{descriptor => ScalaPBDescriptorProtos}
 import com.lightbend.statefulserverless.grpc._
 import akka.cluster.sharding.ShardRegion.HashCodeMessageExtractor
+import com.lightbend.statefulserverless.StateManager.CommandFailure
+import io.grpc.Status
 
 
 object Serve {
@@ -138,6 +140,10 @@ object Serve {
     }
   }
 
+  private def mapRequestFailureExceptions: PartialFunction[Throwable, Status] = {
+    case CommandFailure(msg) => Status.UNKNOWN.augmentDescription(msg)
+  }
+
   private[this] final def compileProxy(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val serviceName = serviceDesc.getFullName
     val implementedEndpoints = serviceDesc.getMethods.iterator.asScala.map(d => (d.getName, new ExposedEndpoint(d))).toMap.withDefault(null)
@@ -155,7 +161,7 @@ object Serve {
 
                 unmarshalStream(req)(endpoint.unmarshaller, mat).
                   map(_.mapAsync(proxyParallelism)(command => (stateManager ? command).mapTo[ProtobufByteString])).
-                  map(e => marshalStream(e)(endpoint.marshaller, mat, responseCodec, sys))
+                  map(e => marshalStream(e, _ => mapRequestFailureExceptions)(endpoint.marshaller, mat, responseCodec, sys))
             }
 
             Some(future.recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys))))

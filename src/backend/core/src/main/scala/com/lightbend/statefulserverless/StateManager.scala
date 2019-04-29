@@ -10,7 +10,7 @@ import akka.cluster.sharding.ShardRegion
 import com.lightbend.statefulserverless.grpc._
 import EntityStreamIn.{Message => ESIMsg}
 import com.google.protobuf.any.{Any => pbAny}
-import com.google.protobuf.{ByteString => pbByteString}
+import com.lightbend.statefulserverless.StateManager.CommandFailure
 
 import scala.collection.immutable.Queue
 
@@ -81,6 +81,12 @@ object StateManager {
       final val commandId: Long,
       final val replyTo: ActorRef
     )
+
+  /**
+    * Exception indicating a failure that has been signalled by the user function
+    * in response to a command.
+    */
+  final case class CommandFailure(msg: String) extends RuntimeException(msg)
 
   final def props(configuration: Configuration, entityId: String, relay: ActorRef): Props =
     Props(new StateManager(configuration, entityId, relay))
@@ -174,6 +180,9 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
             }
           }
 
+        case ESOMsg.Failure(f) if f.commandId == 0 =>
+          crash(s"Non command specific error from entity: " + f.description)
+
         case ESOMsg.Failure(f) if currentRequest == null =>
           crash(s"Unexpected failure, had no current request: $f")
 
@@ -181,7 +190,8 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
           crash(s"Incorrect command id in failure, expecting ${currentRequest.commandId} but got ${f.commandId}")
 
         case ESOMsg.Failure(f) =>
-          currentRequest.replyTo ! Status.Failure(new Exception(f.description))
+          currentRequest.replyTo ! Status.Failure(CommandFailure(f.description))
+          commandHandled()
 
         case ESOMsg.Empty =>
           // Either the reply/failure wasn't set, or its set to something unknown.
