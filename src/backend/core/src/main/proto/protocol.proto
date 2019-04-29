@@ -10,6 +10,8 @@ package com.lightbend.statefulserverless.grpc;
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/descriptor.proto";
+// This is needed to ensure that the FieldOptions are extended when this file is loaded.
+import "entitykey.proto";
 
 // The init message. This will always be the first message sent to the entity when
 // it is loaded.

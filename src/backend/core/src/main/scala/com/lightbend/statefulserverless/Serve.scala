@@ -44,7 +44,7 @@ object Serve {
   private final class CommandSerializer(commandName: String, desc: Descriptor) extends ProtobufSerializer[Command] {
     private[this] final val commandTypeUrl = AnyTypeUrlHostName + desc.getFullName
     private[this] final val entityKeys = desc.getFields.asScala.filter(
-      _.getOptions.getUnknownFields.hasField(EntityKeyOptionNumber) || true // FIXME require option to be set
+      _.getOptions.getUnknownFields.hasField(EntityKeyOptionNumber)
     ).toArray.sortBy(_.getIndex)
 
     require(entityKeys.nonEmpty, s"No field marked with [(com.lightbend.statefulserverless.grpc.entity_key) = true] found for $commandName")
