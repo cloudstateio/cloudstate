@@ -1,0 +1,5 @@
+before_script:
+  - cd src
+  - cd node-support && npm install && cd -
+  - cd samples/js-shopping-cart && npm install
+script: npm test
