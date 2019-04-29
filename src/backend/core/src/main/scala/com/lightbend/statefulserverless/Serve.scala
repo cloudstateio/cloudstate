@@ -12,16 +12,15 @@ import akka.util.{ByteString, Timeout}
 import akka.pattern.ask
 import akka.stream.Materializer
 import com.google.protobuf.{DescriptorProtos, DynamicMessage, ByteString => ProtobufByteString}
-import com.google.protobuf.empty.{Empty => ProtobufEmpty, EmptyProto => ProtobufEmptyProto}
+import com.google.protobuf.empty.{EmptyProto => ProtobufEmptyProto}
 import com.google.protobuf.any.{Any => ProtobufAny, AnyProto => ProtobufAnyProto}
-import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor, MethodDescriptor, ServiceDescriptor}
+import com.google.protobuf.Descriptors.{Descriptor, FieldDescriptor, FileDescriptor, MethodDescriptor, ServiceDescriptor}
+import com.google.protobuf.{descriptor => ScalaPBDescriptorProtos}
 import com.lightbend.statefulserverless.grpc._
 import akka.cluster.sharding.ShardRegion.HashCodeMessageExtractor
 
 
 object Serve {
-  // TODO load this value from the generated Option
-  private final val EntityKeyOptionNumber = 50002 // See src/main/protoentitykey.proto
   // When the entity key is made up of multiple fields, this is used to separate them
   private final val EntityKeyValueSeparator = "-"
   private final val AnyTypeUrlHostName = "type.googleapis.com/"
@@ -41,11 +40,33 @@ object Serve {
       }
   }
 
+  /**
+    * ScalaPB doesn't do this conversion for us unfortunately.
+    *
+    * By doing it, we can use EntitykeyProto.entityKey.get() to read the entity key nicely.
+    */
+  private def convertFieldOptions(field: FieldDescriptor): ScalaPBDescriptorProtos.FieldOptions = {
+    val fieldOptions = ScalaPBDescriptorProtos.FieldOptions.fromJavaProto(field.toProto.getOptions)
+
+    import scala.collection.JavaConverters._
+    // Lots of casting here to get around java.lang.Long <-> scala.Long etc issues
+    val fields = field.getOptions.getUnknownFields.asMap.asScala.map {
+      case (idx, f) => idx -> scalapb.UnknownFieldSet.Field(
+        varint = f.getVarintList.asScala.asInstanceOf[Seq[Long]],
+        fixed64 = f.getFixed64List.asScala.asInstanceOf[Seq[Long]],
+        fixed32 = f.getFixed32List.asScala.asInstanceOf[Seq[Int]],
+        lengthDelimited = f.getLengthDelimitedList.asScala
+      )
+    }.toMap.asInstanceOf[Map[Int, scalapb.UnknownFieldSet.Field]]
+
+    fieldOptions.withUnknownFields(scalapb.UnknownFieldSet(fields))
+  }
+
   private final class CommandSerializer(commandName: String, desc: Descriptor) extends ProtobufSerializer[Command] {
     private[this] final val commandTypeUrl = AnyTypeUrlHostName + desc.getFullName
-    private[this] final val entityKeys = desc.getFields.asScala.filter(
-      _.getOptions.getUnknownFields.hasField(EntityKeyOptionNumber)
-    ).toArray.sortBy(_.getIndex)
+    private[this] final val entityKeys = desc.getFields.asScala
+      .filter(field => EntitykeyProto.entityKey.get(convertFieldOptions(field)))
+      .toArray.sortBy(_.getIndex)
 
     require(entityKeys.nonEmpty, s"No field marked with [(com.lightbend.statefulserverless.grpc.entity_key) = true] found for $commandName")
 
@@ -99,15 +120,14 @@ object Serve {
 
   def createRoute(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val descriptor = FileDescriptor.buildFrom(
-      DescriptorProtos.FileDescriptorProto.parseFrom(
-        spec.proto.get.toByteArray),
+      // It would be nice if we could just use the following line, but turns out ScalaPB doesn't copy unknown fields,
+      // and we need that if we want to access the entity key later.
+      // com.google.protobuf.descriptor.FileDescriptorProto.toJavaProto(spec.proto.get)
+      DescriptorProtos.FileDescriptorProto.parseFrom(spec.proto.get.toByteArray),
         Array(EntitykeyProto.javaDescriptor,
               ProtobufAnyProto.javaDescriptor,
               ProtobufEmptyProto.javaDescriptor),
       true)
-
-    // Debug:
-    //println(DescriptorProtos.FileDescriptorProto.parseFrom(spec.proto.get.toByteArray).toString)
 
     extractService(spec.serviceName, descriptor) match {
       case None => throw new Exception(s"Service ${spec.serviceName} not found in descriptor!")
