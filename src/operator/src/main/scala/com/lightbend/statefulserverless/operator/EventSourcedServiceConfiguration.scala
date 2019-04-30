@@ -1,26 +1,31 @@
 package com.lightbend.statefulserverless.operator
 
-import play.api.libs.json.{Format, JsObject, Json}
+import play.api.libs.json._
 import skuber.ResourceSpecification.Subresources
 import skuber.apiextensions.CustomResourceDefinition
-import skuber.{CustomResource, EnvVar, ListResource, ResourceDefinition}
+import skuber.{CustomResource, ListResource, ResourceDefinition}
 
+object EventSourcedServiceConfiguration {
 
-object EventSourcedJournal {
-
-  type Resource = CustomResource[EventSourcedJournal.Spec, EventSourcedJournal.Status]
+  type Resource = CustomResource[Spec, Status]
   type ResourceList = ListResource[Resource]
 
-  case class Spec(`type`: Option[String], deployment: Option[String], config: Option[JsObject])
+  case class Spec(
+    replicas: Option[Int],
+    journal: Option[EventSourcedService.Journal],
+    template: Option[EventSourcedService.Template]
+  )
 
   object Spec {
     implicit val format: Format[Spec] = Json.format
   }
 
   case class Status(
-    specHash: Option[String],
-    image: Option[String],
-    sidecarEnv: Option[Seq[EnvVar]],
+    appliedSpecHash: Option[String],
+    // This field may be updated by the journal operator
+    journalConfigHash: Option[String],
+    appliedJournalConfigHash: Option[String],
+
     reason: Option[String]
   )
 
@@ -28,11 +33,12 @@ object EventSourcedJournal {
     implicit val format: Format[Status] = Json.format
   }
 
-  implicit val eventSourcedJournalResourceDefinition = ResourceDefinition[Resource](
+
+  implicit val eventSourcedServiceConfigurationResourceDefinition = ResourceDefinition[Resource](
     group = "statefulserverless.lightbend.com",
     version = "v1alpha1",
-    kind = "EventSourcedJournal",
-    shortNames = List("esj"),
+    kind = "EventSourcedServiceConfiguration",
+    shortNames = List("essc"),
     subresources = Some(Subresources()
       .withStatusSubresource
     )

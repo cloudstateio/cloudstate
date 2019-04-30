@@ -1,59 +1,60 @@
 package com.lightbend.statefulserverless.operator
 
 import akka.stream.Materializer
-import akka.stream.scaladsl.Sink
+import akka.stream.scaladsl.{RestartSource, Sink}
 import play.api.libs.json.JsObject
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
 import skuber.api.client.{EventType, KubernetesClient}
 import skuber.apps.v1.Deployment
 import skuber.rbac._
 import skuber._
 import skuber.LabelSelector.dsl._
+
+import scala.util.control.NonFatal
 //import skuber.json.format._
 import skuber.json.rbac.format._
 
-object EventSourcedServiceOperator {
-  val OperatorNamespace = "statefulserverless.lightbend.com"
-  val EventSourcedLabel = s"$OperatorNamespace/event-sourced"
-  val JournalLabel = s"$OperatorNamespace/journal"
-
-  val KubernetesManagedByLabel = "app.kubernetes.io/managed-by"
-
-  val PodReaderRoleName = "statefulserverless-pod-reader"
-
-  val PodReaderRoleBindingName = "statefulserverless-read-pods"
-
-
-}
 
 class EventSourcedServiceOperator(client: KubernetesClient)(implicit mat: Materializer, ec: ExecutionContext) {
 
-  import EventSourcedServiceOperator._
+  import OperatorConstants._
 
   import EventSourcedService.eventSourcedServiceResourceDefinition
 
   def run(): Unit = {
-    case class EventWithState()
 
-    client.usingNamespace("default")
-      .watchAllContinuously[EventSourcedService.Resource]()
-      .scanAsync(Map.empty[String, EventSourcedService.Resource]) { (resources, event) =>
-        println("Got event " + event)
-        event._type match {
-          case EventType.ADDED =>
-            handleAdded(resources, event._object)
-          case EventType.DELETED =>
-            handleDeleted(resources, event._object)
-          case EventType.MODIFIED =>
-            handleModified(resources, event._object)
-          case EventType.ERROR =>
-            // Ignore?
-            Future.successful(resources)
+    RestartSource.onFailuresWithBackoff(2.seconds, 20.seconds, 0.2) { () =>
+      client.usingNamespace("default")
+        .watchAllContinuously[EventSourcedService.Resource]()
+        .scanAsync(Map.empty[String, EventSourcedService.Resource]) { (resources, event) =>
+          println("Got event " + event)
+          val result = try {
+            event._type match {
+              case EventType.ADDED =>
+                handleAdded(resources, event._object)
+              case EventType.DELETED =>
+                handleDeleted(resources, event._object)
+              case EventType.MODIFIED =>
+                handleModified(resources, event._object)
+              case EventType.ERROR =>
+                // Ignore?
+                println("Got error: " + event)
+                Future.successful(resources)
+            }
+          } catch {
+            case NonFatal(e) => Future.failed(e)
+          }
+
+          result.recover {
+            case e =>
+              println("Encountered error handling " + event + ": " + e)
+              e.printStackTrace()
+              resources
+          }
         }
-      }.watchTermination()((_, done) => {
-      done.onComplete(println)
-    }).runWith(Sink.ignore)
+    }.runWith(Sink.ignore)
   }
 
   private def handleAdded(resources: Map[String, EventSourcedService.Resource], resource: EventSourcedService.Resource) = {
