@@ -5,24 +5,37 @@ import java.util.Base64
 
 import akka.Done
 import akka.stream.Materializer
-import akka.stream.scaladsl.{RestartSource, Sink}
-import play.api.libs.json.Format
-import skuber.{CustomResource, HasStatusSubresource, ResourceDefinition}
+import akka.stream.scaladsl.{RestartSource, Sink, Source}
+import com.lightbend.statefulserverless.operator.EventSourcedJournal.Resource
+import play.api.libs.json._
+import skuber.{CustomResource, HasStatusSubresource, ListResource, ResourceDefinition}
 import skuber.api.client.{EventType, KubernetesClient}
+import skuber.json.format._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
 abstract class AbstractOperator[Status, Resource <: CustomResource[_, Status]](client: KubernetesClient)(implicit mat: Materializer,
-  ec: ExecutionContext, fmt: Format[Resource], rd: ResourceDefinition[Resource], hs: HasStatusSubresource[Resource]) {
+  ec: ExecutionContext, fmt: Format[Resource], statusFmt: Format[Status], rd: ResourceDefinition[Resource], hs: HasStatusSubresource[Resource]) {
 
-  protected abstract def namespaces: List[String]
-  protected abstract def hasAnythingChanged(resource: Resource): Boolean
-  protected abstract def handleAdded(namespacedClient: KubernetesClient, resource: Resource): Future[Status]
-  protected abstract def handleModified(namespacedClient: KubernetesClient, resource: Resource): Future[Status]
-  protected abstract def handleDeleted(namespacedClient: KubernetesClient, resource: Resource): Future[Done]
-  protected abstract def statusFromError(error: Throwable, existing: Resource): Status
+  // See https://github.com/doriordan/skuber/issues/270
+  // We do all watches and list resources using JsValue, rather than our actual classes, because this allows us
+  // to handle parse errors
+  type JsValueCustomResource = CustomResource[JsValue, JsValue]
+  private implicit val listResourceFormat: Format[ListResource[JsValueCustomResource]] = ListResourceFormat(implicitly[Format[JsValueCustomResource]])
+  private implicit val jsValueRd: ResourceDefinition[JsValueCustomResource] = rd.asInstanceOf[ResourceDefinition[JsValueCustomResource]]
+  private implicit val statusSubEnabled: HasStatusSubresource[JsValueCustomResource] = CustomResource.statusMethodsEnabler[JsValueCustomResource]
+
+  protected def namespaces: List[String]
+
+  protected def hasAnythingChanged(resource: Resource): Boolean
+
+  protected def handleChanged(namespacedClient: KubernetesClient, resource: Resource): Future[Status]
+
+  protected def handleDeleted(namespacedClient: KubernetesClient, resource: Resource): Future[Done]
+
+  protected def statusFromError(error: Throwable, existing: Option[Resource] = None): Status
 
   protected def updateStatus(resource: Resource, status: Status): Future[Done] = {
     client.updateStatus(resource.withStatus(status).asInstanceOf[Resource])
@@ -39,57 +52,85 @@ abstract class AbstractOperator[Status, Resource <: CustomResource[_, Status]](c
 
   def run(): Unit = {
     namespaces.foreach(namespace => {
+      val namespacedClient = client.usingNamespace(namespace)
+
       RestartSource.onFailuresWithBackoff(2.seconds, 20.seconds, 0.2) { () =>
-        val namespacedClient = client.usingNamespace(namespace)
-
-        namespacedClient
-          .watchAllContinuously[Resource]()
-          .mapAsync(1) { event =>
-
-            println("Got event " + event)
-
-            val result = try {
-              event._type match {
-
-                case EventType.ADDED =>
-                  if (hasAnythingChanged(event._object)) {
-                    handleAdded(namespacedClient, event._object)
-                      .flatMap(_updateStatus(event._object))
-                  } else {
-                    println("Nothing has changed for added resource " + event._object.name)
-                    Future.successful(Done)
+        val futureSource = namespacedClient.list[ListResource[JsValueCustomResource]]().flatMap { resources =>
+          resources.foldLeft(Future.successful(Done.done())) { (previousFuture, jsValueResource) =>
+            previousFuture.flatMap { _ =>
+              Json.fromJson[Resource](Json.toJson(jsValueResource)) match {
+                case JsSuccess(resource, _) =>
+                  withErrorHandling(namespacedClient, resource) {
+                    handleResource(namespacedClient, "discovered", resource)
                   }
-
-                case EventType.DELETED =>
-                  handleDeleted(namespacedClient, event._object)
-
-                case EventType.MODIFIED =>
-                  if (hasAnythingChanged(event._object)) {
-                    handleModified(namespacedClient, event._object)
-                      .flatMap(_updateStatus(event._object))
-                  } else {
-                    println("Nothing has changed for modified resource " + event._object.name)
-                    Future.successful(Done)
-                  }
-
-                case EventType.ERROR =>
-                  // When do we get this?
-                  println("Got error: " + event)
-                  Future.successful(Done)
+                case err: JsError =>
+                  val status = statusFromError(JsResult.Exception(err), None)
+                  client.updateStatus(jsValueResource.withStatus(Json.toJson(status)))
+                    .map(_ => Done)
               }
-            } catch {
-              case NonFatal(e) => Future.failed(e)
             }
-
-            result.recoverWith {
-              case e =>
-                println("Encountered error handling " + event + ": " + e)
-                e.printStackTrace()
-                updateStatus(event._object, statusFromError(e, event._object))
-            }
+          }.map { _ =>
+            startWatching(namespacedClient, resources.resourceVersion)
           }
+        }
+
+        Source.fromFutureSource(futureSource)
+
       }.runWith(Sink.ignore)
     })
+  }
+
+  private def handleResource(namespacedClient: KubernetesClient, event: String, resource: Resource): Future[Done] = {
+    if (hasAnythingChanged(resource)) {
+      handleChanged(namespacedClient, resource)
+        .flatMap(_updateStatus(resource))
+    } else {
+      println(s"Nothing has changed for $event resource ${resource.name}")
+      Future.successful(Done)
+    }
+  }
+
+  private def withErrorHandling(namespacedClient: KubernetesClient, resource: Resource)(block: => Future[Done]): Future[Done] = {
+    val result = try {
+      block
+    } catch {
+      case NonFatal(e) => Future.failed(e)
+    }
+    result.recoverWith {
+      case e =>
+        println("Encountered performing operation on " + resource + ": " + e)
+        e.printStackTrace()
+        updateStatus(resource, statusFromError(e, Some(resource)))
+    }
+  }
+
+  private def startWatching(namespacedClient: KubernetesClient, sinceResourceVersion: String): Source[_, _] = {
+    namespacedClient
+      .watchAllContinuously[Resource](
+        sinceResourceVersion = Some(sinceResourceVersion)
+      ).mapAsync(1) { event =>
+
+        println("Got event " + event)
+
+        withErrorHandling(namespacedClient, event._object) {
+          event._type match {
+
+            case EventType.ADDED =>
+              handleResource(namespacedClient, "added", event._object)
+
+            case EventType.DELETED =>
+              handleDeleted(namespacedClient, event._object)
+
+            case EventType.MODIFIED =>
+              handleResource(namespacedClient, "modified", event._object)
+
+            case EventType.ERROR =>
+              // We'll never get these because skuber doesn't even parse them successfully, just fail
+              println("Got error: " + event)
+              sys.error("Error event")
+          }
+        }
+      }
   }
 
 }

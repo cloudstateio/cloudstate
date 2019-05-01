@@ -29,10 +29,6 @@ class EventSourcedJournalOperator(client: KubernetesClient)(implicit mat: Materi
     }).getOrElse(true)
   }
 
-  override protected def handleAdded(namespacedClient: K8SRequestContext, resource: Resource): Future[EventSourcedJournal.Status] = {
-    handleModified(namespacedClient, resource)
-  }
-
   private def errorStatus(reason: String) = EventSourcedJournal.Status(
     specHash = None,
     image = None,
@@ -40,12 +36,12 @@ class EventSourcedJournalOperator(client: KubernetesClient)(implicit mat: Materi
     reason = Some(reason)
   )
 
-  override protected def handleModified(namespacedClient: K8SRequestContext, resource: Resource): Future[EventSourcedJournal.Status] = {
+  override protected def handleChanged(namespacedClient: K8SRequestContext, resource: Resource): Future[EventSourcedJournal.Status] = {
     val status = resource.spec.`type` match {
-      case Some("cassandra") =>
+      case `CassandraJournalType` =>
         resource.spec.deployment match {
-          case Some("unmanaged") =>
-            (resource.spec.config.getOrElse(JsObject.empty) \ "service").asOpt[String] match {
+          case `UnmanagedJournalDeployment` =>
+            (resource.spec.config \ "service").asOpt[String] match {
               case Some(contactPoints) =>
                 EventSourcedJournal.Status(
                   specHash = Some(hashOf(resource.spec)),
@@ -55,12 +51,11 @@ class EventSourcedJournalOperator(client: KubernetesClient)(implicit mat: Materi
                   )),
                   reason = None
                 )
+              case None => errorStatus("No service name declared in unmanaged Cassandra journal")
             }
-          case Some(unknown) => errorStatus(s"Unknown Cassandra deployment type: $unknown")
-          case None => errorStatus(s"No deployment type specified")
+          case unknown => errorStatus(s"Unknown Cassandra deployment type: $unknown")
         }
-      case Some(unknown) => errorStatus(s"Unknown journal type: $unknown")
-      case None => errorStatus("No journal type specified")
+      case unknown => errorStatus(s"Unknown journal type: $unknown")
     }
 
     if (status.reason.isEmpty && status.specHash.isDefined) {
@@ -98,7 +93,7 @@ class EventSourcedJournalOperator(client: KubernetesClient)(implicit mat: Materi
     }
   }
 
-  override protected def statusFromError(error: Throwable, existing: Resource): EventSourcedJournal.Status = {
+  override protected def statusFromError(error: Throwable, existing: Option[Resource]): EventSourcedJournal.Status = {
     errorStatus("Unknown operator error: " + error)
   }
 }

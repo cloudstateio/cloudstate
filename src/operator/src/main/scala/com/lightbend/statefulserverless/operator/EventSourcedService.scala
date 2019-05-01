@@ -1,6 +1,7 @@
 package com.lightbend.statefulserverless.operator
 
 import play.api.libs.functional.syntax._
+import play.api.libs.json
 import play.api.libs.json._
 import skuber.json.format._
 import skuber.ResourceSpecification.Subresources
@@ -27,31 +28,47 @@ object EventSourcedService {
   case class TemplateSpec(containers: List[Container])
 
   object TemplateSpec {
-    implicit val containerFormat: Format[Container] = (
-      (JsPath \ "name").formatWithDefault[String]("") and
-        (JsPath \ "image").format[String] and
-        (JsPath \ "command").formatMaybeEmptyList[String] and
-        (JsPath \ "args").formatMaybeEmptyList[String] and
-        (JsPath \ "workingDir").formatNullable[String] and
-        (JsPath \ "ports").formatMaybeEmptyList[Container.Port] and
-        (JsPath \ "env").formatMaybeEmptyList[EnvVar] and
-        (JsPath \ "resources").formatNullable[Resource.Requirements] and
-        (JsPath \ "volumeMounts").formatMaybeEmptyList[Volume.Mount] and
-        (JsPath \ "livenessProbe").formatNullable[Probe] and
-        (JsPath \ "readinessProbe").formatNullable[Probe] and
-        (JsPath \ "lifecycle").formatNullable[Lifecycle] and
-        (JsPath \ "terminationMessagePath").formatNullable[String] and
-        (JsPath \ "terminationMessagePolicy").formatNullableEnum(Container.TerminationMessagePolicy)  and
-        (JsPath \ "imagePullPolicy").formatEnum(Container.PullPolicy, Some(Container.PullPolicy.IfNotPresent)) and
-        (JsPath \ "securityContext").formatNullable[SecurityContext] and
-        (JsPath \ "envFrom").formatMaybeEmptyList[EnvFromSource] and
-        (JsPath \ "stdin").formatNullable[Boolean] and
-        (JsPath \ "stdinOnce").formatNullable[Boolean] and
-        (JsPath \ "tty").formatNullable[Boolean] and
-        (JsPath \ "volumeDevices").formatMaybeEmptyList[Volume.Device]
-      )(Container.apply _, unlift(Container.unapply))
+    implicit val containerFormat: Format[Container] = {
 
-    implicit val format: Format[TemplateSpec] = Json.format
+      // Using our own format here so that we can make name optional.
+
+      // Also, we want to default imagePullPolicy based on whether the image is latest or not, like Kubernetes.
+      // So we need to be a little special in how we deal with that.
+      val imagePullPolicyReads = (
+        (JsPath \ "image").read[String] and
+        (JsPath \ "imagePullPolicy").formatNullableEnum(Container.PullPolicy)
+      )((image, pullPolicy) => pullPolicy.getOrElse {
+        if (image.endsWith(":latest")) Container.PullPolicy.Always else Container.PullPolicy.IfNotPresent
+      })
+      val imagePullPolicyFormat = OFormat(imagePullPolicyReads, (JsPath \ "imagePullPolicy").formatEnum(Container.PullPolicy))
+
+        (
+          (JsPath \ "name").formatWithDefault[String]("") and
+            (JsPath \ "image").format[String] and
+            (JsPath \ "command").formatMaybeEmptyList[String] and
+            (JsPath \ "args").formatMaybeEmptyList[String] and
+            (JsPath \ "workingDir").formatNullable[String] and
+            (JsPath \ "ports").formatMaybeEmptyList[Container.Port] and
+            (JsPath \ "env").formatMaybeEmptyList[EnvVar] and
+            (JsPath \ "resources").formatNullable[Resource.Requirements] and
+            (JsPath \ "volumeMounts").formatMaybeEmptyList[Volume.Mount] and
+            (JsPath \ "livenessProbe").formatNullable[Probe] and
+            (JsPath \ "readinessProbe").formatNullable[Probe] and
+            (JsPath \ "lifecycle").formatNullable[Lifecycle] and
+            (JsPath \ "terminationMessagePath").formatNullable[String] and
+            (JsPath \ "terminationMessagePolicy").formatNullableEnum(Container.TerminationMessagePolicy) and
+            imagePullPolicyFormat and
+            (JsPath \ "securityContext").formatNullable[SecurityContext] and
+            (JsPath \ "envFrom").formatMaybeEmptyList[EnvFromSource] and
+            (JsPath \ "stdin").formatNullable[Boolean] and
+            (JsPath \ "stdinOnce").formatNullable[Boolean] and
+            (JsPath \ "tty").formatNullable[Boolean] and
+            (JsPath \ "volumeDevices").formatMaybeEmptyList[Volume.Device]
+          ) (Container.apply, unlift(Container.unapply))
+    }
+
+    implicit val format: Format[TemplateSpec] = (JsPath \ "containers").formatWithDefault[List[Container]](Nil)
+      .inmap(TemplateSpec.apply, unlift(TemplateSpec.unapply))
   }
 
   case class Journal(name: String, config: Option[JsObject])
@@ -61,7 +78,8 @@ object EventSourcedService {
   }
 
   case class Status(
-    error: Option[String]
+    appliedSpecHash: Option[String],
+    reason: Option[String]
   )
 
   object Status {

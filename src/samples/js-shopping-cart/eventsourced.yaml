@@ -63,4 +63,4 @@ spec:
         env:
         - name: DEBUG
           value: stateserve-event-sourcing
-
+          

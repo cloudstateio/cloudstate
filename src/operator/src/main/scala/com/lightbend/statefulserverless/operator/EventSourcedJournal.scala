@@ -4,14 +4,14 @@ import play.api.libs.json.{Format, JsObject, Json}
 import skuber.ResourceSpecification.Subresources
 import skuber.apiextensions.CustomResourceDefinition
 import skuber.{CustomResource, EnvVar, ListResource, ResourceDefinition}
-
+import skuber.json.format._
 
 object EventSourcedJournal {
 
   type Resource = CustomResource[EventSourcedJournal.Spec, EventSourcedJournal.Status]
   type ResourceList = ListResource[Resource]
 
-  case class Spec(`type`: Option[String], deployment: Option[String], config: Option[JsObject])
+  case class Spec(`type`: String, deployment: String, config: JsObject)
 
   object Spec {
     implicit val format: Format[Spec] = Json.format

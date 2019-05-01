@@ -1,8 +1,5 @@
 package com.lightbend.statefulserverless.operator
 
-import java.security.MessageDigest
-import java.util.Base64
-
 import akka.Done
 import akka.stream.Materializer
 import com.lightbend.statefulserverless.operator.EventSourcedServiceConfiguration.Resource
@@ -23,11 +20,7 @@ class EventSourcedServiceConfigurationOperator(client: KubernetesClient)(implici
 
   override protected def namespaces: List[String] = List("default")
 
-  override protected def handleAdded(namespacedClient: KubernetesClient, resource: Resource) = {
-    addOrUpdateDeployment(namespacedClient, resource)
-  }
-
-  override protected def handleModified(namespacedClient: KubernetesClient, resource: Resource) = {
+  override protected def handleChanged(namespacedClient: KubernetesClient, resource: Resource) = {
     addOrUpdateDeployment(namespacedClient, resource)
   }
 
@@ -43,7 +36,7 @@ class EventSourcedServiceConfigurationOperator(client: KubernetesClient)(implici
     } yield Done
   }
 
-  override protected def statusFromError(error: Throwable, existing: Resource): EventSourcedServiceConfiguration.Status = {
+  override protected def statusFromError(error: Throwable, existing: Option[Resource]): EventSourcedServiceConfiguration.Status = {
     EventSourcedServiceConfiguration.Status(
       appliedSpecHash = None,
       journalConfigHash = None,
@@ -65,7 +58,7 @@ class EventSourcedServiceConfigurationOperator(client: KubernetesClient)(implici
         // If there is, return false if it matches the applied hash, otherwise return true
         status.journalConfigHash.exists(!status.appliedJournalConfigHash.contains(_))
       }
-    }) getOrElse false
+    }) getOrElse true
   }
 
   private def addOrUpdateDeployment(namespacedClient: KubernetesClient, resource: EventSourcedServiceConfiguration.Resource) = {
@@ -73,7 +66,7 @@ class EventSourcedServiceConfigurationOperator(client: KubernetesClient)(implici
       maybeJournal <- namespacedClient.getOption[EventSourcedJournal.Resource](resource.spec.journal.name)
       status <- maybeJournal match {
         case Some(journal) if journal.status.isDefined =>
-          addOrUpdateDeploymentForJournal(namespacedClient, resource, journal.name, journal.status.get)
+          addOrUpdateDeploymentForJournal(namespacedClient, resource, journal.name, journal.spec.`type`, journal.status.get)
         case _ =>
           handleDeleted(namespacedClient, resource).map(_ =>
             EventSourcedServiceConfiguration.Status(
@@ -92,7 +85,7 @@ class EventSourcedServiceConfigurationOperator(client: KubernetesClient)(implici
 
     val result = for {
       journalConfig <- journalType match {
-        case "cassandra" =>
+        case `CassandraJournalType` =>
           resource.spec.journal.config.flatMap(obj => (obj \ "keyspace").asOpt[String]) match {
             case Some(keyspace) =>
               Right(List(EnvVar("CASSANDRA_KEYSPACE", keyspace)))
@@ -100,9 +93,9 @@ class EventSourcedServiceConfigurationOperator(client: KubernetesClient)(implici
               Left("No keyspace found for Cassandra journal")
           }
         case _ =>
-          Left("Unknown journal type: " + journalType)
+          Left(s"Journal '$journalName' has unknown journal type '$journalType'")
       }
-      image <- journal.image.toRight("")
+      image <- journal.image.toRight(s"Journal '$journalName' has no defined image in the status")
     } yield {
 
       val templateSpec = resource.spec.template.spec
@@ -115,6 +108,7 @@ class EventSourcedServiceConfigurationOperator(client: KubernetesClient)(implici
           Container(
             name = "akka-sidecar",
             image = image,
+            imagePullPolicy = if (image.endsWith(":latest")) Container.PullPolicy.Always else Container.PullPolicy.IfNotPresent,
             ports = List(
               Container.Port(containerPort = 9000, name = "grpc"),
               Container.Port(containerPort = 8558, name = "management")
@@ -182,10 +176,15 @@ class EventSourcedServiceConfigurationOperator(client: KubernetesClient)(implici
 
       for {
         _ <- ensureRbacPermissionsInNamespace(namespacedClient, resource.namespace)
-        existing <- namespacedClient.getOption[Deployment](deploymentName)
-        _ <- existing match {
-          case Some(_) => namespacedClient.update(deployment)
-          case None => namespacedClient.create(deployment)
+        maybeExisting <- namespacedClient.getOption[Deployment](deploymentName)
+        _ <- maybeExisting match {
+          case Some(existing) =>
+            namespacedClient.update(existing.copy(
+              spec = deployment.spec,
+              metadata = existing.metadata.copy(labels = deployment.metadata.labels)
+            ))
+          case None =>
+            namespacedClient.create(deployment)
         }
       } yield EventSourcedServiceConfiguration.Status(
         appliedSpecHash = Some(hashOf(resource.spec)),

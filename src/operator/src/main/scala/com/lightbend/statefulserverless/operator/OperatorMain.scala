@@ -12,5 +12,7 @@ object OperatorMain extends App {
   val client = k8sInit
 
   new EventSourcedServiceOperator(client).run()
+  new EventSourcedJournalOperator(client).run()
+  new EventSourcedServiceConfigurationOperator(client).run()
 
 }

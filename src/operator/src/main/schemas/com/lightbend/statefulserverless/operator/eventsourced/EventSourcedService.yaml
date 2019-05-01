@@ -6,11 +6,6 @@ extends:
   existingJavaType: io.radanalytics.operator.common.EntityInfo
 properties:
   spec:
-    $ref: "#/definitions/EventSourcedServiceSpec"
-
-definitions:
-
-  EventSourcedServiceSpec:
     type: object
     properties:
 
@@ -25,36 +20,35 @@ definitions:
             type: string
           config:
             type: object
+        required:
+        - name
+        additionalProperties: false
 
       template:
         type: object
         properties:
           spec:
-            $ref: "#/definitions/TemplateSpec"
+            type: object
+            properties:
+              containers:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    image:
+                      type: string
+                    # todo, other supported container properties
+                  required: image
+            required:
+            - containers
 
+    required:
+    - replicas
+    - journal
+    - template
+    additionalProperties: false
 
-  TemplateSpec:
+  status:
     type: object
     properties:
-      containers:
-        type: array
-        items:
-          $ref: "#definitions/Container"
 
-  Container:
-    type: object
-    properties:
-      image:
-        type: string
-      env:
-        type: array
-        items:
-          $ref: "#definitions/EnvVar"
-
-  EnvVar:
-    type: object
-    properties:
-      name:
-        type: string
-      value:
-        type: string

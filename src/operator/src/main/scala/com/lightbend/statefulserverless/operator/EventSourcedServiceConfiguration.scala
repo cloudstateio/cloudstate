@@ -11,9 +11,9 @@ object EventSourcedServiceConfiguration {
   type ResourceList = ListResource[Resource]
 
   case class Spec(
-    replicas: Option[Int],
-    journal: Option[EventSourcedService.Journal],
-    template: Option[EventSourcedService.Template]
+    replicas: Int,
+    journal: EventSourcedService.Journal,
+    template: EventSourcedService.Template
   )
 
   object Spec {
@@ -25,7 +25,6 @@ object EventSourcedServiceConfiguration {
     // This field may be updated by the journal operator
     journalConfigHash: Option[String],
     appliedJournalConfigHash: Option[String],
-
     reason: Option[String]
   )
 

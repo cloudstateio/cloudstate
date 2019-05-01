@@ -7,4 +7,8 @@ object OperatorConstants {
   val KubernetesManagedByLabel = "app.kubernetes.io/managed-by"
   val PodReaderRoleName = "statefulserverless-pod-reader"
   val PodReaderRoleBindingName = "statefulserverless-read-pods"
+
+
+  val CassandraJournalType = "Cassandra"
+  val UnmanagedJournalDeployment = "Unmanaged"
 }
