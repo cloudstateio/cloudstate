@@ -31,7 +31,7 @@ abstract class AbstractOperator[Status, Resource <: CustomResource[_, Status]](c
 
   protected def hasAnythingChanged(resource: Resource): Boolean
 
-  protected def handleChanged(namespacedClient: KubernetesClient, resource: Resource): Future[Status]
+  protected def handleChanged(namespacedClient: KubernetesClient, resource: Resource): Future[Option[Status]]
 
   protected def handleDeleted(namespacedClient: KubernetesClient, resource: Resource): Future[Done]
 
@@ -41,8 +41,6 @@ abstract class AbstractOperator[Status, Resource <: CustomResource[_, Status]](c
     client.updateStatus(resource.withStatus(status).asInstanceOf[Resource])
       .map(_ => Done)
   }
-
-  private def _updateStatus(resource: Resource)(status: Status): Future[Done] = updateStatus(resource, status)
 
 
   protected def hashOf(obj: Any) = {
@@ -83,7 +81,7 @@ abstract class AbstractOperator[Status, Resource <: CustomResource[_, Status]](c
   private def handleResource(namespacedClient: KubernetesClient, event: String, resource: Resource): Future[Done] = {
     if (hasAnythingChanged(resource)) {
       handleChanged(namespacedClient, resource)
-        .flatMap(_updateStatus(resource))
+        .flatMap(_.fold(Future.successful(Done.done()))(status => updateStatus(resource, status)))
     } else {
       println(s"Nothing has changed for $event resource ${resource.name}")
       Future.successful(Done)

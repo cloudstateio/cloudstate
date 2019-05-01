@@ -25,7 +25,7 @@ class EventSourcedServiceOperator(client: KubernetesClient)(implicit mat: Materi
     } yield appliedSpecHash != hashOf(resource.spec)) getOrElse true
   }
 
-  override protected def handleChanged(namespacedClient: K8SRequestContext, resource: Resource): Future[EventSourcedService.Status] = {
+  override protected def handleChanged(namespacedClient: K8SRequestContext, resource: Resource): Future[Option[EventSourcedService.Status]] = {
     val newSpec = EventSourcedServiceConfiguration.Spec(
       replicas = resource.spec.replicas,
       journal = resource.spec.journal,
@@ -44,10 +44,10 @@ class EventSourcedServiceOperator(client: KubernetesClient)(implicit mat: Materi
         case None =>
           namespacedClient.create(EventSourcedServiceConfiguration(resource.name, newSpec).withLabels(labels: _*))
       }
-    } yield EventSourcedService.Status(
+    } yield Some(EventSourcedService.Status(
       appliedSpecHash = Some(hashOf(resource.spec)),
       reason = None
-    )
+    ))
   }
 
   override protected def handleDeleted(namespacedClient: K8SRequestContext, resource: Resource): Future[Done] = {

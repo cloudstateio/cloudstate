@@ -36,7 +36,7 @@ class EventSourcedJournalOperator(client: KubernetesClient)(implicit mat: Materi
     reason = Some(reason)
   )
 
-  override protected def handleChanged(namespacedClient: K8SRequestContext, resource: Resource): Future[EventSourcedJournal.Status] = {
+  override protected def handleChanged(namespacedClient: K8SRequestContext, resource: Resource): Future[Option[EventSourcedJournal.Status]] = {
     val status = resource.spec.`type` match {
       case `CassandraJournalType` =>
         resource.spec.deployment match {
@@ -59,10 +59,13 @@ class EventSourcedJournalOperator(client: KubernetesClient)(implicit mat: Materi
     }
 
     if (status.reason.isEmpty && status.specHash.isDefined) {
-      updateDependents(namespacedClient, resource.name, _.copy(journalConfigHash = status.specHash))
-        .map(_ => status)
+      // We have to first update our own status before we update our dependents, since they depend on our updated status
+      for {
+        _ <- updateStatus(resource, status)
+        _ <- updateDependents(namespacedClient, resource.name, _.copy(journalConfigHash = status.specHash))
+      } yield None
     } else {
-      Future.successful(status)
+      Future.successful(Some(status))
     }
   }
 

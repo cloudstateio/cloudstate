@@ -6,5 +6,3 @@ addSbtPlugin("com.lightbend.sbt" % "sbt-javaagent" % "0.1.4")
 
 
 addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.9")
-
-libraryDependencies += "org.jsonschema2pojo" % "jsonschema2pojo-core" % "1.0.0"

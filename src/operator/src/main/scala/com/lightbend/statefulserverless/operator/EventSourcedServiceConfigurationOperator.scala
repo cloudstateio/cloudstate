@@ -5,6 +5,7 @@ import akka.stream.Materializer
 import com.lightbend.statefulserverless.operator.EventSourcedServiceConfiguration.Resource
 import skuber.LabelSelector.dsl._
 import skuber._
+import skuber.json.format._
 import skuber.api.client.KubernetesClient
 import skuber.apps.v1.Deployment
 import skuber.rbac._
@@ -30,6 +31,13 @@ class EventSourcedServiceConfigurationOperator(client: KubernetesClient)(implici
       _ <- maybeExisting match {
         case Some(existing) if existing.metadata.labels.get(KubernetesManagedByLabel).contains(OperatorNamespace) =>
           namespacedClient.delete[Deployment](existing.name)
+        case None =>
+          Future.successful(Done)
+      }
+      maybeExistingService <- namespacedClient.getOption[Service](resource.name)
+      _ <- maybeExistingService match {
+        case Some(existing) if existing.metadata.labels.get(KubernetesManagedByLabel).contains(OperatorNamespace) =>
+          namespacedClient.delete[Service](existing.name)
         case None =>
           Future.successful(Done)
       }
@@ -77,7 +85,7 @@ class EventSourcedServiceConfigurationOperator(client: KubernetesClient)(implici
             )
           )
       }
-    } yield status
+    } yield Some(status)
   }
 
   private def addOrUpdateDeploymentForJournal(namespacedClient: KubernetesClient, resource: EventSourcedServiceConfiguration.Resource, journalName: String,
@@ -186,6 +194,7 @@ class EventSourcedServiceConfigurationOperator(client: KubernetesClient)(implici
           case None =>
             namespacedClient.create(deployment)
         }
+        _ <- addOrUpdateService(namespacedClient, resource)
       } yield EventSourcedServiceConfiguration.Status(
         appliedSpecHash = Some(hashOf(resource.spec)),
         journalConfigHash = journal.specHash,
@@ -204,6 +213,48 @@ class EventSourcedServiceConfigurationOperator(client: KubernetesClient)(implici
       identity
     )
 
+  }
+
+  private def addOrUpdateService(namespacedClient: KubernetesClient, resource: Resource): Future[Done] = {
+    val spec = Service.Spec(
+      ports = List(
+        Service.Port(
+          port = 80,
+          targetPort = Some(9000),
+          protocol = Protocol.TCP,
+          name = "http2"
+        )
+      ),
+      selector = Map(
+        EventSourcedLabel -> resource.name
+      ),
+      _type = Service.Type.LoadBalancer
+    )
+    val service = Service(
+      spec = Some(spec),
+      metadata = ObjectMeta(
+        name = resource.name,
+        labels = Map(
+          KubernetesManagedByLabel -> OperatorNamespace
+        )
+      )
+    )
+    for {
+      maybeExisting <- namespacedClient.getOption[Service](resource.name)
+      _ <- maybeExisting match {
+        case Some(existing) =>
+          namespacedClient.update(existing.copy(
+            spec = Some(existing.spec.fold(spec)(_.copy(
+              ports = spec.ports,
+              selector = spec.selector,
+              _type = spec._type
+            ))),
+            metadata = existing.metadata.copy(labels = service.metadata.labels)
+          ))
+        case None =>
+          namespacedClient.create(service)
+      }
+    } yield Done
   }
 
   private def ensureRbacPermissionsInNamespace(namespacedClient: KubernetesClient, namespace: String) = {
