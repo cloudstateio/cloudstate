@@ -290,14 +290,14 @@ spec:
       serviceAccountName: stateful-serverless-operator
       containers:
       - name: operator
-        image: lightbend-docker-registry.bintray.io/octo/stateful-serverless-operator:0.1-0-1d642343-20190502-1547
+        image: lightbend-docker-registry.bintray.io/octo/stateful-serverless-operator:0.1
 
         env:
         - name: NAMESPACES
           # Update to comma separated list of namespaces to watch
           value: default
         - name: CASSANDRA_JOURNAL_IMAGE
-          value: lightbend-docker-registry.bintray.io/octo/stateful-serverless-cassandra-backend:0.1-0-1d642343-20190502-1547
+          value: lightbend-docker-registry.bintray.io/octo/stateful-serverless-cassandra-backend:0.1
         - name: JAVA_OPTS
           value: "-Xms128m -Xmx128m"
 
