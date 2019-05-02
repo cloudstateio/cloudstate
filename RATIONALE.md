@@ -202,6 +202,19 @@ Stateful Serverless is designed to extend the model and making it straightforwar
     *   This can be in some cases, mitigated with caching, but the traffic flow, and distribution are still largely the responsibility of the data layer itself: ![Image of 3 tier architecture](images/3-tier-w-cache.png)
     *   As opposed to a Reactive system architecture that only emits fact, and final state to the database, and maintains active state across an even horizontally scalable cluster: ![Image of reactive architecture](images/reactive.png) 
 
+## In-Memory Data Grid
+In-Memory Data Grids provides limited functionality to help obtain some of the goals in the document:
+- A partitioned, easily scalable data store, where data = objects
+- Ability to push processing to data by a set of keys or by query clause.
+- Processing looks like Java lambdas
+- Ability to trigger downstream processing based on events (both cluster events and changes to object state).  By layering this, you can build SEDA-like applications.
+- Streaming capabilities along the lines of Java Streams
+- Streaming or batch aggregation based on above capabilities
+
+The downsides of the IMDG approach include the lack of an approach to distinguish services - everything kinda works, but without a good software discipline for application lifecycle management.
+
+Examples of IMDG include proprietary products like Oracle Coherence, and Open Source equivalents such as Hazelcast, JBoss Data Grid, and Apache Ignite. GigaSpaces takes a different architectural approach but with similar net result.
+
 ## Notes
 
 [^1]:
