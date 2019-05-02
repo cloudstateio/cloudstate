@@ -14,13 +14,13 @@ val AkkaManagementVersion = "1.0.0"
 val AkkaPersistenceCassandraVersion = "0.93"
 
 lazy val root = (project in file("."))
-  .aggregate(`backend-core`, `backend-cassandra`, `akka-client`)
+  .aggregate(`backend-core`, `backend-cassandra`, `akka-client`, operator)
 
 def dockerSettings: Seq[Setting[_]] = Seq(
   dockerBaseImage := "adoptopenjdk/openjdk8",
   dockerUpdateLatest := true,
   dockerRepository := sys.props.get("docker.registry").orElse(Some("lightbend-docker-registry.bintray.io")),
-  dockerUsername := sys.props.get("docker.username").getOrElse(Some("octo"))
+  dockerUsername := sys.props.get("docker.username").orElse(Some("octo"))
 )
 
 lazy val `backend-core` = (project in file("backend/core"))
