@@ -5,19 +5,22 @@ scalaVersion in ThisBuild := "2.12.8"
 version in ThisBuild ~= (_.replace('+', '-'))
 dynver in ThisBuild ~= (_.replace('+', '-'))
 
+// Needed for our fork of skuber
+resolvers in ThisBuild += Resolver.bintrayRepo("jroper", "maven")
+
 val AkkaVersion = "2.5.22"
 val AkkaHttpVersion = "10.1.7"
 val AkkaManagementVersion = "1.0.0"
 val AkkaPersistenceCassandraVersion = "0.93"
 
 lazy val root = (project in file("."))
-  .aggregate(`backend-core`, `backend-cassandra`, `akka-client`)
+  .aggregate(`backend-core`, `backend-cassandra`, `akka-client`, operator)
 
 def dockerSettings: Seq[Setting[_]] = Seq(
   dockerBaseImage := "adoptopenjdk/openjdk8",
   dockerUpdateLatest := true,
-  dockerRepository := sys.props.get("docker.registry"),
-  dockerUsername := sys.props.get("docker.username")
+  dockerRepository := sys.props.get("docker.registry").orElse(Some("lightbend-docker-registry.bintray.io")),
+  dockerUsername := sys.props.get("docker.username").orElse(Some("octo"))
 )
 
 lazy val `backend-core` = (project in file("backend/core"))
@@ -63,6 +66,17 @@ lazy val `backend-cassandra` = (project in file("backend/cassandra"))
 
     fork in run := true,
     mainClass in Compile := Some("com.lightbend.statefulserverless.StatefulServerlessMain")
+  )
+
+lazy val operator = (project in file("operator"))
+  .enablePlugins(JavaAppPackaging, DockerPlugin)
+  .settings(
+    name := "stateful-serverless-operator",
+    // This is a publishLocal build of this PR https://github.com/doriordan/skuber/pull/268
+    libraryDependencies += "io.skuber" %% "skuber" % "2.2.0-jroper-1",
+
+    dockerSettings,
+    dockerExposedPorts := Nil
   )
 
 val copyShoppingCartProtos = taskKey[File]("Copy the shopping cart protobufs")
