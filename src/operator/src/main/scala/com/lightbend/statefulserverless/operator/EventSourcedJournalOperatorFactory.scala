@@ -19,7 +19,7 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
 
   import OperatorConstants._
 
-  val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "lightbend-docker-registry.bintray.io/octo/stateful-serverless-cassandra-backend:latest")
+  val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "lightbend-docker-registry.bintray.io/octo/stateful-serverless-backend-cassandra:latest")
 
   override def apply(client: KubernetesClient): Operator = new EventSourcedJournalOperator(client)
 

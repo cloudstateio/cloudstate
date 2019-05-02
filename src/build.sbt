@@ -128,7 +128,7 @@ def doCompileK8sDescriptors(dir: File, target: File, registry: String, username:
 
   val fullDescriptor = files.map(IO.read(_)).mkString("\n---\n")
 
-  val substitutedDescriptor = List("stateful-serverless-operator", "stateful-serverless-cassandra-backend")
+  val substitutedDescriptor = List("stateful-serverless-operator", "stateful-serverless-backend-cassandra")
     .foldLeft(fullDescriptor) { (descriptor, image) =>
       descriptor.replace(s"lightbend-docker-registry.bintray.io/octo/$image:latest",
         s"$registry/$username/$image:$version")
