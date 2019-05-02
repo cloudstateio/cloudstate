@@ -5,6 +5,9 @@ scalaVersion in ThisBuild := "2.12.8"
 version in ThisBuild ~= (_.replace('+', '-'))
 dynver in ThisBuild ~= (_.replace('+', '-'))
 
+// Needed for our fork of skuber
+resolvers in ThisBuild += Resolver.bintrayRepo("jroper", "maven")
+
 val AkkaVersion = "2.5.22"
 val AkkaHttpVersion = "10.1.7"
 val AkkaManagementVersion = "1.0.0"
@@ -16,8 +19,8 @@ lazy val root = (project in file("."))
 def dockerSettings: Seq[Setting[_]] = Seq(
   dockerBaseImage := "adoptopenjdk/openjdk8",
   dockerUpdateLatest := true,
-  dockerRepository := sys.props.get("docker.registry"),
-  dockerUsername := sys.props.get("docker.username")
+  dockerRepository := sys.props.get("docker.registry").orElse(Some("lightbend-docker-registry.bintray.io")),
+  dockerUsername := sys.props.get("docker.username").getOrElse(Some("octo"))
 )
 
 lazy val `backend-core` = (project in file("backend/core"))
