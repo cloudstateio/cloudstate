@@ -1,5 +1,7 @@
 package com.lightbend.statefulserverless.operator
 
+import java.time.Instant
+
 import play.api.libs.json.{Format, JsObject, Json}
 import skuber.ResourceSpecification.Subresources
 import skuber.apiextensions.CustomResourceDefinition
@@ -21,7 +23,8 @@ object EventSourcedJournal {
     specHash: Option[String],
     image: Option[String],
     sidecarEnv: Option[Seq[EnvVar]],
-    reason: Option[String]
+    reason: Option[String],
+    lastApplied: Option[Instant]
   )
 
   object Status {

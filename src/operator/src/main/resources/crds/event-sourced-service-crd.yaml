@@ -78,6 +78,12 @@ spec:
           properties:
             appliedSpecHash:
               type: string
+            journalConfigHash:
+              type: string
+            appliedJournalConfigHash:
+              type: string
             reason:
+              type: string
+            lastApplied:
               type: string
 

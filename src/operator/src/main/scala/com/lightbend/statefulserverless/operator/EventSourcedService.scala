@@ -1,7 +1,8 @@
 package com.lightbend.statefulserverless.operator
 
+import java.time.Instant
+
 import play.api.libs.functional.syntax._
-import play.api.libs.json
 import play.api.libs.json._
 import skuber.json.format._
 import skuber.ResourceSpecification.Subresources
@@ -79,7 +80,11 @@ object EventSourcedService {
 
   case class Status(
     appliedSpecHash: Option[String],
-    reason: Option[String]
+    // This field may be updated by the journal operator
+    journalConfigHash: Option[String],
+    appliedJournalConfigHash: Option[String],
+    reason: Option[String],
+    lastApplied: Option[Instant]
   )
 
   object Status {

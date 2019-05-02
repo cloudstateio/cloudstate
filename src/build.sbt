@@ -66,17 +66,14 @@ lazy val `backend-cassandra` = (project in file("backend/cassandra"))
   )
 
 lazy val operator = (project in file("operator"))
+  .enablePlugins(JavaAppPackaging, DockerPlugin)
   .settings(
     name := "stateful-serverless-operator",
     // This is a publishLocal build of this PR https://github.com/doriordan/skuber/pull/268
     libraryDependencies += "io.skuber" %% "skuber" % "2.2.0-jroper-1",
 
-    assemblyMergeStrategy in assembly := {
-      case "log4j.properties" => MergeStrategy.first
-      case x =>
-        val oldStrategy = (assemblyMergeStrategy in assembly).value
-        oldStrategy(x)
-    }
+    dockerSettings,
+    dockerExposedPorts := Nil
   )
 
 val copyShoppingCartProtos = taskKey[File]("Copy the shopping cart protobufs")
