@@ -25,12 +25,14 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
 
   class EventSourcedJournalOperator(client: KubernetesClient) extends Operator {
 
+    private def hashSpec(resource: Resource) = hashOf((resource, CassandraJournalImage))
+
     override def hasAnythingChanged(resource: Resource): Boolean = {
       (for {
         status <- resource.status
         specHash <- status.specHash
       } yield {
-        if (hashOf(resource.spec) != specHash) {
+        if (hashSpec(resource) != specHash) {
           true
         } else {
           if (status.reason.isDefined &&
@@ -44,7 +46,7 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
     }
 
     private def errorStatus(reason: String, resource: Option[Resource]) = EventSourcedJournal.Status(
-      specHash = None,
+      specHash = resource.map(hashOf),
       image = None,
       sidecarEnv = None,
       reason = Some(reason),
@@ -64,7 +66,7 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
               (resource.spec.config \ "service").asOpt[String] match {
                 case Some(contactPoints) =>
                   EventSourcedJournal.Status(
-                    specHash = Some(hashOf(resource.spec)),
+                    specHash = Some(hashSpec(resource)),
                     image = Some(CassandraJournalImage),
                     sidecarEnv = Some(List(
                       EnvVar("CASSANDRA_CONTACT_POINTS", contactPoints)
