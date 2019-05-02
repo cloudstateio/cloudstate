@@ -8,7 +8,6 @@ object OperatorConstants {
   val PodReaderRoleName = "statefulserverless-pod-reader"
   val PodReaderRoleBindingName = "statefulserverless-read-pods"
 
-
   val CassandraJournalType = "Cassandra"
   val UnmanagedJournalDeployment = "Unmanaged"
 }

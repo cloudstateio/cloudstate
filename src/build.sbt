@@ -68,6 +68,8 @@ lazy val `backend-cassandra` = (project in file("backend/cassandra"))
     mainClass in Compile := Some("com.lightbend.statefulserverless.StatefulServerlessMain")
   )
 
+val compileK8sDescriptors = taskKey[File]("Compile the K8s descriptors into one")
+
 lazy val operator = (project in file("operator"))
   .enablePlugins(JavaAppPackaging, DockerPlugin)
   .settings(
@@ -76,7 +78,14 @@ lazy val operator = (project in file("operator"))
     libraryDependencies += "io.skuber" %% "skuber" % "2.2.0-jroper-1",
 
     dockerSettings,
-    dockerExposedPorts := Nil
+    dockerExposedPorts := Nil,
+    compileK8sDescriptors := doCompileK8sDescriptors(
+      baseDirectory.value / "deploy",
+      baseDirectory.value / "stateful-serverless.yaml",
+      dockerRepository.value.get,
+      dockerUsername.value.get,
+      version.value
+    )
   )
 
 val copyShoppingCartProtos = taskKey[File]("Copy the shopping cart protobufs")
@@ -113,3 +122,18 @@ lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"
 
   )
 
+def doCompileK8sDescriptors(dir: File, target: File, registry: String, username: String, version: String): File = {
+  val files = ((dir / "crds") * "*.yaml").get ++
+    (dir * "*.yaml").get.sortBy(_.getName)
+
+  val fullDescriptor = files.map(IO.read(_)).mkString("\n---\n")
+
+  val substitutedDescriptor = List("stateful-serverless-operator", "stateful-serverless-cassandra-backend")
+    .foldLeft(fullDescriptor) { (descriptor, image) =>
+      descriptor.replace(s"lightbend-docker-registry.bintray.io/octo/$image:latest",
+        s"$registry/$username/$image:$version")
+    }
+
+  IO.write(target, substitutedDescriptor)
+  target
+}

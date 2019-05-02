@@ -19,6 +19,8 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
 
   import OperatorConstants._
 
+  val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "lightbend-docker-registry.bintray.io/octo/stateful-serverless-cassandra-backend:latest")
+
   override def apply(client: KubernetesClient): Operator = new EventSourcedJournalOperator(client)
 
   class EventSourcedJournalOperator(client: KubernetesClient) extends Operator {
@@ -63,7 +65,7 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
                 case Some(contactPoints) =>
                   EventSourcedJournal.Status(
                     specHash = Some(hashOf(resource.spec)),
-                    image = Some("gcr.io/stateserv/stateful-serverless-backend-cassandra:latest"),
+                    image = Some(CassandraJournalImage),
                     sidecarEnv = Some(List(
                       EnvVar("CASSANDRA_CONTACT_POINTS", contactPoints)
                     )),

@@ -1,0 +1,309 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: eventsourcedservices.statefulserverless.lightbend.com
+spec:
+  group: statefulserverless.lightbend.com
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+  scope: Namespaced
+  names:
+    plural: eventsourcedservices
+    singular: eventsourcedservice
+    kind: EventSourcedService
+    shortNames:
+    - ess
+  subresources:
+    status: {}
+  additionalPrinterColumns:
+  - name: Journal
+    type: string
+    description: The journal being used
+    JSONPath: .spec.journal.name
+  - name: Age
+    type: date
+    JSONPath: .metadata.creationTimestamp
+  - name: Error
+    type: string
+    JSONPath: .status.reason
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          type: object
+          properties:
+
+            replicas:
+              type: integer
+              minimum: 0
+
+            journal:
+              type: object
+              properties:
+                name:
+                  type: string
+                config:
+                  type: object
+              required:
+              - name
+
+            template:
+              type: object
+              properties:
+                spec:
+                  type: object
+                  properties:
+                    containers:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          image:
+                            type: string
+                          # todo, other supported container properties
+                        required:
+                        - image
+                  required:
+                  - containers
+
+          required:
+          - replicas
+          - journal
+          - template
+
+        status:
+          type: object
+          properties:
+            appliedSpecHash:
+              type: string
+            journalConfigHash:
+              type: string
+            appliedJournalConfigHash:
+              type: string
+            reason:
+              type: string
+            lastApplied:
+              type: string
+
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: eventsourcedjournals.statefulserverless.lightbend.com
+spec:
+  group: statefulserverless.lightbend.com
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+  scope: Namespaced
+  names:
+    plural: eventsourcedjournals
+    singular: eventsourcedjournal
+    kind: EventSourcedJournal
+    shortNames:
+    - esj
+  subresources:
+    status: {}
+  additionalPrinterColumns:
+  - name: Type
+    type: string
+    description: The type of event sourced Journal
+    JSONPath: .spec.type
+  - name: Service
+    type: string
+    description: The service that serves this journal
+    JSONPath: .spec.config.service
+  - name: Age
+    type: date
+    JSONPath: .metadata.creationTimestamp
+  - name: Error
+    type: string
+    JSONPath: .status.reason
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          type: object
+          properties:
+
+            type:
+              type: string
+              enum:
+              - Cassandra
+
+            deployment:
+              type: string
+              enum:
+              - Unmanaged
+
+            config:
+              type: object
+
+          required:
+          - type
+          - deployment
+        status:
+          type: object
+          properties:
+            specHash:
+              type: string
+            image:
+              type: string
+            sidecarEnv:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  value:
+                    type: string
+                  valueFrom:
+                    type: object
+                    # todo
+                required:
+                - name
+            reason:
+              type: string
+
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: stateful-serverless-operator
+
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: Role
+metadata:
+  name: stateful-serverless-operator-role
+rules:
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  verbs:
+  - get
+  - create
+  - delete
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  verbs:
+  - get
+  - create
+  - delete
+  - patch
+  - update
+- apiGroups:
+  - statefulserverless.lightbend.com
+  resources:
+  - eventsourcedjournals
+  - eventsourcedservices
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - statefulserverless.lightbend.com
+  resources:
+  - eventsourcedjournals/status
+  - eventsourcedservices/status
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - delete
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - create
+  - delete
+  - patch
+  - update
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - delete
+  - patch
+  - update
+
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: RoleBinding
+metadata:
+  name: stateful-serverless-operator
+subjects:
+- kind: ServiceAccount
+  name: stateful-serverless-operator
+  # Update to the account the operator is deployed to
+  namespace: default
+roleRef:
+  kind: Role
+  name: stateful-serverless-operator-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stateful-serverless-operator
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: stateful-serverless-operator
+  template:
+    metadata:
+      labels:
+        app: stateful-serverless-operator
+    spec:
+      serviceAccountName: stateful-serverless-operator
+      containers:
+      - name: operator
+        image: lightbend-docker-registry.bintray.io/octo/stateful-serverless-operator:0.1-0-1d642343-20190502-1547
+
+        env:
+        - name: NAMESPACES
+          # Update to comma separated list of namespaces to watch
+          value: default
+        - name: CASSANDRA_JOURNAL_IMAGE
+          value: lightbend-docker-registry.bintray.io/octo/stateful-serverless-cassandra-backend:0.1-0-1d642343-20190502-1547
+        - name: JAVA_OPTS
+          value: "-Xms128m -Xmx128m"
+
+        resources:
+          limits:
+            memory: 256Mi
+          requests:
+            cpu: 0.25
+            memory: 256Mi
