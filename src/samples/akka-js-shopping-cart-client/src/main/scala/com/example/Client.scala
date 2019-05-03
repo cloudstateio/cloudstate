@@ -55,11 +55,11 @@ object Client {
   * @param hostname
   * @param port
   */
-class Client(hostname: String, port: Int) {
-
-  private implicit val system = ActorSystem()
-  private implicit val mat = ActorMaterializer()
-  import system.dispatcher
+class Client(hostname: String, port: Int, sys: ActorSystem) {
+  def this(hostname: String, port: Int) = this(hostname, port, ActorSystem())
+  private implicit val system = sys
+  private implicit val materializer = ActorMaterializer()
+  import sys.dispatcher
 
   val service = ShoppingCartClient(GrpcClientSettings.connectToServiceAt(hostname, port).withTls(false))
 
