@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Lightbend Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 const path = require("path");
 const should = require('chai').should();
 const grpc = require("grpc");
@@ -7,19 +23,22 @@ const protobuf = require("protobufjs");
 require("protobufjs/ext/descriptor");
 
 const ssesPath = path.dirname(require.resolve("stateful-serverless-event-sourcing"));
-const packageDefinition = protoLoader.loadSync("protocol.proto", {
+const packageDefinition = protoLoader.loadSync("lightbend/serverless/entity.proto", {
   includeDirs: [path.join(ssesPath, "proto"), path.join(ssesPath, "proto-ext")]
 });
 const descriptor = grpc.loadPackageDefinition(packageDefinition);
 
-const shoppingcart = protobuf.loadSync("proto/shoppingcart.proto");
-shoppingcart.resolveAll();
+const root = new protobuf.Root();
+root.resolvePath = function (origin, target) {
+  return path.join("proto", target);
+};
+root.loadSync("shoppingcart.proto");
+root.loadSync("domain.proto");
+root.resolveAll();
 
-const domain = protobuf.loadSync("proto/domain.proto");
-domain.resolveAll();
-const ItemAdded = domain.lookupType("com.example.shoppingcart.persistence.ItemAdded");
-const ItemRemoved = domain.lookupType("com.example.shoppingcart.persistence.ItemRemoved");
-const Cart = domain.lookupType("com.example.shoppingcart.persistence.Cart");
+const ItemAdded = root.lookupType("com.example.shoppingcart.persistence.ItemAdded");
+const ItemRemoved = root.lookupType("com.example.shoppingcart.persistence.ItemRemoved");
+const Cart = root.lookupType("com.example.shoppingcart.persistence.Cart");
 
 // Start server
 const server = require("../shoppingcart.js");
@@ -138,10 +157,10 @@ function sendCommand(call, name, payload) {
   return nextMessage(call).then(msg => {
     should.exist(msg.reply);
     msg.reply.commandId.toNumber().should.equal(cid);
-    msg.reply.decodedPayload = decodeAny(shoppingcart, msg.reply.payload);
+    msg.reply.decodedPayload = decodeAny(root, msg.reply.payload);
     if (msg.reply.events) {
       msg.reply.decodedEvents = msg.reply.events.map(event => {
-        return decodeAny(domain, event);
+        return decodeAny(root, event);
       });
     }
     return msg.reply;
@@ -161,20 +180,20 @@ function sendEvent(call, sequence, event) {
 }
 
 function getCart(call) {
-  return sendCommand(call, "GetCart", shoppingcart.lookupType("com.example.shoppingcart.GetShoppingCart").create({
+  return sendCommand(call, "GetCart", root.lookupType("com.example.shoppingcart.GetShoppingCart").create({
     userId: "123"
   }));
 }
 
 function addItem(call, item) {
-  return sendCommand(call, "AddItem", shoppingcart.lookupType("com.example.shoppingcart.AddLineItem").create(item));
+  return sendCommand(call, "AddItem", root.lookupType("com.example.shoppingcart.AddLineItem").create(item));
 }
 
 describe("shopping cart", () => {
 
   before("start shopping cart server", () => {
     const port = server.start();
-    client = new descriptor.com.lightbend.statefulserverless.grpc.Entity("127.0.0.1:" + port, grpc.credentials.createInsecure());
+    client = new descriptor.lightbend.serverless.Entity("127.0.0.1:" + port, grpc.credentials.createInsecure());
   });
 
   after("shutdown shopping cart server", () => {
@@ -192,7 +211,7 @@ describe("shopping cart", () => {
       // object, so we have to extract the field out of the protobuf descriptor
       const userIdField = spec.proto.messageType.find(mt => mt.name === "GetShoppingCart")
         .field.find(f => f.name === "userId");
-      userIdField.options.should.have.property(".com.lightbend.statefulserverless.grpc.entityKey", true);
+      userIdField.options.should.have.property(".lightbend.serverless.entityKey", true);
     });
   });
 

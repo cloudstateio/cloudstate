@@ -1,7 +1,28 @@
-let protobuf = require("protobufjs");
-let Entity = require("stateful-serverless-event-sourcing");
+/*
+ * Copyright 2019 Lightbend Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+const path = require("path");
+const protobuf = require("protobufjs");
+const Entity = require("stateful-serverless-event-sourcing");
 
-let domain = protobuf.loadSync(["proto/domain.proto", "proto/shoppingcart.proto"]);
+const domain = new protobuf.Root();
+domain.resolvePath = function (origin, target) {
+  return path.join("proto", target);
+};
+domain.loadSync(["shoppingcart.proto", "domain.proto"]);
+domain.resolveAll();
 
 /*
  * Here we load the Protobuf types. When emitting events or setting state, we need to return
@@ -10,12 +31,12 @@ let domain = protobuf.loadSync(["proto/domain.proto", "proto/shoppingcart.proto"
  *
  * Note this shows loading them dynamically, they could also be compiled and statically loaded.
  */
-let pkg = "com.example.shoppingcart.persistence.";
-let ItemAdded = domain.lookupType(pkg + "ItemAdded");
-let ItemRemoved = domain.lookupType(pkg + "ItemRemoved");
-let Cart = domain.lookupType(pkg + "Cart");
+const pkg = "com.example.shoppingcart.persistence.";
+const ItemAdded = domain.lookupType(pkg + "ItemAdded");
+const ItemRemoved = domain.lookupType(pkg + "ItemRemoved");
+const Cart = domain.lookupType(pkg + "Cart");
 
-let entity = new Entity(domain, "com.example.shoppingcart.ShoppingCart", {
+const entity = new Entity(domain, "com.example.shoppingcart.ShoppingCart", {
   persistenceId: "shopping-cart",
   snapshotEvery: 5 // Usually you wouldn't snapshot this frequently, but this helps to demonstrate snapshotting
 });
@@ -63,7 +84,7 @@ entity.setBehavior(cart => {
  */
 function addItem(addItem, cart, ctx) {
   // Create the event.
-  let itemAdded = ItemAdded.create({
+  const itemAdded = ItemAdded.create({
     item: {
       productId: addItem.productId,
       name: addItem.name,
@@ -81,7 +102,7 @@ function addItem(addItem, cart, ctx) {
 function removeItem(removeItem, cart, ctx) {
   // Validation:
   // Check that the item that we're removing actually exists.
-  let existing = cart.items.find(item => {
+  const existing = cart.items.find(item => {
     return item.productId === removeItem.productId;
   });
 
@@ -90,7 +111,7 @@ function removeItem(removeItem, cart, ctx) {
     ctx.fail("Item " + removeItem.productId + " not in cart");
   } else {
     // Otherwise, emit an item removed event.
-    let itemRemoved = ItemRemoved.create({
+    const itemRemoved = ItemRemoved.create({
       productId: removeItem.productId
     });
     ctx.emit(itemRemoved);
@@ -111,7 +132,7 @@ function getCart(request, cart) {
  */
 function itemAdded(added, cart) {
   // If there is an existing item with that product id, we need to increment its quantity.
-  let existing = cart.items.find(item => {
+  const existing = cart.items.find(item => {
     return item.productId === added.item.productId;
   });
 

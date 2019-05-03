@@ -8,13 +8,38 @@ dynver in ThisBuild ~= (_.replace('+', '-'))
 // Needed for our fork of skuber
 resolvers in ThisBuild += Resolver.bintrayRepo("jroper", "maven")
 
+organizationName in ThisBuild := "Lightbend Inc."
+startYear in ThisBuild := Some(2019)
+licenses in ThisBuild += ("Apache-2.0", new URL("https://www.apache.org/licenses/LICENSE-2.0.txt"))
+
 val AkkaVersion = "2.5.22"
 val AkkaHttpVersion = "10.1.7"
 val AkkaManagementVersion = "1.0.0"
 val AkkaPersistenceCassandraVersion = "0.93"
 
+def common: Seq[Setting[_]] = Seq(
+  headerMappings := headerMappings.value ++ Seq(
+    de.heikoseeberger.sbtheader.FileType("proto") -> HeaderCommentStyle.cppStyleLineComment,
+    de.heikoseeberger.sbtheader.FileType("js") -> HeaderCommentStyle.cStyleBlockComment
+  )
+)
+
+// Include sources from the npm projects
+headerSources in Compile ++= {
+  val nodeSupport = baseDirectory.value / "node-support"
+  val jsShoppingCart = baseDirectory.value / "samples" / "js-shopping-cart"
+
+  Seq(
+    nodeSupport / "src" ** "*.js",
+    nodeSupport * "*.js",
+    jsShoppingCart * "*.js",
+    jsShoppingCart / "test" ** "*.js"
+  ).flatMap(_.get)
+}
+
 lazy val root = (project in file("."))
   .aggregate(`backend-core`, `backend-cassandra`, `akka-client`, operator)
+  .settings(common)
 
 def dockerSettings: Seq[Setting[_]] = Seq(
   dockerBaseImage := "adoptopenjdk/openjdk8",
@@ -26,6 +51,7 @@ def dockerSettings: Seq[Setting[_]] = Seq(
 lazy val `backend-core` = (project in file("backend/core"))
   .enablePlugins(JavaAppPackaging, DockerPlugin, AkkaGrpcPlugin, JavaAgent)
   .settings(
+    common,
     name := "stateful-serverless-backend-core",
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
@@ -57,6 +83,7 @@ lazy val `backend-cassandra` = (project in file("backend/cassandra"))
   .enablePlugins(JavaAppPackaging, DockerPlugin, JavaAgent)
   .dependsOn(`backend-core`)
   .settings(
+    common,
     name := "stateful-serverless-backend-cassandra",
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-persistence-cassandra" % AkkaPersistenceCassandraVersion,
@@ -73,6 +100,7 @@ val compileK8sDescriptors = taskKey[File]("Compile the K8s descriptors into one"
 lazy val operator = (project in file("operator"))
   .enablePlugins(JavaAppPackaging, DockerPlugin)
   .settings(
+    common,
     name := "stateful-serverless-operator",
     // This is a publishLocal build of this PR https://github.com/doriordan/skuber/pull/268
     libraryDependencies += "io.skuber" %% "skuber" % "2.2.0-jroper-1",
@@ -93,6 +121,7 @@ val copyShoppingCartProtos = taskKey[File]("Copy the shopping cart protobufs")
 lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"))
   .enablePlugins(AkkaGrpcPlugin)
   .settings(
+    common,
     name := "akka-js-shopping-cart-client",
 
     fork in run := true,
@@ -109,7 +138,10 @@ lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"
     copyShoppingCartProtos := {
       val toDir = (target in copyShoppingCartProtos).value
       val fromDir = baseDirectory.value.getParentFile / "js-shopping-cart" / "proto"
-      val toSync = (fromDir * "*.proto").get.map(file => file -> toDir / file.getName)
+      val toCopy = (fromDir * "*.proto").get ++ (fromDir / "lightbend" ** "*.proto").get
+      val toSync = (toCopy pair Path.relativeTo(fromDir)).map {
+        case (file, path) => file -> toDir / path
+      }
       Sync.sync(streams.value.cacheStoreFactory.make(copyShoppingCartProtos.toString()))(toSync)
       toDir
     },

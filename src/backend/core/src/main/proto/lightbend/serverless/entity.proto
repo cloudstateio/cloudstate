@@ -1,9 +1,22 @@
-// Hypothetical event sourced function protocol
-// This would be provided by the framework, and event sourced functions would be expected to implement this gRPC
-// interface, while the framework would be a client of it.
+// Copyright 2019 Lightbend Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// gRPC interface for Event Sourced Entity user functions.
+
 syntax = "proto3";
 
-package com.lightbend.statefulserverless.grpc;
+package lightbend.serverless;
 
 // Any is used so that domain events defined according to the functions business domain can be embedded inside
 // the protocol.
@@ -11,7 +24,9 @@ import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/descriptor.proto";
 // This is needed to ensure that the FieldOptions are extended when this file is loaded.
-import "entitykey.proto";
+import "lightbend/serverless/entitykey.proto";
+
+option java_package = "com.lightbend.statefulserverless.grpc";
 
 // The init message. This will always be the first message sent to the entity when
 // it is loaded.

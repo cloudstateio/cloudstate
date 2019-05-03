@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Lightbend Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 const path = require("path");
 const protobuf = require("protobufjs");
 const AnySupport = require ("./protobuf-any");
@@ -30,7 +46,7 @@ module.exports.serviceToDescriptor = function serviceToDescriptor(root, serviceN
     // Only include the entity_key fields, that's all that's needed
     const fieldKeys = Object.keys(type.fields).filter(key => {
       return type.fields[key].options &&
-        type.fields[key].options.hasOwnProperty("(com.lightbend.statefulserverless.grpc.entity_key)");
+        type.fields[key].options.hasOwnProperty("(lightbend.serverless.entity_key)");
     });
 
     function toLabel(rule) {
@@ -75,7 +91,7 @@ module.exports.serviceToDescriptor = function serviceToDescriptor(root, serviceN
           type: toType(field.type),
           defaultValue: field.defaultValue,
           options: {
-            ".com.lightbend.statefulserverless.grpc.entityKey": true
+            ".lightbend.serverless.entityKey": true
           }
         }
       })
