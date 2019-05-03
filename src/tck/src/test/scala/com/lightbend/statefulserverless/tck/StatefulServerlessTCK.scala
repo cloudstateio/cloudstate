@@ -286,21 +286,28 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
       val productName2 = "Test Product 2"
       for {
         cart  <- shoppingClient.getCart(GetShoppingCart(userId))
-        res1  <- shoppingClient.addItem(AddLineItem(userId, productId1, productName1, 1))
-        res2  <- shoppingClient.addItem(AddLineItem(userId, productId2, productName2, 2))
-        res3  <- shoppingClient.addItem(AddLineItem(userId, productId1, productName1, 11))
-        res4  <- shoppingClient.addItem(AddLineItem(userId, productId2, productName2, 5))
+        Empty()  <- shoppingClient.addItem(AddLineItem(userId, productId1, productName1, 1))
+        Empty()  <- shoppingClient.addItem(AddLineItem(userId, productId2, productName2, 2))
+        Empty()  <- shoppingClient.addItem(AddLineItem(userId, productId1, productName1, 11))
+        Empty()  <- shoppingClient.addItem(AddLineItem(userId, productId2, productName2, 5))
         cart1 <- shoppingClient.getCart(GetShoppingCart(userId))
       } yield {
         //FIXME interaction test
+        fromBackend_expectInit(noWait)
+
+        1 to 6 foreach { _ =>
+          val cmd = fromBackend_expectCommand(noWait)
+          val rep = fromFrontend_expectReply(noWait)
+
+          cmd.id must be (rep.commandId)
+        }
+
+        fromBackend.expectNoMsg(noWait)
+        fromFrontend.expectNoMsg(noWait)
 
         //Semantical test
         cart must not be(null)
         cart.items must be(empty)
-        res1 must be(Empty())
-        res2 must be(Empty())
-        res3 must be(Empty())
-        res4 must be(Empty())
         cart1 must not be(null)
         cart1.items must not be(empty)
         cart1.items.toSet must be(Set(LineItem(productId1, productName1, 12), LineItem(productId2, productName2, 7)))
