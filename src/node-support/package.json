@@ -1,6 +1,6 @@
 {
   "name": "stateful-serverless-event-sourcing",
-  "version": "0.2.1",
+  "version": "0.2.4",
   "description": "Support for implementing event sourced serverless functions",
   "keywords": [
     "serverless",

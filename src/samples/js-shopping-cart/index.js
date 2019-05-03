@@ -14,6 +14,4 @@
  * limitations under the License.
  */
 
-require("./shoppingcart.js").start({
-  bindPort: 8080
-});
+require("./shoppingcart.js").start();

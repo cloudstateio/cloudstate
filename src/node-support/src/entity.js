@@ -19,6 +19,7 @@ const debug = require("debug")("stateserve-event-sourcing");
 // Bind to stdout
 debug.log = console.log.bind(console);
 const grpc = require("grpc");
+const fs = require("fs");
 const protoLoader = require("@grpc/proto-loader");
 const protobuf = require("protobufjs");
 const AnySupport = require("./protobuf-any");
@@ -326,30 +327,44 @@ module.exports = class Entity {
 
   constructor(desc, serviceName, options) {
 
-    // Protobuf may be one of the following:
-    //  * A protobufjs root object
-    //  * A a single protobuf file
-    //  * Multiple protobuf files
-    let root;
-    if (Array.isArray(desc) || typeof desc === "string") {
-      root = protobuf.loadSync(desc).resolveAll();
-    } else if (typeof desc === "object") {
-      root = desc.resolveAll();
-    } else {
-      throw new Error("Unknown descriptor type: " + typeof desc)
-    }
-
     this.options = {
       ...{
         persistenceId: "entity",
-        snapshotEvery: 100
+        snapshotEvery: 100,
+        includeDirs: ["."]
       },
       ...options
     };
-    this.root = root;
+
+    const allIncludeDirs = [
+      path.resolve(__dirname, "..", "proto"),
+      path.resolve(__dirname, "..", "proto-ext")
+    ].concat(this.options.includeDirs);
+
+    this.root = new protobuf.Root();
+    this.root.resolvePath = function (origin, target) {
+      for (let i = 0; i < allIncludeDirs.length; i++) {
+        const directory = allIncludeDirs[i];
+        const fullPath = path.resolve(directory, target);
+        try {
+          fs.accessSync(fullPath, fs.constants.R_OK);
+          return fullPath;
+        } catch (err) {
+        }
+      }
+      return null;
+    };
+
+    this.root.loadSync(desc);
+    this.root.resolveAll();
+
     this.serviceName = serviceName;
     // Eagerly lookup the service to fail early
-    this.service = root.lookupService(serviceName);
+    this.service = this.root.lookupService(serviceName);
+  }
+
+  lookupType(messageType) {
+    return this.root.lookupType(messageType);
   }
 
   setInitial(callback) {
@@ -364,7 +379,7 @@ module.exports = class Entity {
     options = {
       ...{
         bindAddress: "0.0.0.0",
-        bindPort: 0
+        bindPort: 8080
       },
       ...options
     };

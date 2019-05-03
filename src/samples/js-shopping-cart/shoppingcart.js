@@ -13,16 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-const path = require("path");
-const protobuf = require("protobufjs");
 const Entity = require("stateful-serverless-event-sourcing");
 
-const domain = new protobuf.Root();
-domain.resolvePath = function (origin, target) {
-  return path.join("proto", target);
-};
-domain.loadSync(["shoppingcart.proto", "domain.proto"]);
-domain.resolveAll();
+const entity = new Entity(
+  ["shoppingcart.proto", "domain.proto"],
+  "com.example.shoppingcart.ShoppingCart",
+  {
+    persistenceId: "shopping-cart",
+    snapshotEvery: 5, // Usually you wouldn't snapshot this frequently, but this helps to demonstrate snapshotting
+    includeDirs: ["proto"]
+  }
+);
 
 /*
  * Here we load the Protobuf types. When emitting events or setting state, we need to return
@@ -32,14 +33,10 @@ domain.resolveAll();
  * Note this shows loading them dynamically, they could also be compiled and statically loaded.
  */
 const pkg = "com.example.shoppingcart.persistence.";
-const ItemAdded = domain.lookupType(pkg + "ItemAdded");
-const ItemRemoved = domain.lookupType(pkg + "ItemRemoved");
-const Cart = domain.lookupType(pkg + "Cart");
+const ItemAdded = entity.lookupType(pkg + "ItemAdded");
+const ItemRemoved = entity.lookupType(pkg + "ItemRemoved");
+const Cart = entity.lookupType(pkg + "Cart");
 
-const entity = new Entity(domain, "com.example.shoppingcart.ShoppingCart", {
-  persistenceId: "shopping-cart",
-  snapshotEvery: 5 // Usually you wouldn't snapshot this frequently, but this helps to demonstrate snapshotting
-});
 
 /*
  * Set a callback to create the initial state. This is what is created if there is no

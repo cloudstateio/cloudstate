@@ -192,7 +192,9 @@ function addItem(call, item) {
 describe("shopping cart", () => {
 
   before("start shopping cart server", () => {
-    const port = server.start();
+    const port = server.start({
+      bindPort: 0
+    });
     client = new descriptor.lightbend.serverless.Entity("127.0.0.1:" + port, grpc.credentials.createInsecure());
   });
 
