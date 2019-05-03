@@ -88,7 +88,12 @@ object EventSourcedService {
       .inmap(TemplateSpec.apply, unlift(TemplateSpec.unapply))
   }
 
-  case class Journal(name: String, config: Option[JsObject])
+  case class Journal(
+    name: String,
+    config: Option[JsObject],
+    sidecarResources: Option[Resource.Requirements],
+    sidecarJvmMemory: Option[String]
+  )
 
   object Journal {
     implicit val format: Format[Journal] = Json.format

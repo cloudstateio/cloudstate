@@ -146,7 +146,10 @@ lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"
       toDir
     },
 
-    PB.protoSources in Compile += (target in copyShoppingCartProtos).value,
+    PB.protoSources in Compile ++= Seq(
+      (target in copyShoppingCartProtos).value,
+      (sourceDirectory in Compile in `backend-core`).value / "proto"
+    ),
     (PB.unpackDependencies in Compile) := {
       copyShoppingCartProtos.value
       (PB.unpackDependencies in Compile).value

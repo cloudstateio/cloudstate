@@ -16,6 +16,8 @@
 
 package com.lightbend.statefulserverless
 
+import java.net.{URLDecoder, URLEncoder}
+
 import akka.NotUsed
 import akka.actor._
 import akka.util.Timeout
@@ -65,7 +67,9 @@ final class StateManagerSupervisor(client: EntityClient, configuration: StateMan
 
   private[this] final def waitingForRelay: Receive = {
     case Relay(relayRef) =>
-      val manager = context.watch(context.actorOf(StateManager.props(configuration, self.path.name, relayRef)))
+      // Cluster sharding URL encodes entity ids, so to extract it we need to decode.
+      val entityId = URLDecoder.decode(self.path.name, "utf-8")
+      val manager = context.watch(context.actorOf(StateManager.props(configuration, entityId, relayRef), "entity"))
       context.become(forwarding(manager))
       unstashAll()
     case _ => stash()

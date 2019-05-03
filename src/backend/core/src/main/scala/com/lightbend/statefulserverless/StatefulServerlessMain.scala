@@ -17,12 +17,13 @@
 package com.lightbend.statefulserverless
 
 import com.typesafe.config.Config
-import akka.actor.ActorSystem
+import akka.actor.{ActorSystem, Props}
 import akka.cluster.Cluster
 import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
 import akka.pattern.{BackoffOpts, BackoffSupervisor}
 import akka.stream.ActorMaterializer
+
 import scala.concurrent.Future
 import scala.concurrent.duration._
 
@@ -85,15 +86,16 @@ object StatefulServerlessMain {
       ClusterBootstrap(system).start()
     }
 
-    cluster.registerOnMemberUp {
-      system.actorOf(BackoffSupervisor.props(
-        BackoffOpts.onFailure(
-          ServerManager.props(serverConfig),
-          childName = "server-manager",
-          minBackoff = appConfig.backoffMin,
-          maxBackoff = appConfig.backoffMax,
-          randomFactor = appConfig.backoffRandomFactor
-        )))
-    }
+    // Warmup the StateManager, connect to Cassandra, etc
+    system.actorOf(Props(classOf[Warmup]), "state-manager-warm-up")
+
+    system.actorOf(BackoffSupervisor.props(
+      BackoffOpts.onFailure(
+        ServerManager.props(serverConfig),
+        childName = "server-manager",
+        minBackoff = appConfig.backoffMin,
+        maxBackoff = appConfig.backoffMax,
+        randomFactor = appConfig.backoffRandomFactor
+      )))
   }
 }

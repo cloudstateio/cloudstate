@@ -17,11 +17,11 @@
 package com.lightbend.statefulserverless
 
 import akka.Done
-import akka.actor.{ActorRef, Actor, ActorLogging, CoordinatedShutdown, Props, Status, Terminated }
+import akka.actor.{Actor, ActorLogging, ActorRef, CoordinatedShutdown, Props, Status, Terminated}
+import akka.cluster.Cluster
 import akka.util.Timeout
 import akka.pattern.pipe
 import akka.stream.Materializer
-import akka.dispatch.ExecutionContexts
 import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
 import akka.cluster.sharding._
@@ -89,12 +89,18 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
         messageExtractor = new Serve.CommandMessageExtractor(config.numberOfShards)))
 
       log.debug("Starting gRPC proxy for {}", reply.persistenceId)
-      Http().bindAndHandleAsync(
-        handler = Serve.createRoute(stateManager, config.proxyParallelism, config.relayTimeout, reply),
-        interface = config.httpInterface,
-        port = config.httpPort,
-        connectionContext = HttpConnectionContext(http2 = UseHttp2.Always)
-      ) pipeTo self
+
+      val handler = Serve.createRoute(stateManager, config.proxyParallelism, config.relayTimeout, reply)
+
+      // Don't actually bind until we have a cluster
+      Cluster(context.system).registerOnMemberUp {
+        Http().bindAndHandleAsync(
+          handler = handler,
+          interface = config.httpInterface,
+          port = config.httpPort,
+          connectionContext = HttpConnectionContext(http2 = UseHttp2.Always)
+        ) pipeTo self
+      }
 
       context.become(binding(stateManager))
 

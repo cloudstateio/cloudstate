@@ -143,6 +143,16 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
         image <- journal.image.toRight(s"Journal '$journalName' has no defined image in the status")
       } yield {
 
+        val sidecarResources = resource.spec.journal.sidecarResources.getOrElse(Resource.Requirements(
+          limits = Map(Resource.memory -> Resource.Quantity("512Mi")),
+          requests = Map(
+            Resource.memory -> Resource.Quantity("512Mi"),
+            Resource.cpu -> Resource.Quantity("0.25")
+          )
+        ))
+
+        val jvmMemory = resource.spec.journal.sidecarJvmMemory.getOrElse("256m")
+
         val templateSpec = resource.spec.template.spec
         val injectedSpec = Pod.Spec(
           containers = templateSpec.containers.map {
@@ -162,16 +172,9 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
                 EnvVar("SELECTOR_LABEL_VALUE", resource.name),
                 EnvVar("SELECTOR_LABEL", EventSourcedLabel),
                 EnvVar("REQUIRED_CONTACT_POINT_NR", Math.ceil(resource.spec.replicas / 2 + 1).toString),
-                // todo where does this come from?
-                EnvVar("JAVA_OPTS", "-Xms256m -Xmx256m")
+                EnvVar("JAVA_OPTS", s"-Xms$jvmMemory -Xmx$jvmMemory")
               ) ++ journal.sidecarEnv.getOrElse(Nil) ++ journalConfig,
-              resources = Some(Resource.Requirements(
-                limits = Map(Resource.memory -> Resource.Quantity("512Mi")),
-                requests = Map(
-                  Resource.memory -> Resource.Quantity("512Mi"),
-                  Resource.cpu -> Resource.Quantity("0.25")
-                )
-              )),
+              resources = Some(sidecarResources),
               readinessProbe = Some(Probe(
                 action = HTTPGetAction(
                   port = Right("management"),

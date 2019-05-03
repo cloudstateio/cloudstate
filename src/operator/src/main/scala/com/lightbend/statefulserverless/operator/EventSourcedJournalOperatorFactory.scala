@@ -41,7 +41,7 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
 
   class EventSourcedJournalOperator(client: KubernetesClient) extends Operator {
 
-    private def hashSpec(resource: Resource) = hashOf((resource, CassandraJournalImage))
+    private def hashSpec(resource: Resource) = hashOf((resource.spec, CassandraJournalImage))
 
     override def hasAnythingChanged(resource: Resource): Boolean = {
       (for {
