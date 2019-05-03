@@ -1,6 +1,28 @@
 {
   "name": "js-shopping-cart",
   "version": "0.1.0",
+  "description": "Sample event sourced serverless shopping cart application",
+  "keywords": [
+    "serverless",
+    "lightbend",
+    "akka",
+    "event-sourcing"
+  ],
+  "homepage": "https://github.com/lightbend/stateful-serverless",
+  "bugs": {
+    "url": "https://github.com/lightbend/stateful-serverless/issues"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "James Roper",
+    "email": "jroper2@gmail.com",
+    "url": "https://jazzy.id.au"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lightbend/stateful-serverless",
+    "directory": "src/samples/js-shopping-cart"
+  },
   "//": "https://npm.community/t/npm-install-does-not-install-transitive-dependencies-of-local-dependency/2264",
   "dependencies": {
     "stateful-serverless-event-sourcing": "file:../../node-support",
@@ -10,7 +32,7 @@
   },
   "devDependencies": {
     "chai": "4.2.0",
-    "mocha": "^6.1.3"
+    "mocha": "^6.1.4"
   },
   "scripts": {
     "test": "mocha",

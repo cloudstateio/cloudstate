@@ -1,6 +1,28 @@
 {
   "name": "stateful-serverless-event-sourcing",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "description": "Support for implementing event sourced serverless functions",
+  "keywords": [
+    "serverless",
+    "lightbend",
+    "akka",
+    "event-sourcing"
+  ],
+  "homepage": "https://github.com/lightbend/stateful-serverless",
+  "bugs": {
+    "url": "https://github.com/lightbend/stateful-serverless/issues"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "James Roper",
+    "email": "jroper2@gmail.com",
+    "url": "https://jazzy.id.au"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lightbend/stateful-serverless",
+    "directory": "src/node-support"
+  },
   "dependencies": {
     "@grpc/proto-loader": "^0.1.0",
     "google-protobuf": "^3.0.0",
