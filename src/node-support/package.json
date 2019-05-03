@@ -1,6 +1,6 @@
 {
   "name": "stateful-serverless-event-sourcing",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Support for implementing event sourced serverless functions",
   "keywords": [
     "serverless",
@@ -23,6 +23,12 @@
     "url": "https://github.com/lightbend/stateful-serverless",
     "directory": "src/node-support"
   },
+  "files": [
+    "proto",
+    "proto-ext",
+    "src",
+    "index.js"
+  ],
   "dependencies": {
     "@grpc/proto-loader": "^0.1.0",
     "google-protobuf": "^3.0.0",
