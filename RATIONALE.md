@@ -77,11 +77,6 @@ It builds on and extends the traditional stateless FaaS model, by adding support
 Define your data model, choose its consistency mode and resolution method, and access both your data, data-centric operations, streaming pipelines, and events via a well-formed protocol of gRPC command and read channels.
 
 
-## Developer Experience
-
-TODO @viktorklang
-
-
 ## High-level design
 
 Stateful Serverless is built on top of Knative and Akka. Each stateful service is backed by an Akka Cluster of durable Akka Actors (event-sourced using Akka Persistence and a distributed database of choice). The user, however, is shielded from these complexities through a set of sidecars bridging the user code to the backend state and cluster management. 
@@ -91,9 +86,6 @@ Inbound and outbound communication is always going through the sidecars over gRP
 Communicating over a gRPC allows the user code to be implemented in different languages (Scala, Java, Go, JavaScript, etc.).
 
 ![Visualization of architecture](images/architecture-visualization.png)
-
-
-**TODO: Add Picture**
 
 Managing distributed state isn't just about pushing data from A to B in a reliable fashion. It's about selecting a model that reflects the real world use of the data, and its convergence on usable consistency, not artificially enforced consistency. Being able to have data span clusters, data centers, availability zones, and continents, and maintain a useful coherent state is the gift that Akka gives to Stateful Serverless. Additionally, repetitive work that is better executed in the stateful cluster, or needs to maintain long-running state can be embedded via command channels. 
 
@@ -133,7 +125,7 @@ However, implementing traditional application development, microservices, statef
 
 Stateful Serverless is designed to extend the model and making it straightforward to implement use-cases such as: 
 
-*   **Training Machine Learning Models**
+*   **Training and Serving of Machine Learning Models**
     *   Any use-case that needs to build up, and provide low latency serving of, dynamic models
     *   An Akka Streams pipeline can invoke model serving using the ability to embed async Actor invocations. Those actors can encapsulate both durable, distributed state (e.g., the models themselves, running stats, etc.) and they can manage the invocations of scoring or even training, to remote services or embedded libraries. 
 *   **Real-time Resilient Distributed Stream Processing**
@@ -149,7 +141,7 @@ Stateful Serverless is designed to extend the model and making it straightforwar
     *   Supports transactional distributed workflow management, such as the Saga Pattern.
     *   Manages each step in the workflow including rollback/compensating actions in the case of failure. 
     *   Offer options in terms of consistency guarantees.
-*   **Collaborative Workspaces, such as Collaborative Document Editing and Chat Rooms**.
+*   **Shared Collaborative Workspaces, e.g. Collaborative Document Editing and Chat Rooms**.
     *   Requires real-time push events to connected users/devices
     *   This covers a range of use cases from chat rooms, to collaborative document editing, to user notifications, etc.
     *   This is difficult to achieve with traditional pub-sub brokers, since they don't tend to scale well on the subscriber axis when each end user has one to many active subscriptions, but can be easily implemented when point to point addressable messaging is available.
