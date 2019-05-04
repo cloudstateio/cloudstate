@@ -136,21 +136,20 @@ Stateful Serverless is designed to extend the model and making it straightforwar
 *   **Training Machine Learning Models**
     *   Any use-case that needs to build up, and provide low latency serving of, dynamic models
     *   An Akka Streams pipeline can invoke model serving using the ability to embed async Actor invocations. Those actors can encapsulate both durable, distributed state (e.g., the models themselves, running stats, etc.) and they can manage the invocations of scoring or even training, to remote services or embedded libraries. 
-*   **Low-latency Prediction Serving**
-    *   By using gRPC streams as the interface we can deliver boundary crossing at low latency without the penalty of REST or other higher level protocols. Since models are invoked using async actors, response time is not a factor, and blocking is avoided.
-*   **Real-time resilient Stream Processing**
-    *   Fraud detection, anomaly detection, recommendations, …
+*   **Real-time Resilient Distributed Stream Processing**
+*   *   **Low-latency Real-time Prediction/Recommendation Serving**
+    *   *   By using gRPC streams as the interface we can deliver boundary crossing at low latency without the penalty of REST or other higher level protocols. Since models are invoked using async actors, response time is not a factor, and blocking is avoided.
+    *   **Low-latency Real-time Fraud Detection**
+    *   **Low-latency Real-time Anomaly Detection**
 *   **User Session, Shopping Cart (and other distributed hash-table-centric use-cases)**
     *   Managing in-memory (but potentially durable) session state across the lifecycle of individual requests.
     *   This is a very common use-case, e.g. retail, online gaming, real-time betting, etc.
     *   Akka Distributed Data's CRDTs is an ideal way to do this—balancing consistency and availability—as has been shown many times.
 *   **Transaction Management**, **Saga Pattern**
-    *   Supports transactional distributed workflow management with rollback/compensating actions (such as the Saga Pattern)
-    *   Manages each step in the workflow including compensating actions in the case of failure. 
-    *   Offers options in terms of consistency guarantees.
-    *   Implements the front end in an alternative lang of choice.
-    *   Considering using [this project](https://github.com/sean-walsh/akka-transactional.) (once we have added gRPC support). 
-*   **Collaborative Workspaces, such as Collaborative Document Editing and **Chat Rooms**.
+    *   Supports transactional distributed workflow management, such as the Saga Pattern.
+    *   Manages each step in the workflow including rollback/compensating actions in the case of failure. 
+    *   Offer options in terms of consistency guarantees.
+*   **Collaborative Workspaces, such as Collaborative Document Editing and Chat Rooms**.
     *   Requires real-time push events to connected users/devices
     *   This covers a range of use cases from chat rooms, to collaborative document editing, to user notifications, etc.
     *   This is difficult to achieve with traditional pub-sub brokers, since they don't tend to scale well on the subscriber axis when each end user has one to many active subscriptions, but can be easily implemented when point to point addressable messaging is available.
