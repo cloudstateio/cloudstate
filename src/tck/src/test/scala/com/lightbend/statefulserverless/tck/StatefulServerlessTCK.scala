@@ -278,39 +278,45 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
       }
     }
 
-    "verify that items can be added to a shopping cart" in {
+    "verify that items can be added to, and removed from, a shopping cart" in {
       val userId       = "testuser:2"
       val productId1   = "testproduct:1"
       val productId2   = "testproduct:2"
       val productName1 = "Test Product 1"
       val productName2 = "Test Product 2"
       for {
-        cart  <- shoppingClient.getCart(GetShoppingCart(userId))
-        Empty()  <- shoppingClient.addItem(AddLineItem(userId, productId1, productName1, 1))
-        Empty()  <- shoppingClient.addItem(AddLineItem(userId, productId2, productName2, 2))
-        Empty()  <- shoppingClient.addItem(AddLineItem(userId, productId1, productName1, 11))
-        Empty()  <- shoppingClient.addItem(AddLineItem(userId, productId2, productName2, 5))
-        cart1 <- shoppingClient.getCart(GetShoppingCart(userId))
+        cart    <- shoppingClient.getCart(GetShoppingCart(userId))
+        Empty() <- shoppingClient.addItem(AddLineItem(userId, productId1, productName1, 1))  // Test add the first product
+        Empty() <- shoppingClient.addItem(AddLineItem(userId, productId2, productName2, 2))  // Test add the second product
+        Empty() <- shoppingClient.addItem(AddLineItem(userId, productId1, productName1, 11)) // Test increase quantity
+        Empty() <- shoppingClient.addItem(AddLineItem(userId, productId2, productName2, 31)) // Test increase quantity
+        cart1   <- shoppingClient.getCart(GetShoppingCart(userId))                           // Test intermediate state
+        Empty() <- shoppingClient.removeItem(RemoveLineItem(userId, productId1))             // Test removal of first product
+        Empty() <- shoppingClient.addItem(AddLineItem(userId, productId2, productName2, -7)) // Test decrement quantity of second product
+        cart2   <- shoppingClient.getCart(GetShoppingCart(userId))                           // Test end state
       } yield {
-        //FIXME interaction test
         fromBackend_expectInit(noWait)
 
-        1 to 6 foreach { _ =>
+        val commands = (1 to 9).foldLeft(Set.empty[Long]){ (set, _) =>
           val cmd = fromBackend_expectCommand(noWait)
           val rep = fromFrontend_expectReply(noWait)
 
-          cmd.id must be (rep.commandId)
+          cmd.id must be (rep.commandId) // Verify correlation
+          set must not contain(cmd.id)
+          set + cmd.id
         }
 
         fromBackend.expectNoMsg(noWait)
         fromFrontend.expectNoMsg(noWait)
 
+        commands must have(size(9)) // Verify command id uniqueness
+
         //Semantical test
-        cart must not be(null)
-        cart.items must be(empty)
-        cart1 must not be(null)
-        cart1.items must not be(empty)
-        cart1.items.toSet must be(Set(LineItem(productId1, productName1, 12), LineItem(productId2, productName2, 7)))
+        cart must equal(Cart(Nil))
+
+        // FIXME ShoppingCartProtocol should specify and maintain item order?
+        cart1.items.toSet must equal(Set(LineItem(productId1, productName1, 12), LineItem(productId2, productName2, 33)))
+        cart2.items.toSet must equal(Set(LineItem(productId2, productName2, 26)))
       }
     }
   }
