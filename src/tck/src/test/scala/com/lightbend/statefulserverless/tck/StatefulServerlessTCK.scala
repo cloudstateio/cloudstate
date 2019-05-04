@@ -278,22 +278,27 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
       }
     }
 
+    // TODO convert this into a ScalaCheck generated test case
     "verify that items can be added to, and removed from, a shopping cart" in {
+      val sc           = shoppingClient
+      import sc.{getCart, addItem, removeItem}
+
       val userId       = "testuser:2"
       val productId1   = "testproduct:1"
       val productId2   = "testproduct:2"
       val productName1 = "Test Product 1"
       val productName2 = "Test Product 2"
+
       for {
-        cart    <- shoppingClient.getCart(GetShoppingCart(userId))
-        Empty() <- shoppingClient.addItem(AddLineItem(userId, productId1, productName1, 1))  // Test add the first product
-        Empty() <- shoppingClient.addItem(AddLineItem(userId, productId2, productName2, 2))  // Test add the second product
-        Empty() <- shoppingClient.addItem(AddLineItem(userId, productId1, productName1, 11)) // Test increase quantity
-        Empty() <- shoppingClient.addItem(AddLineItem(userId, productId2, productName2, 31)) // Test increase quantity
-        cart1   <- shoppingClient.getCart(GetShoppingCart(userId))                           // Test intermediate state
-        Empty() <- shoppingClient.removeItem(RemoveLineItem(userId, productId1))             // Test removal of first product
-        Empty() <- shoppingClient.addItem(AddLineItem(userId, productId2, productName2, -7)) // Test decrement quantity of second product
-        cart2   <- shoppingClient.getCart(GetShoppingCart(userId))                           // Test end state
+        Cart(Nil)    <- getCart(GetShoppingCart(userId))                           // Test initial state
+        Empty()      <- addItem(AddLineItem(userId, productId1, productName1, 1))  // Test add the first product
+        Empty()      <- addItem(AddLineItem(userId, productId2, productName2, 2))  // Test add the second product
+        Empty()      <- addItem(AddLineItem(userId, productId1, productName1, 11)) // Test increase quantity
+        Empty()      <- addItem(AddLineItem(userId, productId2, productName2, 31)) // Test increase quantity
+        Cart(items1) <- getCart(GetShoppingCart(userId))                           // Test intermediate state
+        Empty()      <- removeItem(RemoveLineItem(userId, productId1))             // Test removal of first product
+        Empty()      <- addItem(AddLineItem(userId, productId2, productName2, -7)) // Test decrement quantity of second product
+        Cart(items2) <- getCart(GetShoppingCart(userId))                           // Test end state
       } yield {
         fromBackend_expectInit(noWait)
 
@@ -312,11 +317,10 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
         commands must have(size(9)) // Verify command id uniqueness
 
         //Semantical test
-        cart must equal(Cart(Nil))
 
         // FIXME ShoppingCartProtocol should specify and maintain item order?
-        cart1.items.toSet must equal(Set(LineItem(productId1, productName1, 12), LineItem(productId2, productName2, 33)))
-        cart2.items.toSet must equal(Set(LineItem(productId2, productName2, 26)))
+        items1.toSet must equal(Set(LineItem(productId1, productName1, 12), LineItem(productId2, productName2, 33)))
+        items2.toSet must equal(Set(LineItem(productId2, productName2, 26)))
       }
     }
   }
