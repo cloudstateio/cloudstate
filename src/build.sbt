@@ -49,7 +49,7 @@ def dockerSettings: Seq[Setting[_]] = Seq(
 )
 
 lazy val `backend-core` = (project in file("backend/core"))
-  .enablePlugins(JavaAppPackaging, DockerPlugin, AkkaGrpcPlugin, JavaAgent)
+  .enablePlugins(JavaAppPackaging, DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin)
   .settings(
     common,
     name := "stateful-serverless-backend-core",
@@ -76,7 +76,22 @@ lazy val `backend-core` = (project in file("backend/core"))
     fork in run := true,
 
     // In memory journal by default
-    javaOptions in run ++= Seq("-Dconfig.resource=in-memory.conf", "-Dstateful-serverless.dev-mode-enabled=true")
+    javaOptions in run ++= Seq("-Dconfig.resource=in-memory.conf", "-Dstateful-serverless.dev-mode-enabled=true"),
+
+    mainClass in assembly := Some("com.lightbend.statefulserverless.StatefulServerlessMain"),
+
+    assemblyJarName in assembly := "akka-backend.jar",
+
+    test in assembly := {},
+
+    // logLevel in assembly := Level.Debug,
+
+    assemblyMergeStrategy in assembly := {
+      /*ADD CUSTOMIZATIONS HERE*/
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    }
   )
 
 lazy val `backend-cassandra` = (project in file("backend/cassandra"))
@@ -165,9 +180,14 @@ lazy val `tck` = (project in file("tck"))
   .settings(
     name := "tck",
 
-    fork in test := true,
+    fork in test := false,
 
     parallelExecution in Test := false,
+
+    test in Test := {
+      (`backend-core`/assembly).value
+      (test in Test).value
+    },
 
     libraryDependencies ++= Seq(
       "com.typesafe.akka"  %% "akka-stream"          % AkkaVersion,
