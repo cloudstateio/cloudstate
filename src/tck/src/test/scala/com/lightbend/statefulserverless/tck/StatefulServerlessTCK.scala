@@ -14,7 +14,7 @@ import com.typesafe.config.Config
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.collection.JavaConverters._
-import scala.util.{Success, Failure, Try}
+import scala.util.{Try}
 
 import java.util.{Map => JMap}
 import java.util.concurrent.TimeUnit
@@ -88,6 +88,7 @@ object StatefulServerlessTCK {
       client.handle(in.alsoTo(fromBackendInterceptor)).alsoTo(fromFrontendInterceptor)
 
     override def ready(in: Empty): Future[EntitySpec] = {
+      import scala.util.{Success, Failure}
       fromBackend.ref ! in
       client.ready(in).andThen {
         case Success(es) => fromFrontend.ref ! es
@@ -207,11 +208,7 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
     init must not be(null)
     init.message must be('init)
     init.message.init must be(defined)
-    val i = init.message.init.get
-    //FIXME validate
-    //i.entityId
-    //i.snapshot
-    i
+    init.message.init.get
   }
 
   final def fromBackend_expectCommand(within: FiniteDuration): Command = {
@@ -220,10 +217,7 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
     command.message must be('command)
     command.message.command must be(defined)
     val c = command.message.command.get
-    //FIXME validate
-    //c.entityId
-    //c.id
-    //c.payload
+    c.entityId must not be(empty)
     c
   }
 
@@ -232,14 +226,21 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
     reply must not be(null)
     reply.message must be('reply)
     reply.message.reply must be(defined)
-    val r = reply.message.reply.get
-    //FIXME validate
-    //r.commandId
-    //r.payload
-    //r.events
-    //r.snapshot
-    r
+    reply.message.reply.get
   }
+
+  final def fromFrontend_expectFailure(within: FiniteDuration): Failure = {
+    val failure = fromFrontend.expectMsgType[EntityStreamOut](noWait)
+    failure must not be(null)
+    failure.message must be('failure)
+    failure.message.failure must be(defined)
+    failure.message.failure.get
+  }
+
+  final def correlate(cmd: Command, reply: Reply)     = cmd.id must be(reply.commandId)
+  final def correlate(cmd: Command, failure: Failure) = cmd.id must be(failure.commandId)
+  final def unrelated(cmd: Command, reply: Reply)     = cmd.id must not be reply.commandId
+  final def unrelated(cmd: Command, failure: Failure) = cmd.id must not be failure.commandId
 
   "The TCK" must {
     implicit val scheduler = system.scheduler
@@ -257,15 +258,13 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
       attempt(shoppingClient.getCart(GetShoppingCart(userId)), 4.seconds, 10) map {
         cart =>
           // Interaction test
-          val _     = fromBackend.expectMsg(Empty())
+          fromBackend.expectMsg(Empty())
 
-          val spec  = fromFrontend_expectEntitySpec(noWait)
+          fromFrontend_expectEntitySpec(noWait)
 
-          val init  = fromBackend_expectInit(noWait)
+          fromBackend_expectInit(noWait)
 
-          val cmd   = fromBackend_expectCommand(noWait)
-
-          val reply = fromFrontend_expectReply(noWait)
+          correlate(fromBackend_expectCommand(noWait), fromFrontend_expectReply(noWait))
 
           fromBackend.expectNoMsg(noWait)
           fromFrontend.expectNoMsg(noWait)
@@ -273,8 +272,6 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
           // Semantical test
           cart must not be(null)
           cart.items must be(empty)
-
-          cmd.id must be(reply.commandId)
       }
     }
 
@@ -297,16 +294,21 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
         Empty()      <- addItem(AddLineItem(userId, productId2, productName2, 31)) // Test increase quantity
         Cart(items1) <- getCart(GetShoppingCart(userId))                           // Test intermediate state
         Empty()      <- removeItem(RemoveLineItem(userId, productId1))             // Test removal of first product
-        Empty()      <- addItem(AddLineItem(userId, productId2, productName2, -7)) // Test decrement quantity of second product
+        addNeg       <- addItem(AddLineItem(userId, productId2, productName2, -7)).transform(scala.util.Success(_)) // Test decrement quantity of second product
+        add0         <- addItem(AddLineItem(userId, productId1, productName1, 0)).transform(scala.util.Success(_)) // Test add 0 of new product
+        removeNone   <- removeItem(RemoveLineItem(userId, productId1)).transform(scala.util.Success(_)) // Test remove non-exiting product
         Cart(items2) <- getCart(GetShoppingCart(userId))                           // Test end state
       } yield {
-        fromBackend_expectInit(noWait)
+        val init = fromBackend_expectInit(noWait)
+        init.entityId must not be(empty)
 
-        val commands = (1 to 9).foldLeft(Set.empty[Long]){ (set, _) =>
+        val commands = Seq(true, true, true, true, true, true, true, false, false, false, true).
+        foldLeft(Set.empty[Long]){ (set, isReply) =>
           val cmd = fromBackend_expectCommand(noWait)
-          val rep = fromFrontend_expectReply(noWait)
-
-          cmd.id must be (rep.commandId) // Verify correlation
+          if (isReply)
+            correlate(cmd, fromFrontend_expectReply(noWait)) // Verify correlation
+          else
+            correlate(cmd, fromFrontend_expectFailure(noWait)) // Verify correlation
           set must not contain(cmd.id)
           set + cmd.id
         }
@@ -314,13 +316,15 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
         fromBackend.expectNoMsg(noWait)
         fromFrontend.expectNoMsg(noWait)
 
-        commands must have(size(9)) // Verify command id uniqueness
+        commands must have(size(11)) // Verify command id uniqueness
+
+        addNeg must be('failure) // Verfify that we get a failure when adding a negative quantity
+        add0 must be('failure) // Verify that we get a failure when adding a line item of 0 items
+        //removeNone must be('failure) // Verify that we get a failure when removing a non-existing item
 
         //Semantical test
-
-        // FIXME ShoppingCartProtocol should specify and maintain item order?
         items1.toSet must equal(Set(LineItem(productId1, productName1, 12), LineItem(productId2, productName2, 33)))
-        items2.toSet must equal(Set(LineItem(productId2, productName2, 26)))
+        items2.toSet must equal(Set(LineItem(productId2, productName2, 33)))
       }
     }
   }
