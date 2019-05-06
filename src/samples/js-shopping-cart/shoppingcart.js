@@ -80,17 +80,23 @@ entity.setBehavior(cart => {
  * Handler for add item commands.
  */
 function addItem(addItem, cart, ctx) {
+  // Validation:
+  // Make sure that it is not possible to add negative quantities
+  if (addItem.quantity < 1) {
+    ctx.fail("Cannot add negative quantity to item " + addItem.productId);
+  } else {
   // Create the event.
-  const itemAdded = ItemAdded.create({
-    item: {
-      productId: addItem.productId,
-      name: addItem.name,
-      quantity: addItem.quantity
-    }
-  });
-  // Emit the event.
-  ctx.emit(itemAdded);
-  return {};
+    const itemAdded = ItemAdded.create({
+      item: {
+        productId: addItem.productId,
+        name: addItem.name,
+        quantity: addItem.quantity
+      }
+    });
+    // Emit the event.
+    ctx.emit(itemAdded);
+    return {};
+  }
 }
 
 /**

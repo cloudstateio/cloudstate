@@ -149,6 +149,6 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
     super.postStop()
     client.close()
     log.debug("shutting down")
-    // TODO do we system.terminate() here?
+    system.terminate()
   }
 }

@@ -38,7 +38,7 @@ headerSources in Compile ++= {
 }
 
 lazy val root = (project in file("."))
-  .aggregate(`backend-core`, `backend-cassandra`, `akka-client`, operator)
+  .aggregate(`backend-core`, `backend-cassandra`, `akka-client`, operator, `tck`)
   .settings(common)
 
 def dockerSettings: Seq[Setting[_]] = Seq(
@@ -49,19 +49,19 @@ def dockerSettings: Seq[Setting[_]] = Seq(
 )
 
 lazy val `backend-core` = (project in file("backend/core"))
-  .enablePlugins(JavaAppPackaging, DockerPlugin, AkkaGrpcPlugin, JavaAgent)
+  .enablePlugins(JavaAppPackaging, DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin)
   .settings(
     common,
     name := "stateful-serverless-backend-core",
     libraryDependencies ++= Seq(
-      "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
-      "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-      "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
-      "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
-      "com.typesafe.akka" %% "akka-cluster-sharding" % AkkaVersion,
+      "com.typesafe.akka"             %% "akka-persistence"                  % AkkaVersion,
+      "com.typesafe.akka"             %% "akka-stream"                       % AkkaVersion,
+      "com.typesafe.akka"             %% "akka-http"                         % AkkaHttpVersion,
+      "com.typesafe.akka"             %% "akka-http-spray-json"              % AkkaHttpVersion,
+      "com.typesafe.akka"             %% "akka-cluster-sharding"             % AkkaVersion,
       "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
-      "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion,
-      "com.google.protobuf" % "protobuf-java" % "3.5.1" % "protobuf" // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
+      "com.lightbend.akka.discovery"  %% "akka-discovery-kubernetes-api"     % AkkaManagementVersion,
+      "com.google.protobuf"            % "protobuf-java"                     % "3.5.1" % "protobuf" // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
     ),
 
     // Akka gRPC adds all protobuf files from the classpath to this, which we don't want because it includes
@@ -76,7 +76,22 @@ lazy val `backend-core` = (project in file("backend/core"))
     fork in run := true,
 
     // In memory journal by default
-    javaOptions in run ++= Seq("-Dconfig.resource=in-memory.conf", "-Dstateful-serverless.dev-mode-enabled=true")
+    javaOptions in run ++= Seq("-Dconfig.resource=in-memory.conf", "-Dstateful-serverless.dev-mode-enabled=true"),
+
+    mainClass in assembly := Some("com.lightbend.statefulserverless.StatefulServerlessMain"),
+
+    assemblyJarName in assembly := "akka-backend.jar",
+
+    test in assembly := {},
+
+    // logLevel in assembly := Level.Debug,
+
+    assemblyMergeStrategy in assembly := {
+      /*ADD CUSTOMIZATIONS HERE*/
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    }
   )
 
 lazy val `backend-cassandra` = (project in file("backend/cassandra"))
@@ -86,7 +101,7 @@ lazy val `backend-cassandra` = (project in file("backend/cassandra"))
     common,
     name := "stateful-serverless-backend-cassandra",
     libraryDependencies ++= Seq(
-      "com.typesafe.akka" %% "akka-persistence-cassandra" % AkkaPersistenceCassandraVersion,
+      "com.typesafe.akka" %% "akka-persistence-cassandra"          % AkkaPersistenceCassandraVersion,
       "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test
     ),
     dockerSettings,
@@ -127,11 +142,11 @@ lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"
     fork in run := true,
 
     libraryDependencies ++= Seq(
-      "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
-      "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-      "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
-      "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
-      "com.google.protobuf" % "protobuf-java" % "3.5.1" % "protobuf" // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
+      "com.typesafe.akka"  %% "akka-persistence"     % AkkaVersion,
+      "com.typesafe.akka"  %% "akka-stream"          % AkkaVersion,
+      "com.typesafe.akka"  %% "akka-http"            % AkkaHttpVersion,
+      "com.typesafe.akka"  %% "akka-http-spray-json" % AkkaHttpVersion,
+      "com.google.protobuf" % "protobuf-java"        % "3.5.1" % "protobuf" // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
     ),
 
     target in copyShoppingCartProtos := target.value / "js-shopping-cart-protos",
@@ -154,7 +169,49 @@ lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"
       copyShoppingCartProtos.value
       (PB.unpackDependencies in Compile).value
     }
+  )
 
+val copyProtocolProtosToTCK = taskKey[File]("Copy the protocol files to the tck")
+
+lazy val `tck` = (project in file("tck"))
+  .enablePlugins(AkkaGrpcPlugin)
+  .dependsOn(`backend-core`) // For the protocol
+  .dependsOn(`akka-client`) // For the shopping cart
+  .settings(
+    name := "tck",
+
+    fork in test := false,
+
+    parallelExecution in Test := false,
+
+    test in Test := {
+      (`backend-core`/assembly).value
+      (test in Test).value
+    },
+
+    libraryDependencies ++= Seq(
+      "com.typesafe.akka"  %% "akka-stream"          % AkkaVersion,
+      "com.typesafe.akka"  %% "akka-http"            % AkkaHttpVersion,
+      "com.typesafe.akka"  %% "akka-http-spray-json" % AkkaHttpVersion,
+      "com.google.protobuf" % "protobuf-java"        % "3.5.1" % "protobuf", // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
+      "org.scalatest"       % "scalatest_2.12"       % "3.0.5" % Test,
+      "com.typesafe.akka"  %% "akka-testkit"         % AkkaVersion % Test
+    ),
+
+    target in copyProtocolProtosToTCK := target.value / "backend-protos",
+    copyProtocolProtosToTCK := {
+      val toDir = (target in copyProtocolProtosToTCK).value
+      val fromDir = baseDirectory.value.getParentFile / "backend" / "core" / "src" / "main" / "proto"
+      val toSync = (fromDir * "*.proto").get.map(file => file -> toDir / file.getName)
+      Sync.sync(streams.value.cacheStoreFactory.make(copyProtocolProtosToTCK.toString()))(toSync)
+      toDir
+    },
+
+    PB.protoSources in Compile += (target in copyProtocolProtosToTCK).value,
+    (PB.unpackDependencies in Compile) := {
+      copyProtocolProtosToTCK.value
+      (PB.unpackDependencies in Compile).value
+    }
   )
 
 def doCompileK8sDescriptors(dir: File, target: File, registry: String, username: String, version: String): File = {

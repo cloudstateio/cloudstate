@@ -63,21 +63,18 @@ object Serve {
     *
     * By doing it, we can use EntitykeyProto.entityKey.get() to read the entity key nicely.
     */
-  private def convertFieldOptions(field: FieldDescriptor): ScalaPBDescriptorProtos.FieldOptions = {
-    val fieldOptions = ScalaPBDescriptorProtos.FieldOptions.fromJavaProto(field.toProto.getOptions)
+  private[this] final def convertFieldOptions(field: FieldDescriptor): ScalaPBDescriptorProtos.FieldOptions = {
+    val fields =
+      scalapb.UnknownFieldSet(field.getOptions.getUnknownFields.asMap.asScala.map {
+        case (idx, f) => idx.toInt -> scalapb.UnknownFieldSet.Field(
+          varint          = f.getVarintList.asScala.map(_.toLong),
+          fixed64         = f.getFixed64List.asScala.map(_.toLong),
+          fixed32         = f.getFixed32List.asScala.map(_.toInt),
+          lengthDelimited = f.getLengthDelimitedList.asScala
+        )
+      }.toMap)
 
-    import scala.collection.JavaConverters._
-    // Lots of casting here to get around java.lang.Long <-> scala.Long etc issues
-    val fields = field.getOptions.getUnknownFields.asMap.asScala.map {
-      case (idx, f) => idx -> scalapb.UnknownFieldSet.Field(
-        varint = f.getVarintList.asScala.asInstanceOf[Seq[Long]],
-        fixed64 = f.getFixed64List.asScala.asInstanceOf[Seq[Long]],
-        fixed32 = f.getFixed32List.asScala.asInstanceOf[Seq[Int]],
-        lengthDelimited = f.getLengthDelimitedList.asScala
-      )
-    }.toMap.asInstanceOf[Map[Int, scalapb.UnknownFieldSet.Field]]
-
-    fieldOptions.withUnknownFields(scalapb.UnknownFieldSet(fields))
+    ScalaPBDescriptorProtos.FieldOptions.fromJavaProto(field.toProto.getOptions).withUnknownFields(fields)
   }
 
   private final class CommandSerializer(commandName: String, desc: Descriptor) extends ProtobufSerializer[Command] {
@@ -90,7 +87,7 @@ object Serve {
       fields.length match {
         case 0 => throw new IllegalStateException(s"No field marked with [(com.lightbend.statefulserverless.grpc.entity_key) = true] found for $commandName")
         case 1 =>
-          val f = fields(0)
+          val f = fields.head
           (dm: DynamicMessage) => dm.getField(f).toString
         case _ =>
           (dm: DynamicMessage) => fields.iterator.map(dm.getField).mkString(EntityKeyValueSeparator)
@@ -148,7 +145,7 @@ object Serve {
         Array(EntitykeyProto.javaDescriptor,
               ProtobufAnyProto.javaDescriptor,
               ProtobufEmptyProto.javaDescriptor),
-      true)
+        true)
 
     extractService(spec.serviceName, descriptor) match {
       case None => throw new Exception(s"Service ${spec.serviceName} not found in descriptor!")
@@ -159,17 +156,15 @@ object Serve {
     }
   }
 
-  private[this] final val mapRequestFailureExceptions: (ActorSystem => PartialFunction[Throwable, Status]) = {
-    val pf: PartialFunction[Throwable, Status] = {
-      case CommandFailure(msg) => Status.UNKNOWN.augmentDescription(msg)
-    }
-
-    _ => pf
-  }
-
   private[this] final def compileProxy(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val serviceName = serviceDesc.getFullName
     val implementedEndpoints = serviceDesc.getMethods.iterator.asScala.map(d => (d.getName, new ExposedEndpoint(d))).toMap.withDefault(null)
+    val mapRequestFailureExceptions: (ActorSystem => PartialFunction[Throwable, Status]) = {
+      val pf: PartialFunction[Throwable, Status] = {
+        case CommandFailure(msg) => Status.UNKNOWN.augmentDescription(msg)
+      }
+      _ => pf
+    }
 
     Function.unlift { req: HttpRequest =>
       req.uri.path match {
