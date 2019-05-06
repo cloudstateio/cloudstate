@@ -1,33 +1,3 @@
-# Deployment spec for a journal. A journal is a logical abstraction over a database
-# deployment, and captures how to deploy and connect to that database. Multiple
-# EventSourcedFunction's would use a single journal.
-apiVersion: statefulserverless.lightbend.com/v1alpha1
-kind: EventSourcedJournal
-metadata:
-  name: cassandra
-spec:
-
-  # The type of Journal - valid values would come from an enum of supported databases.
-  # Currently, Cassandra is the only supported database.
-  type: Cassandra
-
-  # The deployment type, ie, how this Journal is deployed. Valid values would depend on
-  # the Journal type, but all types would support "Unmanaged", which indicates that the
-  # operator doesn't manage/deploy the database itself, ie, the user has to deploy
-  # the database themselves. For Cassandra, future supported values might include
-  # "GoogleCloudMarketplace", which would deploy Cassandra using Google's Application
-  # CRD, or "InstaclustrOperator", which would deploy Cassandra using Instaclustr's
-  # Cassandra operator.
-  deployment: Unmanaged
-
-  # Type and deployment specific configuration for the journal.
-  config:
-
-    # The name of the unmanaged Cassandra service to connect to.
-    service: cassandra-cassandra-0.cassandra-cassandra-svc.default.svc.cluster.local
-
----
-
 # Deployment spec for our shopping cart event sourced function
 apiVersion: statefulserverless.lightbend.com/v1alpha1
 kind: EventSourcedService
@@ -56,11 +26,10 @@ spec:
     spec:
       # Like Knative Serving, this is the containers configuration
       containers:
-      - image: gcr.io/stateserv/js-shopping-cart:latest
+      - image: lightbend-docker-registry.bintray.io/octo/js-shopping-cart:0.3
 
         # This enables some interesting logging to see what messages are being passed between
         # the sidecar and the user function.
         env:
         - name: DEBUG
           value: stateserve-event-sourcing
-        - name: FOO
