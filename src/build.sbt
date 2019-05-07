@@ -38,7 +38,7 @@ headerSources in Compile ++= {
 }
 
 lazy val root = (project in file("."))
-  .aggregate(`backend-core`, `backend-cassandra`, `akka-client`, operator, `tck`)
+  .aggregate(`backend-core`, `backend-cassandra`, `akka-client`, operator, `tck`, `reference_tck`)
   .settings(common)
 
 def dockerSettings: Seq[Setting[_]] = Seq(
@@ -175,27 +175,33 @@ val copyProtocolProtosToTCK = taskKey[File]("Copy the protocol files to the tck"
 
 lazy val `tck` = (project in file("tck"))
   .enablePlugins(AkkaGrpcPlugin)
-  .dependsOn(`backend-core`) // For the protocol
-  .dependsOn(`akka-client`) // For the shopping cart
+  .dependsOn(`akka-client`)
   .settings(
     name := "tck",
-
-    fork in test := false,
-
-    parallelExecution in Test := false,
-
-    executeTests in Test := (executeTests in Test).dependsOn(`backend-core`/assembly).value,
 
     libraryDependencies ++= Seq(
       "com.typesafe.akka"  %% "akka-stream"          % AkkaVersion,
       "com.typesafe.akka"  %% "akka-http"            % AkkaHttpVersion,
       "com.typesafe.akka"  %% "akka-http-spray-json" % AkkaHttpVersion,
       "com.google.protobuf" % "protobuf-java"        % "3.5.1" % "protobuf", // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
-      "org.scalatest"       % "scalatest_2.12"       % "3.0.5" % Test,
-      "com.typesafe.akka"  %% "akka-testkit"         % AkkaVersion % Test
+      "org.scalatest"       % "scalatest_2.12"       % "3.0.5",
+      "com.typesafe.akka"  %% "akka-testkit"         % AkkaVersion
     ),
 
+    target in copyShoppingCartProtos := target.value / "js-shopping-cart-protos",
     target in copyProtocolProtosToTCK := target.value / "backend-protos",
+
+    copyShoppingCartProtos := {
+      val toDir = (target in copyShoppingCartProtos).value
+      val fromDir = baseDirectory.value.getParentFile / "samples" / "js-shopping-cart" / "proto"
+      val toCopy = (fromDir * "*.proto").get ++ (fromDir / "lightbend" ** "*.proto").get
+      val toSync = (toCopy pair Path.relativeTo(fromDir)).map {
+        case (file, path) => file -> toDir / path
+      }
+      Sync.sync(streams.value.cacheStoreFactory.make(copyShoppingCartProtos.toString()))(toSync)
+      toDir
+    },
+
     copyProtocolProtosToTCK := {
       val toDir = (target in copyProtocolProtosToTCK).value
       val fromDir = baseDirectory.value.getParentFile / "backend" / "core" / "src" / "main" / "proto"
@@ -204,11 +210,30 @@ lazy val `tck` = (project in file("tck"))
       toDir
     },
 
-    PB.protoSources in Compile += (target in copyProtocolProtosToTCK).value,
-    (PB.unpackDependencies in Compile) := {
+    PB.protoSources in Compile ++= Seq(
+      (target in copyShoppingCartProtos).value,
+      (target in copyProtocolProtosToTCK).value,
+      (sourceDirectory in Compile in `backend-core`).value / "proto"
+    ),
+
+    PB.unpackDependencies in Compile := {
+      copyShoppingCartProtos.value
       copyProtocolProtosToTCK.value
       (PB.unpackDependencies in Compile).value
     }
+  )
+
+lazy val reference_tck = (project in file("reference-tck"))
+  .enablePlugins(AkkaGrpcPlugin)
+  .dependsOn(`tck`)
+  .settings(
+    name := "reference-tck",
+
+    fork in test := false,
+
+    parallelExecution in Test := false,
+
+    executeTests in Test := (executeTests in Test).dependsOn(`backend-core`/assembly).value
   )
 
 def doCompileK8sDescriptors(dir: File, target: File, registry: String, username: String, version: String): File = {
