@@ -224,7 +224,6 @@ lazy val `tck` = (project in file("tck"))
   )
 
 lazy val reference_tck = (project in file("reference-tck"))
-  .enablePlugins(AkkaGrpcPlugin)
   .dependsOn(`tck`)
   .settings(
     name := "reference-tck",
