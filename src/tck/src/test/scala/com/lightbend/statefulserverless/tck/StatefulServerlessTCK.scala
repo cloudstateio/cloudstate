@@ -55,6 +55,7 @@ object StatefulServerlessTCK {
     def validate(): Unit = {
       require(directory.exists, s"Configured directory (${directory}) does not exist")
       require(directory.isDirectory, s"Configured directory (${directory}) is not a directory")
+      require(command.nonEmpty, "Configured command missing")
     }
   }
   final case class Configuration private(
@@ -313,6 +314,7 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
             correlate(cmd, fromFrontend_expectReply(events = eventCount, noWait)) // Verify correlation
           else
             correlate(cmd, fromFrontend_expectFailure(noWait)) // Verify correlation
+          init.entityId must be(cmd.entityId)
           set must not contain(cmd.id)
           set + cmd.id
         }
@@ -324,7 +326,7 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
 
         addNeg must be('failure) // Verfify that we get a failure when adding a negative quantity
         add0 must be('failure) // Verify that we get a failure when adding a line item of 0 items
-        //removeNone must be('failure) // Verify that we get a failure when removing a non-existing item
+        removeNone must be('failure) // Verify that we get a failure when removing a non-existing item
 
         //Semantical test
         items1.toSet must equal(Set(LineItem(productId1, productName1, 12), LineItem(productId2, productName2, 33)))
