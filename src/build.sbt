@@ -184,7 +184,7 @@ lazy val `tck` = (project in file("tck"))
 
     parallelExecution in Test := false,
 
-    test in Test := (test in Test).dependsOn(`backend-core`/assembly).value,
+    executeTests in Test := (executeTests in Test).dependsOn(`backend-core`/assembly).value,
 
     libraryDependencies ++= Seq(
       "com.typesafe.akka"  %% "akka-stream"          % AkkaVersion,
