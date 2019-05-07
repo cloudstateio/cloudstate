@@ -221,12 +221,14 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
     c
   }
 
-  final def fromFrontend_expectReply(within: FiniteDuration): Reply = {
+  final def fromFrontend_expectReply(events: Int, within: FiniteDuration): Reply = {
     val reply = fromFrontend.expectMsgType[EntityStreamOut](noWait)
     reply must not be(null)
     reply.message must be('reply)
     reply.message.reply must be(defined)
-    reply.message.reply.get
+    val r = reply.message.reply.get
+    r.events.size must be (events)
+    r
   }
 
   final def fromFrontend_expectFailure(within: FiniteDuration): Failure = {
@@ -264,7 +266,7 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
 
           fromBackend_expectInit(noWait)
 
-          correlate(fromBackend_expectCommand(noWait), fromFrontend_expectReply(noWait))
+          correlate(fromBackend_expectCommand(noWait), fromFrontend_expectReply(events = 0, noWait))
 
           fromBackend.expectNoMsg(noWait)
           fromFrontend.expectNoMsg(noWait)
@@ -302,11 +304,13 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
         val init = fromBackend_expectInit(noWait)
         init.entityId must not be(empty)
 
-        val commands = Seq(true, true, true, true, true, true, true, false, false, false, true).
-        foldLeft(Set.empty[Long]){ (set, isReply) =>
+        val commands = Seq(
+          (true,0),(true,1),(true, 1),(true,1),(true,1),(true,0),
+          (true,1),(false,0),(false,0),(false,0),(true,0)).
+        foldLeft(Set.empty[Long]){ case (set, (isReply, eventCount)) =>
           val cmd = fromBackend_expectCommand(noWait)
           if (isReply)
-            correlate(cmd, fromFrontend_expectReply(noWait)) // Verify correlation
+            correlate(cmd, fromFrontend_expectReply(events = eventCount, noWait)) // Verify correlation
           else
             correlate(cmd, fromFrontend_expectFailure(noWait)) // Verify correlation
           set must not contain(cmd.id)
