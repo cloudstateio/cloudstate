@@ -38,7 +38,7 @@ headerSources in Compile ++= {
 }
 
 lazy val root = (project in file("."))
-  .aggregate(`backend-core`, `backend-cassandra`, `akka-client`, operator, `tck`, `reference_tck`)
+  .aggregate(`backend-core`, `backend-cassandra`, `akka-client`, operator, `tck`)
   .settings(common)
 
 def dockerSettings: Seq[Setting[_]] = Seq(
@@ -220,13 +220,7 @@ lazy val `tck` = (project in file("tck"))
       copyShoppingCartProtos.value
       copyProtocolProtosToTCK.value
       (PB.unpackDependencies in Compile).value
-    }
-  )
-
-lazy val reference_tck = (project in file("reference-tck"))
-  .dependsOn(`tck`)
-  .settings(
-    name := "reference-tck",
+    },
 
     fork in test := false,
 
