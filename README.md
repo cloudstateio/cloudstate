@@ -65,6 +65,9 @@ Next we'll take a look at the Akka backend, which can be found in [`src/backend/
 * [`StateManager.scala`](src/backend/core/src/main/scala/com/lightbend/statefulserverless/StateManager.scala) - This is an Akka persistent actor that talks to the user function via the event sourcing gRPC protocol.
 * [`StatefulServerlessServer.scala`](src/backend/core/src/main/scala/com/lightbend/statefulserverless/StatefulServerlessServer.scala) - This pulls everything together, starting the Akka gRPC server, cluster sharding, and persistence.
 
+## Compliance testing
+
+The [TCK](https://github.com/lightbend/stateful-serverless/blob/master/src/tck/src/test/resources/application.conf) makes it possible to verify that combinations of backends and frontends behaves as expected. In order to make a frontend eligible for testing in the TCK a sample application implementing a simple [Shopping Cart](src/samples/js-shopping-cart) (here showcased with the Node.js frontend) is required.
 
 ## Docs
 - See the [rationale](RATIONALE.md) document for a more context.

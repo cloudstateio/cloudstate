@@ -32,11 +32,12 @@ import akka.testkit.{ TestActors, TestKit, TestProbe }
 import com.google.protobuf.empty.Empty
 
 object StatefulServerlessTCK {
-  private[this] final val BACKEND   = "stateful-serverless-tck.backend"
-  private[this] final val FRONTEND  = "stateful-serverless-tck.frontend"
-  private[this] final val TCK       = "stateful-serverless-tck.tck"
+  private[this] final val BACKEND   = "backend"
+  private[this] final val FRONTEND  = "frontend"
+  private[this] final val TCK       = "tck"
   private[this] final val HOSTNAME  = "hostname"
   private[this] final val PORT      = "port"
+  private[this] final val NAME      = "name"
 
   final case class ProcSpec private(
     hostname: String,
@@ -59,11 +60,13 @@ object StatefulServerlessTCK {
     }
   }
   final case class Configuration private(
+    name: String,
     backend: ProcSpec,
     frontend: ProcSpec,
     tckHostname: String,
     tckPort: Int) {
     def this(config: Config) = this(
+      name        = config.getString(NAME),
       backend     = new ProcSpec(config.getConfig(BACKEND)),
       frontend    = new ProcSpec(config.getConfig(FRONTEND)),
       tckHostname = config.getString(TCK + "." + HOSTNAME),
@@ -102,11 +105,10 @@ object StatefulServerlessTCK {
     Future.unit.flatMap(_ => op) recoverWith { case _ if retries > 0 => after(delay, s)(attempt(op, delay, retries - 1)) }
 }
 
-class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeAndAfterAll {
+class StatefulServerlessTCK(private[this] final val config: StatefulServerlessTCK.Configuration) extends AsyncWordSpec with MustMatchers with BeforeAndAfterAll {
   import StatefulServerlessTCK._
             private[this] final val system                               = ActorSystem("StatefulServerlessTCK")
             private[this] final val mat                                  = ActorMaterializer()(system)
-            private[this] final val config                               = new Configuration(system.settings.config)
             private[this] final val fromBackend                          = TestProbe("fromBackend")(system)
             private[this] final val fromFrontend                         = TestProbe("fromFrontend")(system)
   @volatile private[this] final var shoppingClient:  ShoppingCartClient  = _
@@ -245,7 +247,7 @@ class StatefulServerlessTCK extends AsyncWordSpec with MustMatchers with BeforeA
   final def unrelated(cmd: Command, reply: Reply)     = cmd.id must not be reply.commandId
   final def unrelated(cmd: Command, failure: Failure) = cmd.id must not be failure.commandId
 
-  "The TCK" must {
+  ("The TCK for" + config.name) must {
     implicit val scheduler = system.scheduler
 
     "verify that the user function process responds" in {
