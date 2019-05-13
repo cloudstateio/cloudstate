@@ -60,7 +60,6 @@ object StatefulServerlessMain {
       require(backoffMin >= Duration.Zero)
       require(backoffMax >= backoffMin)
       require(backoffRandomFactor >= 0d)
-      // TODO add more config validation here
     }
   }
 
@@ -68,12 +67,9 @@ object StatefulServerlessMain {
     implicit val system = ActorSystem("statefulserverless-backend")
     implicit val materializer = ActorMaterializer()
 
-    // FIXME go over and supply appropriate values for Cluster Sharding
-    // https://doc.akka.io/docs/akka/current/cluster-sharding.html?language=scala#configuration
     val c = system.settings.config.getConfig("stateful-serverless")
     val serverConfig = new ServerManager.Configuration(c)
     val appConfig = new StatefulServerlessMain.Configuration(c)
-
 
     val cluster = Cluster(system)
 

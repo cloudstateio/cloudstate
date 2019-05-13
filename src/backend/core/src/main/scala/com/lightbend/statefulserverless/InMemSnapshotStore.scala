@@ -21,7 +21,6 @@ import akka.persistence.snapshot.SnapshotStore
 
 import scala.concurrent.Future
 
-// FIXME Move this to test dir
 class InMemSnapshotStore extends SnapshotStore {
 
   private[this] final var snapshots = Map.empty[String, SelectedSnapshot]

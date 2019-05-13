@@ -61,8 +61,9 @@ object ServerManager {
     }
 
     private[this] final def validate(): Unit = {
-      require(proxyParallelism > 0)
-      // TODO add more config validation here
+      require(proxyParallelism > 0, s"proxy-parallelism must be greater than 0 but was $proxyParallelism")
+      require(numberOfShards > 0, s"number-of-shards must be greater than 0 but was $numberOfShards")
+      require(relayOutputBufferSize > 0, "relay-buffer-size must be greater than 0 but was $relayOutputBufferSize")
     }
   }
 
@@ -90,9 +91,11 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
         settings = ClusterShardingSettings(system),
         messageExtractor = new Serve.CommandMessageExtractor(config.numberOfShards)))
 
-      log.debug("Starting gRPC proxy for {}", reply.persistenceId)
+      log.debug("Creating gRPC proxy for {}", reply.persistenceId)
 
       val handler = Serve.createRoute(stateManager, config.proxyParallelism, config.relayTimeout, reply)
+
+      log.debug("Starting gRPC proxy for {}", reply.persistenceId)
 
       // Don't actually bind until we have a cluster
       Cluster(context.system).registerOnMemberUp {
@@ -123,7 +126,7 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
       }
 
       shutdown.addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "http-graceful-terminate") { () =>
-        binding.terminate(config.gracefulTerminationTimeout.duration).map(_ => Done) // TODO make configurable?
+        binding.terminate(config.gracefulTerminationTimeout.duration).map(_ => Done)
       }
 
       shutdown.addTask(CoordinatedShutdown.PhaseServiceStop, "http-shutdown") { () =>
