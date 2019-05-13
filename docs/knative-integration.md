@@ -2,13 +2,13 @@
 
 This page serves to outline a potential way that Stateful Serverless might integrate with Knative. This includes potential modifications necessary to Knative.
 
-It assumed that the reader is familiar with Knative, in particular, they have read and understood the Knative serving [overview](https://github.com/knative/serving/blob/master/docs/spec/overview.md) and [spec](https://github.com/knative/serving/blob/master/docs/spec/spec.md), and therefore are familiar with Knative `Service`'s, `Configuration`'s, `Revision`'s and Routes.
+It assumed that the reader is familiar with Knative, in particular, they have read and understood the Knative serving [overview](https://github.com/knative/serving/blob/master/docs/spec/overview.md) and [spec](https://github.com/knative/serving/blob/master/docs/spec/spec.md), and therefore are familiar with Knative `Services`, `Configurations`, `Revisions` and Routes.
 
 It's also assumed that the reader is familiar with the Stateful Serverless project. [This screencast](https://www.youtube.com/watch?v=AOY8yRC6dVY) introduces the project. In particular, familiarity with the `EventSourcedService` CRD shown in use [here](https://github.com/lightbend/stateful-serverless/blob/f9da1a2b7272733cba94e504c76bd7fca3355c68/src/samples/js-shopping-cart/eventsourced.yaml) will demonstrate how some of the requirements for this project have been solved in a non Knative based deployment.
 
 ## Goals
 
-The primary goal is that Stateful Serverless functions are deployed and managed just like any other Knative function, by deploying a Knative `Service`, which results in a Knative Route and `Configuration` being created, each change to `Configuration`'s results in a new Knative `Revision` being created, and then `Revision`'s get deployed as Pods according to Route configuration and load. Ideally, as much of Knative serving as possible should be used by stateful serverless functions, so that the differences between maintaining and deploying Stateful Serverless functions, and Knative functions, is minimal.
+The primary goal is that Stateful Serverless functions are deployed and managed just like any other Knative function, by deploying a Knative `Service`, which results in a Knative Route and `Configuration` being created, each change to `Configurations` results in a new Knative `Revision` being created, and then `Revisions` get deployed as Pods according to Route configuration and load. Ideally, as much of Knative serving as possible should be used by stateful serverless functions, so that the differences between maintaining and deploying Stateful Serverless functions, and Knative functions, is minimal.
 
 ## Stateful Serverless requirements
 
@@ -36,9 +36,9 @@ Option 1 may feel more natural from the developers perspective (they don't care 
 
 ### Custom sidecar injection
 
-TODO: I've made an assumption that Knative is using `Deployment`'s for this, maybe it's not, maybe it's using `ReplicaSet`'s, or maybe it's using something else.
+TODO: I've made an assumption that Knative is using `Deployments` for this, maybe it's not, maybe it's using `ReplicaSets`, or maybe it's using something else.
 
-The Knative operator is responsible translating `Revision`'s into `Deployment`'s. As part of this, it injects the Knative sidecar into the template spec. This translation needs to be disabled, and Stateful Serverless needs to provide its own operator that watches `Revision`'s, and translates the ones that it is responsible for to `Deployment`'s, including the injection of its own side car.
+The Knative operator is responsible translating `Revisions` into `Deployments`. As part of this, it injects the Knative sidecar into the template spec. This translation needs to be disabled, and Stateful Serverless needs to provide its own operator that watches `Revisions`, and translates the ones that it is responsible for to `Deployments`, including the injection of its own side car.
 
 To support this, an annotation could used as the flag to disable it, but as discussed in [Custom configuration](#custom-configuration), this is not ideal. An alternative solution is to add a new configuration parameter to the `Service`, `Configuration` and `Revision` specs. This could be called `moduleName`, which could default to `knative` and would indicate that `knative` is going to do the translation. Any value other than `knative` will indicate that Knative should not do the translation. If following the suggestion of using a `module` property for the custom configuration, then the custom configuration could be made to live under a property that is equal to the `moduleName`.
 
