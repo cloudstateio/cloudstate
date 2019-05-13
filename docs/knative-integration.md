@@ -2,13 +2,13 @@
 
 This page serves to outline a potential way that Stateful Serverless might integrate with Knative. This includes potential modifications necessary to Knative.
 
-It assumed that the reader is familiar with Knative, in particular, they have read and understood the Knative serving [overview](https://github.com/knative/serving/blob/master/docs/spec/overview.md) and [spec](https://github.com/knative/serving/blob/master/docs/spec/spec.md), and therefore are familiar with Knative `Services`, `Configurations`, `Revisions` and Routes.
+It assumed that the reader is familiar with Knative, in particular, they have read and understood the Knative serving [overview](https://github.com/knative/serving/blob/master/docs/spec/overview.md) and [spec](https://github.com/knative/serving/blob/master/docs/spec/spec.md), and therefore are familiar with Knative `Services`, `Configurations`, `Revisions` and `Routes`.
 
 It's also assumed that the reader is familiar with the Stateful Serverless project. [This screencast](https://www.youtube.com/watch?v=AOY8yRC6dVY) introduces the project. In particular, familiarity with the `EventSourcedService` CRD shown in use [here](https://github.com/lightbend/stateful-serverless/blob/f9da1a2b7272733cba94e504c76bd7fca3355c68/src/samples/js-shopping-cart/eventsourced.yaml) will demonstrate how some of the requirements for this project have been solved in a non Knative based deployment.
 
 ## Goals
 
-The primary goal is that Stateful Serverless functions are deployed and managed just like any other Knative function, by deploying a Knative `Service`, which results in a Knative Route and `Configuration` being created, each change to `Configurations` results in a new Knative `Revision` being created, and then `Revisions` get deployed as Pods according to Route configuration and load. Ideally, as much of Knative serving as possible should be used by stateful serverless functions, so that the differences between maintaining and deploying Stateful Serverless functions, and Knative functions, is minimal.
+The primary goal is that Stateful Serverless functions are deployed and managed just like any other Knative function, by deploying a Knative `Service`, which results in a Knative `Route` and `Configuration` being created, each change to `Configurations` results in a new Knative `Revision` being created, and then `Revisions` get deployed as replica sets according to `Route` configuration and load. Ideally, as much of Knative serving as possible should be used by stateful serverless functions, so that the differences between maintaining and deploying Stateful Serverless functions, and Knative functions, is minimal.
 
 ## Stateful Serverless requirements
 
