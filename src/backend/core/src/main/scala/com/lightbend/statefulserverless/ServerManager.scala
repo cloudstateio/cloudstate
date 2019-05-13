@@ -40,21 +40,23 @@ object ServerManager {
     userFunctionPort: Int,
     relayTimeout: Timeout,
     relayOutputBufferSize: Int,
+    gracefulTerminationTimeout: Timeout,
     passivationTimeout: Timeout,
     numberOfShards: Int,
     proxyParallelism: Int) {
     validate()
     def this(config: Config) = {
       this(
-        httpInterface         = config.getString("http-interface"),
-        httpPort              = config.getInt("http-port"),
-        userFunctionInterface = config.getString("user-function-interface"),
-        userFunctionPort      = config.getInt("user-function-port"),
-        relayTimeout          = Timeout(config.getDuration("relay-timeout").toMillis.millis),
-        relayOutputBufferSize = config.getInt("relay-buffer-size"),
-        passivationTimeout    = Timeout(config.getDuration("passivation-timeout").toMillis.millis),
-        numberOfShards        = config.getInt("number-of-shards"),
-        proxyParallelism      = config.getInt("proxy-parallelism")
+        httpInterface              = config.getString("http-interface"),
+        httpPort                   = config.getInt("http-port"),
+        userFunctionInterface      = config.getString("user-function-interface"),
+        userFunctionPort           = config.getInt("user-function-port"),
+        relayTimeout               = Timeout(config.getDuration("relay-timeout").toMillis.millis),
+        relayOutputBufferSize      = config.getInt("relay-buffer-size"),
+        gracefulTerminationTimeout = Timeout(config.getDuration("graceful-termination-timeout").toMillis.millis),
+        passivationTimeout         = Timeout(config.getDuration("passivation-timeout").toMillis.millis),
+        numberOfShards             = config.getInt("number-of-shards"),
+        proxyParallelism           = config.getInt("proxy-parallelism")
       )
     }
 
@@ -121,7 +123,7 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
       }
 
       shutdown.addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "http-graceful-terminate") { () =>
-        binding.terminate(10.seconds).map(_ => Done) // TODO make configurable?
+        binding.terminate(config.gracefulTerminationTimeout.duration).map(_ => Done) // TODO make configurable?
       }
 
       shutdown.addTask(CoordinatedShutdown.PhaseServiceStop, "http-shutdown") { () =>
