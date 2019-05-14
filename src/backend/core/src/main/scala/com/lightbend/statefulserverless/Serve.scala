@@ -19,8 +19,10 @@ package com.lightbend.statefulserverless
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import akka.grpc.scaladsl.{GrpcExceptionHandler, GrpcMarshalling}
+import GrpcMarshalling.{marshalStream, unmarshalStream}
 import akka.grpc.{Codecs, ProtobufSerializer}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes}
+import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.Uri.Path.Segment
 import akka.actor.{ActorRef, ActorSystem}
@@ -117,7 +119,7 @@ object Serve {
     }
   }
 
-  private final class ExposedEndpoint private[this](
+  private final class gRPCMethod private[this](
     final val name: String,
     final val unmarshaller: ProtobufSerializer[Command],
     final val marshaller: ProtobufSerializer[ProtobufByteString]) {
@@ -158,7 +160,7 @@ object Serve {
 
   private[this] final def compileProxy(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val serviceName = serviceDesc.getFullName
-    val implementedEndpoints = serviceDesc.getMethods.iterator.asScala.map(d => (d.getName, new ExposedEndpoint(d))).toMap.withDefault(null)
+    val rpcs = serviceDesc.getMethods.iterator.asScala.map(d => (Path / serviceName / d.getName, new gRPCMethod(d))).toMap
     val mapRequestFailureExceptions: (ActorSystem => PartialFunction[Throwable, Status]) = {
       val pf: PartialFunction[Throwable, Status] = {
         case CommandFailure(msg) => Status.UNKNOWN.augmentDescription(msg)
@@ -166,26 +168,14 @@ object Serve {
       _ => pf
     }
 
-    Function.unlift { req: HttpRequest =>
-      req.uri.path match {
-        case Path.Slash(Segment(`serviceName`, Path.Slash(Segment(endpointName, Path.Empty)))) ⇒
-          val future =
-            implementedEndpoints(endpointName) match {
-              case null => Future.failed(new NotImplementedError(s"Not implemented: $endpointName"))
-              case endpoint =>
-                import GrpcMarshalling.{marshalStream, unmarshalStream}
-                val responseCodec = Codecs.negotiate(req)
-                implicit val askTimeout = relayTimeout
-
-                unmarshalStream(req)(endpoint.unmarshaller, mat).
-                  map(_.mapAsync(proxyParallelism)(command => (stateManager ? command).mapTo[ProtobufByteString])).
-                  map(e => marshalStream(e, mapRequestFailureExceptions)(endpoint.marshaller, mat, responseCodec, sys))
-            }
-
-            Some(future.recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys))))
-          case _ =>
-            None
-      }
+    { case req: HttpRequest if rpcs.contains(req.uri.path) =>
+        implicit val askTimeout = relayTimeout
+        val responseCodec = Codecs.negotiate(req)
+        val rpc = rpcs(req.uri.path)
+        unmarshalStream(req)(rpc.unmarshaller, mat).
+          map(_.mapAsync(proxyParallelism)(command => (stateManager ? command).mapTo[ProtobufByteString])).
+          map(e => marshalStream(e, mapRequestFailureExceptions)(rpc.marshaller, mat, responseCodec, sys)).
+          recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
     }
   }
 }
