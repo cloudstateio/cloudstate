@@ -20,7 +20,7 @@ import akka.Done
 import akka.actor.{Actor, ActorLogging, ActorRef, CoordinatedShutdown, Props, Status, Terminated}
 import akka.cluster.Cluster
 import akka.util.Timeout
-import akka.pattern.pipe
+import akka.pattern.{pipe, ask}
 import akka.stream.Materializer
 import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
@@ -68,11 +68,14 @@ object ServerManager {
   }
 
   def props(config: Configuration)(implicit mat: Materializer): Props = Props(new ServerManager(config))
+
+  final case object Ready // Responds with true / false
 }
 
 class ServerManager(config: ServerManager.Configuration)(implicit mat: Materializer) extends Actor with ActorLogging {
   import context.system
   import context.dispatcher
+  import ServerManager.Ready
 
   private[this] final val clientSettings = GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
   private[this] final val client         = EntityClient(clientSettings)
@@ -108,7 +111,7 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
       }
 
       context.become(binding(stateManager))
-
+    case Ready => sender ! false
     case Status.Failure(cause) =>
       // Failure to load the entity spec is not fatal, simply crash and let the backoff supervisor restart us
       throw cause
@@ -143,11 +146,14 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
       // Failure to bind the HTTP server is fatal, terminate
       log.error(cause, "Failed to bind HTTP server")
       system.terminate()
+
+    case Ready => sender ! false
   }
 
   /** Nothing to do when running */
   private[this] final def running(stateManager: ActorRef): Receive = {
     case Terminated(`stateManager`) => // TODO How to handle the termination of the stateManager during runtime?
+    case Ready => sender ! true
   }
 
   override final def postStop(): Unit = {

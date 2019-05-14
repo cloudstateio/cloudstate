@@ -18,6 +18,8 @@ package com.lightbend.statefulserverless
 
 import com.typesafe.config.Config
 import akka.actor.{ActorSystem, Props}
+import akka.pattern.ask
+import akka.util.Timeout
 import akka.cluster.Cluster
 import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
@@ -28,9 +30,12 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 
 final class HealthCheckReady(system: ActorSystem) extends (() => Future[Boolean]) {
-  override final def apply(): Future[Boolean] = {
-    Future.successful(true) // FIXME implement
-  }
+  private[this] final val timeoutMs = system.settings.config.getConfig("stateful-serverless").getDuration("ready-timeout").toMillis.millis
+  private[this] final implicit val ec = system.dispatcher
+  private[this] final val selection = system.actorSelection("/user/server-manager-supervisor/server-manager")
+  private[this] final implicit val timeout = Timeout(timeoutMs)
+  override final def apply(): Future[Boolean] =
+    selection.resolveOne().map(_ ? ServerManager.Ready).mapTo[Boolean].recover({ case _ => false})
 }
 
 final class HealthCheckLive(system: ActorSystem) extends (() => Future[Boolean]) {
@@ -92,6 +97,6 @@ object StatefulServerlessMain {
         minBackoff = appConfig.backoffMin,
         maxBackoff = appConfig.backoffMax,
         randomFactor = appConfig.backoffRandomFactor
-      )))
+      )), "server-manager-supervisor")
   }
 }

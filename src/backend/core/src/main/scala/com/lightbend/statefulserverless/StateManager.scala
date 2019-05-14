@@ -201,7 +201,7 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
           }
 
         case ESOMsg.Failure(f) if f.commandId == 0 =>
-          crash(s"Non command specific error from entity: " + f.description)
+          crash(s"Non command specific error from entity: ${f.description}")
 
         case ESOMsg.Failure(f) if currentRequest == null =>
           crash(s"Unexpected failure, had no current request: $f")
