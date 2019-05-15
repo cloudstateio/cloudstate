@@ -62,7 +62,7 @@ What we need support for is:
     *   As concluded by [Jonas et al](https://arxiv.org/pdf/1902.03383.pdf): _"This limitation also suggests that new variants of serverless computing may be worth exploring, for example naming function instances and allowing direct addressability for access to their internal state (e.g., Actors as a Service)"_.
 *   Tools for managing _distributed state_ reliably at scale—in a durable or ephemeral fashion—with _options for consistency_ ranging from _strong_ to _eventual_ and _causal_ consistency[^4], and ways to physically co-locate code and data while remaining logically separate.
     *   As discussed by [Hellerstein et al](https://blog.acolyer.org/2019/01/14/serverless-computing-one-step-forward-two-steps-back/): _"The sequential metaphor of procedural programming will not scale to the cloud. Developers need languages that encourage code that works correctly in small, granular units— of both data and computation— that can be easily moved around across time and space."_
-*   Intelligent adaptive placement of stateful functions—ways to physically co-locate code and data while remaining logically separate.
+*   Intelligent adaptive placement of stateful functions—ways to physically co-locate code and data while remaining logically separate[^9].
 *   End-to-end correctness and consistency—be able to reason about streaming pipelines and the properties[^5] and guarantees it has as a whole.
 *   Predictable performance, latency, and throughput—in startup time, communication, coordination, and durable storage/access of data. 
 
@@ -225,9 +225,13 @@ Examples of IMDG include proprietary products like Oracle Coherence, and Open So
 
 [^6]:
      At most one per service/entity, allowing the infrastructure to safely cache entity state in memory in the context of the gRPC stream.
-
+     
 [^7]:
      Akka Multi-DC log replication is a great example of combining the two techniques to do amazing things. 
 
 [^8]:
      See the paper [Serverless Computing: Economic and Architectural Impact](https://blog.acolyer.org/2017/10/19/serverless-computing-economic-and-architectural-impact/).
+
+[^9]:
+      As discussed in [this article](https://medium.com/riselab/two-missing-links-in-serverless-computing-stateful-computation-and-placement-control-964c3236d18) by Stoica and Petersohn.
+
