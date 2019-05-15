@@ -20,15 +20,17 @@ import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import akka.grpc.scaladsl.{GrpcExceptionHandler, GrpcMarshalling}
 import GrpcMarshalling.{marshalStream, unmarshalStream}
-import akka.grpc.{Codecs, ProtobufSerializer}
+import akka.grpc.{Codecs, ProtobufSerializer, GrpcServiceException}
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes}
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.Uri.Path.Segment
 import akka.actor.{ActorRef, ActorSystem}
 import akka.util.{ByteString, Timeout}
+import akka.NotUsed
 import akka.pattern.ask
 import akka.stream.Materializer
+import akka.stream.scaladsl.{Flow, Sink}
 import com.google.protobuf.{DescriptorProtos, DynamicMessage, ByteString => ProtobufByteString}
 import com.google.protobuf.empty.{EmptyProto => ProtobufEmptyProto}
 import com.google.protobuf.any.{Any => ProtobufAny, AnyProto => ProtobufAnyProto}
@@ -128,13 +130,7 @@ object Serve {
 
   private[this] final def extractService(serviceName: String, descriptor: FileDescriptor): Option[ServiceDescriptor] = {
     // todo - this really needs to be on a FileDescriptorSet, not a single FileDescriptor
-    val dot = serviceName.lastIndexOf(".")
-    val (pkg, name) = if (dot >= 0) {
-      (serviceName.substring(0, dot), serviceName.substring(dot + 1))
-    } else {
-      ("", serviceName)
-    }
-
+    val (pkg, name) = Names.splitPrev(serviceName)
     Some(descriptor).filter(_.getPackage == pkg).map(_.findServiceByName(name))
   }
 
@@ -144,7 +140,8 @@ object Serve {
       // and we need that if we want to access the entity key later.
       // com.google.protobuf.descriptor.FileDescriptorProto.toJavaProto(spec.proto.get)
       DescriptorProtos.FileDescriptorProto.parseFrom(spec.proto.get.toByteArray),
-        Array(EntitykeyProto.javaDescriptor,
+        Array(ScalaPBDescriptorProtos.DescriptorProtoCompanion.javaDescriptor,
+              EntitykeyProto.javaDescriptor,
               ProtobufAnyProto.javaDescriptor,
               ProtobufEmptyProto.javaDescriptor),
         true)
@@ -152,7 +149,7 @@ object Serve {
     extractService(spec.serviceName, descriptor) match {
       case None => throw new Exception(s"Service ${spec.serviceName} not found in descriptor!")
       case Some(service) =>
-        compileProxy(stateManager, proxyParallelism, relayTimeout, service) orElse {
+        Reflection.serve(descriptor) orElse compileProxy(stateManager, proxyParallelism, relayTimeout, service) orElse {
           case req: HttpRequest => Future.successful(HttpResponse(StatusCodes.NotFound)) // TODO do we need this?
         }
     }
@@ -178,4 +175,115 @@ object Serve {
           recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
     }
   }
+}
+
+private[statefulserverless] object Names {
+  final def splitPrev(name: String): (String, String) = {
+    val dot = name.lastIndexOf('.')
+    if (dot >= 0) {
+      (name.substring(0, dot), name.substring(dot + 1))
+    } else {
+      ("", name)
+    }
+  }
+
+  final def splitNext(name: String): (String, String) = {
+    val dot = name.indexOf('.')
+    if (dot >= 0) {
+      (name.substring(0, dot), name.substring(dot + 1))
+    } else {
+      (name, "")
+    }
+  }
+}
+
+object Reflection {
+  import _root_.grpc.reflection.v1alpha._
+
+  private final val ReflectionPath = Path / ServerReflection.name / "ServerReflectionInfo"
+
+  def serve(fileDesc: FileDescriptor)(implicit mat: Materializer, sys: ActorSystem): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+    implicit val ec: ExecutionContext = mat.executionContext
+    import ServerReflection.Serializers._
+
+    val handler = handle(fileDesc)
+
+    {
+      case req: HttpRequest if req.uri.path == ReflectionPath =>
+        val responseCodec = Codecs.negotiate(req)
+        GrpcMarshalling.unmarshalStream(req)(ServerReflectionRequestSerializer, mat)
+        .map( _.alsoTo(Sink.foreach(x => println(x.toString))).via(handler))
+        .map(e => GrpcMarshalling.marshalStream(e, GrpcExceptionHandler.defaultMapper)(ServerReflectionResponseSerializer, mat, responseCodec, sys))
+    }
+  }
+
+  private final def findFileDescForName(name: String, fileDesc: FileDescriptor): Option[FileDescriptor] =
+    if (name == fileDesc.getName) Option(fileDesc)
+    else fileDesc.getDependencies.iterator.asScala.map(fd => findFileDescForName(name, fd)).find(_.isDefined).flatten
+
+  private final def containsSymbol(symbol: String, fileDesc: FileDescriptor): Boolean =
+    (symbol.startsWith(fileDesc.getPackage)) && // Ensure package match first
+    (Names.splitNext(if (fileDesc.getPackage.isEmpty) symbol else symbol.drop(fileDesc.getPackage.length + 1)) match {
+      case ("", "") => false
+      case (typeOrService, "") => 
+        fileDesc.findMessageTypeByName(typeOrService) != null ||
+        fileDesc.findServiceByName(typeOrService) != null
+      case (service, method) =>
+        Option(fileDesc.findServiceByName(service)).exists(_.findMethodByName(method) != null)
+    })
+
+  private final def findFileDescForSymbol(symbol: String, fileDesc: FileDescriptor): Option[FileDescriptor] =
+    if (containsSymbol(symbol, fileDesc)) Option(fileDesc)
+    else fileDesc.getDependencies.iterator.asScala.map(fd => findFileDescForSymbol(symbol, fd)).find(_.isDefined).flatten
+
+  private final def containsExtension(container: String, number: Int, fileDesc: FileDescriptor): Boolean =
+    fileDesc.getExtensions.iterator.asScala.exists(ext => container == ext.getContainingType.getFullName && number == ext.getNumber)
+
+  private final def findFileDescForExtension(container: String, number: Int, fileDesc: FileDescriptor): Option[FileDescriptor] =
+    if (containsExtension(container, number, fileDesc)) Option(fileDesc)
+    else fileDesc.getDependencies.iterator.asScala.map(fd => findFileDescForExtension(container, number, fd)).find(_.isDefined).flatten
+
+  private final def findExtensionNumbersForContainingType(container: String, fileDesc: FileDescriptor): List[Int] = 
+    fileDesc.getDependencies.iterator.asScala.foldLeft(
+      fileDesc.getExtensions.iterator.asScala.collect({ case ext if ext.getFullName == container => ext.getNumber }).toList
+    )((list, fd) => findExtensionNumbersForContainingType(container, fd) ::: list)
+
+  // TODO create caches for all of these lookups when/if needed
+  private def handle(fileDesc: FileDescriptor): Flow[ServerReflectionRequest, ServerReflectionResponse, NotUsed] =
+    Flow[ServerReflectionRequest].map { req =>
+      import ServerReflectionRequest.{ MessageRequest => In}
+      import ServerReflectionResponse.{ MessageResponse => Out}
+
+      val response = req.messageRequest match {
+        case In.Empty =>
+          Out.Empty
+        case In.FileByFilename(fileName) =>
+          val list = findFileDescForName(fileName, fileDesc) match {
+            case None => Nil // throw new GrpcServiceException(Status.NOT_FOUND.augmentDescription(s"File not found: $fileName"))
+            case Some(file) => file.toProto.toByteString :: Nil
+          }
+          Out.FileDescriptorResponse(FileDescriptorResponse(list))
+        case In.FileContainingSymbol(symbol) =>
+          val list = findFileDescForSymbol(symbol, fileDesc) match {
+            case None => Nil // throw new GrpcServiceException(Status.NOT_FOUND.augmentDescription(s"Symbol not found: $symbol"))
+            case Some(file) => file.toProto.toByteString :: Nil
+          }
+          Out.FileDescriptorResponse(FileDescriptorResponse(list))
+        case In.FileContainingExtension(ExtensionRequest(container, number)) =>
+          val list = findFileDescForExtension(container, number, fileDesc) match {
+            case None => Nil // throw new GrpcServiceException(Status.NOT_FOUND.augmentDescription(s"Extensions not found for: $container"))
+            case Some(file) => file.toProto.toByteString :: Nil
+          }
+          Out.FileDescriptorResponse(FileDescriptorResponse(list))
+        case In.AllExtensionNumbersOfType(container) =>
+          // TODO should we throw a NOT_FOUND if we don't know the container type at all?
+          val list = findExtensionNumbersForContainingType(container, fileDesc)
+          Out.AllExtensionNumbersResponse(ExtensionNumberResponse(container, list))
+        case In.ListServices(_)              =>
+          val list = fileDesc.getServices.iterator.asScala.map(s => ServiceResponse(s.getFullName)).toList
+          Out.ListServicesResponse(ListServiceResponse(list))
+      }
+      // TODO Validate assumptions here
+      ServerReflectionResponse(req.host, Some(req), response)
+    }
 }
