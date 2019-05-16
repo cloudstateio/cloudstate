@@ -335,5 +335,41 @@ class StatefulServerlessTCK(private[this] final val config: StatefulServerlessTC
         items2.toSet must equal(Set(LineItem(productId2, productName2, 33)))
       }
     }
+
+    "verify that the backend supports the ServerReflection API" in {
+      import grpc.reflection.v1alpha._
+      import ServerReflectionRequest.{ MessageRequest => In}
+      import ServerReflectionResponse.{ MessageResponse => Out}
+
+      val reflectionClient = ServerReflectionClient(GrpcClientSettings.connectToServiceAt(config.backend.hostname, config.backend.port)(system).withTls(false))(mat, mat.executionContext)
+
+      val host = config.backend.hostname
+
+      val testData = List[(In, Out)](
+        (In.ListServices(""), Out.ListServicesResponse(ListServiceResponse(Vector(ServiceResponse("com.example.shoppingcart.ShoppingCart")))))
+      ) map {
+        case (in, out) =>
+          val req = ServerReflectionRequest(host, in)
+          val res = ServerReflectionResponse(host, Some(req), out)
+          (req, res)
+      }
+      val input = testData.map(_._1)
+      val expected = testData.map(_._2)
+      val test = for {
+        output <- reflectionClient.serverReflectionInfo(Source(input)).runWith(Sink.seq)(mat)
+      } yield {
+        testData.zip(output) foreach {
+          case ((in, exp), out) =>
+            out.validHost must equal(exp.validHost)
+            out.originalRequest must equal(exp.originalRequest)
+            out.messageResponse must equal(exp.messageResponse)
+        }
+        output must not(be(empty))
+      }
+
+      test andThen {
+        case _ => Try(reflectionClient.close())
+      }
+    }
   }
 }

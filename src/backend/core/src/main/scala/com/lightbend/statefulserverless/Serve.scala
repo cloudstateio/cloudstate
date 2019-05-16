@@ -149,7 +149,8 @@ object Serve {
     extractService(spec.serviceName, descriptor) match {
       case None => throw new Exception(s"Service ${spec.serviceName} not found in descriptor!")
       case Some(service) =>
-        Reflection.serve(descriptor) orElse compileProxy(stateManager, proxyParallelism, relayTimeout, service) orElse {
+         compileProxy(stateManager, proxyParallelism, relayTimeout, service) orElse
+         Reflection.serve(descriptor) orElse {
           case req: HttpRequest => Future.successful(HttpResponse(StatusCodes.NotFound)) // TODO do we need this?
         }
     }
@@ -225,7 +226,8 @@ object Reflection {
     (symbol.startsWith(fileDesc.getPackage)) && // Ensure package match first
     (Names.splitNext(if (fileDesc.getPackage.isEmpty) symbol else symbol.drop(fileDesc.getPackage.length + 1)) match {
       case ("", "") => false
-      case (typeOrService, "") => 
+      case (typeOrService, "") =>
+      //fileDesc.findEnumTypeByName(typeOrService) != null || // TODO investigate if this is expected
         fileDesc.findMessageTypeByName(typeOrService) != null ||
         fileDesc.findServiceByName(typeOrService) != null
       case (service, method) =>
