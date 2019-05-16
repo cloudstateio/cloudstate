@@ -212,7 +212,7 @@ object Reflection {
       case req: HttpRequest if req.uri.path == ReflectionPath =>
         val responseCodec = Codecs.negotiate(req)
         GrpcMarshalling.unmarshalStream(req)(ServerReflectionRequestSerializer, mat)
-        .map( _.alsoTo(Sink.foreach(x => println(x.toString))).via(handler))
+        .map(_ via handler)
         .map(e => GrpcMarshalling.marshalStream(e, GrpcExceptionHandler.defaultMapper)(ServerReflectionResponseSerializer, mat, responseCodec, sys))
     }
   }
