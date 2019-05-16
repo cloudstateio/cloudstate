@@ -252,7 +252,7 @@ object Reflection {
 
   // TODO create caches for all of these lookups when/if needed
   private def handle(fileDesc: FileDescriptor): Flow[ServerReflectionRequest, ServerReflectionResponse, NotUsed] =
-    Flow[ServerReflectionRequest].map { req =>
+    Flow[ServerReflectionRequest]/*DEBUG: .alsoTo(Sink.foreach(println(_)))*/.map(req => {
       import ServerReflectionRequest.{ MessageRequest => In}
       import ServerReflectionResponse.{ MessageResponse => Out}
 
@@ -287,5 +287,5 @@ object Reflection {
       }
       // TODO Validate assumptions here
       ServerReflectionResponse(req.host, Some(req), response)
-    }
+    })// DEBUG: .alsoTo(Sink.foreach(println(_)))
 }

@@ -343,14 +343,16 @@ class StatefulServerlessTCK(private[this] final val config: StatefulServerlessTC
 
       val reflectionClient = ServerReflectionClient(GrpcClientSettings.connectToServiceAt(config.backend.hostname, config.backend.port)(system).withTls(false))(mat, mat.executionContext)
 
-      val host = config.backend.hostname
+      val Host        = config.backend.hostname
+      val ShoppingCart = "com.example.shoppingcart.ShoppingCart"
 
       val testData = List[(In, Out)](
-        (In.ListServices(""), Out.ListServicesResponse(ListServiceResponse(Vector(ServiceResponse("com.example.shoppingcart.ShoppingCart")))))
+        (In.ListServices(""), Out.ListServicesResponse(ListServiceResponse(Vector(ServiceResponse(ShoppingCart))))),
+        (In.ListServices("nonsense.blabla."), Out.ListServicesResponse(ListServiceResponse(Vector(ServiceResponse(ShoppingCart))))),
       ) map {
         case (in, out) =>
-          val req = ServerReflectionRequest(host, in)
-          val res = ServerReflectionResponse(host, Some(req), out)
+          val req = ServerReflectionRequest(Host, in)
+          val res = ServerReflectionResponse(Host, Some(req), out)
           (req, res)
       }
       val input = testData.map(_._1)
@@ -359,10 +361,7 @@ class StatefulServerlessTCK(private[this] final val config: StatefulServerlessTC
         output <- reflectionClient.serverReflectionInfo(Source(input)).runWith(Sink.seq)(mat)
       } yield {
         testData.zip(output) foreach {
-          case ((in, exp), out) =>
-            out.validHost must equal(exp.validHost)
-            out.originalRequest must equal(exp.originalRequest)
-            out.messageResponse must equal(exp.messageResponse)
+          case ((in, exp), out) => (in, out) must equal((in, exp))
         }
         output must not(be(empty))
       }
