@@ -335,5 +335,40 @@ class StatefulServerlessTCK(private[this] final val config: StatefulServerlessTC
         items2.toSet must equal(Set(LineItem(productId2, productName2, 33)))
       }
     }
+
+    "verify that the backend supports the ServerReflection API" in {
+      import grpc.reflection.v1alpha._
+      import ServerReflectionRequest.{ MessageRequest => In}
+      import ServerReflectionResponse.{ MessageResponse => Out}
+
+      val reflectionClient = ServerReflectionClient(GrpcClientSettings.connectToServiceAt(config.backend.hostname, config.backend.port)(system).withTls(false))(mat, mat.executionContext)
+
+      val Host        = config.backend.hostname
+      val ShoppingCart = "com.example.shoppingcart.ShoppingCart"
+
+      val testData = List[(In, Out)](
+        (In.ListServices(""), Out.ListServicesResponse(ListServiceResponse(Vector(ServiceResponse(ShoppingCart))))),
+        (In.ListServices("nonsense.blabla."), Out.ListServicesResponse(ListServiceResponse(Vector(ServiceResponse(ShoppingCart))))),
+      ) map {
+        case (in, out) =>
+          val req = ServerReflectionRequest(Host, in)
+          val res = ServerReflectionResponse(Host, Some(req), out)
+          (req, res)
+      }
+      val input = testData.map(_._1)
+      val expected = testData.map(_._2)
+      val test = for {
+        output <- reflectionClient.serverReflectionInfo(Source(input)).runWith(Sink.seq)(mat)
+      } yield {
+        testData.zip(output) foreach {
+          case ((in, exp), out) => (in, out) must equal((in, exp))
+        }
+        output must not(be(empty))
+      }
+
+      test andThen {
+        case _ => Try(reflectionClient.close())
+      }
+    }
   }
 }
