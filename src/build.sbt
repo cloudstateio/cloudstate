@@ -118,7 +118,9 @@ lazy val operator = (project in file("operator"))
     common,
     name := "stateful-serverless-operator",
     // This is a publishLocal build of this PR https://github.com/doriordan/skuber/pull/268
-    libraryDependencies += "io.skuber" %% "skuber" % "2.2.0-jroper-1",
+    libraryDependencies ++= Seq(
+      "io.skuber" %% "skuber" % "2.2.0-jroper-1"
+    ),
 
     dockerSettings,
     dockerExposedPorts := Nil,

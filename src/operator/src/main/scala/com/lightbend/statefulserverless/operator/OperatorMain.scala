@@ -28,6 +28,6 @@ object OperatorMain extends App {
   val namespaces = sys.env.get("NAMESPACES").fold(List("default"))(_.split(",").toList)
 
   val runner = new OperatorRunner()
-  runner.start(namespaces, new EventSourcedServiceOperatorFactory())
+  runner.start(namespaces, new KnativeRevisionOperatorFactory())
   runner.start(namespaces, new EventSourcedJournalOperatorFactory())
 }

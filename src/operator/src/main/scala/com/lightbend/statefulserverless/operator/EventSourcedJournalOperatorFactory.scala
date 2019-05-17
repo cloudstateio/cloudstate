@@ -16,8 +16,9 @@
 
 package com.lightbend.statefulserverless.operator
 
-import java.time.Instant
-import java.time.temporal.ChronoUnit
+import java.security.MessageDigest
+import java.time.ZonedDateTime
+import java.util.Base64
 
 import akka.Done
 import akka.stream.Materializer
@@ -35,90 +36,73 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
 
   import OperatorConstants._
 
-  val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "lightbend-docker-registry.bintray.io/octo/stateful-serverless-backend-cassandra:latest")
-
   override def apply(client: KubernetesClient): Operator = new EventSourcedJournalOperator(client)
 
   class EventSourcedJournalOperator(client: KubernetesClient) extends Operator {
 
-    private def hashSpec(resource: Resource) = hashOf((resource.spec, CassandraJournalImage))
-
-    override def hasAnythingChanged(resource: Resource): Boolean = {
-      (for {
-        status <- resource.status
-        specHash <- status.specHash
-      } yield {
-        if (hashSpec(resource) != specHash) {
-          true
-        } else {
-          if (status.reason.isDefined &&
-            status.lastApplied.getOrElse(Instant.EPOCH).plus(1, ChronoUnit.MINUTES).isBefore(Instant.now())) {
-            true
-          } else {
-            false
-          }
-        }
-      }).getOrElse(true)
-    }
-
-    private def errorStatus(reason: String, resource: Option[Resource]) = EventSourcedJournal.Status(
-      specHash = resource.map(hashOf),
-      image = None,
-      sidecarEnv = None,
-      reason = Some(reason),
-      lastApplied = Some(Instant.now())
+    private def status(spec: Option[Resource], status: String, reason: Option[String] = None, message: Option[String] = None) = EventSourcedJournal.Status(
+      conditions = Some(List(
+        Condition(
+          `type` = JournalConditionType,
+          status = status,
+          reason = reason,
+          message = message,
+          lastUpdateTime = Some(ZonedDateTime.now())
+        )
+      )),
+      specHash = spec.map(hashSpec)
     )
 
-    private def updateStatus(resource: Resource, status: EventSourcedJournal.Status): Future[Done] = {
-      client.updateStatus(resource.withStatus(status))
-        .map(_ => Done)
+    private def hashSpec(spec: Resource) = {
+      val md = MessageDigest.getInstance("MD5")
+      val hashBytes = md.digest(spec.spec.toString.getBytes("utf-8"))
+      Base64.getEncoder.encodeToString(hashBytes)
     }
 
-    override def handleChanged(resource: Resource): Future[Option[EventSourcedJournal.Status]] = {
-      val status = resource.spec.`type` match {
-        case `CassandraJournalType` =>
-          resource.spec.deployment match {
-            case `UnmanagedJournalDeployment` =>
-              (resource.spec.config \ "service").asOpt[String] match {
-                case Some(contactPoints) =>
-                  EventSourcedJournal.Status(
-                    specHash = Some(hashSpec(resource)),
-                    image = Some(CassandraJournalImage),
-                    sidecarEnv = Some(List(
-                      EnvVar("CASSANDRA_CONTACT_POINTS", contactPoints)
-                    )),
-                    reason = None,
-                    lastApplied = Some(Instant.now())
-                  )
-                case None => errorStatus("No service name declared in unmanaged Cassandra journal", Some(resource))
-              }
-            case unknown => errorStatus(s"Unknown Cassandra deployment type: $unknown", Some(resource))
-          }
-        case unknown => errorStatus(s"Unknown journal type: $unknown", Some(resource))
-      }
+    private def errorStatus(spec: Option[Resource], reason: String, message: String) =
+      status(spec,FalseStatus, Some(reason), Some(message))
 
-      if (status.reason.isEmpty && status.specHash.isDefined) {
-        // We have to first update our own status before we update our dependents, since they depend on our updated status
-        for {
-          _ <- updateStatus(resource, status)
-          _ <- updateDependents(resource.name, _.copy(journalConfigHash = status.specHash))
-        } yield None
+    override def handleChanged(resource: Resource): Future[StatusUpdate] = {
+      if (resource.status.exists(_.specHash.contains(hashSpec(resource))) &&
+        resource.status.exists(_.conditions.exists(_.exists(c => c.`type` == JournalConditionType && c.status == TrueStatus)))) {
+        // Don't do anything if last time we saw it, we successfully validated it, and it hasn't changed since then.
+        Future.successful(StatusUpdate.None)
       } else {
-        Future.successful(Some(status))
+        val maybeErrorStatus = resource.spec.`type` match {
+          case `CassandraJournalType` =>
+            resource.spec.deployment match {
+              case `UnmanagedJournalDeployment` =>
+                (resource.spec.config \ "service").asOpt[String] match {
+                  case Some(_) => None
+                  case None =>
+                    Some(errorStatus(Some(resource), "MissingServiceName", "No service name declared in unmanaged Cassandra journal"))
+                }
+              case unknown =>
+                Some(errorStatus(Some(resource), "UnknownDeploymentType", s"Unknown Cassandra deployment type: $unknown, supported types for Cassandra are: Unmanaged"))
+            }
+          case unknown =>
+            Some(errorStatus(Some(resource), "UnknownJournalType", s"Unknown journal type: $unknown, supported types are: Cassandra"))
+        }
+
+        maybeErrorStatus match {
+          case Some(error) => Future.successful(StatusUpdate.Update(error))
+          case None =>
+            updateDependents(resource.name).map(_ => StatusUpdate.Update(status(Some(resource), TrueStatus)))
+        }
       }
     }
 
     override def handleDeleted(resource: Resource): Future[Done] = {
-      updateDependents(resource.name, _.copy(journalConfigHash = None))
+      updateDependents(resource.name)
     }
 
-    private def updateDependents(name: String, update: EventSourcedService.Status => EventSourcedService.Status) = {
+    private def updateDependents(name: String) = {
 
       (for {
         deployments <- client.listSelected[DeploymentList](LabelSelector(
           JournalLabel is name
         ))
-        _ <- Future.sequence(deployments.map(deployment => updateServiceForDeployment(deployment, update)))
+        _ <- Future.sequence(deployments.map(deployment => updateServiceForDeployment(deployment)))
       } yield Done).recover {
         case error =>
           println("Error while attempting to update dependent service configuration resource, ignoring")
@@ -127,27 +111,50 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
       }
     }
 
-    private def updateServiceForDeployment(deployment: Deployment,
-      update: EventSourcedService.Status => EventSourcedService.Status): Future[Done] = {
+    private def updateServiceForDeployment(deployment: Deployment): Future[Done] = {
 
+      // todo It would be much better to use a patch here, but since Knative serving doesn't declare any validation
+      // such that it could declare a patch merge key on the conditions, we can't use that. As it is, since we
+      // fetch the resource first and update it, optimistic concurrency is used (ie, revision id), so update will
+      // fail if two things attempt to update at the same time.
       for {
-        maybeService <- deployment.metadata.labels.get(EventSourcedLabel).map { serviceName =>
-          client.getOption[EventSourcedService.Resource](serviceName)
+        maybeRevision <- deployment.metadata.labels.get(RevisionLabel).map { revisionName =>
+          client.getOption[KnativeRevision.Resource](revisionName)
         }.getOrElse(Future.successful(None))
-        _ <- maybeService match {
-          case Some(service) =>
-            val status = service.status.getOrElse(
-              EventSourcedService.Status(None, None, None, None, None)
-            )
-            client.updateStatus(service.withStatus(update(status)))
+        _ <- maybeRevision match {
+          case Some(revision) =>
+            val status = revision.status.getOrElse(KnativeRevision.Status(None, Nil, None, None, None))
+            client.updateStatus(revision.withStatus(touchKnativeRevisionStatus(status)))
           case None =>
             Future.successful(Done)
         }
       } yield Done
     }
 
-    override def statusFromError(error: Throwable, existing: Option[Resource]): EventSourcedJournal.Status = {
-      errorStatus("Unknown operator error: " + error, existing)
+    // Here we change the validation to Unknown. It is the responsibility of the revision controller to
+    // handle updates to the journal, by changing to unknown we let it go in and do the update.
+    private def touchKnativeRevisionStatus(status: KnativeRevision.Status): KnativeRevision.Status = {
+      val condition = KnativeRevision.Condition(
+        `type` = JournalConditionType,
+        status = UnknownStatus,
+        reason = Some("JournalChanged"),
+        lastTransitionTime = Some(ZonedDateTime.now())
+      )
+
+      val hasExistingCondition = status.conditions.exists(_.`type` == JournalConditionType)
+      val conditions = if (hasExistingCondition) {
+        status.conditions.map {
+          case c if c.`type` == JournalConditionType => condition
+          case other => other
+        }
+      } else {
+        status.conditions :+ condition
+      }
+      status.copy(conditions = conditions)
+    }
+
+    override def statusFromError(error: Throwable, existing: Option[Resource]): StatusUpdate = {
+      StatusUpdate.Update(status(existing, UnknownStatus, Some("UnknownOperatorError"), Some(error.getMessage)))
     }
   }
 }

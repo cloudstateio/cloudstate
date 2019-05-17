@@ -17,7 +17,7 @@
 package com.lightbend.statefulserverless.operator
 
 import akka.actor.ActorSystem
-import akka.{Done, NotUsed}
+import akka.NotUsed
 import akka.stream.Materializer
 import akka.stream.scaladsl.{RestartSource, Sink, Source}
 import play.api.libs.json._
@@ -44,6 +44,8 @@ class OperatorRunner(implicit system: ActorSystem, mat: Materializer, ec: Execut
   }
 
   private type JsValueCustomResource = CustomResource[JsValue, JsValue]
+  private type Cache = Map[String, JsValueCustomResource]
+
   private implicit val listResourceFormat: Format[ListResource[JsValueCustomResource]] = ListResourceFormat(implicitly[Format[JsValueCustomResource]])
 
 
@@ -87,49 +89,52 @@ class OperatorRunner(implicit system: ActorSystem, mat: Materializer, ec: Execut
             ).takeWithin(5.minutes)
           }
 
-        source.mapAsync(1) { event =>
-          val wasParseErrorBefore = (for {
-            status <- event._object.status
-            parseError <- (status \ "jsParseError").asOpt[Boolean]
-          } yield parseError).getOrElse(false)
+        source.scanAsync(Map.empty[String, JsValueCustomResource]) { (cache, event) =>
 
-          Json.fromJson[Resource](Json.toJson(event._object)) match {
-            case JsSuccess(resource, _) =>
-              withErrorHandling(resource) {
-                handleEvent(WatchEvent(event._type, resource))
-              }
+          // It's unmodifed if the event type is modified but the object hasn't changed.
+          // Otherwise, it's it's been modified in some way (eg, added, deleted or changed).
+          val unmodified = event._type == EventType.MODIFIED &&
+            cache.get(event._object.name).contains(event._object)
 
-            case _: JsError if wasParseErrorBefore =>
-              Future.successful(Done)
+          if (unmodified) {
+            Future.successful(cache)
+          } else {
+            val newCache = cache + (event._object.name -> event._object)
+            // Attempt to parse
+            Json.fromJson[Resource](Json.toJson(event._object)) match {
+              case JsSuccess(resource, _) =>
+                handleEvent(newCache, event._object, WatchEvent(event._type, resource))
 
-            case err: JsError =>
-              val status = operator.statusFromError(JsResult.Exception(err), None)
-              client.updateStatus(
-                event._object.withStatus(Json.toJson(status).as[JsObject]
-                  + ("jsParseError" -> JsBoolean(true))
-              )).map(_ => Done)
+              case err: JsError =>
+                val status = operator.statusFromError(JsResult.Exception(err), None)
+                updateStatus(cache, event._object, status)
+            }
           }
 
         }
       }.runWith(Sink.ignore)
     }
 
-    private def updateStatus(resource: Resource, status: Status): Future[Done] = {
-      client.updateStatus(resource.withStatus(status).asInstanceOf[Resource])
-        .map(_ => Done)
-    }
-
-    private def handleResource(resource: Resource): Future[Done] = {
-      if (operator.hasAnythingChanged(resource)) {
-        operator.handleChanged(resource)
-          .flatMap(_.fold(Future.successful(Done.done()))(status => updateStatus(resource, status)))
-      } else {
-        println(s"Nothing has changed for resource ${resource.name}")
-        Future.successful(Done)
+    private def updateStatus(cache: Cache, resource: JsValueCustomResource, statusUpdate: operator.StatusUpdate): Future[Cache] = {
+      statusUpdate match {
+        case operator.StatusUpdate.None =>
+          Future.successful(cache)
+        case p@ operator.StatusUpdate.Patch(patch) =>
+          implicit val patchWrites: Writes[p.PatchType] = p.writes
+          client.patch[p.PatchType, JsValueCustomResource](resource.name, patch)
+            .map(newResource => cache + (newResource.name -> newResource))
+        case operator.StatusUpdate.Update(status) =>
+          client.updateStatus(resource.withStatus(Json.toJson(status)))
+            .map(newResource => cache + (newResource.name -> newResource))
       }
     }
 
-    private def withErrorHandling(resource: Resource)(block: => Future[Done]): Future[Done] = {
+    private def handleResource(cache: Cache, jsResource: JsValueCustomResource, resource: Resource): Future[Cache] = {
+      operator.handleChanged(resource)
+        .flatMap(statusUpdate => updateStatus(cache, jsResource, statusUpdate))
+    }
+
+    private def withErrorHandling(cache: Cache, jsResource: JsValueCustomResource, resource: Resource)(block: => Future[Cache]): Future[Cache] = {
       val result = try {
         block
       } catch {
@@ -139,24 +144,26 @@ class OperatorRunner(implicit system: ActorSystem, mat: Materializer, ec: Execut
         case e =>
           println("Encountered performing operation on " + resource + ": " + e)
           e.printStackTrace()
-          updateStatus(resource, operator.statusFromError(e, Some(resource)))
+          updateStatus(cache, jsResource, operator.statusFromError(e, Some(resource)))
       }
     }
 
-    private def handleEvent(event: WatchEvent[Resource]): Future[Done] = {
+    private def handleEvent(cache: Cache, jsResource: JsValueCustomResource, event: WatchEvent[Resource]): Future[Cache] = {
       println("Got event " + event)
 
-      withErrorHandling(event._object) {
+      withErrorHandling(cache, jsResource, event._object) {
         event._type match {
 
           case EventType.ADDED =>
-            handleResource(event._object)
+            handleResource(cache, jsResource, event._object)
 
           case EventType.DELETED =>
-            operator.handleDeleted(event._object)
+            operator.handleDeleted(event._object).map(_ =>
+              cache - jsResource.name
+            )
 
           case EventType.MODIFIED =>
-            handleResource(event._object)
+            handleResource(cache, jsResource, event._object)
 
           case EventType.ERROR =>
             // We'll never get these because skuber doesn't even parse them successfully, just fail

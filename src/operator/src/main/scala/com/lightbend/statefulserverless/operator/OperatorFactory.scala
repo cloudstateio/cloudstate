@@ -16,10 +16,8 @@
 
 package com.lightbend.statefulserverless.operator
 
-import java.security.MessageDigest
-import java.util.Base64
-
 import akka.Done
+import play.api.libs.json.Writes
 import skuber.CustomResource
 import skuber.api.client.KubernetesClient
 
@@ -35,19 +33,12 @@ trait OperatorFactory[Status, Resource <: CustomResource[_, Status]] {
   trait Operator {
 
     /**
-      * Return true if the status of this resource doesn't match the spec.
-      *
-      * Typically this is implemented by putting a hash of the spec in the status.
-      */
-    def hasAnythingChanged(resource: Resource): Boolean
-
-    /**
       * Handle a resource being changed.
       *
       * @param resource The changed resource.
       * @return Optionally, the status to update, if the status should be updated.
       */
-    def handleChanged(resource: Resource): Future[Option[Status]]
+    def handleChanged(resource: Resource): Future[StatusUpdate]
 
     /**
       * Handle a resource being deleted.
@@ -64,17 +55,20 @@ trait OperatorFactory[Status, Resource <: CustomResource[_, Status]] {
       * @param existing The existing resource, if it could be successfully parsed.
       * @return The status to set.
       */
-    def statusFromError(error: Throwable, existing: Option[Resource] = None): Status
+    def statusFromError(error: Throwable, existing: Option[Resource] = None): StatusUpdate
 
-    /**
-      * Convenience that can be used to calculate a hash of the passed in object.
-      *
-      * It converts the object to a String, then MD5s and base64s that.
-      */
-    def hashOf(obj: Any) = {
-      val md = MessageDigest.getInstance("MD5")
-      Base64.getEncoder.encodeToString(md.digest(obj.toString.getBytes("utf-8")))
+    sealed trait StatusUpdate
+
+    object StatusUpdate {
+      case object None extends StatusUpdate
+      case class Patch[P <: skuber.api.patch.Patch: Writes](patch: P) extends StatusUpdate {
+        type PatchType = P
+        val writes: Writes[PatchType] = implicitly[Writes[PatchType]]
+      }
+      case class Update(status: Status) extends StatusUpdate
     }
   }
 
 }
+
+
