@@ -349,6 +349,7 @@ class StatefulServerlessTCK(private[this] final val config: StatefulServerlessTC
       val testData = List[(In, Out)](
         (In.ListServices(""), Out.ListServicesResponse(ListServiceResponse(Vector(ServiceResponse(ShoppingCart))))),
         (In.ListServices("nonsense.blabla."), Out.ListServicesResponse(ListServiceResponse(Vector(ServiceResponse(ShoppingCart))))),
+        (In.FileContainingSymbol("nonsense.blabla.Void"), Out.FileDescriptorResponse(FileDescriptorResponse(Nil))),
       ) map {
         case (in, out) =>
           val req = ServerReflectionRequest(Host, in)
