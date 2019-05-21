@@ -7,6 +7,7 @@ import akka.stream.scaladsl.{Source, Sink}
 import akka.pattern.after
 
 import akka.grpc.GrpcClientSettings
+import com.google.protobuf.{ByteString => ProtobufByteString}
 
 import org.scalatest._
 import com.typesafe.config.Config
@@ -200,7 +201,7 @@ class StatefulServerlessTCK(private[this] final val config: StatefulServerlessTC
 
   final def fromFrontend_expectEntitySpec(within: FiniteDuration): EntitySpec = {
     val spec = fromFrontend.expectMsgType[EntitySpec](within)
-    spec.proto must be(defined)
+    spec.proto must not be ProtobufByteString.EMPTY
     spec.serviceName must not be empty
     spec.persistenceId must not be empty
     spec
@@ -252,7 +253,7 @@ class StatefulServerlessTCK(private[this] final val config: StatefulServerlessTC
 
     "verify that the user function process responds" in {
       attempt(entityClient.ready(Empty()), 4.seconds, 10) map { spec =>
-        spec.proto must be(defined)
+        spec.proto must not be ProtobufByteString.EMPTY
         spec.serviceName must not be empty
         spec.persistenceId must not be empty
       }

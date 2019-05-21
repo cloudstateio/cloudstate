@@ -47,6 +47,10 @@ object Serve {
   private final val EntityKeyValueSeparator = "-"
   private final val AnyTypeUrlHostName = "type.googleapis.com/"
 
+  private final val NotFound: PartialFunction[HttpRequest, Future[HttpResponse]] = {
+    case req: HttpRequest => Future.successful(HttpResponse(StatusCodes.NotFound))
+  }
+
   private final object ReplySerializer extends ProtobufSerializer[ProtobufByteString] {
     override final def serialize(pbBytes: ProtobufByteString): ByteString =
       if (pbBytes.isEmpty) {
@@ -129,31 +133,29 @@ object Serve {
   }
 
   private[this] final def extractService(serviceName: String, descriptor: FileDescriptor): Option[ServiceDescriptor] = {
-    // todo - this really needs to be on a FileDescriptorSet, not a single FileDescriptor
     val (pkg, name) = Names.splitPrev(serviceName)
     Some(descriptor).filter(_.getPackage == pkg).map(_.findServiceByName(name))
   }
 
   def createRoute(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    val descriptor = FileDescriptor.buildFrom(
-      // It would be nice if we could just use the following line, but turns out ScalaPB doesn't copy unknown fields,
-      // and we need that if we want to access the entity key later.
-      // com.google.protobuf.descriptor.FileDescriptorProto.toJavaProto(spec.proto.get)
-      DescriptorProtos.FileDescriptorProto.parseFrom(spec.proto.get.toByteArray),
-        Array(ScalaPBDescriptorProtos.DescriptorProtoCompanion.javaDescriptor,
-              EntitykeyProto.javaDescriptor,
-              ProtobufAnyProto.javaDescriptor,
-              ProtobufEmptyProto.javaDescriptor),
-        true)
-
-    extractService(spec.serviceName, descriptor) match {
-      case None => throw new Exception(s"Service ${spec.serviceName} not found in descriptor!")
-      case Some(service) =>
-         compileProxy(stateManager, proxyParallelism, relayTimeout, service) orElse
-         Reflection.serve(descriptor) orElse {
-          case req: HttpRequest => Future.successful(HttpResponse(StatusCodes.NotFound)) // TODO do we need this?
-        }
-    }
+    val descriptorSet = DescriptorProtos.FileDescriptorSet.parseFrom(spec.proto)
+    descriptorSet.getFileList.iterator.asScala.map({
+      fdp => FileDescriptor.buildFrom(fdp,
+               Array( ScalaPBDescriptorProtos.DescriptorProtoCompanion.javaDescriptor,
+                      EntitykeyProto.javaDescriptor,
+                      ProtobufAnyProto.javaDescriptor,
+                      ProtobufEmptyProto.javaDescriptor),
+               true
+             )
+    }).map({
+      descriptor => extractService(spec.serviceName, descriptor).map({
+                      service =>
+                       compileProxy(stateManager, proxyParallelism, relayTimeout, service) orElse
+                       Reflection.serve(descriptor) orElse
+                       NotFound
+                    })
+    }).collectFirst({ case Some(route) => route })
+      .getOrElse(throw new Exception(s"Service ${spec.serviceName} not found in descriptors!"))
   }
 
   private[this] final def compileProxy(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
@@ -250,7 +252,6 @@ object Reflection {
       fileDesc.getExtensions.iterator.asScala.collect({ case ext if ext.getFullName == container => ext.getNumber }).toList
     )((list, fd) => findExtensionNumbersForContainingType(container, fd) ::: list)
 
-  // TODO create caches for all of these lookups when/if needed
   private def handle(fileDesc: FileDescriptor): Flow[ServerReflectionRequest, ServerReflectionResponse, NotUsed] =
     Flow[ServerReflectionRequest]/*DEBUG: .alsoTo(Sink.foreach(println(_)))*/.map(req => {
       import ServerReflectionRequest.{ MessageRequest => In}
