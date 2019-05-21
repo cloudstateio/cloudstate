@@ -264,19 +264,23 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         )
       ))
 
-      // fixme this needs to use the same ports that Knative expects, and also needs to be configured to work
-      // in Istio.
+      val userPort = revision.spec.containers.flatMap(_.ports).headOption.fold(DefaultUserPort)(_.containerPort)
+      val configuration = revision.metadata.labels.getOrElse(ConfigurationLabel, "")
+
       Container(
         name = "akka-sidecar",
         image = image,
         imagePullPolicy = if (image.endsWith(":latest")) Container.PullPolicy.Always else Container.PullPolicy.IfNotPresent,
         ports = List(
-          Container.Port(containerPort = 9000, name = "grpc"),
-          Container.Port(containerPort = 8558, name = "management")
+          Container.Port(containerPort = SidecarH2cPort, name = SidecarPortName)
         ),
         env = List(
-          EnvVar("SELECTOR_LABEL_VALUE", revision.uid),
-          EnvVar("SELECTOR_LABEL", RevisionUidLabel),
+          EnvVar("HTTP_PORT", SidecarH2cPort.toString),
+          EnvVar("USER_FUNCTION_PORT", userPort.toString),
+          EnvVar("REMOTING_PORT", AkkaRemotingPort.toString),
+          EnvVar("MANAGEMENT_PORT", AkkaManagementPort.toString),
+          EnvVar("SELECTOR_LABEL_VALUE", configuration),
+          EnvVar("SELECTOR_LABEL", ConfigurationLabel),
           // todo this should be based on minscale
           EnvVar("REQUIRED_CONTACT_POINT_NR", "1"),
           EnvVar("JAVA_OPTS", s"-Xms$jvmMemory -Xmx$jvmMemory")
@@ -284,21 +288,21 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         resources = Some(sidecarResources),
         readinessProbe = Some(Probe(
           action = HTTPGetAction(
-            port = Right("management"),
+            port = Left(AkkaManagementPort),
             path = "/ready"
           ),
-          periodSeconds = Some(10),
-          failureThreshold = Some(10),
-          initialDelaySeconds = 20
+          periodSeconds = Some(2),
+          failureThreshold = Some(20),
+          initialDelaySeconds = 2
         )),
         livenessProbe = Some(Probe(
           action = HTTPGetAction(
-            port = Right("management"),
+            port = Left(AkkaManagementPort),
             path = "/alive"
           ),
-          periodSeconds = Some(10),
-          failureThreshold = Some(10),
-          initialDelaySeconds = 20
+          periodSeconds = Some(2),
+          failureThreshold = Some(20),
+          initialDelaySeconds = 2
         ))
       )
 
@@ -341,7 +345,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
           userContainer,
           sidecar
         ),
-        volumes = revision.spec.volumes :+ Volume("varlog", Volume.EmptyDir()),
+        volumes = revision.spec.volumes.getOrElse(Nil) :+ Volume("varlog", Volume.EmptyDir()),
         serviceAccountName = revision.spec.serviceAccountName.getOrElse(""),
         terminationGracePeriodSeconds = revision.spec.timeoutSeconds.map(_.asInstanceOf[Int])
       )
@@ -358,6 +362,10 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         else ls
       }
       val annotations = revision.metadata.annotations - LastPinnedLabel
+      val podAnnotations = annotations ++ Seq(
+        "traffic.sidecar.istio.io/excludeInboundPorts" -> s"$AkkaRemotingPort,$AkkaManagementPort",
+        "traffic.sidecar.istio.io/excludeOutboundPorts" -> s"$AkkaRemotingPort,$AkkaManagementPort"
+      )
 
       // Create the deployment
       Deployment(
@@ -384,7 +392,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         .withTemplate(Pod.Template.Spec(
           metadata = ObjectMeta(
             labels = labels,
-            annotations = annotations
+            annotations = podAnnotations
           ),
           spec = Some(podSpec)
         ))

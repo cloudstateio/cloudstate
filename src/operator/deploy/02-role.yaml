@@ -1,5 +1,5 @@
 apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: Role
+kind: ClusterRole
 metadata:
   name: stateful-serverless-operator-role
 rules:
@@ -27,7 +27,6 @@ rules:
   - statefulserverless.lightbend.com
   resources:
   - eventsourcedjournals
-  - eventsourcedservices
   verbs:
   - get
   - list
@@ -36,37 +35,6 @@ rules:
   - statefulserverless.lightbend.com
   resources:
   - eventsourcedjournals/status
-  - eventsourcedservices/status
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - delete
-  - patch
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - services
-  verbs:
-  - get
-  - create
-  - delete
-  - patch
-  - update
-- apiGroups:
-  - apps
-  resources:
-  - deployments
   verbs:
   - get
   - list

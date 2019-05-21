@@ -7,6 +7,8 @@ dynver in ThisBuild ~= (_.replace('+', '-'))
 
 // Needed for our fork of skuber
 resolvers in ThisBuild += Resolver.bintrayRepo("jroper", "maven")
+// Temporary while we wait for Akka-management 1.0.1 to be synced to central
+resolvers in ThisBuild += Resolver.bintrayRepo("akka", "maven")
 
 organizationName in ThisBuild := "Lightbend Inc."
 startYear in ThisBuild := Some(2019)
@@ -14,7 +16,7 @@ licenses in ThisBuild += ("Apache-2.0", new URL("https://www.apache.org/licenses
 
 val AkkaVersion = "2.5.22"
 val AkkaHttpVersion = "10.1.7"
-val AkkaManagementVersion = "1.0.0"
+val AkkaManagementVersion = "1.0.1"
 val AkkaPersistenceCassandraVersion = "0.93"
 
 def common: Seq[Setting[_]] = Seq(

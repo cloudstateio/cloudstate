@@ -34,7 +34,7 @@ object KnativeRevision {
 
   case class Spec(
     containers: List[Container],
-    volumes: List[Volume],
+    volumes: Option[List[Volume]],
     serviceAccountName: Option[String],
     containerConcurrency: Option[Long],
     timeoutSeconds: Option[Long],

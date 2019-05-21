@@ -62,4 +62,12 @@ object OperatorConstants {
   val KnativeServiceEnvVar = "K_SERVICE"
 
   val KubernetesManagedByLabel = "app.kubernetes.io/managed-by"
+
+  val ProtocolH2c = "h2c"
+  val SidecarPortName = "queue-port"
+  val SidecarHttpPort = 8012
+  val SidecarH2cPort = 8013
+
+  val AkkaManagementPort = 8558
+  val AkkaRemotingPort = 2552
 }

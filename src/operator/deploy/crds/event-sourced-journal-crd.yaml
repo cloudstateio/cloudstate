@@ -29,9 +29,6 @@ spec:
   - name: Age
     type: date
     JSONPath: .metadata.creationTimestamp
-  - name: Error
-    type: string
-    JSONPath: .status.reason
   validation:
     openAPIV3Schema:
       properties:
@@ -55,27 +52,4 @@ spec:
           required:
           - type
           - deployment
-        status:
-          type: object
-          properties:
-            specHash:
-              type: string
-            image:
-              type: string
-            sidecarEnv:
-              type: array
-              items:
-                type: object
-                properties:
-                  name:
-                    type: string
-                  value:
-                    type: string
-                  valueFrom:
-                    type: object
-                    # todo
-                required:
-                - name
-            reason:
-              type: string
 
