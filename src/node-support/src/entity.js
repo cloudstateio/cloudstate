@@ -23,7 +23,6 @@ const fs = require("fs");
 const protoLoader = require("@grpc/proto-loader");
 const protobuf = require("protobufjs");
 const AnySupport = require("./protobuf-any");
-const DescriptorSupport = require("./protobuf-descriptor");
 
 const includeDirs = [
   path.join(__dirname, "..", "proto"),
@@ -50,7 +49,10 @@ function setup(entity) {
 
   // Get the service
   const server = new grpc.Server();
-  server.addService(grpcDescriptor.lightbend.serverless.Entity.service, {
+
+  const entityService = grpcDescriptor.lightbend.serverless.Entity.service;
+
+  server.addService(entityService, {
     ready: ready,
     handle: handle
   });
@@ -58,7 +60,7 @@ function setup(entity) {
   function ready(call, callback) {
     debug("Received ready, sending descriptor with service name '" + entity.serviceName + "' and persistenceId '" + entity.options.persistenceId + "'");
     callback(null, {
-      proto: DescriptorSupport.serviceToDescriptor(entity.root, entity.serviceName),
+      proto: fs.readFileSync("user-function.desc"),
       serviceName: entity.serviceName,
       persistenceId: entity.options.persistenceId
     });
@@ -331,7 +333,10 @@ module.exports = class Entity {
       ...{
         persistenceId: "entity",
         snapshotEvery: 100,
-        includeDirs: ["."]
+        includeDirs: ["."],
+        //defaults: false, (default)
+        //arrays: false, (default)
+        //bytes: "Buffer" (default)
       },
       ...options
     };
@@ -361,6 +366,9 @@ module.exports = class Entity {
     this.serviceName = serviceName;
     // Eagerly lookup the service to fail early
     this.service = this.root.lookupService(serviceName);
+
+    if(!fs.existsSync("user-function.desc"))
+      throw new Error("No 'user-function.desc' file found in application root folder.");
   }
 
   lookupType(messageType) {

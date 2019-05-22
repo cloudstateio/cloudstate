@@ -202,21 +202,6 @@ describe("shopping cart", () => {
     server.shutdown();
   });
 
-  it("should return descriptor when ready", () => {
-    return invokeReady().then(spec => {
-      spec.serviceName.should.equal("com.example.shoppingcart.ShoppingCart");
-      const service = spec.root.lookupService(spec.serviceName);
-      service.should.have.property("name", "ShoppingCart");
-      const GetShoppingCart = spec.root.lookupType("com.example.shoppingcart.GetShoppingCart");
-      GetShoppingCart.fields.should.have.property("userId");
-      // protobuf.js doesn't transfer extension options when converting the protobuf descriptor to a protobuf.js root
-      // object, so we have to extract the field out of the protobuf descriptor
-      const userIdField = spec.proto.messageType.find(mt => mt.name === "GetShoppingCart")
-        .field.find(f => f.name === "userId");
-      userIdField.options.should.have.property(".lightbend.serverless.entityKey", true);
-    });
-  });
-
   it("should respond to commands", () => {
     const call = callAndInit();
     return getCart(call)

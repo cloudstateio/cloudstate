@@ -36,6 +36,9 @@
   },
   "scripts": {
     "test": "mocha",
+    "pretest": "protoc --include_imports --proto_path=proto --proto_path=../../backend/core/src/main/proto --descriptor_set_out=user-function.desc proto/shoppingcart.proto",
+    "preinstall": "protoc --include_imports --proto_path=proto --proto_path=../../backend/core/src/main/proto --descriptor_set_out=user-function.desc proto/shoppingcart.proto",
+    "prestart": "protoc --include_imports --proto_path=proto --proto_path=../../backend/core/src/main/proto --descriptor_set_out=user-function.desc proto/shoppingcart.proto",
     "start": "node index.js"
   }
 }
