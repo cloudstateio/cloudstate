@@ -38,6 +38,7 @@ object OperatorConstants {
 
   val RevisionConditionResourcesAvailableNotOwned = "NotOwned"
 
+  val KnativeServingDeployerName = "KnativeServing"
   val EventSourcedDeployerName = "EventSourced"
 
   val JournalConditionType = "JournalValid"

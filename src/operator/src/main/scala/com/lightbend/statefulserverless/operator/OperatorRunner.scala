@@ -22,7 +22,7 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{RestartSource, Sink, Source}
 import play.api.libs.json._
 import skuber.{CustomResource, HasStatusSubresource, ListResource, ResourceDefinition}
-import skuber.api.client.{EventType, KubernetesClient, WatchEvent}
+import skuber.api.client.{EventType, KubernetesClient, WatchEvent, K8SException}
 import skuber.json.format.ListResourceFormat
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -74,13 +74,8 @@ class OperatorRunner(implicit system: ActorSystem, mat: Materializer, ec: Execut
             Source.fromFutureSource(
               client.list[ListResource[JsValueCustomResource]]()
                 .map { resources =>
-
-                  val watch = Source.fromFutureSource(
-                    client
-                      .watchAll[JsValueCustomResource](sinceResourceVersion = Some(resources.resourceVersion))
-                      // fromFutureSource doesn't like wildcard materailized values, change it to NotUsed
-                      .map(_.mapMaterializedValue(_ => NotUsed))
-                  )
+                  val watch = client
+                      .watchAllContinuously[JsValueCustomResource](sinceResourceVersion = Some(resources.resourceVersion))
 
                   Source(resources)
                     .map(WatchEvent(EventType.MODIFIED, _))
@@ -126,6 +121,12 @@ class OperatorRunner(implicit system: ActorSystem, mat: Materializer, ec: Execut
         case operator.StatusUpdate.Update(status) =>
           client.updateStatus(resource.withStatus(Json.toJson(status)))
             .map(newResource => cache + (newResource.name -> newResource))
+            .recover {
+              case e: K8SException if e.status.code.contains(409) =>
+                // Something else has modified it, so ignore, because this operator should get notified of the new resource
+                println(s"Got conflict on updating status of ${resource.namespace}/${resource.name}:${resource.uid}@${resource.metadata.resourceVersion}, ignoring to handle changed version.")
+                cache
+            }
       }
     }
 

@@ -26,3 +26,18 @@ spec:
     # The name of the unmanaged Cassandra service to connect to.
     service: cassandra-cassandra-0.cassandra-cassandra-svc.cassandra.svc.cluster.local
 
+---
+
+apiVersion: networking.istio.io/v1alpha3
+kind: ServiceEntry
+metadata:
+  name: cassandra
+spec:
+  hosts:
+  - cassandra-cassandra-0.cassandra-cassandra-svc.cassandra.svc.cluster.local
+  - cassandra-cassandra-1.cassandra-cassandra-svc.cassandra.svc.cluster.local
+  - cassandra-cassandra-2.cassandra-cassandra-svc.cassandra.svc.cluster.local
+  ports:
+  - number: 9042
+    name: cas-native
+    protocol: tcp

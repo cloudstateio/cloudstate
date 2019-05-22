@@ -92,7 +92,7 @@ object KnativeRevision {
     implicit val reads: Reads[Deployer] = {
       val configPath = __ \ "config"
       (__ \ "name").read[String].flatMap {
-        case "KnativeServing" => Reads.pure(KnativeServingDeployer)
+        case OperatorConstants.KnativeServingDeployerName => Reads.pure(KnativeServingDeployer)
         case OperatorConstants.EventSourcedDeployerName =>
           configPath.read[EventSourcedDeployer].map(identity)
         case other =>
@@ -105,8 +105,9 @@ object KnativeRevision {
       (__ \ "name").write[String] and
         (__ \ "config").writeNullable[JsValue]
       )((dep: Deployer) => dep match {
-      case KnativeServingDeployer => ("KnativeServing", None)
-      case es: EventSourcedDeployer => (OperatorConstants.EventSourcedDeployerName, Some(Json.toJson(es)))
+      case KnativeServingDeployer => (KnativeServingDeployerName, None)
+      case es: EventSourcedDeployer =>
+        (OperatorConstants.EventSourcedDeployerName, Some(Json.toJson(es)(EventSourcedDeployer.format)))
       case UnknownDeployer(name, config) => (name, config)
     })
   }
