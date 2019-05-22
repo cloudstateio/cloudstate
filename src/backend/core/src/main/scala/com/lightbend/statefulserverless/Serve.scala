@@ -261,26 +261,16 @@ object Reflection {
         case In.Empty =>
           Out.Empty
         case In.FileByFilename(fileName) =>
-          val list = findFileDescForName(fileName, fileDesc) match {
-            case None => Nil // throw new GrpcServiceException(Status.NOT_FOUND.augmentDescription(s"File not found: $fileName"))
-            case Some(file) => file.toProto.toByteString :: Nil
-          }
+          val list = findFileDescForName(fileName, fileDesc).map(_.toProto.toByteString).toList
           Out.FileDescriptorResponse(FileDescriptorResponse(list))
         case In.FileContainingSymbol(symbol) =>
-          val list = findFileDescForSymbol(symbol, fileDesc) match {
-            case None => Nil // throw new GrpcServiceException(Status.NOT_FOUND.augmentDescription(s"Symbol not found: $symbol"))
-            case Some(file) => file.toProto.toByteString :: Nil
-          }
+          val list = findFileDescForSymbol(symbol, fileDesc).map(_.toProto.toByteString).toList
           Out.FileDescriptorResponse(FileDescriptorResponse(list))
         case In.FileContainingExtension(ExtensionRequest(container, number)) =>
-          val list = findFileDescForExtension(container, number, fileDesc) match {
-            case None => Nil // throw new GrpcServiceException(Status.NOT_FOUND.augmentDescription(s"Extensions not found for: $container"))
-            case Some(file) => file.toProto.toByteString :: Nil
-          }
+          val list = findFileDescForExtension(container, number, fileDesc).map(_.toProto.toByteString).toList
           Out.FileDescriptorResponse(FileDescriptorResponse(list))
         case In.AllExtensionNumbersOfType(container) =>
-          // TODO should we throw a NOT_FOUND if we don't know the container type at all?
-          val list = findExtensionNumbersForContainingType(container, fileDesc)
+          val list = findExtensionNumbersForContainingType(container, fileDesc) // TODO should we throw a NOT_FOUND if we don't know the container type at all?
           Out.AllExtensionNumbersResponse(ExtensionNumberResponse(container, list))
         case In.ListServices(_)              =>
           val list = fileDesc.getServices.iterator.asScala.map(s => ServiceResponse(s.getFullName)).toList
