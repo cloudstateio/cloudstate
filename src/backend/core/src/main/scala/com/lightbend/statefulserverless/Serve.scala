@@ -46,6 +46,12 @@ object Serve {
   // When the entity key is made up of multiple fields, this is used to separate them
   private final val EntityKeyValueSeparator = "-"
   private final val AnyTypeUrlHostName = "type.googleapis.com/"
+  private final val DescriptorDependencies = Array(
+    ScalaPBDescriptorProtos.DescriptorProtoCompanion.javaDescriptor,
+    EntitykeyProto.javaDescriptor,
+    ProtobufAnyProto.javaDescriptor,
+    ProtobufEmptyProto.javaDescriptor
+  )
 
   private final val NotFound: PartialFunction[HttpRequest, Future[HttpResponse]] = {
     case req: HttpRequest => Future.successful(HttpResponse(StatusCodes.NotFound))
@@ -139,23 +145,17 @@ object Serve {
 
   def createRoute(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val descriptorSet = DescriptorProtos.FileDescriptorSet.parseFrom(spec.proto)
-    descriptorSet.getFileList.iterator.asScala.map({
-      fdp => FileDescriptor.buildFrom(fdp,
-               Array( ScalaPBDescriptorProtos.DescriptorProtoCompanion.javaDescriptor,
-                      EntitykeyProto.javaDescriptor,
-                      ProtobufAnyProto.javaDescriptor,
-                      ProtobufEmptyProto.javaDescriptor),
-               true
-             )
-    }).map({
-      descriptor => extractService(spec.serviceName, descriptor).map({
+    descriptorSet.getFileList.iterator.asScala.map(
+      fdp => FileDescriptor.buildFrom(fdp, DescriptorDependencies, true)
+    ).map(
+      descriptor => extractService(spec.serviceName, descriptor).map(
                       service =>
                        compileProxy(stateManager, proxyParallelism, relayTimeout, service) orElse
                        Reflection.serve(descriptor) orElse
                        NotFound
-                    })
-    }).collectFirst({ case Some(route) => route })
-      .getOrElse(throw new Exception(s"Service ${spec.serviceName} not found in descriptors!"))
+                    )
+    ).collectFirst({ case Some(route) => route })
+     .getOrElse(throw new Exception(s"Service ${spec.serviceName} not found in descriptors!"))
   }
 
   private[this] final def compileProxy(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
