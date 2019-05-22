@@ -131,13 +131,6 @@ object Serve {
     }
   }
 
-  private final class gRPCMethod private[this](
-    final val name: String,
-    final val unmarshaller: ProtobufSerializer[Command],
-    final val marshaller: ProtobufSerializer[ProtobufByteString]) {
-    def this(method: MethodDescriptor) = this(method.getName, new CommandSerializer(method.getName, method.getInputType), ReplySerializer)
-  }
-
   private[this] final def extractService(serviceName: String, descriptor: FileDescriptor): Option[ServiceDescriptor] = {
     val (pkg, name) = Names.splitPrev(serviceName)
     Some(descriptor).filter(_.getPackage == pkg).map(_.findServiceByName(name))
@@ -160,7 +153,9 @@ object Serve {
 
   private[this] final def compileProxy(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val serviceName = serviceDesc.getFullName
-    val rpcs = serviceDesc.getMethods.iterator.asScala.map(d => (Path / serviceName / d.getName, new gRPCMethod(d))).toMap
+    val rpcMethodSerializers = serviceDesc.getMethods.iterator.asScala.map(
+      d => (Path / serviceName / d.getName, new CommandSerializer(d.getName, d.getInputType))
+    ).toMap
     val mapRequestFailureExceptions: (ActorSystem => PartialFunction[Throwable, Status]) = {
       val pf: PartialFunction[Throwable, Status] = {
         case CommandFailure(msg) => Status.UNKNOWN.augmentDescription(msg)
@@ -168,13 +163,12 @@ object Serve {
       _ => pf
     }
 
-    { case req: HttpRequest if rpcs.contains(req.uri.path) =>
+    { case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
         implicit val askTimeout = relayTimeout
         val responseCodec = Codecs.negotiate(req)
-        val rpc = rpcs(req.uri.path)
-        unmarshalStream(req)(rpc.unmarshaller, mat).
+        unmarshalStream(req)(rpcMethodSerializers(req.uri.path), mat).
           map(_.mapAsync(proxyParallelism)(command => (stateManager ? command).mapTo[ProtobufByteString])).
-          map(e => marshalStream(e, mapRequestFailureExceptions)(rpc.marshaller, mat, responseCodec, sys)).
+          map(e => marshalStream(e, mapRequestFailureExceptions)(ReplySerializer, mat, responseCodec, sys)).
           recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
     }
   }
