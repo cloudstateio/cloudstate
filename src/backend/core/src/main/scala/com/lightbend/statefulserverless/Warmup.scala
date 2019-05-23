@@ -16,7 +16,7 @@ class Warmup extends Actor with ActorLogging {
   log.debug("Starting warmup...")
 
   private val stateManager = context.watch(context.actorOf(StateManager.props(
-    Configuration("###warmup", 30.seconds, 100), "###warmup-entity", self
+    Configuration("###warmup", 30.seconds, 100), "###warmup-entity", self, self
   ), "entity"))
 
   stateManager ! Command(
@@ -26,6 +26,7 @@ class Warmup extends Actor with ActorLogging {
   )
 
   override def receive: Receive = {
+    case ConcurrencyEnforcer.Action(_, _, start) => start()
     case EntityStreamIn(EntityStreamIn.Message.Event(_)) =>
       // Ignore
     case EntityStreamIn(EntityStreamIn.Message.Init(_)) =>
@@ -45,7 +46,7 @@ class Warmup extends Actor with ActorLogging {
       log.info("Warmup complete")
       context.stop(self)
     case _ =>
-      // The state manager will send a success message to the relay to shut it down when it's told to stop
+      // There are a few other messages we'll receive that we don't care about
   }
 
   override def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy

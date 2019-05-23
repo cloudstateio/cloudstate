@@ -71,4 +71,6 @@ object OperatorConstants {
 
   val AkkaManagementPort = 8558
   val AkkaRemotingPort = 2552
+  val MetricsPort = 9090
+  val MetricsPortName = "queue-metrics"
 }

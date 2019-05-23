@@ -29,6 +29,8 @@ import akka.grpc.GrpcClientSettings
 import com.typesafe.config.Config
 import com.lightbend.statefulserverless.grpc._
 import com.google.protobuf.empty.Empty
+import com.lightbend.statefulserverless.ConcurrencyEnforcer.ConcurrencyEnforcerSettings
+import com.lightbend.statefulserverless.StatsCollector.StatsCollectorSettings
 
 import scala.concurrent.duration._
 
@@ -43,7 +45,10 @@ object ServerManager {
     gracefulTerminationTimeout: Timeout,
     passivationTimeout: Timeout,
     numberOfShards: Int,
-    proxyParallelism: Int) {
+    proxyParallelism: Int,
+    concurrencySettings: ConcurrencyEnforcerSettings,
+    statsCollectorSettings: StatsCollectorSettings
+  ) {
     validate()
     def this(config: Config) = {
       this(
@@ -56,7 +61,13 @@ object ServerManager {
         gracefulTerminationTimeout = Timeout(config.getDuration("graceful-termination-timeout").toMillis.millis),
         passivationTimeout         = Timeout(config.getDuration("passivation-timeout").toMillis.millis),
         numberOfShards             = config.getInt("number-of-shards"),
-        proxyParallelism           = config.getInt("proxy-parallelism")
+        proxyParallelism           = config.getInt("proxy-parallelism"),
+        concurrencySettings        = ConcurrencyEnforcerSettings(
+          concurrency   = config.getInt("container-concurrency"),
+          actionTimeout = config.getDuration("action-timeout").toMillis.millis,
+          cleanupPeriod = config.getDuration("action-timeout-poll-period").toMillis.millis
+        ),
+        statsCollectorSettings     = new StatsCollectorSettings(config.getConfig("stats"))
       )
     }
 
@@ -79,6 +90,8 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
 
   private[this] final val clientSettings = GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
   private[this] final val client         = EntityClient(clientSettings)
+  private[this] final val statsCollector = context.actorOf(StatsCollector.props(config.statsCollectorSettings), "stats-collector")
+  private[this] final val concurrencyEnforcer = context.actorOf(ConcurrencyEnforcer.props(config.concurrencySettings, statsCollector), "concurrency-enforcer")
 
   client.ready(Empty.of()) pipeTo self
 
@@ -90,9 +103,9 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
       log.debug("Starting StateManager for {}", reply.persistenceId)
       val stateManager = context.watch(ClusterSharding(system).start(
         typeName = reply.persistenceId,
-        entityProps = StateManagerSupervisor.props(client, stateManagerConfig),
+        entityProps = StateManagerSupervisor.props(client, stateManagerConfig, concurrencyEnforcer),
         settings = ClusterShardingSettings(system),
-        messageExtractor = new Serve.CommandMessageExtractor(config.numberOfShards)))
+        messageExtractor = new Serve.RequestMessageExtractor(config.numberOfShards)))
 
       log.debug("Creating gRPC proxy for {}", reply.persistenceId)
 

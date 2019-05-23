@@ -5,6 +5,7 @@ import akka.grpc.GrpcClientSettings
 import akka.stream.ActorMaterializer
 import com.example.shoppingcart.{AddLineItem, GetShoppingCart, RemoveLineItem, ShoppingCartClient}
 
+import scala.concurrent.Future
 import scala.util.{Failure, Random, Success}
 
 object GenerateLoad extends App {
@@ -20,8 +21,8 @@ object GenerateLoad extends App {
     "8" -> "Coke"
   )
 
-  val users = (1 to 10).toSeq
-  val NumClients = 20
+  val users = (1 to 100).toSeq
+  val NumClients = 100
 
   private implicit val system = ActorSystem()
   private implicit val materializer = ActorMaterializer()
@@ -34,12 +35,14 @@ object GenerateLoad extends App {
     val user = "user" + users(Random.nextInt(users.size))
     client.getCart(GetShoppingCart(user)).flatMap { cart =>
       println("Got cart for " + user + " which has " + cart.items.size + " items.")
-      val add = cart.items.isEmpty || Random.nextDouble() > 0.1
-      if (add) {
-        val (id, name) = products(Random.nextInt(products.size))
-        client.addItem(AddLineItem(user, id, name, Random.nextInt(10) + 1))
-      } else {
-        client.removeItem(RemoveLineItem(user, cart.items(Random.nextInt(cart.items.size)).productId))
+      Random.nextDouble() match {
+        case delete if cart.items.nonEmpty && delete < 0.001 =>
+          client.removeItem(RemoveLineItem(user, cart.items(Random.nextInt(cart.items.size)).productId))
+        case add if add < 0.01 =>
+          val (id, name) = products(Random.nextInt(products.size))
+          client.addItem(AddLineItem(user, id, name, Random.nextInt(10) + 1))
+        case _ =>
+          Future.successful(())
       }
     }
   }

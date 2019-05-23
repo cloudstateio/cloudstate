@@ -26,7 +26,8 @@ import scala.concurrent.duration._
 
 object Client {
   def main(args: Array[String]): Unit = {
-    val client = new Client("127.0.0.1", 9000)
+
+    val client = new Client("35.197.173.27", 80, Some("shopping-cart.default.example.com"))
 
     val userId = "viktor"
     val productId = "1337"

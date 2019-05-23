@@ -18,6 +18,7 @@ val AkkaVersion = "2.5.22"
 val AkkaHttpVersion = "10.1.7"
 val AkkaManagementVersion = "1.0.1"
 val AkkaPersistenceCassandraVersion = "0.93"
+val PrometheusClientVersion = "0.6.0"
 
 def common: Seq[Setting[_]] = Seq(
   headerMappings := headerMappings.value ++ Seq(
@@ -57,13 +58,18 @@ lazy val `backend-core` = (project in file("backend/core"))
     name := "stateful-serverless-backend-core",
     libraryDependencies ++= Seq(
       "com.typesafe.akka"             %% "akka-persistence"                  % AkkaVersion,
+      "com.typesafe.akka"             %% "akka-persistence-query"            % AkkaVersion,
       "com.typesafe.akka"             %% "akka-stream"                       % AkkaVersion,
+      "com.typesafe.akka"             %% "akka-slf4j"                        % AkkaVersion,
       "com.typesafe.akka"             %% "akka-http"                         % AkkaHttpVersion,
       "com.typesafe.akka"             %% "akka-http-spray-json"              % AkkaHttpVersion,
       "com.typesafe.akka"             %% "akka-cluster-sharding"             % AkkaVersion,
       "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
       "com.lightbend.akka.discovery"  %% "akka-discovery-kubernetes-api"     % AkkaManagementVersion,
-      "com.google.protobuf"            % "protobuf-java"                     % "3.5.1" % "protobuf" // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
+      "com.google.protobuf"            % "protobuf-java"                     % "3.5.1" % "protobuf", // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565,
+      "io.prometheus"                  % "simpleclient"                      % PrometheusClientVersion,
+      "io.prometheus"                  % "simpleclient_common"               % PrometheusClientVersion,
+      "ch.qos.logback"                 % "logback-classic"                   % "1.2.3"
     ),
 
     // Akka gRPC adds all protobuf files from the classpath to this, which we don't want because it includes
@@ -121,7 +127,12 @@ lazy val operator = (project in file("operator"))
     name := "stateful-serverless-operator",
     // This is a publishLocal build of this PR https://github.com/doriordan/skuber/pull/268
     libraryDependencies ++= Seq(
-      "io.skuber" %% "skuber" % "2.2.0-jroper-1"
+      "com.typesafe.akka"  %% "akka-stream"     % AkkaVersion,
+      "com.typesafe.akka"  %% "akka-slf4j"      % AkkaVersion,
+      "com.typesafe.akka"  %% "akka-http"       % AkkaHttpVersion,
+      "io.skuber"          %% "skuber"          % "2.2.0-jroper-1",
+      "ch.qos.logback"      % "logback-classic" % "1.2.3"
+
     ),
 
     dockerSettings,

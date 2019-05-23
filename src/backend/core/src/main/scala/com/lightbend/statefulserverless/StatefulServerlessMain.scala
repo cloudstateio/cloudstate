@@ -28,6 +28,7 @@ import akka.stream.ActorMaterializer
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.{Failure, Success}
 
 final class HealthCheckReady(system: ActorSystem) extends (() => Future[Boolean]) {
   private[this] final val timeoutMs = system.settings.config.getConfig("stateful-serverless").getDuration("ready-timeout").toMillis.millis
@@ -49,7 +50,8 @@ object StatefulServerlessMain {
     devMode: Boolean,
     backoffMin: FiniteDuration,
     backoffMax: FiniteDuration,
-    backoffRandomFactor: Double
+    backoffRandomFactor: Double,
+    metricsPort: Int
     ) {
     validate()
     def this(config: Config) = {
@@ -57,7 +59,8 @@ object StatefulServerlessMain {
         devMode             = config.getBoolean("dev-mode-enabled"),
         backoffMin          = config.getDuration("backoff.min").toMillis.millis,
         backoffMax          = config.getDuration("backoff.max").toMillis.millis,
-        backoffRandomFactor = config.getDouble("backoff.random-factor")
+        backoffRandomFactor = config.getDouble("backoff.random-factor"),
+        metricsPort         = config.getInt("metrics-port")
       )
     }
 
@@ -71,6 +74,7 @@ object StatefulServerlessMain {
   def main(args: Array[String]): Unit = {
     implicit val system = ActorSystem("statefulserverless-backend")
     implicit val materializer = ActorMaterializer()
+    import system.dispatcher
 
     val c = system.settings.config.getConfig("stateful-serverless")
     val serverConfig = new ServerManager.Configuration(c)
@@ -83,8 +87,18 @@ object StatefulServerlessMain {
       // In development, we just have a cluster of one, so we join ourself.
       cluster.join(cluster.selfAddress)
     } else {
+      // Start cluster bootstrap
       AkkaManagement(system).start()
       ClusterBootstrap(system).start()
+
+      // Start Prometheus exporter in prod mode
+      new AkkaHttpPrometheusExporter(appConfig.metricsPort).start().onComplete {
+        case Success(binding) =>
+          system.log.info("Prometheus exporter started on {}", binding.localAddress)
+        case Failure(error) =>
+          system.log.error(error, "Error starting Prometheus exporter!")
+          system.terminate()
+      }
     }
 
     // Warmup the StateManager, connect to Cassandra, etc

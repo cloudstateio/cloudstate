@@ -100,7 +100,12 @@ function setup(entity) {
       if (stateDescriptor == null) {
         updateState(entity.initial(entityId));
       }
-      const stateObj = stateDescriptor.decode(anyState.value);
+      // If the state is empty, anyState.value could be null or undefined, handle that
+      let buffer = anyState.value;
+      if (typeof buffer === "undefined") {
+        buffer = new Buffer(0)
+      }
+      const stateObj = stateDescriptor.decode(buffer);
       const behavior = entity.behavior(stateObj);
       callback(behavior, stateObj);
     }
@@ -153,7 +158,11 @@ function setup(entity) {
           const grpcMethod = entity.service.methods[command.name];
 
           // todo maybe reconcile whether the command URL of the Any type matches the gRPC response type
-          const deserCommand = grpcMethod.resolvedRequestType.decode(command.payload.value);
+          let commandBuffer = command.payload.value;
+          if (typeof commandBuffer === "undefined") {
+            commandBuffer = new Buffer(0)
+          }
+          const deserCommand = grpcMethod.resolvedRequestType.decode(commandBuffer);
 
           withBehaviorAndState((behavior, state) => {
 
@@ -285,7 +294,7 @@ function setup(entity) {
           if (entityStreamIn.init.snapshot) {
             const snapshot = entityStreamIn.init.snapshot;
             sequence = snapshot.snapshotSequence;
-            streamDebug("Handling snapshot with type %s at sequence %s", snapshot.snapshot.type_url, sequence);
+            streamDebug("Handling snapshot with type '%s' at sequence %s", snapshot.snapshot.type_url, sequence);
             stateDescriptor = anySupport.lookupDescriptor(snapshot.snapshot);
             anyState = snapshot.snapshot;
           }
@@ -310,6 +319,12 @@ function setup(entity) {
       } catch (err) {
         streamDebug("Error handling message, terminating stream: %o", entityStreamIn);
         console.error(err);
+        call.write({
+          failure: {
+            commandId: 0,
+            description: "Fatal error handling message, check user container logs."
+          }
+        });
         call.end();
       }
 

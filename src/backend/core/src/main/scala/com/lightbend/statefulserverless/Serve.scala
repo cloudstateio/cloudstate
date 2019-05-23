@@ -36,10 +36,14 @@ import com.google.protobuf.empty.{EmptyProto => ProtobufEmptyProto}
 import com.google.protobuf.any.{Any => ProtobufAny, AnyProto => ProtobufAnyProto}
 import com.google.protobuf.Descriptors.{Descriptor, FieldDescriptor, FileDescriptor, MethodDescriptor, ServiceDescriptor}
 import com.google.protobuf.{descriptor => ScalaPBDescriptorProtos}
-import com.lightbend.statefulserverless.grpc._
 import akka.cluster.sharding.ShardRegion.HashCodeMessageExtractor
+import akka.http.scaladsl.model.headers.{ModeledCustomHeader, ModeledCustomHeaderCompanion}
 import com.lightbend.statefulserverless.StateManager.CommandFailure
+import com.lightbend.statefulserverless.grpc.{EntitySpec, EntitykeyProto}
 import io.grpc.Status
+import com.lightbend.statefulserverless.internal.grpc.{GrpcEntityCommand, Request}
+
+import scala.util.Success
 
 
 object Serve {
@@ -55,6 +59,24 @@ object Serve {
 
   private final val NotFound: PartialFunction[HttpRequest, Future[HttpResponse]] = {
     case req: HttpRequest => Future.successful(HttpResponse(StatusCodes.NotFound))
+  }
+
+  private final val ActivatorProxyName = "activator"
+
+  final class KnativeProxyHeader(token: String) extends ModeledCustomHeader[KnativeProxyHeader] {
+    override def renderInRequests = true
+    override def renderInResponses = true
+    override val companion = KnativeProxyHeader
+    override def value: String = token
+
+    /**
+      * Whether the proxy is the Knative activator proxy
+      */
+    def isActivator = value == ActivatorProxyName
+  }
+  object KnativeProxyHeader extends ModeledCustomHeaderCompanion[KnativeProxyHeader] {
+    override val name = "K-Proxy-Request"
+    override def parse(value: String) = Success(new KnativeProxyHeader(value))
   }
 
   private final object ReplySerializer extends ProtobufSerializer[ProtobufByteString] {
@@ -91,7 +113,7 @@ object Serve {
     ScalaPBDescriptorProtos.FieldOptions.fromJavaProto(field.toProto.getOptions).withUnknownFields(fields)
   }
 
-  private final class CommandSerializer(commandName: String, desc: Descriptor) extends ProtobufSerializer[Command] {
+  private final class CommandSerializer(commandName: String, desc: Descriptor) extends ProtobufSerializer[GrpcEntityCommand] {
     private[this] final val commandTypeUrl = AnyTypeUrlHostName + desc.getFullName
     private[this] final val extractId = {
       val fields = desc.getFields.iterator.asScala.
@@ -109,25 +131,21 @@ object Serve {
     }
 
     // Should not be used in practice
-    override final def serialize(command: Command): ByteString = command.payload match {
+    override final def serialize(command: GrpcEntityCommand): ByteString = command.payload match {
       case None => ByteString.empty
       case Some(payload) => ByteString(payload.value.asReadOnlyByteBuffer())
     }
 
-    override final def deserialize(bytes: ByteString): Command = {
-      // Use of named parameters here is important, Command is a generated class and if the
-      // order of fields changes, that could silently break this code
-      // Note, we're not setting the command id. We'll leave it up to the StateManager actor
-      // to generate an id that is unique per session.
-      Command(entityId = extractId(DynamicMessage.parseFrom(desc, bytes.iterator.asInputStream)),
+    override final def deserialize(bytes: ByteString): GrpcEntityCommand = {
+      GrpcEntityCommand(entityId = extractId(DynamicMessage.parseFrom(desc, bytes.iterator.asInputStream)),
               name = commandName,
               payload = Some(ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer))))
     }
   }
 
-  final class CommandMessageExtractor(shards: Int) extends HashCodeMessageExtractor(shards) {
+  final class RequestMessageExtractor(shards: Int) extends HashCodeMessageExtractor(shards) {
     override final def entityId(message: Any): String = message match {
-      case c: Command => c.entityId
+      case c: Request => c.command.fold("")(_.entityId)
     }
   }
 
@@ -167,7 +185,10 @@ object Serve {
         implicit val askTimeout = relayTimeout
         val responseCodec = Codecs.negotiate(req)
         unmarshalStream(req)(rpcMethodSerializers(req.uri.path), mat).
-          map(_.mapAsync(proxyParallelism)(command => (stateManager ? command).mapTo[ProtobufByteString])).
+          map(_.mapAsync(proxyParallelism) { command =>
+            val request = Request(Some(command), req.header[KnativeProxyHeader].exists(_.isActivator))
+            (stateManager ? request).mapTo[ProtobufByteString]
+          }).
           map(e => marshalStream(e, mapRequestFailureExceptions)(ReplySerializer, mat, responseCodec, sys)).
           recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
     }

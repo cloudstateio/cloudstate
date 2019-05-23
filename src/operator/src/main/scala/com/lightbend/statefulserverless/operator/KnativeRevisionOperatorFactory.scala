@@ -34,7 +34,7 @@ import skuber.json.rbac.format._
 class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionContext)
   extends OperatorFactory[KnativeRevision.Status, Resource] {
 
-  private val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "lightbend-docker-registry.bintray.io/octo/stateful-serverless-backend-cassandra:latest")
+  private val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "gcr.io/stateserv/stateful-serverless-backend-cassandra:latest")
 
   import OperatorConstants._
 
@@ -165,6 +165,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
               client.update(desiredWithLabels).map { updated =>
                 if (updated.spec != existing.spec) {
                   println("Updated deployment spec.")
+                  println("Differences were: " + (updated.spec.toString diff existing.spec.toString))
                 }
               }
             } else {
@@ -260,7 +261,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         limits = Map(Resource.memory -> Resource.Quantity("512Mi")),
         requests = Map(
           Resource.memory -> Resource.Quantity("512Mi"),
-          Resource.cpu -> Resource.Quantity("0.25")
+          Resource.cpu -> Resource.Quantity("1")
         )
       ))
 
@@ -272,15 +273,23 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         image = image,
         imagePullPolicy = if (image.endsWith(":latest")) Container.PullPolicy.Always else Container.PullPolicy.IfNotPresent,
         ports = List(
-          Container.Port(containerPort = SidecarH2cPort, name = SidecarPortName)
+          Container.Port(containerPort = SidecarH2cPort, name = SidecarPortName),
+          Container.Port(containerPort = MetricsPort, name = MetricsPortName)
         ),
         env = List(
           EnvVar("HTTP_PORT", SidecarH2cPort.toString),
           EnvVar("USER_FUNCTION_PORT", userPort.toString),
           EnvVar("REMOTING_PORT", AkkaRemotingPort.toString),
           EnvVar("MANAGEMENT_PORT", AkkaManagementPort.toString),
+          EnvVar("METRICS_PORT", MetricsPort.toString),
           EnvVar("SELECTOR_LABEL_VALUE", configuration),
           EnvVar("SELECTOR_LABEL", ConfigurationLabel),
+          EnvVar("CONTAINER_CONCURRENCY", revision.spec.containerConcurrency.getOrElse(1).toString),
+          EnvVar("REVISION_TIMEOUT", revision.spec.timeoutSeconds.getOrElse(10) + "s"),
+          EnvVar("SERVING_NAMESPACE", revision.namespace),
+          EnvVar("SERVING_CONFIGURATION", configuration),
+          EnvVar("SERVING_REVISION", revision.name),
+          EnvVar("SERVING_POD", EnvVar.FieldRef("metadata.name")),
           // todo this should be based on minscale
           EnvVar("REQUIRED_CONTACT_POINT_NR", "1"),
           EnvVar("JAVA_OPTS", s"-Xms$jvmMemory -Xmx$jvmMemory")
@@ -338,7 +347,6 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         terminationMessagePolicy = orig.terminationMessagePolicy
           .orElse(Some(Container.TerminationMessagePolicy.FallbackToLogsOnError))
       )
-      // todo Knative reroutes readiness checks through the proxy, we should potentially do that too?
 
       val podSpec = Pod.Spec(
         containers = List(
@@ -385,6 +393,8 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
             )
           )
         )
+        // Replicas must initially be 1, Knative will verify that the pods come up before it marks the revision ready,
+        // and then it scales back down to zero.
       ).withReplicas(1)
         .withLabelSelector(
           RevisionUidLabel is revision.uid
