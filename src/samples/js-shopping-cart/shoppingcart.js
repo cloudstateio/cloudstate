@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 const Entity = require("stateful-serverless-event-sourcing");
 
 const entity = new Entity(

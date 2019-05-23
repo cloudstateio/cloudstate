@@ -24,7 +24,8 @@ def common: Seq[Setting[_]] = Seq(
   headerMappings := headerMappings.value ++ Seq(
     de.heikoseeberger.sbtheader.FileType("proto") -> HeaderCommentStyle.cppStyleLineComment,
     de.heikoseeberger.sbtheader.FileType("js") -> HeaderCommentStyle.cStyleBlockComment
-  )
+  ),
+  excludeFilter in headerResources := HiddenFileFilter || GlobFilter("reflection.proto")
 )
 
 // Include sources from the npm projects
