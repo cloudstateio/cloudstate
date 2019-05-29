@@ -71,4 +71,4 @@ The [TCK](https://github.com/lightbend/stateful-serverless/blob/master/src/tck/s
 
 ## Docs
 - See the [rationale](RATIONALE.md) document for a more context.
-- Read the current [documentation](docs/README.md) and [spec](SPEC.md). 
+- Read the current [documentation](docs/README.md) and [spec](SPEC.md).  
