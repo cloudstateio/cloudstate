@@ -1,4 +1,4 @@
-# Stateful Serverless With Akka and Knative
+# Polyglot Stateful Serverless With Akka and Knative
 
 ## Scalable Compute needs Scalable State
 
