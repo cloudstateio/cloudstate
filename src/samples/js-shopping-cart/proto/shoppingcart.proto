@@ -3,6 +3,8 @@ syntax = "proto3";
 
 import "google/protobuf/empty.proto";
 import "lightbend/serverless/entitykey.proto";
+import "google/api/annotations.proto";
+import "google/api/http.proto";
 
 package com.example.shoppingcart;
 
@@ -33,9 +35,18 @@ message Cart {
 }
 
 service ShoppingCart {
-    rpc AddItem(AddLineItem) returns (google.protobuf.Empty) {}
+    rpc AddItem(AddLineItem) returns (google.protobuf.Empty) {
+        option (google.api.http) = {
+            post: "/cart/{user_id}/items/add",
+            body: "*",
+        };
+    }
 
-    rpc RemoveItem(RemoveLineItem) returns (google.protobuf.Empty) {}
+    rpc RemoveItem(RemoveLineItem) returns (google.protobuf.Empty) {
+        option (google.api.http).post = "/cart/{user_id}/items/{product_id}/remove";
+    }
 
-    rpc GetCart(GetShoppingCart) returns (Cart) {}
+    rpc GetCart(GetShoppingCart) returns (Cart) {
+        option (google.api.http).get = "/carts/{user_id}";
+    }
 }

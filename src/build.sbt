@@ -12,10 +12,11 @@ organizationName in ThisBuild := "Lightbend Inc."
 startYear in ThisBuild := Some(2019)
 licenses in ThisBuild += ("Apache-2.0", new URL("https://www.apache.org/licenses/LICENSE-2.0.txt"))
 
-val AkkaVersion = "2.5.22"
-val AkkaHttpVersion = "10.1.7"
+val AkkaVersion = "2.5.23"
+val AkkaHttpVersion = "10.1.9-klang" // "10.1.7"
 val AkkaManagementVersion = "1.0.0"
 val AkkaPersistenceCassandraVersion = "0.93"
+val ProtobufVersion = "3.5.1"
 
 def common: Seq[Setting[_]] = Seq(
   headerMappings := headerMappings.value ++ Seq(
@@ -58,10 +59,13 @@ lazy val `backend-core` = (project in file("backend/core"))
       "com.typesafe.akka"             %% "akka-stream"                       % AkkaVersion,
       "com.typesafe.akka"             %% "akka-http"                         % AkkaHttpVersion,
       "com.typesafe.akka"             %% "akka-http-spray-json"              % AkkaHttpVersion,
+      "com.typesafe.akka"             %% "akka-http-core"                    % AkkaHttpVersion,
+      "com.typesafe.akka"             %% "akka-http2-support"                % AkkaHttpVersion,
       "com.typesafe.akka"             %% "akka-cluster-sharding"             % AkkaVersion,
       "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
       "com.lightbend.akka.discovery"  %% "akka-discovery-kubernetes-api"     % AkkaManagementVersion,
-      "com.google.protobuf"            % "protobuf-java"                     % "3.5.1" % "protobuf" // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
+      "com.google.protobuf"            % "protobuf-java"                     % ProtobufVersion % "protobuf", // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
+      "com.google.protobuf"            % "protobuf-java-util"                % ProtobufVersion
     ),
 
     // Akka gRPC adds all protobuf files from the classpath to this, which we don't want because it includes
@@ -146,7 +150,7 @@ lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"
       "com.typesafe.akka"  %% "akka-stream"          % AkkaVersion,
       "com.typesafe.akka"  %% "akka-http"            % AkkaHttpVersion,
       "com.typesafe.akka"  %% "akka-http-spray-json" % AkkaHttpVersion,
-      "com.google.protobuf" % "protobuf-java"        % "3.5.1" % "protobuf" // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
+      "com.google.protobuf" % "protobuf-java"        % ProtobufVersion % "protobuf" // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
     ),
 
     target in copyShoppingCartProtos := target.value / "js-shopping-cart-protos",
@@ -183,7 +187,7 @@ lazy val `tck` = (project in file("tck"))
       "com.typesafe.akka"  %% "akka-stream"          % AkkaVersion,
       "com.typesafe.akka"  %% "akka-http"            % AkkaHttpVersion,
       "com.typesafe.akka"  %% "akka-http-spray-json" % AkkaHttpVersion,
-      "com.google.protobuf" % "protobuf-java"        % "3.5.1" % "protobuf", // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
+      "com.google.protobuf" % "protobuf-java"        % ProtobufVersion % "protobuf", // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
       "org.scalatest"       % "scalatest_2.12"       % "3.0.5",
       "com.typesafe.akka"  %% "akka-testkit"         % AkkaVersion
     ),
