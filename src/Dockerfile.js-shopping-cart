@@ -1,18 +1,17 @@
 FROM node:8.15
 
-# install deps
-run mkdir -p /tmp/samples/js-shopping-cart
-ADD samples/js-shopping-cart/package.json /tmp/samples/js-shopping-cart/package.json
-COPY ./node-support /tmp/node-support
-RUN cd /tmp/samples/js-shopping-cart && npm install
+# Copy and install deps. This is done as a separate step as an optimization, so changes to the programs files
+# don't require the npm install to be redone
+RUN mkdir -p /opt/samples/js-shopping-cart
+COPY node-support /opt/node-support
+COPY samples/js-shopping-cart/package.json /opt/samples/js-shopping-cart/
+RUN cd /opt/node-support && npm install && cd /opt/samples/js-shopping-cart && npm install
 
-# Copy deps
-RUN mkdir -p /opt/samples/js-shopping-cart && cp -a /tmp/samples/js-shopping-cart/node_modules /opt/samples/js-shopping-cart && cp -a /tmp/node-support /opt
-
-# Setup workdir
-WORKDIR /opt/samples/js-shopping-cart
+# Now copy the entire app
 COPY samples/js-shopping-cart /opt/samples/js-shopping-cart
+WORKDIR /opt/samples/js-shopping-cart
+RUN npm run prestart
 
 # run
 EXPOSE 8080
-CMD ["npm", "start"]
+CMD ["npm", "run", "start-no-prestart"]

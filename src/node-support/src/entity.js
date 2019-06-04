@@ -26,7 +26,7 @@ const AnySupport = require("./protobuf-any");
 
 const includeDirs = [
   path.join(__dirname, "..", "proto"),
-  path.join(__dirname, "..", "proto-ext")
+  path.join(__dirname, "..", "protoc", "include")
 ];
 const packageDefinition = protoLoader.loadSync("lightbend/serverless/entity.proto", {
   includeDirs: includeDirs
@@ -358,7 +358,7 @@ module.exports = class Entity {
 
     const allIncludeDirs = [
       path.resolve(__dirname, "..", "proto"),
-      path.resolve(__dirname, "..", "proto-ext")
+      path.resolve(__dirname, "..", "protoc", "include")
     ].concat(this.options.includeDirs);
 
     this.root = new protobuf.Root();

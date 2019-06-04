@@ -261,7 +261,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         limits = Map(Resource.memory -> Resource.Quantity("512Mi")),
         requests = Map(
           Resource.memory -> Resource.Quantity("512Mi"),
-          Resource.cpu -> Resource.Quantity("1")
+          Resource.cpu -> Resource.Quantity("1.0")
         )
       ))
 

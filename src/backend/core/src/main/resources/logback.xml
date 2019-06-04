@@ -5,6 +5,8 @@
         </encoder>
     </appender>
 
+    <logger name="com.lightbend.statefulserverless" level="DEBUG"/>
+
     <root level="info">
         <appender-ref ref="STDOUT" />
     </root>

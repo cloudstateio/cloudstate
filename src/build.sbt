@@ -187,6 +187,16 @@ lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"
     }
   )
 
+lazy val `load-generator` = (project in file("samples/js-shopping-cart-load-generator"))
+  .enablePlugins(JavaAppPackaging, DockerPlugin)
+  .dependsOn(`akka-client`)
+  .settings(
+    common,
+    name := "js-shopping-cart-load-generator",
+    dockerSettings,
+    dockerExposedPorts := Nil
+  )
+
 val copyProtocolProtosToTCK = taskKey[File]("Copy the protocol files to the tck")
 
 lazy val `tck` = (project in file("tck"))

@@ -20,9 +20,8 @@ import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import akka.grpc.scaladsl.{GrpcExceptionHandler, GrpcMarshalling}
 import GrpcMarshalling.{marshalStream, unmarshalStream}
-import akka.grpc.{Codecs, ProtobufSerializer, GrpcServiceException}
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes}
-import akka.http.scaladsl.model.Uri
+import akka.grpc.{Codecs, GrpcServiceException, ProtobufSerializer}
+import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.Uri.Path.Segment
 import akka.actor.{ActorRef, ActorSystem}
@@ -34,7 +33,7 @@ import akka.stream.scaladsl.{Flow, Sink}
 import com.google.protobuf.{DescriptorProtos, DynamicMessage, ByteString => ProtobufByteString}
 import com.google.protobuf.empty.{EmptyProto => ProtobufEmptyProto}
 import com.google.protobuf.any.{Any => ProtobufAny, AnyProto => ProtobufAnyProto}
-import com.google.protobuf.Descriptors.{Descriptor, FieldDescriptor, FileDescriptor, MethodDescriptor, ServiceDescriptor}
+import com.google.protobuf.Descriptors._
 import com.google.protobuf.{descriptor => ScalaPBDescriptorProtos}
 import akka.cluster.sharding.ShardRegion.HashCodeMessageExtractor
 import akka.http.scaladsl.model.headers.{ModeledCustomHeader, ModeledCustomHeaderCompanion}
@@ -42,11 +41,13 @@ import com.lightbend.statefulserverless.StateManager.CommandFailure
 import com.lightbend.statefulserverless.grpc.{EntitySpec, EntitykeyProto}
 import io.grpc.Status
 import com.lightbend.statefulserverless.internal.grpc.{GrpcEntityCommand, Request}
+import org.slf4j.LoggerFactory
 
-import scala.util.Success
+import scala.util.{Failure, Success}
 
 
 object Serve {
+  private final val log = LoggerFactory.getLogger(getClass)
   // When the entity key is made up of multiple fields, this is used to separate them
   private final val EntityKeyValueSeparator = "-"
   private final val AnyTypeUrlHostName = "type.googleapis.com/"
@@ -58,7 +59,9 @@ object Serve {
   )
 
   private final val NotFound: PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    case req: HttpRequest => Future.successful(HttpResponse(StatusCodes.NotFound))
+    case req: HttpRequest =>
+      log.debug("Not found request: " + req.getUri())
+      Future.successful(HttpResponse(StatusCodes.NotFound))
   }
 
   private final val ActivatorProxyName = "activator"
@@ -159,14 +162,23 @@ object Serve {
     descriptorSet.getFileList.iterator.asScala.map(
       fdp => FileDescriptor.buildFrom(fdp, DescriptorDependencies, true)
     ).map(
-      descriptor => extractService(spec.serviceName, descriptor).map(
-                      service =>
+      descriptor => extractService(spec.serviceName, descriptor).map( service =>
                        compileProxy(stateManager, proxyParallelism, relayTimeout, service) orElse
+                       handleNetworkProbe() orElse
                        Reflection.serve(descriptor) orElse
                        NotFound
                     )
     ).collectFirst({ case Some(route) => route })
      .getOrElse(throw new Exception(s"Service ${spec.serviceName} not found in descriptors!"))
+  }
+
+  def handleNetworkProbe(): PartialFunction[HttpRequest, Future[HttpResponse]] = Function.unlift { req =>
+    req.headers.find(_.name.equalsIgnoreCase("K-Network-Probe")).map { header =>
+      Future.successful(header.value match {
+        case "queue" => HttpResponse(entity = HttpEntity("queue"))
+        case other => HttpResponse(status = StatusCodes.BadRequest, entity = HttpEntity(s"unexpected probe header value: $other"))
+      })
+    }
   }
 
   private[this] final def compileProxy(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {

@@ -149,9 +149,9 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
   private[this] final def commandHandled(): Unit = {
     currentRequest = null
     if (stashedRequests.nonEmpty) {
-      val (command, newStashedCommands) = stashedRequests.dequeue
+      val ((request, sender), newStashedCommands) = stashedRequests.dequeue
       stashedRequests = newStashedCommands
-      receiveCommand(command)
+      handleCommand(request, sender)
     } else if (stopped) {
       context.stop(self)
     }
@@ -178,24 +178,29 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
     currentActionId = null
   }
 
+  private[this] final def handleCommand(request: Request, sender: ActorRef): Unit = {
+    val Request(Some(GrpcEntityCommand(_, name, payload)), isProxied) = request
+    idCounter += 1
+    currentActionId = actorId + ":" + entityId + ":" + idCounter
+    val command = Command(
+      entityId = entityId,
+      id = idCounter,
+      name = name,
+      payload = payload
+    )
+    currentRequest = StateManager.OutstandingRequest(idCounter, sender)
+    concurrencyEnforcer ! Action(currentActionId, isProxied, () => {
+      relay ! EntityStreamIn(ESIMsg.Command(command))
+    })
+  }
+
   override final def receiveCommand: PartialFunction[Any, Unit] = {
 
     case r: Request if currentRequest != null =>
       stashedRequests = stashedRequests.enqueue((r, sender()))
 
-    case Request(Some(GrpcEntityCommand(_, name, payload)), isProxied) =>
-      idCounter += 1
-      currentActionId = actorId + ":" + entityId + ":" + idCounter
-      val command = Command(
-        entityId = entityId,
-        id = idCounter,
-        name = name,
-        payload = payload
-      )
-      currentRequest = StateManager.OutstandingRequest(idCounter, sender())
-      concurrencyEnforcer ! Action(currentActionId, isProxied, () => {
-        relay ! EntityStreamIn(ESIMsg.Command(command))
-      })
+    case r: Request =>
+      handleCommand(r, sender())
 
     case EntityStreamOut(m) =>
 

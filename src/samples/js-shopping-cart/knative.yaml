@@ -13,9 +13,6 @@ spec:
         ports:
         - name: h2c
           containerPort: 8080
-        env:
-        - name: DEBUG
-          value: stateserve-event-sourcing
       deployer:
         name: EventSourced
         config:

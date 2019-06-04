@@ -16,7 +16,7 @@
 
 package com.lightbend.statefulserverless
 
-import akka.actor.{Actor, DeadLetterSuppression, Props, Timers}
+import akka.actor.{Actor, ActorLogging, DeadLetterSuppression, Props, Timers}
 import com.lightbend.statefulserverless.StatsCollector.StatsCollectorSettings
 import com.typesafe.config.Config
 import io.prometheus.client.Gauge
@@ -95,7 +95,7 @@ object StatsCollector {
   }
 }
 
-class StatsCollector(settings: StatsCollectorSettings) extends Actor with Timers {
+class StatsCollector(settings: StatsCollectorSettings) extends Actor with Timers with ActorLogging {
 
   import StatsCollector._
 
@@ -187,10 +187,9 @@ class StatsCollector(settings: StatsCollectorSettings) extends Actor with Timers
       updateState()
       val reportPeriodSeconds = Math.max(currentTime - lastReportedMillis, 1).asInstanceOf[Double] / 1000
 
-      // fixme * 50 for debugging purposes only
-      val avgConcurrency = weightedAverage(timeNanosOnConcurrency) * 50
-      val avgProxiedConcurrency = weightedAverage(timeNanosOnProxiedConcurrency) * 50
-      println(s"Reporting concurrency of $avgConcurrency with $requestCount requests and current concurrency of $concurrency")
+      val avgConcurrency = weightedAverage(timeNanosOnConcurrency)
+      val avgProxiedConcurrency = weightedAverage(timeNanosOnProxiedConcurrency)
+      log.debug(s"Reporting concurrency of $avgConcurrency with $requestCount requests and current concurrency of $concurrency")
       operationsPerSecondGauge.set(requestCount.asInstanceOf[Double] / reportPeriodSeconds)
       proxiedOperationsPerSecondGauge.set(proxiedCount / reportPeriodSeconds)
       averageConcurrentRequestsGauge.set(avgConcurrency)

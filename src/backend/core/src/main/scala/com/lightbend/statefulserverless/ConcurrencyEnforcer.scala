@@ -79,7 +79,7 @@ class ConcurrencyEnforcer(settings: ConcurrencyEnforcerSettings, statsCollector:
 
     case a: Action =>
       reportCommand(a)
-      queue.enqueue(a)
+      queue = queue.enqueue(a)
 
     case ActionCompleted(id) =>
       if (outstanding.contains(id)) {
@@ -113,8 +113,8 @@ class ConcurrencyEnforcer(settings: ConcurrencyEnforcerSettings, statsCollector:
     outstanding -= id
     if (queue.nonEmpty) {
       val (action, newQueue) = queue.dequeue
-      startAction(action)
       queue = newQueue
+      startAction(action)
     }
   }
 
@@ -122,7 +122,7 @@ class ConcurrencyEnforcer(settings: ConcurrencyEnforcerSettings, statsCollector:
     if (outstanding.contains(action.id)) {
       log.warning("Action {} already outstanding?", action.id)
     }
-    action.start()
     outstanding += (action.id -> OutstandingAction(action.isProxied, settings.actionTimeout.fromNow))
+    action.start()
   }
 }

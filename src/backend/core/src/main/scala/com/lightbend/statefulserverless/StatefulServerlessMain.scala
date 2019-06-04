@@ -25,18 +25,23 @@ import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
 import akka.pattern.{BackoffOpts, BackoffSupervisor}
 import akka.stream.ActorMaterializer
+import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
 final class HealthCheckReady(system: ActorSystem) extends (() => Future[Boolean]) {
+  private[this] final val log = LoggerFactory.getLogger(getClass)
   private[this] final val timeoutMs = system.settings.config.getConfig("stateful-serverless").getDuration("ready-timeout").toMillis.millis
   private[this] final implicit val ec = system.dispatcher
   private[this] final val selection = system.actorSelection("/user/server-manager-supervisor/server-manager")
   private[this] final implicit val timeout = Timeout(timeoutMs)
   override final def apply(): Future[Boolean] =
-    selection.resolveOne().map(_ ? ServerManager.Ready).mapTo[Boolean].recover({ case _ => false})
+    selection.resolveOne().flatMap(_ ? ServerManager.Ready).mapTo[Boolean].recover { case e =>
+        log.debug("Error performing readiness check", e)
+        false
+    }
 }
 
 final class HealthCheckLive(system: ActorSystem) extends (() => Future[Boolean]) {
