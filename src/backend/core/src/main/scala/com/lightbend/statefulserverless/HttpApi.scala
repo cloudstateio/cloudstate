@@ -19,6 +19,7 @@ package com.lightbend.statefulserverless
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Success, Failure}
 import akka.ConfigurationException
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse, HttpEntity, ContentTypes, HttpMethod, HttpMethods, RequestEntityAcceptance, IllegalRequestException, StatusCodes}
 import akka.http.scaladsl.model.Uri
@@ -31,13 +32,15 @@ import akka.pattern.ask
 import akka.stream.Materializer
 import akka.parboiled2.util.Base64
 import com.google.api.{AnnotationsProto, CustomHttpPattern, HttpRule, HttpProto}
-import com.google.protobuf.{DescriptorProtos, DynamicMessage, ByteString => ProtobufByteString}
-import com.google.protobuf.Descriptors.{Descriptor, FieldDescriptor, FileDescriptor, MethodDescriptor, ServiceDescriptor}
+import com.google.protobuf.{DescriptorProtos, DynamicMessage, ByteString => ProtobufByteString, MessageOrBuilder}
+import com.google.protobuf.Descriptors.{Descriptor, EnumValueDescriptor, FieldDescriptor, FileDescriptor, MethodDescriptor, ServiceDescriptor}
 import com.google.protobuf.{descriptor => ScalaPBDescriptorProtos}
 import com.google.protobuf.any.{Any => ProtobufAny}
 import com.google.protobuf.util.JsonFormat
 import com.google.protobuf.Descriptors.FieldDescriptor.JavaType
 import com.lightbend.statefulserverless.grpc._
+import java.lang.{Short => JShort, Integer => JInteger, Long => JLong, Boolean => JBoolean, Float => JFloat, Double => JDouble}
+import com.google.protobuf.{Value, ListValue, EnumValue, Struct}
 
 // References:
 // https://cloud.google.com/endpoints/docs/grpc-service-config/reference/rpc/google.api#httprule
@@ -45,8 +48,6 @@ import com.lightbend.statefulserverless.grpc._
 // https://github.com/googleapis/googleapis/blob/master/google/api/annotations.proto
 object HttpApi {
   object PathExtractors {
-    import java.lang.{Short => JShort, Integer => JInteger, Long => JLong, Boolean => JBoolean, Float => JFloat, Double => JDouble}
-
     final val ShortX: String => Option[JShort] =
       s => try Option(JShort.valueOf(s)) catch { case _: NumberFormatException => None }
 
@@ -92,6 +93,8 @@ object HttpApi {
 
   private final val configError: String => Nothing = s => throw new ConfigurationException("HTTP API Config: " + s)
   private final val requestError: String => Nothing = s => throw IllegalRequestException(StatusCodes.BadRequest, s)
+  // This is so that we can reuse path comparisons for path value extraction
+  private final val nofx: (Option[Any], FieldDescriptor) => Unit = (_,_) => ()
 
   // This is used to support the "*" custom pattern
   final val ANY_METHOD = HttpMethod.custom(name = "ANY",
@@ -99,16 +102,13 @@ object HttpApi {
                                            idempotent = false,
                                            requestEntityAcceptance = RequestEntityAcceptance.Tolerated)
 
-  // This is so that we can reuse path comparisons for path value extraction
-  val nofx: (Option[Any], FieldDescriptor) => Unit = (_,_) => ()
-
   final class HttpEndpoint(final val methDesc: MethodDescriptor,
                            final val rule: HttpRule,
                            final val stateManager: ActorRef,
                            final val relayTimeout: Timeout)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext) extends PartialFunction[HttpRequest, Future[HttpResponse]] {
     final val log = Logging(sys, rule.pattern.toString) // TODO use other name?
 
-    final val (methodPattern, urlPattern, bodyDescriptor) = extractAndValidate()
+    final val (methodPattern, urlPattern, bodyDescriptor, responseBodyDescriptor) = extractAndValidate()
 
     final val idExtractor = Serve.createEntityIdExtractorFor(methDesc.getInputType)
 
@@ -128,12 +128,12 @@ object HttpApi {
                                         add(methDesc.getOutputType).
                                         build()).
                       includingDefaultValueFields()
-                      //printingEnumsAsInts()
-                      //preservingProtoFieldNames().
+                      //printingEnumsAsInts() // If you enable this, you need to fix the output for responseBody as well
+                      //preservingProtoFieldNames(). // If you enable this, you need to fix the output for responseBody structs as well
                       //omittingInsignificantWhitespace().
                       //sortingMapKeys().
 
-    def extractAndValidate(): (HttpMethod, Path, Descriptor) = {
+    def extractAndValidate(): (HttpMethod, Path, Descriptor, Option[FieldDescriptor]) = {
       // Validate selector
       if (rule.selector != "" && rule.selector != methDesc.getFullName)
         configError(s"Rule selector [${rule.selector}] must be empty or [${methDesc.getFullName}]")
@@ -207,12 +207,17 @@ object HttpApi {
         }
 
       // Validate response body value
-      rule.responseBody match {
-        case "" => methDesc.getOutputType
-        case fieldName => configError("Response body functionality not supported yet, please remove [$fieldName]")
-      }
+      val rd =
+        rule.responseBody match {
+          case "" => Option.empty[FieldDescriptor]
+          case fieldName =>
+            lookupFieldByName(methDesc.getOutputType, fieldName) match {
+              case null => configError("Response body field [$fieldName] does not exist on type [${methDesc.getOutputType.getFullName}]")
+              case field => Some(field)
+            }
+        }
 
-      (mp, up, bd)
+      (mp, up, bd, rd)
     }
 
     def pathMatches(patPath: Path, reqPath: Path, effect: (Option[Any], FieldDescriptor) => Unit): Boolean =
@@ -220,7 +225,7 @@ object HttpApi {
       else if (patPath.isEmpty || reqPath.isEmpty) false
       else {
         if(log.isDebugEnabled)
-          log.debug((if (effect eq nofx) "Matching: " else "Extracting: ") + patPath.head + " " + reqPath.head) // DEBUG
+          log.debug((if (effect eq nofx) "Matching: " else "Extracting: ") + patPath.head + " " + reqPath.head)
         val segmentMatch = (patPath.head, reqPath.head) match {
           case ('/', '/') => true
           case (vbl: String, seg: String) if !vbl.isEmpty && vbl.head == '{' && vbl.last == '}' =>
@@ -334,16 +339,55 @@ object HttpApi {
 
     def sendCommand(command: Command): Future[DynamicMessage] = {
       implicit val askTimeout = relayTimeout
-      (stateManager ? command).mapTo[ProtobufByteString].map {
-        bytes =>
+      (stateManager ? command).mapTo[ProtobufByteString].transform({
+        case Success(bytes) =>
           val response = DynamicMessage.parseFrom(methDesc.getOutputType, bytes)
           debugMsg(response, "Got response")
-          response
-      }
+          Success(response)
+        case Failure(cf: StateManager.CommandFailure) => requestError(cf.getMessage) // TODO Should we handle CommandFailures like this?
+        case Failure(t) => Failure(t)
+      })
+    }
+
+    // FIXME Devise other way of supporting responseBody, this is waaay too costly and unproven
+    def responseBody(jType: JavaType, value: AnyRef, repeated: Boolean): com.google.protobuf.Value = {
+      val result =
+        if (repeated) {
+          Value.newBuilder.setListValue(
+            ListValue.
+              newBuilder.
+              addAllValues(
+                value.asInstanceOf[java.lang.Iterable[AnyRef]].asScala.map(v => responseBody(jType, v, false)).asJava
+              )
+          )
+        } else {
+          jType match {
+            case JavaType.BOOLEAN     => Value.newBuilder.setBoolValue(value.asInstanceOf[JBoolean])
+            case JavaType.BYTE_STRING => Value.newBuilder.setStringValueBytes(value.asInstanceOf[ProtobufByteString])
+            case JavaType.DOUBLE      => Value.newBuilder.setNumberValue(value.asInstanceOf[JDouble])
+            case JavaType.ENUM        => Value.newBuilder.setStringValue(value.asInstanceOf[EnumValueDescriptor].getName) // Switch to getNumber if enabling printingEnumsAsInts in the JSON Printer
+            case JavaType.FLOAT       => Value.newBuilder.setNumberValue(value.asInstanceOf[JFloat].toDouble)
+            case JavaType.INT         => Value.newBuilder.setNumberValue(value.asInstanceOf[JInteger].toDouble)
+            case JavaType.LONG        => Value.newBuilder.setNumberValue(value.asInstanceOf[JLong].toDouble)
+            case JavaType.MESSAGE     =>
+              val b = Struct.newBuilder
+              value.asInstanceOf[MessageOrBuilder].getAllFields.forEach(
+                (k,v) => b.putFields(k.getJsonName, responseBody(k.getJavaType, v, k.isRepeated)) //Switch to getName if enabling preservingProtoFieldNames in the JSON Printer
+              )
+              Value.newBuilder.setStructValue(b)
+            case JavaType.STRING      => Value.newBuilder.setStringValue(value.asInstanceOf[String])
+          }
+        }
+      result.build()
     }
 
     def createResponse(response: DynamicMessage): HttpResponse = {
-      HttpResponse(200, entity = HttpEntity(ContentTypes.`application/json`, jsonPrinter.print(response)))
+      val output =
+        responseBodyDescriptor match {
+          case None        => response
+          case Some(field) => responseBody(field.getJavaType, response.getField(field), field.isRepeated)
+        }
+      HttpResponse(200, entity = HttpEntity(ContentTypes.`application/json`, jsonPrinter.print(output)))
     }
   }
 
@@ -374,9 +418,9 @@ object HttpApi {
               rule
             case None =>
               val rule = HttpRule.of(selector = method.getFullName, // We know what thing we are proxying
-                                 body = "*",        // Parse all input
-                                 responseBody = "", // Include all output
-                                 additionalBindings = Nil, // No need for additional bindings
+                                 body = "*",                        // Parse all input
+                                 responseBody = "",                 // Include all output
+                                 additionalBindings = Nil,          // No need for additional bindings
                                  pattern = HttpRule.Pattern.Post((Path / "v1" / method.getName).toString))
               log.info(s"Generating HTTP API endpoint using rule [$rule]")
               rule
