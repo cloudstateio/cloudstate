@@ -384,8 +384,13 @@ object HttpApi {
     def createResponse(response: DynamicMessage): HttpResponse = {
       val output =
         responseBodyDescriptor match {
-          case None        => response
-          case Some(field) => responseBody(field.getJavaType, response.getField(field), field.isRepeated)
+          case None        =>
+            response
+          case Some(field) =>
+            response.getField(field) match {
+              case m: MessageOrBuilder if !field.isRepeated => m // No need to wrap this
+              case value => responseBody(field.getJavaType, value, field.isRepeated)
+            }
         }
       HttpResponse(200, entity = HttpEntity(ContentTypes.`application/json`, jsonPrinter.print(output)))
     }
