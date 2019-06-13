@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: js-shopping-cart-load-generator
 spec:
-  replicas: 6
+  replicas: 1
   strategy:
     type: Recreate
   selector:
@@ -22,9 +22,11 @@ spec:
 
         env:
         - name: NUM_USERS
+          value: "100"
+        - name: REQUEST_RATE_PER_S
           value: "200"
-        - name: NUM_CLIENTS
-          value: "10"
+        - name: RAMP_UP_S
+          value: "20"
         - name: SHOPPING_CART_SERVICE
           value: "shopping-cart.default.svc.cluster.local"
         - name: SHOPPING_CART_SERVICE_PORT

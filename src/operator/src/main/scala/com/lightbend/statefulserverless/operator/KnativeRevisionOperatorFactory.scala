@@ -261,7 +261,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         limits = Map(Resource.memory -> Resource.Quantity("512Mi")),
         requests = Map(
           Resource.memory -> Resource.Quantity("512Mi"),
-          Resource.cpu -> Resource.Quantity("1.0")
+          Resource.cpu -> Resource.Quantity("0.5")
         )
       ))
 
@@ -284,7 +284,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
           EnvVar("METRICS_PORT", MetricsPort.toString),
           EnvVar("SELECTOR_LABEL_VALUE", configuration),
           EnvVar("SELECTOR_LABEL", ConfigurationLabel),
-          EnvVar("CONTAINER_CONCURRENCY", revision.spec.containerConcurrency.getOrElse(1).toString),
+          EnvVar("CONTAINER_CONCURRENCY", revision.spec.containerConcurrency.getOrElse(0).toString),
           EnvVar("REVISION_TIMEOUT", revision.spec.timeoutSeconds.getOrElse(10) + "s"),
           EnvVar("SERVING_NAMESPACE", revision.namespace),
           EnvVar("SERVING_CONFIGURATION", configuration),
@@ -371,7 +371,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       }
       val annotations = revision.metadata.annotations - LastPinnedLabel
       val podAnnotations = annotations ++ Seq(
-        "traffic.sidecar.istio.io/excludeInboundPorts" -> s"$AkkaRemotingPort,$AkkaManagementPort",
+        "traffic.sidecar.istio.io/includeInboundPorts" -> s"$SidecarH2cPort",
         "traffic.sidecar.istio.io/excludeOutboundPorts" -> s"$AkkaRemotingPort,$AkkaManagementPort"
       )
 

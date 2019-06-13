@@ -85,7 +85,13 @@ class ConcurrencyEnforcer(settings: ConcurrencyEnforcerSettings, statsCollector:
       if (outstanding.contains(id)) {
         completeAction(id)
       } else {
-        log.warning("Action {} was completed but wasn't outstanding", id)
+        if (queue.exists(_.id == id)) {
+          // It's been completed before it's been executed, generally the state manager actor will already have
+          // logged the reason for this, so just remove it from the queue.
+          queue = queue.filterNot(_.id == id)
+        } else {
+          log.warning("Action {} was completed but wasn't outstanding", id)
+        }
       }
 
     case Tick =>

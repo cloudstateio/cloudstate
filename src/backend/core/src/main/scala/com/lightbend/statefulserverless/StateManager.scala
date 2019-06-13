@@ -140,6 +140,7 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
 
   override final def postStop(): Unit = {
     if (currentActionId != null) {
+      log.warning("Stopped but we have a current action id {}", currentActionId)
       reportActionComplete()
     }
     // This will shutdown the stream (if not already shut down)

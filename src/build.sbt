@@ -17,7 +17,7 @@ licenses in ThisBuild += ("Apache-2.0", new URL("https://www.apache.org/licenses
 val AkkaVersion = "2.5.22"
 val AkkaHttpVersion = "10.1.7"
 val AkkaManagementVersion = "1.0.1"
-val AkkaPersistenceCassandraVersion = "0.93"
+val AkkaPersistenceCassandraVersion = "0.96"
 val PrometheusClientVersion = "0.6.0"
 
 def common: Seq[Setting[_]] = Seq(

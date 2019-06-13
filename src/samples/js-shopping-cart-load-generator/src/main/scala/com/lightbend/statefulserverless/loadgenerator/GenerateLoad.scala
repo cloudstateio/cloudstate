@@ -1,20 +1,46 @@
 package com.lightbend.statefulserverless.loadgenerator
 
-import java.time.ZonedDateTime
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
+import java.time.{Instant, ZonedDateTime}
+import java.time.format.DateTimeFormatter
 
 import akka.Done
-import akka.actor.{ActorSystem, CoordinatedShutdown}
+import akka.actor.{Actor, ActorRef, ActorSystem, CoordinatedShutdown, Props, Status, Timers}
 import akka.grpc.GrpcClientSettings
+import akka.pattern.{BackoffOpts, BackoffSupervisor}
 import akka.stream.ActorMaterializer
-import com.example.shoppingcart.{AddLineItem, GetShoppingCart, RemoveLineItem, ShoppingCartClient}
+import akka.util.Timeout
+import com.example.shoppingcart._
+import com.google.protobuf.empty.Empty
 
-import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration._
-import scala.util.{Failure, Random, Success}
+import scala.util.Random
 
 object GenerateLoad extends App{
 
+
+  val system = ActorSystem()
+
+  val loadGenerator = system.actorOf(BackoffSupervisor.props(BackoffOpts.onFailure(
+    childProps = Props[LoadGeneratorActor],
+    childName = "load-generator",
+    minBackoff = 3.seconds,
+    maxBackoff = 30.seconds,
+    randomFactor = 0.2d
+  ).withReplyWhileStopped(Done)), "load-generator-supervisor")
+
+  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "stop-making-requests") { () =>
+    import akka.pattern.ask
+    implicit val timeout = Timeout(10.seconds)
+    (loadGenerator ? LoadGeneratorActor.Stop).mapTo[Done]
+  }
+}
+
+object LoadGeneratorActor {
+  case object Tick
+  case object Report
+  case object Stop
+
+  val nanos = 1000 * 1000 * 1000
   val products = Seq(
     "1" -> "Bread",
     "2" -> "Milk",
@@ -29,75 +55,200 @@ object GenerateLoad extends App{
   // Read params from the environment
   // The number of users to make requests for. This will equate to the number of shopping cart entities that will be
   // requested, a higher number will result in more cache misses.
-  val numUsers = sys.env.getOrElse("NUM_USERS", "1000").toInt
-  // The number of clients to use to make requests. This controls the number of concurrent requests being made.
-  val numClients = sys.env.getOrElse("NUM_CLIENTS", "100").toInt
+  val numUsers = sys.env.getOrElse("NUM_USERS", "100").toInt
+  // The number of gRPC clients to instantiate. This controls how many connections the requests will be fanned out over.
+  val numClients = sys.env.getOrElse("NUM_CLIENTS", "5").toInt
   val serviceName = sys.env.getOrElse("SHOPPING_CART_SERVICE", "shopping-cart.default.35.189.22.136.xip.io")
   val servicePort = sys.env.getOrElse("SHOPPING_CART_SERVICE_PORT", "80").toInt
   // The ratio of read operations to write operations. A value of 0.9 means 90% of the operations will be read
-  // operations. Note that every write operation will be proceeded with a read operation as well.
+  // operations.
   val readWriteRequestRatio = sys.env.getOrElse("READ_WRITE_REQUEST_RATIO", "0.9").toDouble
   require(readWriteRequestRatio >= 0.0 && readWriteRequestRatio <= 1.0)
-  // The ratio of add operations to delete operations. A value of 0.9 means 90% of the write operations will be add
-  // operations.
-  val addDeleteRequestRatio = sys.env.getOrElse("ADD_DELETE_REQUEST_RATIO", "0.9").toDouble
-  require(addDeleteRequestRatio >= 0.0 && addDeleteRequestRatio <= 1.0)
-  val otherToDeleteRequestRatio = ((1.0d - readWriteRequestRatio) * addDeleteRequestRatio) + readWriteRequestRatio
 
-  private implicit val system = ActorSystem()
-  private implicit val materializer = ActorMaterializer()
-  import system.dispatcher
+  // The maximum amount of time that responses can lag behind requests before we throttle making requests. If this is
+  // 2 seconds, and our request rate is 200 requests a second, then this means we can have at most 400 requests
+  // outstanding before we stop making more requests
+  val maxResponseLag = sys.env.getOrElse("MAX_RESPONSE_LAG_MS", "400").toInt.millis
 
-  val settings = GrpcClientSettings.connectToServiceAt(serviceName, servicePort)
-    .withTls(false)
-    .withDeadline(1.minute)
+  // How often to tick to send requests.
+  val tickInterval = sys.env.getOrElse("TICK_INTERVAL_MS", "20").toInt.millis
+  // The desired request rate. If this doesn't result in a whole number of requests per tick, the load generator will
+  // randomly round up or down, weighted to the fractional portion of the number of requests per tick, to attempt to
+  // achieve this rate on average.
+  // fixme: For the purposes of demoing this, we generate half the actual load requested. The reason for this is that
+  // due to https://github.com/knative/serving/issues/4277, the actual request rate reported in the UI is double what
+  // it is. I don't want to have to explain this in the demo, I just want to tell people "I'm going to generate 200
+  // req/s" and then see that in the UI. Since I don't know what the bug is that's causing the actual rate to be
+  // doubled, I can't fix that, but I can hack this so that when I request 200 req/s, it only generates 100 req/s, and
+  // therefore reports 200 req/s.
+  val requestRate = sys.env.getOrElse("REQUEST_RATE_PER_S", "200").toInt / 2
+  val requestsPerTick: Double = tickInterval.div(1.second) * requestRate
+  // The amount of time to spend ramping up. Ramp up is linear.
+  val rampUpPeriodNanos = sys.env.getOrElse("RAMP_UP_S", "20").toInt.seconds.toNanos
+  // How often the load generator should report it's current state (req/s, outstanding requests, etc) to stdout
+  val reportInterval = sys.env.getOrElse("REPORT_INTERVAL_S", "5").toInt.seconds
 
-  def makeRandomRequest(client: ShoppingCartClient) = {
-    val user = "user" + (Random.nextInt(numUsers) + 1)
-    client.getCart(GetShoppingCart(user)).flatMap { cart =>
-      Random.nextDouble() match {
-        case read if read < readWriteRequestRatio =>
-          Future.successful(())
-        case delete if cart.items.nonEmpty && delete > otherToDeleteRequestRatio =>
-          client.removeItem(RemoveLineItem(user, cart.items(Random.nextInt(cart.items.size)).productId))
-        case _ =>
-          val (id, name) = products(Random.nextInt(products.size))
-          client.addItem(AddLineItem(user, id, name, Random.nextInt(10) + 1))
-      }
+  val maxOutstandingRequests = (maxResponseLag.toMillis.toDouble / 1000 * requestRate).toInt
+
+  val dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+}
+
+class LoadGeneratorActor extends Actor with Timers {
+
+  import LoadGeneratorActor._
+  import akka.pattern.pipe
+
+  implicit val materializer = ActorMaterializer()
+  implicit val system = context.system
+  import context.dispatcher
+
+  private val clients = {
+    val settings = GrpcClientSettings.connectToServiceAt(serviceName, servicePort)
+      .withTls(false)
+      .withDeadline(1.minute)
+
+    (1 to numClients).toList.map { _ =>
+      ShoppingCartClient(settings)
     }
   }
 
-  val stopped = new AtomicBoolean()
-  val requestCount = new AtomicLong()
+  private var startupTime = System.nanoTime()
+  private var outstandingRequests = 0
+  private var lastReportNanos = System.nanoTime()
+  private var requestsMadeSinceLastReport = 0
+  private var responsesReceivedSinceLastReport = 0
+  private var failuresSinceLastReport = 0
 
-  val allFinished = Future.sequence(Seq(1 to numClients).map { _ =>
-    val service = ShoppingCartClient(settings)
-    val finished = Promise[Done]()
+  private var stoppingRef: ActorRef = _
 
-    def run(): Unit = {
-      makeRandomRequest(service)
-        .onComplete {
-          case _ if stopped.get() =>
-            finished.success(Done)
-          case Success(_) =>
-            val count = requestCount.incrementAndGet()
-            if (count % 100 == 0) {
-              println(s"${ZonedDateTime.now()} - Successful request count: $count")
-            }
-            run()
-          case Failure(exception) =>
-            println(s"${ZonedDateTime.now()} - Error invoking $serviceName: $exception")
-            run()
+  timers.startPeriodicTimer("report", Report, reportInterval)
+
+  override def receive = starting
+
+  override def postStop(): Unit = {
+    if (stoppingRef != null) {
+      stoppingRef ! Done
+    }
+  }
+
+  override def preStart(): Unit = {
+    clients.head.getCart(GetShoppingCart("user1")) pipeTo self
+  }
+
+  /**
+    * Let's say that we want to achieve 13 requests per second, with a 250ms tick interval. To do this, we need to make
+    * 3.25 requests per tick. But you can't make 0.25 requests. If we round this up or down, we're going to end up with
+    * a requests per second that is greater or less than our desired rate. We could track the rate across ticks, but
+    * there's no simple way to do that, especially during warmup, and taking back off due to response lag into
+    * consideration. Instead, we round 3.25 up or down randomly, weighted according to its decimal part, so on average,
+    * 75% of the time we round down, 25% we round up, and therefore end up with an average of 13 requests a second, as
+    * desired.
+    */
+  private def roundRandomWeighted(d: Double): Int = {
+    val floor = d.floor
+    val remainder = d - floor
+    if (Random.nextDouble() > remainder) floor.toInt
+    else floor.toInt + 1
+  }
+
+  private def requestsToMake(): Int = {
+    val timeSinceStartup = System.nanoTime() - startupTime
+    val thisTick = if (timeSinceStartup > rampUpPeriodNanos) {
+      requestsPerTick
+    } else {
+      (timeSinceStartup.toDouble / rampUpPeriodNanos) * requestsPerTick
+    }
+
+    Math.min(roundRandomWeighted(thisTick), maxOutstandingRequests - outstandingRequests)
+  }
+
+  // To start, we send a single request, and we don't start generating load until our first request is successful.
+  // This is so that the autoscaler doesn't decide to scale up to a ridiculous number when scaled to zero.
+  def starting: Receive = {
+    case _: Cart =>
+      timers.startPeriodicTimer("tick", Tick, tickInterval)
+      lastReportNanos = System.nanoTime()
+      context become (running orElse report)
+    case Status.Failure(err) =>
+      throw err
+    case Report =>
+      println("%s Report: waiting for first request to succeed".format(dateTimeFormatter.format(ZonedDateTime.now())))
+    case Stop =>
+      stoppingRef = sender()
+      context stop self
+  }
+
+  def running: Receive = {
+    case Tick =>
+      for (i <- 0 until requestsToMake()) {
+        val client = clients(i % numClients)
+
+        val user = "user" + (Random.nextInt(numUsers) + 1)
+        Random.nextDouble() match {
+          case read if read < readWriteRequestRatio =>
+            client.getCart(GetShoppingCart(user)) pipeTo self
+          case _ =>
+            val (id, name) = products(Random.nextInt(products.size))
+            client.addItem(AddLineItem(user, id, name, Random.nextInt(10) + 1)) pipeTo self
         }
-    }
+        outstandingRequests += 1
+        requestsMadeSinceLastReport += 1
+      }
 
-    run()
-    finished.future
-  })
+    case _: Cart | _: Empty =>
+      responsesReceivedSinceLastReport += 1
+      outstandingRequests -= 1
 
-  CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "stop-making-requests") { () =>
-    stopped.set(true)
-    allFinished.map(_ => Done)
+    case Status.Failure(err) =>
+      err.printStackTrace()
+      outstandingRequests -= 1
+      failuresSinceLastReport += 1
+
+    case Stop =>
+      stoppingRef = sender()
+      timers.cancel("tick")
+      if (outstandingRequests == 0) {
+        context stop self
+      } else {
+        context become (stopping orElse report)
+      }
   }
 
+  def report: Receive = {
+    case Report =>
+      val reportTime = System.nanoTime()
+      val reportInterval = reportTime - lastReportNanos
+      val requestsASecond = requestsMadeSinceLastReport.toDouble / reportInterval * nanos
+      val responsesASecond = responsesReceivedSinceLastReport.toDouble / reportInterval * nanos
+      val failuresASecond = failuresSinceLastReport.toDouble / reportInterval * nanos
+
+      println("%s Report: %4.0f req/s %4.0f success/s %4.0f failure/s with %d outstanding requests".format(
+        dateTimeFormatter.format(ZonedDateTime.now()),
+        requestsASecond, responsesASecond, failuresASecond, outstandingRequests))
+
+      lastReportNanos = reportTime
+      requestsMadeSinceLastReport = 0
+      responsesReceivedSinceLastReport = 0
+      failuresSinceLastReport = 0
+  }
+
+  def stopping: Receive = {
+    case Tick =>
+      // Ignore
+
+    case _: Cart | _: Empty =>
+      responsesReceivedSinceLastReport += 1
+      outstandingRequests -= 1
+      if (outstandingRequests == 0) {
+        context stop self
+      }
+
+    case Status.Failure(err) =>
+      err.printStackTrace()
+      outstandingRequests -= 1
+      failuresSinceLastReport += 1
+      if (outstandingRequests == 0) {
+        context stop self
+      }
+  }
 }
