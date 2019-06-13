@@ -47,49 +47,47 @@ import com.google.protobuf.{Value, ListValue, EnumValue, Struct}
 // https://github.com/googleapis/googleapis/blob/master/google/api/http.proto
 // https://github.com/googleapis/googleapis/blob/master/google/api/annotations.proto
 object HttpApi {
-  object PathExtractors {
-    final val ShortX: String => Option[JShort] =
-      s => try Option(JShort.valueOf(s)) catch { case _: NumberFormatException => None }
+  final val ParseShort: String => Option[JShort] =
+    s => try Option(JShort.valueOf(s)) catch { case _: NumberFormatException => None }
 
-    final val IntX: String => Option[JInteger] =
-      s => try Option(JInteger.valueOf(s)) catch { case _: NumberFormatException => None }
+  final val ParseInt: String => Option[JInteger] =
+    s => try Option(JInteger.valueOf(s)) catch { case _: NumberFormatException => None }
 
-    final val LongX: String => Option[JLong] =
-      s => try Option(JLong.valueOf(s)) catch { case _: NumberFormatException => None }
+  final val ParseLong: String => Option[JLong] =
+    s => try Option(JLong.valueOf(s)) catch { case _: NumberFormatException => None }
 
-    final val FloatX: String => Option[JFloat] =
-      s => try Option(JFloat.valueOf(s)) catch { case _: NumberFormatException => None }
+  final val ParseFloat: String => Option[JFloat] =
+    s => try Option(JFloat.valueOf(s)) catch { case _: NumberFormatException => None }
 
-    final val DoubleX: String => Option[JDouble] =
-      s => try Option(JDouble.valueOf(s)) catch { case _: NumberFormatException => None }
+  final val ParseDouble: String => Option[JDouble] =
+    s => try Option(JDouble.valueOf(s)) catch { case _: NumberFormatException => None }
 
-    final val StringX: String => Option[String] =
-      s => Option(s)
+  final val ParseString: String => Option[String] =
+    s => Option(s)
 
-    final val BooleanX: String => Option[JBoolean] =
-      _.toLowerCase match {
-        case "true" => Some(JBoolean.TRUE)
-        case "false" => Some(JBoolean.FALSE)
-        case _ => None
-      }
+  final val ParseBoolean: String => Option[JBoolean] =
+    _.toLowerCase match {
+      case  "true" => Some(JBoolean.TRUE)  // Cache this?
+      case "false" => Some(JBoolean.FALSE) // Cache this?
+      case       _ => None
+    }
 
-    // Reads a rfc2045 encoded Base64 string
-    final val BytesX: String => Option[ProtobufByteString] =
-      s => Some(ProtobufByteString.copyFrom(Base64.rfc2045.decode(s)))
+  // Reads a rfc2045 encoded Base64 string
+  final val ParseBytes: String => Option[ProtobufByteString] =
+    s => Some(ProtobufByteString.copyFrom(Base64.rfc2045.decode(s))) // Make cheaper? Protobuf has a Base64 decoder?
 
-    final def suitableFor(field: FieldDescriptor)(whenIllegal: String => Nothing): String => Option[Any] =
-      field.getJavaType match {
-        case JavaType.BOOLEAN     => BooleanX
-        case JavaType.BYTE_STRING => BytesX
-        case JavaType.DOUBLE      => DoubleX
-        case JavaType.ENUM        => whenIllegal("Enum path parameters not supported!")
-        case JavaType.FLOAT       => FloatX
-        case JavaType.INT         => IntX
-        case JavaType.LONG        => LongX
-        case JavaType.MESSAGE     => whenIllegal("Message path parameters not supported!")
-        case JavaType.STRING      => StringX
-      }
-  }
+  final def suitableParserFor(field: FieldDescriptor)(whenIllegal: String => Nothing): String => Option[Any] =
+    field.getJavaType match {
+      case JavaType.BOOLEAN     => ParseBoolean
+      case JavaType.BYTE_STRING => ParseBytes
+      case JavaType.DOUBLE      => ParseDouble
+      case JavaType.ENUM        => whenIllegal("Enum path parameters not supported!")
+      case JavaType.FLOAT       => ParseFloat
+      case JavaType.INT         => ParseInt
+      case JavaType.LONG        => ParseLong
+      case JavaType.MESSAGE     => whenIllegal("Message path parameters not supported!")
+      case JavaType.STRING      => ParseString
+    }
 
   // We use this to indicate problems with the configuration of the routes
   private final val configError: String => Nothing = s => throw new ConfigurationException("HTTP API Config: " + s)
@@ -138,6 +136,7 @@ object HttpApi {
                                                     //omittingInsignificantWhitespace().
                                                     //sortingMapKeys().
 
+    // This method validates the configuration and returns values obtained by parsing the configuration
     private[this] final def extractAndValidate(): (HttpMethod, Path, Descriptor, Option[FieldDescriptor]) = {
       // Validate selector
       if (rule.selector != "" && rule.selector != methDesc.getFullName)
@@ -163,9 +162,9 @@ object HttpApi {
                   lookupFieldByName(methDesc.getInputType, variable) match {
                     case null => false
                     case field =>
-                      if (field.isRepeated) configError("Repeated parameters [$field] not allowed as path variables")
+                      if (field.isRepeated) configError("Repeated parameters [$field] are not allowed as path variables")
                       else if (field.isMapField) configError("Map parameters [$field] are not allowed as path variables")
-                      else if (PathExtractors.suitableFor(field)(configError) == null) () // Can't really happen
+                      else if (suitableParserFor(field)(configError) == null) () // Can't really happen
                       else if (found.contains(variable)) configError(s"Path parameter [$variable] occurs more than once")
                       else found += variable // Keep track of the variables we've seen so far
                   }
@@ -241,7 +240,7 @@ object HttpApi {
             lookupFieldByPath(methDesc.getInputType, variable) match {
               case null => false
               case field =>
-                val value = PathExtractors.suitableFor(field)(requestError)(seg)
+                val value = suitableParserFor(field)(requestError)(seg)
                 effect(value, field)
                 value.isDefined
             }
@@ -275,7 +274,7 @@ object HttpApi {
               case field if field.getMessageType != null         => requestError("Query parameter [$selector] refers to a message type") // FIXME validate assumption that this is prohibited
               case field if !field.isRepeated && values.size > 1 => requestError("Multiple values sent for non-repeated field by query parameter [$selector]")
               case field => // FIXME verify that we can set nested fields from the inputBuilder type
-                val x = PathExtractors.suitableFor(field)(requestError)
+                val x = suitableParserFor(field)(requestError)
                 if (field.isRepeated) {
                   values foreach {
                     v => inputBuilder.addRepeatedField(field, x(v).getOrElse(requestError("Malformed Query parameter [$selector]")))
@@ -296,27 +295,28 @@ object HttpApi {
         Future.failed(IllegalRequestException(StatusCodes.BadRequest, "Content-type must be application/json!"))
       } else {
         val inputBuilder = DynamicMessage.newBuilder(methDesc.getInputType)
-        if (rule.body.isEmpty) {// Iff empty body rule, then only query parameters
-          req.discardEntityBytes();
-          parseRequestParametersInto(req.uri.query().toMultiMap, inputBuilder)
-          parsePathParametersInto(req.uri.path, inputBuilder)
-          Future.successful(createCommand(inputBuilder.build))
-        } else if (rule.body == "*") { // Iff * body rule, then no query parameters, and only fields not mapped in path variables
-          Unmarshal(req.entity).to[String].map(str => { 
-            jsonParser.merge(str, inputBuilder)
-            parsePathParametersInto(req.uri.path, inputBuilder)
-            createCommand(inputBuilder.build)
-          })
-        } else { // Iff body rule, then all parameters not mapped in path variables
-          Unmarshal(req.entity).to[String].map(str => {
-            val subField = lookupFieldByName(methDesc.getInputType, rule.body)
-            val subInputBuilder = DynamicMessage.newBuilder(subField.getMessageType)
-            jsonParser.merge(str, subInputBuilder)
+        rule.body match {
+          case "" => // Iff empty body rule, then only query parameters
+            req.discardEntityBytes();
             parseRequestParametersInto(req.uri.query().toMultiMap, inputBuilder)
             parsePathParametersInto(req.uri.path, inputBuilder)
-            inputBuilder.setField(subField, subInputBuilder.build())
-            createCommand(inputBuilder.build)
-          })
+            Future.successful(createCommand(inputBuilder.build))
+          case "*" => // Iff * body rule, then no query parameters, and only fields not mapped in path variables
+            Unmarshal(req.entity).to[String].map(str => { 
+              jsonParser.merge(str, inputBuilder)
+              parsePathParametersInto(req.uri.path, inputBuilder)
+              createCommand(inputBuilder.build)
+            })
+          case fieldName => // Iff fieldName body rule, then all parameters not mapped in path variables
+            Unmarshal(req.entity).to[String].map(str => {
+              val subField = lookupFieldByName(methDesc.getInputType, fieldName)
+              val subInputBuilder = DynamicMessage.newBuilder(subField.getMessageType)
+              jsonParser.merge(str, subInputBuilder)
+              parseRequestParametersInto(req.uri.query().toMultiMap, inputBuilder)
+              parsePathParametersInto(req.uri.path, inputBuilder)
+              inputBuilder.setField(subField, subInputBuilder.build())
+              createCommand(inputBuilder.build)
+            })
         }
       }
     }
@@ -349,7 +349,7 @@ object HttpApi {
           debugMsg(response, "Got response")
           Success(response)
         case Failure(cf: StateManager.CommandFailure) => requestError(cf.getMessage) // TODO Should we handle CommandFailures like this?
-        case Failure(t) => Failure(t) // TODO technically we could do `f @ Failure(_) => f.asInstanceOf[Failure[DynamicMessage]]`
+        case Failure(t) => Failure(t)
       })
     }
 
@@ -420,30 +420,23 @@ object HttpApi {
 
   final def serve(stateManager: ActorRef, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val log = Logging(sys, "HttpApi")
-    val routes = serviceDesc.getMethods.iterator.asScala.map {
+    serviceDesc.getMethods.iterator.asScala.flatMap({
       method =>
-        (method,
-          (AnnotationsProto.http.get(convertMethodOptions(method)) match {
-            case Some(rule) =>
-              log.info(s"Using configured HTTP API endpoint using [$rule]")
-              rule
-            case None =>
-              val rule = HttpRule.of(selector = method.getFullName, // We know what thing we are proxying
-                                 body = "*",                        // Parse all input
-                                 responseBody = "",                 // Include all output
-                                 additionalBindings = Nil,          // No need for additional bindings
-                                 pattern = HttpRule.Pattern.Post((Path / "v1" / method.getName).toString))
-              log.info(s"Generating HTTP API endpoint using rule [$rule]")
-              rule
-          })
-        )
-    } flatMap {
-      case (method, rule) =>
-        new HttpEndpoint(method, rule, stateManager, relayTimeout) +:
-        rule.additionalBindings.map(r => new HttpEndpoint(method, r, stateManager, relayTimeout)) // Only 1 level nesting allowed
-    }
-
-    routes.foldLeft(NoMatch) {
+        val rule = AnnotationsProto.http.get(convertMethodOptions(method)) match {
+          case Some(rule) =>
+            log.info(s"Using configured HTTP API endpoint using [$rule]")
+            rule
+          case None =>
+            val rule = HttpRule.of(selector = method.getFullName, // We know what thing we are proxying
+                               body = "*",                        // Parse all input
+                               responseBody = "",                 // Include all output
+                               additionalBindings = Nil,          // No need for additional bindings
+                               pattern = HttpRule.Pattern.Post((Path / "v1" / method.getName).toString))
+            log.info(s"Using generated HTTP API endpoint using [$rule]")
+            rule
+        }
+        (rule +: rule.additionalBindings).map(r => new HttpEndpoint(method, r, stateManager, relayTimeout))
+    }).foldLeft(NoMatch) {
       case (NoMatch,    first) => first
       case (previous, current) => current orElse previous // Last goes first
     }
