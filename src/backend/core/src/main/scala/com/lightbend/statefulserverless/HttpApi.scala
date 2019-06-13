@@ -77,7 +77,7 @@ object HttpApi {
     final val BytesX: String => Option[ProtobufByteString] =
       s => Some(ProtobufByteString.copyFrom(Base64.rfc2045.decode(s)))
 
-    def suitableFor(field: FieldDescriptor)(whenIllegal: String => Nothing): String => Option[Any] =
+    final def suitableFor(field: FieldDescriptor)(whenIllegal: String => Nothing): String => Option[Any] =
       field.getJavaType match {
         case JavaType.BOOLEAN     => BooleanX
         case JavaType.BYTE_STRING => BytesX
@@ -91,49 +91,54 @@ object HttpApi {
       }
   }
 
+  // We use this to indicate problems with the configuration of the routes
   private final val configError: String => Nothing = s => throw new ConfigurationException("HTTP API Config: " + s)
+  // We use this to signal to the requestor that there's something wrong with the request
   private final val requestError: String => Nothing = s => throw IllegalRequestException(StatusCodes.BadRequest, s)
   // This is so that we can reuse path comparisons for path value extraction
   private final val nofx: (Option[Any], FieldDescriptor) => Unit = (_,_) => ()
 
   // This is used to support the "*" custom pattern
-  final val ANY_METHOD = HttpMethod.custom(name = "ANY",
+  private final val ANY_METHOD = HttpMethod.custom(name = "ANY",
                                            safe = false,
                                            idempotent = false,
                                            requestEntityAcceptance = RequestEntityAcceptance.Tolerated)
+
+  // A route which will not match anything
+  private final val NoMatch = PartialFunction.empty[HttpRequest, Future[HttpResponse]]
 
   final class HttpEndpoint(final val methDesc: MethodDescriptor,
                            final val rule: HttpRule,
                            final val stateManager: ActorRef,
                            final val relayTimeout: Timeout)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext) extends PartialFunction[HttpRequest, Future[HttpResponse]] {
-    final val log = Logging(sys, rule.pattern.toString) // TODO use other name?
+    private[this] final val log = Logging(sys, rule.pattern.toString) // TODO use other name?
 
-    final val (methodPattern, urlPattern, bodyDescriptor, responseBodyDescriptor) = extractAndValidate()
+    private[this] final val (methodPattern, urlPattern, bodyDescriptor, responseBodyDescriptor) = extractAndValidate()
 
-    final val idExtractor = Serve.createEntityIdExtractorFor(methDesc.getInputType)
+    private[this] final val idExtractor = Serve.createEntityIdExtractorFor(methDesc.getInputType)
 
-    final val jsonParser  = JsonFormat.
-                      parser.
-                      usingTypeRegistry(JsonFormat.TypeRegistry.
-                                        newBuilder.
-                                        add(bodyDescriptor).
-                                        build())
-                      //ignoringUnknownFields().
-                      //usingRecursionLimit(…).
+    private[this] final val jsonParser  = JsonFormat.
+                                                    parser.
+                                                    usingTypeRegistry(JsonFormat.TypeRegistry.
+                                                                      newBuilder.
+                                                                      add(bodyDescriptor).
+                                                                      build())
+                                                    //ignoringUnknownFields().
+                                                    //usingRecursionLimit(…).
 
-    final val jsonPrinter = JsonFormat.
-                      printer.
-                      usingTypeRegistry(JsonFormat.TypeRegistry.
-                                        newBuilder.
-                                        add(methDesc.getOutputType).
-                                        build()).
-                      includingDefaultValueFields()
-                      //printingEnumsAsInts() // If you enable this, you need to fix the output for responseBody as well
-                      //preservingProtoFieldNames(). // If you enable this, you need to fix the output for responseBody structs as well
-                      //omittingInsignificantWhitespace().
-                      //sortingMapKeys().
+    private[this] final val jsonPrinter = JsonFormat.
+                                                    printer.
+                                                    usingTypeRegistry(JsonFormat.TypeRegistry.
+                                                                      newBuilder.
+                                                                      add(methDesc.getOutputType).
+                                                                      build()).
+                                                    includingDefaultValueFields()
+                                                    //printingEnumsAsInts() // If you enable this, you need to fix the output for responseBody as well
+                                                    //preservingProtoFieldNames(). // If you enable this, you need to fix the output for responseBody structs as well
+                                                    //omittingInsignificantWhitespace().
+                                                    //sortingMapKeys().
 
-    def extractAndValidate(): (HttpMethod, Path, Descriptor, Option[FieldDescriptor]) = {
+    private[this] final def extractAndValidate(): (HttpMethod, Path, Descriptor, Option[FieldDescriptor]) = {
       // Validate selector
       if (rule.selector != "" && rule.selector != methDesc.getFullName)
         configError(s"Rule selector [${rule.selector}] must be empty or [${methDesc.getFullName}]")
@@ -164,7 +169,6 @@ object HttpApi {
                       else if (found.contains(variable)) configError(s"Path parameter [$variable] occurs more than once")
                       else found += variable // Keep track of the variables we've seen so far
                   }
-                case _ =>
               }
               p = p.tail
             }
@@ -181,7 +185,7 @@ object HttpApi {
           case p @ Patch(pattern)  => (PATCH,      validPath(pattern))
           case p @ Custom(chp)     =>
             if (chp.kind == "*")      (ANY_METHOD, validPath(chp.path)) // FIXME is "path" the same as "pattern" for the other kinds? Is an empty kind valid?
-            else                      configError(s"Only Custom patterns with * kind supported but [${chp.kind}] found!")
+            else                      configError(s"Only Custom patterns with [*] kind supported but [${chp.kind}] found!")
         }
       }
 
@@ -209,7 +213,7 @@ object HttpApi {
       // Validate response body value
       val rd =
         rule.responseBody match {
-          case "" => Option.empty[FieldDescriptor]
+          case "" => None
           case fieldName =>
             lookupFieldByName(methDesc.getOutputType, fieldName) match {
               case null => configError("Response body field [$fieldName] does not exist on type [${methDesc.getOutputType.getFullName}]")
@@ -217,10 +221,14 @@ object HttpApi {
             }
         }
 
+      if (rule.additionalBindings.exists(_.additionalBindings.nonEmpty))
+        configError("Only one level of additionalBindings supported, but [$rule] has more than one!")
+
       (mp, up, bd, rd)
     }
 
-    def pathMatches(patPath: Path, reqPath: Path, effect: (Option[Any], FieldDescriptor) => Unit): Boolean =
+    // TODO support more advanced variable declarations: x=*, x=**, x=/foo/** etc?
+    @tailrec private[this] final def pathMatches(patPath: Path, reqPath: Path, effect: (Option[Any], FieldDescriptor) => Unit): Boolean =
       if (patPath.isEmpty && reqPath.isEmpty) true
       else if (patPath.isEmpty || reqPath.isEmpty) false
       else {
@@ -229,7 +237,6 @@ object HttpApi {
         val segmentMatch = (patPath.head, reqPath.head) match {
           case ('/', '/') => true
           case (vbl: String, seg: String) if !vbl.isEmpty && vbl.head == '{' && vbl.last == '}' =>
-            // FIXME support more advanced variable declarations: x=*, x=**, x=/foo/** etc
             val variable = vbl.substring(1, vbl.length - 1)
             lookupFieldByPath(methDesc.getInputType, variable) match {
               case null => false
@@ -241,11 +248,10 @@ object HttpApi {
           case (seg1, seg2) => seg1 == seg2
         }
 
-        if (!segmentMatch) false
-        else pathMatches(patPath.tail, reqPath.tail, effect)
+        segmentMatch && pathMatches(patPath.tail, reqPath.tail, effect)
       }
 
-    @tailrec def lookupFieldByPath(desc: Descriptor, selector: String): FieldDescriptor =
+    @tailrec private[this] final def lookupFieldByPath(desc: Descriptor, selector: String): FieldDescriptor =
       Names.splitNext(selector) match {
         case ("", "")          => null
         case (fieldName, "")   => lookupFieldByName(desc, fieldName)
@@ -257,16 +263,16 @@ object HttpApi {
       }
 
     // Question: Do we need to handle conversion from JSON names?
-    def lookupFieldByName(desc: Descriptor, selector: String): FieldDescriptor =
-      desc.findFieldByName(selector) // TODO potentially start supporting path-like selectors?
+    private[this] final def lookupFieldByName(desc: Descriptor, selector: String): FieldDescriptor =
+      desc.findFieldByName(selector) // TODO potentially start supporting path-like selectors with maximum nesting level?
 
-    def parseRequestParametersInto(query: Map[String, List[String]], inputBuilder: DynamicMessage.Builder): Unit = {
+    private[this] final def parseRequestParametersInto(query: Map[String, List[String]], inputBuilder: DynamicMessage.Builder): Unit = {
       query.foreach {
         case (selector, values) =>
           if (values.nonEmpty) {
             lookupFieldByPath(methDesc.getInputType, selector) match {
               case null => requestError("Query parameter [$selector] refers to non-existant field")
-              case field if field.getMessageType != null => requestError("Query parameter [$selector] refers to a message type") // FIXME validate assumption that this is prohibited
+              case field if field.getMessageType != null         => requestError("Query parameter [$selector] refers to a message type") // FIXME validate assumption that this is prohibited
               case field if !field.isRepeated && values.size > 1 => requestError("Multiple values sent for non-repeated field by query parameter [$selector]")
               case field => // FIXME verify that we can set nested fields from the inputBuilder type
                 val x = PathExtractors.suitableFor(field)(requestError)
@@ -280,17 +286,16 @@ object HttpApi {
       }
     }
 
-    def parsePathParametersInto(requestPath: Path, inputBuilder: DynamicMessage.Builder): Unit =
+    private[this] final def parsePathParametersInto(requestPath: Path, inputBuilder: DynamicMessage.Builder): Unit =
       pathMatches(urlPattern, requestPath, (value, field) =>
         inputBuilder.setField(field, value.getOrElse(requestError("Path contains value of wrong type!")))
       )
 
-    def parseCommand(req: HttpRequest): Future[Command] = {
+    final def parseCommand(req: HttpRequest): Future[Command] = {
       if (rule.body.nonEmpty && req.entity.contentType != ContentTypes.`application/json`) {
         Future.failed(IllegalRequestException(StatusCodes.BadRequest, "Content-type must be application/json!"))
       } else {
         val inputBuilder = DynamicMessage.newBuilder(methDesc.getInputType)
-        // Map request body to rule
         if (rule.body.isEmpty) {// Iff empty body rule, then only query parameters
           req.discardEntityBytes();
           parseRequestParametersInto(req.uri.query().toMultiMap, inputBuilder)
@@ -321,36 +326,36 @@ object HttpApi {
 
     override final def apply(req: HttpRequest): Future[HttpResponse] =
       parseCommand(req).
-        flatMap(command => sendCommand(command).map(createResponse)).
+        flatMap(command => sendCommand(command)(relayTimeout).map(createResponse)).
         recover {
           case ire: IllegalRequestException => HttpResponse(ire.status.intValue, entity = ire.status.reason)
         }
 
-    private def debugMsg(msg: DynamicMessage, preamble: String): Unit =
+    private[this] final def debugMsg(msg: DynamicMessage, preamble: String): Unit =
       if(log.isDebugEnabled)
         log.debug(s"$preamble: ${msg}${msg.getAllFields().asScala.map(f => s"\n\r   * Request Field: [${f._1.getFullName}] = [${f._2}]").mkString}")
 
-    def createCommand(request: DynamicMessage): Command = {
+    private[this] final def createCommand(request: DynamicMessage): Command = {
       debugMsg(request, "Got request")
       Command(entityId = idExtractor(request),
                name    = methDesc.getName,
                payload = Some(ProtobufAny(typeUrl = Serve.AnyTypeUrlHostName + methDesc.getInputType.getFullName, value = request.toByteString)))
     }
 
-    def sendCommand(command: Command): Future[DynamicMessage] = {
-      implicit val askTimeout = relayTimeout
+    private[this] final def sendCommand(command: Command)(implicit timeout: Timeout): Future[DynamicMessage] = {
       (stateManager ? command).mapTo[ProtobufByteString].transform({
         case Success(bytes) =>
           val response = DynamicMessage.parseFrom(methDesc.getOutputType, bytes)
           debugMsg(response, "Got response")
           Success(response)
         case Failure(cf: StateManager.CommandFailure) => requestError(cf.getMessage) // TODO Should we handle CommandFailures like this?
-        case Failure(t) => Failure(t)
+        case Failure(t) => Failure(t) // TODO technically we could do `f @ Failure(_) => f.asInstanceOf[Failure[DynamicMessage]]`
       })
     }
 
     // FIXME Devise other way of supporting responseBody, this is waaay too costly and unproven
-    def responseBody(jType: JavaType, value: AnyRef, repeated: Boolean): com.google.protobuf.Value = {
+    // This method converts an arbitrary type to something which can be represented as JSON.
+    private[this] final def responseBody(jType: JavaType, value: AnyRef, repeated: Boolean): com.google.protobuf.Value = {
       val result =
         if (repeated) {
           Value.newBuilder.setListValue(
@@ -361,27 +366,28 @@ object HttpApi {
               )
           )
         } else {
+          val b = Value.newBuilder
           jType match {
-            case JavaType.BOOLEAN     => Value.newBuilder.setBoolValue(value.asInstanceOf[JBoolean])
-            case JavaType.BYTE_STRING => Value.newBuilder.setStringValueBytes(value.asInstanceOf[ProtobufByteString])
-            case JavaType.DOUBLE      => Value.newBuilder.setNumberValue(value.asInstanceOf[JDouble])
-            case JavaType.ENUM        => Value.newBuilder.setStringValue(value.asInstanceOf[EnumValueDescriptor].getName) // Switch to getNumber if enabling printingEnumsAsInts in the JSON Printer
-            case JavaType.FLOAT       => Value.newBuilder.setNumberValue(value.asInstanceOf[JFloat].toDouble)
-            case JavaType.INT         => Value.newBuilder.setNumberValue(value.asInstanceOf[JInteger].toDouble)
-            case JavaType.LONG        => Value.newBuilder.setNumberValue(value.asInstanceOf[JLong].toDouble)
+            case JavaType.BOOLEAN     => b.setBoolValue(value.asInstanceOf[JBoolean])
+            case JavaType.BYTE_STRING => b.setStringValueBytes(value.asInstanceOf[ProtobufByteString])
+            case JavaType.DOUBLE      => b.setNumberValue(value.asInstanceOf[JDouble])
+            case JavaType.ENUM        => b.setStringValue(value.asInstanceOf[EnumValueDescriptor].getName) // Switch to getNumber if enabling printingEnumsAsInts in the JSON Printer
+            case JavaType.FLOAT       => b.setNumberValue(value.asInstanceOf[JFloat].toDouble)
+            case JavaType.INT         => b.setNumberValue(value.asInstanceOf[JInteger].toDouble)
+            case JavaType.LONG        => b.setNumberValue(value.asInstanceOf[JLong].toDouble)
             case JavaType.MESSAGE     =>
-              val b = Struct.newBuilder
+              val sb = Struct.newBuilder
               value.asInstanceOf[MessageOrBuilder].getAllFields.forEach(
-                (k,v) => b.putFields(k.getJsonName, responseBody(k.getJavaType, v, k.isRepeated)) //Switch to getName if enabling preservingProtoFieldNames in the JSON Printer
+                (k,v) => sb.putFields(k.getJsonName, responseBody(k.getJavaType, v, k.isRepeated)) //Switch to getName if enabling preservingProtoFieldNames in the JSON Printer
               )
-              Value.newBuilder.setStructValue(b)
-            case JavaType.STRING      => Value.newBuilder.setStringValue(value.asInstanceOf[String])
+              b.setStructValue(sb)
+            case JavaType.STRING      => b.setStringValue(value.asInstanceOf[String])
           }
         }
       result.build()
     }
 
-    def createResponse(response: DynamicMessage): HttpResponse = {
+    private[this] final def createResponse(response: DynamicMessage): HttpResponse = {
       val output =
         responseBodyDescriptor match {
           case None        =>
@@ -414,9 +420,9 @@ object HttpApi {
 
   final def serve(stateManager: ActorRef, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val log = Logging(sys, "HttpApi")
-    val methodsAndRules = serviceDesc.getMethods.iterator.asScala.map {
+    val routes = serviceDesc.getMethods.iterator.asScala.map {
       method =>
-        ( method,
+        (method,
           (AnnotationsProto.http.get(convertMethodOptions(method)) match {
             case Some(rule) =>
               log.info(s"Using configured HTTP API endpoint using [$rule]")
@@ -431,18 +437,15 @@ object HttpApi {
               rule
           })
         )
-    }
-
-    val routes = methodsAndRules flatMap {
+    } flatMap {
       case (method, rule) =>
-        // FIXME add a try-catch around Endpoint-creation to filter out those who are erronously configured?
         new HttpEndpoint(method, rule, stateManager, relayTimeout) +:
-        rule.additionalBindings.map(r => new HttpEndpoint(method, r, stateManager, relayTimeout))
+        rule.additionalBindings.map(r => new HttpEndpoint(method, r, stateManager, relayTimeout)) // Only 1 level nesting allowed
     }
 
-    // FIXME Perhaps compose Directives instead as composing like this become a stack-usage issue?
-    routes.foldLeft(PartialFunction.empty[HttpRequest, Future[HttpResponse]]) {
-      (previous, current) => current orElse previous // FIXME check if it is first match wins or last match wins
+    routes.foldLeft(NoMatch) {
+      case (NoMatch,    first) => first
+      case (previous, current) => current orElse previous // Last goes first
     }
   }
 }

@@ -104,7 +104,7 @@ object Reflection {
         case In.AllExtensionNumbersOfType(container) =>
           val list = findExtensionNumbersForContainingType(container, fileDesc) // TODO should we throw a NOT_FOUND if we don't know the container type at all?
           Out.AllExtensionNumbersResponse(ExtensionNumberResponse(container, list))
-        case In.ListServices(_)              =>
+        case In.ListServices(_) =>
           val list = fileDesc.getServices.iterator.asScala.map(s => ServiceResponse(s.getFullName)).toList
           Out.ListServicesResponse(ListServiceResponse(list))
       }
