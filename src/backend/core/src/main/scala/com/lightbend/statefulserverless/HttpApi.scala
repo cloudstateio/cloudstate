@@ -168,6 +168,7 @@ object HttpApi {
                       else if (found.contains(variable)) configError(s"Path parameter [$variable] occurs more than once")
                       else found += variable // Keep track of the variables we've seen so far
                   }
+                case _ => // path element, ignore
               }
               p = p.tail
             }

@@ -106,7 +106,7 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
           handler = handler,
           interface = config.httpInterface,
           port = config.httpPort,
-          connectionContext = HttpConnectionContext(http2 = UseHttp2.PriorKnowledge)
+          connectionContext = HttpConnectionContext(http2 = UseHttp2.Negotiated)
         ) pipeTo self
       }
 

@@ -21,7 +21,7 @@ const entity = new Entity(
   {
     persistenceId: "shopping-cart",
     snapshotEvery: 5, // Usually you wouldn't snapshot this frequently, but this helps to demonstrate snapshotting
-    includeDirs: ["proto"]
+    includeDirs: ["../../protocols/frontend"]
   }
 );
 
