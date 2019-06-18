@@ -47,10 +47,12 @@ service ShoppingCart {
     }
 
     rpc GetCart(GetShoppingCart) returns (Cart) {
-        //option (google.api.http).get = "/carts/{user_id}";
         option (google.api.http) = {
-            get: "/carts/{user_id}",
-            response_body: "items",
+          get: "/carts/{user_id}",
+          additional_bindings: [{
+            get: "/carts/{user_id}/items",
+            response_body: "items"
+          }]
         };
     }
 }

@@ -372,5 +372,7 @@ class StatefulServerlessTCK(private[this] final val config: StatefulServerlessTC
         case _ => Try(reflectionClient.close())
       }
     }
+
+    "verify that the HTTP API of ShoppingCart protocol works" in pending
   }
 }
