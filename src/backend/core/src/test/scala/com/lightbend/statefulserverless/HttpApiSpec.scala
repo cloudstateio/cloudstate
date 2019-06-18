@@ -29,7 +29,6 @@ import com.lightbend.statefulserverless.test._
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 
 class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
-  val config = ConfigFactory.load()
   val timeout = Timeout(10.seconds)
 
   def assertConfigurationFailure(d: FileDescriptor, n: String, msg: String): Assertion = {
@@ -41,6 +40,13 @@ class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
   }
 
   "HTTP API" must {
+    "not allow empty patterns" in {
+      assertConfigurationFailure(
+        IllegalHttpConfig0Proto.javaDescriptor, "IllegalHttpConfig0",
+        "HTTP API Config: Pattern missing for rule [HttpRule(,,,Vector(),Empty)]!"
+      )
+    }
+
     "not allow selectors which do not exist as service methods" in {
       assertConfigurationFailure(
         IllegalHttpConfig1Proto.javaDescriptor, "IllegalHttpConfig1",
@@ -61,5 +67,53 @@ class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
         "HTTP API Config: Repeated parameters [com.lightbend.statefulserverless.test.IllegalHttpConfig3Message.illegal_repeated] are not allowed as path variables"
       )
     }
+
+    "not allow path extractors which refer to map fields" in pending
+
+    "not allow path extractors to be duplicated in the same rule" in {
+      assertConfigurationFailure(
+        IllegalHttpConfig4Proto.javaDescriptor, "IllegalHttpConfig4",
+        "HTTP API Config: Path parameter [duplicated] occurs more than once"
+      )
+    }
+
+    "not allow custom non-* custom kinds" in {
+      assertConfigurationFailure(
+        IllegalHttpConfig5Proto.javaDescriptor, "IllegalHttpConfig5",
+        "HTTP API Config: Only Custom patterns with [*] kind supported but [not currently supported] found!"
+      )
+    }
+
+    "not allow fieldName body-selector which does not exist on request type" in {
+      assertConfigurationFailure(
+        IllegalHttpConfig6Proto.javaDescriptor, "IllegalHttpConfig6",
+        "HTTP API Config: Body configured to [not-available] but that field does not exist on input type."
+      )
+    }
+
+    "not allow repeated fields in body-selector" in {
+      assertConfigurationFailure(
+        IllegalHttpConfig7Proto.javaDescriptor, "IllegalHttpConfig7",
+        "HTTP API Config: Body configured to [not_allowed] but that field does not exist on input type."
+      )
+    }
+
+    "not allow fieldName responseBody-selector which does not exist on response type" in {
+      assertConfigurationFailure(
+        IllegalHttpConfig8Proto.javaDescriptor, "IllegalHttpConfig8",
+        "HTTP API Config: Response body field [not-available] does not exist on type [google.protobuf.Empty]"
+      )
+    }
+
+    "not allow more than one level of additionalBindings" in {
+      assertConfigurationFailure(
+        IllegalHttpConfig9Proto.javaDescriptor, "IllegalHttpConfig9",
+        "HTTP API Config: Only one level of additionalBindings supported, but [HttpRule(,,,Vector(HttpRule(,,,Vector(HttpRule(,,,Vector(),Get(/baz))),Get(/bar))),Get(/foo))] has more than one!"
+      )
+    }
+
+    // Not currently possible since we don't support TRACE, HEAD, CONNECT (which do not allow entity in request)
+    "not allow *-body-selector on request kinds without body" in pending
+    "not allow fieldName body-selector on request kinds without body" in pending
   }
 }

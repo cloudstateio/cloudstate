@@ -216,13 +216,13 @@ object HttpApi {
           case "" => None
           case fieldName =>
             lookupFieldByName(methDesc.getOutputType, fieldName) match {
-              case null => configError("Response body field [$fieldName] does not exist on type [${methDesc.getOutputType.getFullName}]")
+              case null => configError(s"Response body field [$fieldName] does not exist on type [${methDesc.getOutputType.getFullName}]")
               case field => Some(field)
             }
         }
 
       if (rule.additionalBindings.exists(_.additionalBindings.nonEmpty))
-        configError("Only one level of additionalBindings supported, but [$rule] has more than one!")
+        configError(s"Only one level of additionalBindings supported, but [$rule] has more than one!")
 
       (mp, up, bd, rd)
     }

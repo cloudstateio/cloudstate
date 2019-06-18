@@ -1,0 +1,16 @@
+// This is the public API offered by the shopping cart entity.
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
+import "google/api/http.proto";
+
+package com.lightbend.statefulserverless.test;
+
+option java_package = "com.lightbend.statefulserverless.test";
+
+service IllegalHttpConfig0 {
+    rpc fail(google.protobuf.Empty) returns (google.protobuf.Empty) {
+        option (google.api.http) = {};
+    }
+}
