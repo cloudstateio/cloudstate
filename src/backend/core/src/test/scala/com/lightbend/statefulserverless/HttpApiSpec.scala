@@ -17,20 +17,49 @@
 package com.lightbend.statefulserverless
 
 import scala.concurrent.duration._
-import org.scalatest._
+import akka.ConfigurationException
 import akka.util.Timeout
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.http.scaladsl.server._
+import org.scalatest._
 import com.typesafe.config.{Config, ConfigFactory}
+import akka.testkit.{ TestActors, TestKit, TestProbe }
+import com.lightbend.statefulserverless.test._
+import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 
 class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
   val config = ConfigFactory.load()
+  val timeout = Timeout(10.seconds)
 
-  // (stateManager: ActorRef, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]]
-  val httpApiRoute = HttpApi.serve(???, Timeout(10.seconds), ???)
+  def assertConfigurationFailure(d: FileDescriptor, n: String, msg: String): Assertion = {
+    intercept[ConfigurationException] {
+      val service = d.findServiceByName(n)
+      service must not be(null)
+      HttpApi.serve(TestProbe().ref, timeout, service)
+    }.getMessage must equal(msg)
+  }
 
-  "The HttpApi" must {
-    "have tests" in pending
+  "HTTP API" must {
+    "not allow selectors which do not exist as service methods" in {
+      assertConfigurationFailure(
+        IllegalHttpConfig1Proto.javaDescriptor, "IllegalHttpConfig1",
+        "HTTP API Config: Rule selector [wrongSelector] must be empty or [com.lightbend.statefulserverless.test.IllegalHttpConfig1.fail]"
+      )
+    }
+
+    "not allow patterns which do not start with slash" in {
+      assertConfigurationFailure(
+        IllegalHttpConfig2Proto.javaDescriptor, "IllegalHttpConfig2",
+        "HTTP API Config: Configured pattern [no/initial/slash] does not start with slash"
+      )
+    }
+
+    "not allow path extractors which refer to repeated fields" in {
+      assertConfigurationFailure(
+        IllegalHttpConfig3Proto.javaDescriptor, "IllegalHttpConfig3",
+        "HTTP API Config: Repeated parameters [com.lightbend.statefulserverless.test.IllegalHttpConfig3Message.illegal_repeated] are not allowed as path variables"
+      )
+    }
   }
 }

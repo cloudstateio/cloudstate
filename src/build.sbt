@@ -122,6 +122,7 @@ lazy val `backend-core` = (project in file("backend/core"))
       "com.google.protobuf"            % "protobuf-java-util"                % ProtobufVersion,
 
       "org.scalatest"                 %% "scalatest"                         % "3.0.5" % "test",
+      "com.typesafe.akka"             %% "akka-testkit"                      % AkkaVersion % "test",
       "com.typesafe.akka"             %% "akka-stream-testkit"               % AkkaVersion % "test",
       "com.typesafe.akka"             %% "akka-http-testkit"                 % AkkaHttpVersion % "test"
     ),
@@ -132,6 +133,7 @@ lazy val `backend-core` = (project in file("backend/core"))
     inConfig(Test)(
       sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
         PB.protoSources ++= Seq(sourceDirectory.value / "protos"),
+        akkaGrpcGeneratedSources := Seq(AkkaGrpc.Server),
       )
     ),
 

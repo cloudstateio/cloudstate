@@ -162,8 +162,8 @@ object HttpApi {
                   lookupFieldByName(methDesc.getInputType, variable) match {
                     case null => false
                     case field =>
-                      if (field.isRepeated) configError("Repeated parameters [$field] are not allowed as path variables")
-                      else if (field.isMapField) configError("Map parameters [$field] are not allowed as path variables")
+                      if (field.isRepeated) configError(s"Repeated parameters [$field] are not allowed as path variables")
+                      else if (field.isMapField) configError(s"Map parameters [$field] are not allowed as path variables")
                       else if (suitableParserFor(field)(configError) == null) () // Can't really happen
                       else if (found.contains(variable)) configError(s"Path parameter [$variable] occurs more than once")
                       else found += variable // Keep track of the variables we've seen so far
