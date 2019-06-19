@@ -24,6 +24,9 @@ import java.io.File
 
 import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
+import akka.http.scaladsl.model.{HttpRequest, HttpProtocols, HttpMethods, HttpEntity, HttpResponse, ContentTypes, StatusCode, StatusCodes}
+import akka.http.scaladsl.model.headers._
+import akka.http.scaladsl.unmarshalling._
 
 import com.lightbend.statefulserverless.grpc._
 import com.example.shoppingcart._
@@ -117,11 +120,6 @@ class StatefulServerlessTCK(private[this] final val config: StatefulServerlessTC
   @volatile private[this] final var backendProcess:  Process             = _
   @volatile private[this] final var frontendProcess: Process             = _
   @volatile private[this] final var tckProxy:        ServerBinding       = _
-
-  final implicit override def executionContext = system match {
-    case null => super.executionContext
-    case some => some.dispatcher
-  }
 
   def process(ps: ProcSpec): ProcessBuilder = {
     val pb =
@@ -373,6 +371,98 @@ class StatefulServerlessTCK(private[this] final val config: StatefulServerlessTC
       }
     }
 
-    "verify that the HTTP API of ShoppingCart protocol works" in pending
+    "verify that the HTTP API of ShoppingCart protocol works" in {
+      implicit val s = system
+      implicit val m = mat
+
+      def validateResponse(response: HttpResponse): Future[String] = {
+        response.status must be(StatusCodes.OK)
+        response.entity.contentType must be(ContentTypes.`application/json`)
+        Unmarshal(response).to[String]
+      }
+
+      def getCart(userId: String): Future[String] =
+        Http().singleRequest(
+          HttpRequest(
+            method = HttpMethods.GET,
+            headers = Nil,
+            uri = s"http://${config.backend.hostname}:${config.backend.port}/carts/${userId}",
+            entity = HttpEntity.Empty,
+            protocol = HttpProtocols.`HTTP/1.1`
+          )
+        ).flatMap(validateResponse)
+
+      def getItems(userId: String): Future[String] =
+        Http().singleRequest(
+          HttpRequest(
+            method = HttpMethods.GET,
+            headers = Nil,
+            uri = s"http://${config.backend.hostname}:${config.backend.port}/carts/${userId}/items",
+            entity = HttpEntity.Empty,
+            protocol = HttpProtocols.`HTTP/1.1`
+          )
+        ).flatMap(validateResponse)
+
+      def addItem(userId: String, productId: String, productName: String, quantity: Int): Future[String] =
+        Http().singleRequest(
+          HttpRequest(
+            method = HttpMethods.POST,
+            headers = Nil,
+            uri = s"http://${config.backend.hostname}:${config.backend.port}/cart/${userId}/items/add",
+            entity = HttpEntity(ContentTypes.`application/json`,
+              s"""
+              {
+                "product_id": "${productId}",
+                "name": "${productName}",
+                "quantity": ${quantity}
+              }
+              """.trim
+            ),
+            protocol = HttpProtocols.`HTTP/1.1`
+          )
+        ).flatMap(validateResponse)
+
+      def removeItem(userId: String, productId: String): Future[String] =
+        Http().singleRequest(
+          HttpRequest(
+            method = HttpMethods.POST,
+            headers = Nil,
+            uri = s"http://${config.backend.hostname}:${config.backend.port}/cart/${userId}/items/${productId}/remove",
+            entity = HttpEntity.Empty,
+            protocol = HttpProtocols.`HTTP/1.1`
+          )
+        ).flatMap(validateResponse)
+
+      val userId = "foo"
+      for {
+        c0 <- getCart(userId)
+        a0 <- addItem(userId, "A14362347", "Deluxe", 5)
+        a1 <- addItem(userId, "B14623482", "Basic", 1)
+        a2 <- addItem(userId, "A14362347", "Deluxe", 2)
+        c1 <- getCart(userId)
+        l0 <- getItems(userId)
+        r0 <- removeItem(userId, "A14362347")
+        c2 <- getCart(userId)
+        l1 <- getItems(userId)
+      } yield {
+        c0 must equal("""{"items":[]}""")
+        a0 must equal("""{}""")
+        a1 must equal("""{}""")
+        a2 must equal("""{}""")
+        c1 must equal(
+          """{"items":[{"productId":"A14362347","name":"Deluxe","quantity":7},{"productId":"B14623482","name":"Basic","quantity":1}]}"""
+        )
+        l0 must equal(
+          """[{"productId":"A14362347","name":"Deluxe","quantity":7.0},{"productId":"B14623482","name":"Basic","quantity":1.0}]"""
+        )
+        r0 must equal("""{}""")
+        c2 must equal(
+          """{"items":[{"productId":"B14623482","name":"Basic","quantity":1}]}"""
+        )
+        l1 must equal(
+          """[{"productId":"B14623482","name":"Basic","quantity":1.0}]"""
+        )
+      }
+    }
   }
 }

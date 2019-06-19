@@ -15,7 +15,7 @@ licenses in ThisBuild += ("Apache-2.0", new URL("https://www.apache.org/licenses
 
 val AkkaVersion = "2.5.23"
 val AkkaHttpVersion = "10.1.8+47-9ef9d823"
-val AkkaManagementVersion = "1.0.0"
+val AkkaManagementVersion = "1.0.1"
 val AkkaPersistenceCassandraVersion = "0.93"
 val ProtobufVersion = "3.5.1"
 
@@ -212,6 +212,9 @@ lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"
       "com.typesafe.akka"  %% "akka-stream"          % AkkaVersion,
       "com.typesafe.akka"  %% "akka-http"            % AkkaHttpVersion,
       "com.typesafe.akka"  %% "akka-http-spray-json" % AkkaHttpVersion,
+      "com.typesafe.akka"  %% "akka-http-core"       % AkkaHttpVersion,
+      "com.typesafe.akka"  %% "akka-http2-support"   % AkkaHttpVersion,
+      "com.typesafe.akka"  %% "akka-parsing"         % AkkaVersion,
       "com.google.protobuf" % "protobuf-java"        % ProtobufVersion % "protobuf" // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
     ),
 

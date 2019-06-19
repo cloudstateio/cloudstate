@@ -130,10 +130,10 @@ object HttpApi {
                                                                       newBuilder.
                                                                       add(methDesc.getOutputType).
                                                                       build()).
-                                                    includingDefaultValueFields()
+                                                    includingDefaultValueFields().
+                                                    omittingInsignificantWhitespace()
                                                     //printingEnumsAsInts() // If you enable this, you need to fix the output for responseBody as well
                                                     //preservingProtoFieldNames(). // If you enable this, you need to fix the output for responseBody structs as well
-                                                    //omittingInsignificantWhitespace().
                                                     //sortingMapKeys().
 
     // This method validates the configuration and returns values obtained by parsing the configuration
