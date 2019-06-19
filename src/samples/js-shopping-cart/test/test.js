@@ -18,22 +18,33 @@ const path = require("path");
 const should = require('chai').should();
 const grpc = require("grpc");
 const protoLoader = require("@grpc/proto-loader");
-
+const fs = require("fs");
 const protobuf = require("protobufjs");
 require("protobufjs/ext/descriptor");
 
 const ssesPath = path.dirname(require.resolve("stateful-serverless-event-sourcing"));
-const packageDefinition = protoLoader.loadSync("lightbend/serverless/entity.proto", {
-  includeDirs: [path.join(ssesPath, "proto"), path.join(ssesPath, "proto-ext")]
+const allIncludePath = [path.join(ssesPath, "proto"), path.join(ssesPath, "proto-ext"), path.join("..", "..", "protocols", "frontend")]
+const packageDefinition = protoLoader.loadSync(path.join("lightbend","serverless", "entity.proto"), {
+  includeDirs: allIncludePath
 });
 const descriptor = grpc.loadPackageDefinition(packageDefinition);
 
 const root = new protobuf.Root();
 root.resolvePath = function (origin, target) {
-  return path.join("proto", target);
+  for (var _i = 0; _i < allIncludePath.length; _i++) {
+    let fullPath = path.join(allIncludePath[_i], target);
+    try {
+      fs.accessSync(fullPath, fs.constants.R_OK);
+      return fullPath;
+    } catch (err) {
+      continue;
+    }
+  }
+  return null;
+  // return path.join("../../protocols/frontend", target);
 };
-root.loadSync("shoppingcart.proto");
-root.loadSync("domain.proto");
+root.loadSync(path.join("example","shoppingcart","shoppingcart.proto"));
+root.loadSync(path.join("example","shoppingcart","persistence","domain.proto"));
 root.resolveAll();
 
 const ItemAdded = root.lookupType("com.example.shoppingcart.persistence.ItemAdded");

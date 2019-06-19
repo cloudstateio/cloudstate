@@ -40,6 +40,6 @@
     "mocha": "^6.1.4"
   },
   "scripts": {
-    "prepare": "cp -r ../backend/core/src/main/proto ."
+    "prepare": "cp -r ../protocols/frontend/ ./proto/"
   }
 }

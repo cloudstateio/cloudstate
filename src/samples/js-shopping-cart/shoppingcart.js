@@ -16,12 +16,12 @@
 const Entity = require("stateful-serverless-event-sourcing");
 
 const entity = new Entity(
-  ["shoppingcart.proto", "domain.proto"],
+  ["example/shoppingcart/shoppingcart.proto", "example/shoppingcart/persistence/domain.proto"],
   "com.example.shoppingcart.ShoppingCart",
   {
     persistenceId: "shopping-cart",
     snapshotEvery: 5, // Usually you wouldn't snapshot this frequently, but this helps to demonstrate snapshotting
-    includeDirs: ["proto"]
+    includeDirs: [""]
   }
 );
 
