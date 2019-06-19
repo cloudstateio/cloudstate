@@ -28,7 +28,7 @@ const includeDirs = [
   path.join(__dirname, "..", "proto"),
   path.join(__dirname, "..", "proto-ext")
 ];
-const packageDefinition = protoLoader.loadSync("lightbend/serverless/entity.proto", {
+const packageDefinition = protoLoader.loadSync(path.join("lightbend","serverless", "entity.proto"), {
   includeDirs: includeDirs
 });
 const grpcDescriptor = grpc.loadPackageDefinition(packageDefinition);
@@ -343,7 +343,8 @@ module.exports = class Entity {
 
     const allIncludeDirs = [
       path.resolve(__dirname, "..", "proto"),
-      path.resolve(__dirname, "..", "proto-ext")
+      path.resolve(__dirname, "..", "proto-ext"),
+      path.resolve(__dirname, "..", "..", "protocols", "frontend"),
     ].concat(this.options.includeDirs);
 
     this.root = new protobuf.Root();
