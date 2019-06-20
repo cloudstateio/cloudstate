@@ -20,16 +20,15 @@ import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import akka.grpc.scaladsl.{GrpcExceptionHandler, GrpcMarshalling}
 import GrpcMarshalling.{marshalStream, unmarshalStream}
-import akka.grpc.{Codecs, GrpcServiceException, ProtobufSerializer}
+import akka.grpc.{Codecs, ProtobufSerializer}
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.Uri.Path
-import akka.http.scaladsl.model.Uri.Path.Segment
 import akka.actor.{ActorRef, ActorSystem}
 import akka.util.{ByteString, Timeout}
 import akka.NotUsed
 import akka.pattern.ask
 import akka.stream.Materializer
-import akka.stream.scaladsl.{Flow, Sink}
+import akka.stream.scaladsl.Flow
 import com.google.protobuf.{DescriptorProtos, DynamicMessage, ByteString => ProtobufByteString}
 import com.google.protobuf.empty.{EmptyProto => ProtobufEmptyProto}
 import com.google.protobuf.any.{Any => ProtobufAny, AnyProto => ProtobufAnyProto}
@@ -40,13 +39,14 @@ import akka.http.scaladsl.model.headers.{ModeledCustomHeader, ModeledCustomHeade
 import com.lightbend.statefulserverless.StateManager.CommandFailure
 import com.lightbend.statefulserverless.grpc.{EntitySpec, EntitykeyProto}
 import io.grpc.Status
-import com.lightbend.statefulserverless.internal.grpc.{GrpcEntityCommand, Request}
+import com.lightbend.statefulserverless.internal.grpc.{GrpcEntityCommand, GrpcEntityReply, Request}
 import org.slf4j.LoggerFactory
 
-import scala.util.{Failure, Success}
+import scala.util.Success
 
 
 object Serve {
+
   private final val log = LoggerFactory.getLogger(getClass)
   // When the entity key is made up of multiple fields, this is used to separate them
   private final val EntityKeyValueSeparator = "-"
@@ -64,37 +64,19 @@ object Serve {
       Future.successful(HttpResponse(StatusCodes.NotFound))
   }
 
-  private final val ActivatorProxyName = "activator"
-
-  final class KnativeProxyHeader(token: String) extends ModeledCustomHeader[KnativeProxyHeader] {
-    override def renderInRequests = true
-    override def renderInResponses = true
-    override val companion = KnativeProxyHeader
-    override def value: String = token
-
-    /**
-      * Whether the proxy is the Knative activator proxy
-      */
-    def isActivator = value == ActivatorProxyName
-  }
-  object KnativeProxyHeader extends ModeledCustomHeaderCompanion[KnativeProxyHeader] {
-    override val name = "K-Proxy-Request"
-    override def parse(value: String) = Success(new KnativeProxyHeader(value))
-  }
-
-  private final object ReplySerializer extends ProtobufSerializer[ProtobufByteString] {
-    override final def serialize(pbBytes: ProtobufByteString): ByteString =
-      if (pbBytes.isEmpty) {
+  private final object ReplySerializer extends ProtobufSerializer[GrpcEntityReply] {
+    override final def serialize(reply: GrpcEntityReply): ByteString =
+      if (reply.payload.isEmpty) {
         ByteString.empty
       } else {
-        ByteString.fromArrayUnsafe(pbBytes.toByteArray())
+        ByteString.fromArrayUnsafe(reply.payload.toByteArray)
       }
-    override final def deserialize(bytes: ByteString): ProtobufByteString =
-      if (bytes.isEmpty) {
-        ProtobufByteString.EMPTY
-      } else {
-        ProtobufByteString.readFrom(bytes.iterator.asInputStream)
-      }
+
+    override final def deserialize(bytes: ByteString): GrpcEntityReply =
+      GrpcEntityReply(
+        if (bytes.isEmpty) ProtobufByteString.EMPTY
+        else ProtobufByteString.readFrom(bytes.iterator.asInputStream)
+      )
   }
 
   /**
@@ -106,9 +88,9 @@ object Serve {
     val fields =
       scalapb.UnknownFieldSet(field.getOptions.getUnknownFields.asMap.asScala.map {
         case (idx, f) => idx.toInt -> scalapb.UnknownFieldSet.Field(
-          varint          = f.getVarintList.asScala.map(_.toLong),
-          fixed64         = f.getFixed64List.asScala.map(_.toLong),
-          fixed32         = f.getFixed32List.asScala.map(_.toInt),
+          varint = f.getVarintList.asScala.map(_.toLong),
+          fixed64 = f.getFixed64List.asScala.map(_.toLong),
+          fixed32 = f.getFixed32List.asScala.map(_.toInt),
           lengthDelimited = f.getLengthDelimitedList.asScala
         )
       }.toMap)
@@ -120,8 +102,8 @@ object Serve {
     private[this] final val commandTypeUrl = AnyTypeUrlHostName + desc.getFullName
     private[this] final val extractId = {
       val fields = desc.getFields.iterator.asScala.
-                     filter(field => EntitykeyProto.entityKey.get(convertFieldOptions(field))).
-                     toArray.sortBy(_.getIndex)
+        filter(field => EntitykeyProto.entityKey.get(convertFieldOptions(field))).
+        toArray.sortBy(_.getIndex)
 
       fields.length match {
         case 0 => throw new IllegalStateException(s"No field marked with [(com.lightbend.statefulserverless.grpc.entity_key) = true] found for $commandName")
@@ -141,8 +123,8 @@ object Serve {
 
     override final def deserialize(bytes: ByteString): GrpcEntityCommand = {
       GrpcEntityCommand(entityId = extractId(DynamicMessage.parseFrom(desc, bytes.iterator.asInputStream)),
-              name = commandName,
-              payload = Some(ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer))))
+        name = commandName,
+        payload = Some(ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer))))
     }
   }
 
@@ -157,19 +139,19 @@ object Serve {
     Some(descriptor).filter(_.getPackage == pkg).map(_.findServiceByName(name))
   }
 
-  def createRoute(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+  def createRoute(stateManager: ActorRef, statsCollector: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val descriptorSet = DescriptorProtos.FileDescriptorSet.parseFrom(spec.proto)
     descriptorSet.getFileList.iterator.asScala.map(
       fdp => FileDescriptor.buildFrom(fdp, DescriptorDependencies, true)
     ).map(
-      descriptor => extractService(spec.serviceName, descriptor).map( service =>
-                       compileProxy(stateManager, proxyParallelism, relayTimeout, service) orElse
-                       handleNetworkProbe() orElse
-                       Reflection.serve(descriptor) orElse
-                       NotFound
-                    )
+      descriptor => extractService(spec.serviceName, descriptor).map(service =>
+        compileProxy(stateManager, statsCollector, proxyParallelism, relayTimeout, service) orElse
+          handleNetworkProbe() orElse
+          Reflection.serve(descriptor) orElse
+          NotFound
+      )
     ).collectFirst({ case Some(route) => route })
-     .getOrElse(throw new Exception(s"Service ${spec.serviceName} not found in descriptors!"))
+      .getOrElse(throw new Exception(s"Service ${spec.serviceName} not found in descriptors!"))
   }
 
   def handleNetworkProbe(): PartialFunction[HttpRequest, Future[HttpResponse]] = Function.unlift { req =>
@@ -181,7 +163,7 @@ object Serve {
     }
   }
 
-  private[this] final def compileProxy(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+  private[this] final def compileProxy(stateManager: ActorRef, statsCollector: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val serviceName = serviceDesc.getFullName
     val rpcMethodSerializers = serviceDesc.getMethods.iterator.asScala.map(
       d => (Path / serviceName / d.getName, new CommandSerializer(d.getName, d.getInputType))
@@ -193,13 +175,21 @@ object Serve {
       _ => pf
     }
 
-    { case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
+    {
+      case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
+        val startTime = System.nanoTime()
         implicit val askTimeout = relayTimeout
         val responseCodec = Codecs.negotiate(req)
         unmarshalStream(req)(rpcMethodSerializers(req.uri.path), mat).
           map(_.mapAsync(proxyParallelism) { command =>
-            val request = Request(Some(command), req.header[KnativeProxyHeader].exists(_.isActivator))
-            (stateManager ? request).mapTo[ProtobufByteString]
+            statsCollector ! StatsCollector.RequestReceived
+
+            val request = Request(Some(command))
+            (stateManager ? request).mapTo[GrpcEntityReply]
+              .transform { result =>
+                statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
+                result
+              }
           }).
           map(e => marshalStream(e, mapRequestFailureExceptions)(ReplySerializer, mat, responseCodec, sys)).
           recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
@@ -228,6 +218,7 @@ private[statefulserverless] object Names {
 }
 
 object Reflection {
+
   import _root_.grpc.reflection.v1alpha._
 
   private final val ReflectionPath = Path / ServerReflection.name / "ServerReflectionInfo"
@@ -242,8 +233,8 @@ object Reflection {
       case req: HttpRequest if req.uri.path == ReflectionPath =>
         val responseCodec = Codecs.negotiate(req)
         GrpcMarshalling.unmarshalStream(req)(ServerReflectionRequestSerializer, mat)
-        .map(_ via handler)
-        .map(e => GrpcMarshalling.marshalStream(e, GrpcExceptionHandler.defaultMapper)(ServerReflectionResponseSerializer, mat, responseCodec, sys))
+          .map(_ via handler)
+          .map(e => GrpcMarshalling.marshalStream(e, GrpcExceptionHandler.defaultMapper)(ServerReflectionResponseSerializer, mat, responseCodec, sys))
     }
   }
 
@@ -253,15 +244,15 @@ object Reflection {
 
   private final def containsSymbol(symbol: String, fileDesc: FileDescriptor): Boolean =
     (symbol.startsWith(fileDesc.getPackage)) && // Ensure package match first
-    (Names.splitNext(if (fileDesc.getPackage.isEmpty) symbol else symbol.drop(fileDesc.getPackage.length + 1)) match {
-      case ("", "") => false
-      case (typeOrService, "") =>
-      //fileDesc.findEnumTypeByName(typeOrService) != null || // TODO investigate if this is expected
-        fileDesc.findMessageTypeByName(typeOrService) != null ||
-        fileDesc.findServiceByName(typeOrService) != null
-      case (service, method) =>
-        Option(fileDesc.findServiceByName(service)).exists(_.findMethodByName(method) != null)
-    })
+      (Names.splitNext(if (fileDesc.getPackage.isEmpty) symbol else symbol.drop(fileDesc.getPackage.length + 1)) match {
+        case ("", "") => false
+        case (typeOrService, "") =>
+          //fileDesc.findEnumTypeByName(typeOrService) != null || // TODO investigate if this is expected
+          fileDesc.findMessageTypeByName(typeOrService) != null ||
+            fileDesc.findServiceByName(typeOrService) != null
+        case (service, method) =>
+          Option(fileDesc.findServiceByName(service)).exists(_.findMethodByName(method) != null)
+      })
 
   private final def findFileDescForSymbol(symbol: String, fileDesc: FileDescriptor): Option[FileDescriptor] =
     if (containsSymbol(symbol, fileDesc)) Option(fileDesc)
@@ -274,15 +265,15 @@ object Reflection {
     if (containsExtension(container, number, fileDesc)) Option(fileDesc)
     else fileDesc.getDependencies.iterator.asScala.map(fd => findFileDescForExtension(container, number, fd)).find(_.isDefined).flatten
 
-  private final def findExtensionNumbersForContainingType(container: String, fileDesc: FileDescriptor): List[Int] = 
+  private final def findExtensionNumbersForContainingType(container: String, fileDesc: FileDescriptor): List[Int] =
     fileDesc.getDependencies.iterator.asScala.foldLeft(
       fileDesc.getExtensions.iterator.asScala.collect({ case ext if ext.getFullName == container => ext.getNumber }).toList
     )((list, fd) => findExtensionNumbersForContainingType(container, fd) ::: list)
 
   private def handle(fileDesc: FileDescriptor): Flow[ServerReflectionRequest, ServerReflectionResponse, NotUsed] =
-    Flow[ServerReflectionRequest]/*DEBUG: .alsoTo(Sink.foreach(println(_)))*/.map(req => {
-      import ServerReflectionRequest.{ MessageRequest => In}
-      import ServerReflectionResponse.{ MessageResponse => Out}
+    Flow[ServerReflectionRequest] /*DEBUG: .alsoTo(Sink.foreach(println(_)))*/ .map(req => {
+      import ServerReflectionRequest.{MessageRequest => In}
+      import ServerReflectionResponse.{MessageResponse => Out}
 
       val response = req.messageRequest match {
         case In.Empty =>
@@ -299,11 +290,11 @@ object Reflection {
         case In.AllExtensionNumbersOfType(container) =>
           val list = findExtensionNumbersForContainingType(container, fileDesc) // TODO should we throw a NOT_FOUND if we don't know the container type at all?
           Out.AllExtensionNumbersResponse(ExtensionNumberResponse(container, list))
-        case In.ListServices(_)              =>
+        case In.ListServices(_) =>
           val list = fileDesc.getServices.iterator.asScala.map(s => ServiceResponse(s.getFullName)).toList
           Out.ListServicesResponse(ListServiceResponse(list))
       }
       // TODO Validate assumptions here
       ServerReflectionResponse(req.host, Some(req), response)
-    })// DEBUG: .alsoTo(Sink.foreach(println(_)))
+    }) // DEBUG: .alsoTo(Sink.foreach(println(_)))
 }

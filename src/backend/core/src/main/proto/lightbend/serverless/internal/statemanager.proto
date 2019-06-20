@@ -32,5 +32,8 @@ message GrpcEntityCommand {
 
 message Request {
     GrpcEntityCommand command = 1;
-    bool is_proxied = 2;
+}
+
+message GrpcEntityReply {
+    bytes payload = 1;
 }

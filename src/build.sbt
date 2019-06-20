@@ -14,11 +14,12 @@ organizationName in ThisBuild := "Lightbend Inc."
 startYear in ThisBuild := Some(2019)
 licenses in ThisBuild += ("Apache-2.0", new URL("https://www.apache.org/licenses/LICENSE-2.0.txt"))
 
-val AkkaVersion = "2.5.22"
+val AkkaVersion = "2.5.23-jroper-rebalance-fix-1"
 val AkkaHttpVersion = "10.1.7"
 val AkkaManagementVersion = "1.0.1"
 val AkkaPersistenceCassandraVersion = "0.96"
 val PrometheusClientVersion = "0.6.0"
+val ScalaTestVersion = "3.0.5"
 
 def common: Seq[Setting[_]] = Seq(
   headerMappings := headerMappings.value ++ Seq(
@@ -67,10 +68,13 @@ lazy val `backend-core` = (project in file("backend/core"))
       "com.typesafe.akka"             %% "akka-cluster-sharding"             % AkkaVersion,
       "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
       "com.lightbend.akka.discovery"  %% "akka-discovery-kubernetes-api"     % AkkaManagementVersion,
+      "com.thesamet.scalapb"          %% "scalapb-runtime"                   % scalapb.compiler.Version.scalapbVersion % "protobuf",
       "com.google.protobuf"            % "protobuf-java"                     % "3.5.1" % "protobuf", // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565,
       "io.prometheus"                  % "simpleclient"                      % PrometheusClientVersion,
       "io.prometheus"                  % "simpleclient_common"               % PrometheusClientVersion,
-      "ch.qos.logback"                 % "logback-classic"                   % "1.2.3"
+      "ch.qos.logback"                 % "logback-classic"                   % "1.2.3",
+      "org.scalatest"                 %% "scalatest"                         % ScalaTestVersion % Test,
+      "com.typesafe.akka"             %% "akka-testkit"                      % AkkaVersion % Test
     ),
 
     // Akka gRPC adds all protobuf files from the classpath to this, which we don't want because it includes
@@ -151,6 +155,7 @@ val copyShoppingCartProtos = taskKey[File]("Copy the shopping cart protobufs")
 
 lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"))
   .enablePlugins(AkkaGrpcPlugin)
+  .dependsOn(`backend-core`)
   .settings(
     common,
     name := "akka-js-shopping-cart-client",
@@ -162,6 +167,7 @@ lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"
       "com.typesafe.akka"  %% "akka-stream"          % AkkaVersion,
       "com.typesafe.akka"  %% "akka-http"            % AkkaHttpVersion,
       "com.typesafe.akka"  %% "akka-http-spray-json" % AkkaHttpVersion,
+      "com.thesamet.scalapb"          %% "scalapb-runtime"                   % scalapb.compiler.Version.scalapbVersion % "protobuf",
       "com.google.protobuf" % "protobuf-java"        % "3.5.1" % "protobuf" // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
     ),
 
@@ -210,7 +216,7 @@ lazy val `tck` = (project in file("tck"))
       "com.typesafe.akka"  %% "akka-http"            % AkkaHttpVersion,
       "com.typesafe.akka"  %% "akka-http-spray-json" % AkkaHttpVersion,
       "com.google.protobuf" % "protobuf-java"        % "3.5.1" % "protobuf", // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
-      "org.scalatest"       % "scalatest_2.12"       % "3.0.5",
+      "org.scalatest"      %% "scalatest"            % ScalaTestVersion,
       "com.typesafe.akka"  %% "akka-testkit"         % AkkaVersion
     ),
 

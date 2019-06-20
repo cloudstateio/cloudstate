@@ -20,7 +20,7 @@ import java.time.ZonedDateTime
 
 import akka.Done
 import akka.stream.Materializer
-import com.lightbend.statefulserverless.operator.KnativeRevision.{EventSourcedDeployer, Resource}
+import com.lightbend.statefulserverless.operator.EventSourcedService.Resource
 import skuber.LabelSelector.dsl._
 import skuber._
 import skuber.api.client.KubernetesClient
@@ -28,122 +28,105 @@ import skuber.apps.v1.Deployment
 
 import scala.concurrent.{ExecutionContext, Future}
 
-class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionContext)
-  extends OperatorFactory[KnativeRevision.Status, Resource] {
+
+class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionContext)
+  extends OperatorFactory[EventSourcedService.Status, Resource] {
 
   private val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "gcr.io/stateserv/stateful-serverless-backend-cassandra:latest")
 
   import OperatorConstants._
 
-  override def apply(client: KubernetesClient): Operator = new KnativeRevisionOperator(client)
+  override def apply(client: KubernetesClient): Operator = new EventSourcedServiceOperator(client)
 
-  class KnativeRevisionOperator(client: KubernetesClient) extends Operator {
+  class EventSourcedServiceOperator(client: KubernetesClient) extends Operator {
 
     private val helper = new ResourceHelper(client)
 
-    private def isOwnedByKnativeRevisionController(deployment: Deployment): Boolean = {
+    private def isOwnedByEventSourcedServiceController(deployment: Deployment): Boolean = {
       deployment.metadata.ownerReferences
         .find(_.controller.contains(true))
-        .exists(ref => ref.apiVersion.startsWith(KnativeServingGroup + "/")
-          && ref.kind == RevisionKind)
+        .exists(ref => ref.apiVersion.startsWith(StatefulServerlessGroup + "/")
+          && ref.kind == EventSourcedServiceKind)
     }
 
     override def handleChanged(resource: Resource): Future[StatusUpdate] = {
-      resource.spec.deployer match {
-        case Some(esd: EventSourcedDeployer) =>
-          reconcile(resource, esd)
-        case _ =>
-          Future.successful(StatusUpdate.None)
-      }
+      val deploymentName = deploymentNameFor(resource)
+
+      for {
+        maybeJournal <- client.getOption[EventSourcedJournal.Resource](resource.spec.journal.name)
+        maybeDeployment <- client.getOption[Deployment](deploymentName)
+        statusUpdate <- reconcileDeployment(resource, maybeJournal, maybeDeployment)
+      } yield statusUpdate
     }
 
     override def handleDeleted(resource: Resource): Future[Done] = {
 
-      resource.spec.deployer match {
-        case Some(esd: EventSourcedDeployer) =>
-          for {
-            maybeExisting <- client.getOption[Deployment](deploymentNameFor(resource))
-            _ <- maybeExisting match {
-              case Some(existing) if isOwnedByKnativeRevisionController(existing) =>
-                println("Deleting deployment " + existing.name)
-                client.delete[Deployment](existing.name)
-              case Some(existing) =>
-                println(s"Not deleting deployment ${existing.name} because we don't manage it")
-                Future.successful(Done)
-              case None =>
-                println("Deployment to delete not found")
-                Future.successful(Done)
-            }
-          } yield Done
-        case _ =>
-          Future.successful(Done)
-      }
+      for {
+        maybeExisting <- client.getOption[Deployment](deploymentNameFor(resource))
+        _ <- maybeExisting match {
+          case Some(existing) if isOwnedByEventSourcedServiceController(existing) =>
+            println("Deleting deployment " + existing.name)
+            client.delete[Deployment](existing.name)
+          case Some(existing) =>
+            println(s"Not deleting deployment ${existing.name} because we don't manage it")
+            Future.successful(Done)
+          case None =>
+            println("Deployment to delete not found")
+            Future.successful(Done)
+        }
+      } yield Done
 
     }
 
     override def statusFromError(error: Throwable, existing: Option[Resource]): StatusUpdate = {
       existing match {
-        case Some(revision) =>
-          updateCondition(revision, KnativeRevision.Condition(
-            `type` = JournalConditionType,
+        case Some(service) =>
+          updateCondition(service, EventSourcedService.Condition(
+            `type` = ConditionResourcesAvailable,
             status = UnknownStatus,
             reason = Some("UnknownError"),
             message = Some(error.getMessage),
             lastTransitionTime = Some(ZonedDateTime.now())
           ))
         case None =>
-          println("Unknown error handling revision change, but we don't have an existing revision to update: " + error)
+          println("Unknown error handling service change, but we don't have an existing service to update: " + error)
           error.printStackTrace()
           StatusUpdate.None
       }
     }
 
-    private def updateCondition(revision: KnativeRevision.Resource, condition: KnativeRevision.Condition): StatusUpdate = {
-      val status = revision.status.getOrElse(new KnativeRevision.Status(None, Nil, None, None, None))
-      // First check if the condition has actually changed - important, because otherwise we might end up in an
-      // infinite loop with the Knative operator
-      if (status.conditions.exists(c =>
+    private def updateCondition(service: Resource, conditions: EventSourcedService.Condition*): StatusUpdate = {
+      val status = service.status.getOrElse(new EventSourcedService.Status(Nil))
+
+      if (conditions.forall(condition => status.conditions.exists(c =>
         c.`type` == condition.`type` &&
           c.status == condition.status &&
           c.reason == condition.reason
-      )) {
+      ))) {
         // Hasn't changed, don't update.
         StatusUpdate.None
       } else {
         // Otherwise, update.
-        val conditions = if (status.conditions.exists(_.`type` == condition.`type`)) {
-          status.conditions.map {
-            case c if c.`type` == condition.`type` => condition
-            case other => other
-          }
-        } else {
-          status.conditions :+ condition
-        }
-        StatusUpdate.Update(status.copy(conditions = conditions))
+        val newConditions = status.conditions.map { condition =>
+          conditions.find(_.`type` == condition.`type`).getOrElse(condition)
+        } ++ conditions.filter(c => !status.conditions.exists(_.`type` == c.`type`))
+
+        StatusUpdate.Update(status.copy(conditions = newConditions))
       }
     }
 
-    private def reconcile(revision: KnativeRevision.Resource, deployer: EventSourcedDeployer) = {
-      val deploymentName = deploymentNameFor(revision)
+    private def reconcileDeployment(service: Resource, maybeJournal: Option[EventSourcedJournal.Resource],
+      maybeDeployment: Option[Deployment]) = {
 
-      for {
-        maybeJournal <- client.getOption[EventSourcedJournal.Resource](deployer.journal.name)
-        maybeDeployment <- client.getOption[Deployment](deploymentName)
-        statusUpdate <- reconcileDeployment(revision, deployer, maybeJournal, maybeDeployment)
-      } yield statusUpdate
-    }
-
-    private def reconcileDeployment(revision: KnativeRevision.Resource, deployer: EventSourcedDeployer,
-      maybeJournal: Option[EventSourcedJournal.Resource], maybeDeployment: Option[Deployment]) = {
-      val deploymentName = deploymentNameFor(revision)
+      val deploymentName = deploymentNameFor(service)
 
       // for expression over eithers, only progresses when they return Right, otherwise we end up with Left of condition
       val result = for {
         _ <- verifyWeOwnDeployment(deploymentName, maybeDeployment)
-        sidecar <- validateJournal(revision, deployer, maybeJournal)
+        sidecar <- validateJournal(service, maybeJournal)
       } yield {
 
-        val newDeployment = createDeployment(revision, deployer, sidecar)
+        val newDeployment = createDeployment(service, sidecar)
 
         val deploymentFuture = maybeDeployment match {
           case Some(existing) =>
@@ -176,10 +159,15 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         }
 
         for {
-          _ <- ensureRbacPermissionsInNamespace(revision.spec.serviceAccountName.getOrElse("default"))
+          _ <- ensureOtherObjectsExist(service, service.spec.serviceAccountName.getOrElse("default"), deploymentName)
           _ <- deploymentFuture
-        } yield updateCondition(revision, KnativeRevision.Condition(
+        } yield updateCondition(service, EventSourcedService.Condition(
           `type` = JournalConditionType,
+          status = TrueStatus,
+          severity = Some("Info"),
+          lastTransitionTime = Some(ZonedDateTime.now())
+        ), EventSourcedService.Condition(
+          `type` = ConditionResourcesAvailable,
           status = TrueStatus,
           severity = Some("Info"),
           lastTransitionTime = Some(ZonedDateTime.now())
@@ -188,22 +176,22 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
 
       result match {
         case Left(error) =>
-          Future.successful(updateCondition(revision, error))
+          Future.successful(updateCondition(service, error))
         case Right(action) =>
           action
       }
     }
 
     private def errorCondition(`type`: String, reason: String, message: String) = {
-      KnativeRevision.Condition(`type`, FalseStatus, Some("Error"), Some(ZonedDateTime.now()), Some(reason), Some(message))
+      EventSourcedService.Condition(`type`, FalseStatus, Some("Error"), Some(ZonedDateTime.now()), Some(reason), Some(message))
     }
 
-    private def verifyWeOwnDeployment(name: String, maybeDeployment: Option[Deployment]): Either[KnativeRevision.Condition, Done] = {
+    private def verifyWeOwnDeployment(name: String, maybeDeployment: Option[Deployment]): Either[EventSourcedService.Condition, Done] = {
       maybeDeployment match {
         case None =>
           Right(Done)
         case Some(deployment) =>
-          if (isOwnedByKnativeRevisionController(deployment)) {
+          if (isOwnedByEventSourcedServiceController(deployment)) {
             Right(Done)
           } else {
             Left(errorCondition(ConditionResourcesAvailable, ConditionResourcesAvailableNotOwned,
@@ -212,11 +200,10 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       }
     }
 
-    private def validateJournal(revision: KnativeRevision.Resource, deployer: EventSourcedDeployer,
-      maybeJournal: Option[EventSourcedJournal.Resource]): Either[KnativeRevision.Condition, Container] = {
+    private def validateJournal(service: Resource, maybeJournal: Option[EventSourcedJournal.Resource]): Either[EventSourcedService.Condition, Container] = {
       maybeJournal match {
         case None =>
-          Left(errorCondition(JournalConditionType, "JournalNotFound", s"Journal with name ${deployer.journal.name} not found."))
+          Left(errorCondition(JournalConditionType, "JournalNotFound", s"Journal with name ${service.spec.journal.name} not found."))
         case Some(journal) =>
           journal.spec.`type` match {
             case `CassandraJournalType` =>
@@ -224,9 +211,9 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
                 case `UnmanagedJournalDeployment` =>
                   (journal.spec.config \ "service").asOpt[String] match {
                     case Some(serviceName) =>
-                      deployer.journal.config.flatMap(config => (config \ "keyspace").asOpt[String]) match {
+                      service.spec.journal.config.flatMap(config => (config \ "keyspace").asOpt[String]) match {
                         case Some(keyspace) =>
-                          Right(createCassandraSideCar(revision, deployer, serviceName, keyspace))
+                          Right(createCassandraSideCar(service, serviceName, keyspace))
                         case None =>
                           Left(errorCondition(JournalConditionType, "MissingKeyspace",
                             "No keyspace declared for Cassandra journal"))
@@ -246,17 +233,16 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       }
     }
 
-    private def createCassandraSideCar(revision: KnativeRevision.Resource, deployer: EventSourcedDeployer,
-      service: String, keyspace: String) = {
-      createSideCar(revision, deployer, CassandraJournalImage, List(
-        EnvVar("CASSANDRA_CONTACT_POINTS", service),
+    private def createCassandraSideCar(serviceResource: Resource, serviceName: String, keyspace: String) = {
+      createSideCar(serviceResource, CassandraJournalImage, List(
+        EnvVar("CASSANDRA_CONTACT_POINTS", serviceName),
         EnvVar("CASSANDRA_KEYSPACE", keyspace)
       ))
     }
 
-    private def createSideCar(revision: KnativeRevision.Resource, deployer: EventSourcedDeployer, image: String, env: Seq[EnvVar]) = {
-      val jvmMemory = deployer.sidecarJvmMemory.getOrElse("256m")
-      val sidecarResources = deployer.sidecarResources.getOrElse(Resource.Requirements(
+    private def createSideCar(service: Resource, image: String, env: List[EnvVar]) = {
+      val jvmMemory = service.spec.sidecarJvmMemory.getOrElse("256m")
+      val sidecarResources = service.spec.sidecarResources.getOrElse(Resource.Requirements(
         limits = Map(
           Resource.memory -> Resource.Quantity("512Mi")
         ),
@@ -266,35 +252,43 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         )
       ))
 
-      val userPort = revision.spec.containers.flatMap(_.ports).headOption.fold(DefaultUserPort)(_.containerPort)
-      val configuration = revision.metadata.labels.getOrElse(ConfigurationLabel, "")
+      val userPort = service.spec.containers.flatMap(_.ports).headOption.fold(DefaultUserPort)(_.containerPort)
+
+      val autoscalingEnvVars: List[EnvVar] = service.spec.autoscaling match {
+        case Some(autoscaling) =>
+          Seq[(String, Option[_])](
+            "USER_FUNCTION_TARGET_CONCURRENCY" -> autoscaling.userFunctionTargetConcurrency,
+            "REQUEST_TARGET_CONCURRENCY" -> autoscaling.requestTargetConcurrency,
+            "TARGET_CONCURRENCY_WINDOW" -> autoscaling.targetConcurrencyWindow,
+            "SCALE_UP_STABLE_DEADLINE" -> autoscaling.scaleUpStableDeadline,
+            "SCALE_DOWN_STABLE_DEADLINE" -> autoscaling.scaleDownStableDeadline,
+            "REQUEST_RATE_THRESHOLD_FACTOR" -> autoscaling.requestRateThresholdFactor,
+            "REQUEST_RATE_WINDOW" -> autoscaling.requestRateWindow
+          ).foldLeft(List.empty[EnvVar]) {
+            case (list, (name, Some(value))) => EnvVar(name, value.toString) :: list
+            case (list, _) => list
+          }
+
+        case None => Nil
+      }
 
       Container(
         name = "akka-sidecar",
         image = image,
         imagePullPolicy = if (image.endsWith(":latest")) Container.PullPolicy.Always else Container.PullPolicy.IfNotPresent,
         ports = List(
-          Container.Port(containerPort = KnativeSidecarH2cPort, name = KnativeSidecarPortName),
-          Container.Port(containerPort = MetricsPort, name = MetricsPortName)
+          Container.Port(containerPort = KnativeSidecarH2cPort, name = "grpc-proxy")
         ),
-        env = List(
+        env = env ::: autoscalingEnvVars ::: List(
           EnvVar("HTTP_PORT", KnativeSidecarH2cPort.toString),
           EnvVar("USER_FUNCTION_PORT", userPort.toString),
           EnvVar("REMOTING_PORT", AkkaRemotingPort.toString),
           EnvVar("MANAGEMENT_PORT", AkkaManagementPort.toString),
-          EnvVar("METRICS_PORT", MetricsPort.toString),
-          EnvVar("SELECTOR_LABEL_VALUE", configuration),
-          EnvVar("SELECTOR_LABEL", ConfigurationLabel),
-          EnvVar("CONTAINER_CONCURRENCY", revision.spec.containerConcurrency.getOrElse(0).toString),
-          EnvVar("REVISION_TIMEOUT", revision.spec.timeoutSeconds.getOrElse(10) + "s"),
-          EnvVar("SERVING_NAMESPACE", revision.namespace),
-          EnvVar("SERVING_CONFIGURATION", configuration),
-          EnvVar("SERVING_REVISION", revision.name),
-          EnvVar("SERVING_POD", EnvVar.FieldRef("metadata.name")),
-          // todo this should be based on minscale
+          EnvVar("SELECTOR_LABEL_VALUE", service.name),
+          EnvVar("SELECTOR_LABEL", EventSourcedServiceLabel),
           EnvVar("REQUIRED_CONTACT_POINT_NR", "1"),
           EnvVar("JAVA_OPTS", s"-Xms$jvmMemory -Xmx$jvmMemory")
-        ) ++ env,
+        ),
         resources = Some(sidecarResources),
         readinessProbe = Some(Probe(
           action = HTTPGetAction(
@@ -318,10 +312,10 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
 
     }
 
-    private def createDeployment(revision: KnativeRevision.Resource, deployer: EventSourcedDeployer, sidecar: Container) = {
+    private def createDeployment(service: Resource, sidecar: Container) = {
 
-      // validate? It should already be validated.
-      val orig = revision.spec.containers.head
+      // todo perhaps validate?
+      val orig = service.spec.containers.head
 
       val userPort = orig.ports.headOption.fold(DefaultUserPort)(_.containerPort)
 
@@ -334,17 +328,11 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
           containerPort = userPort
         )),
         env = orig.env ++ List(
-          EnvVar(UserPortEnvVar, userPort.toString),
-          EnvVar(KnativeRevisionEnvVar, revision.name),
-          EnvVar(KnativeConfigruationEnvVar, EnvVar.StringValue(revision.metadata.labels.getOrElse(ConfigurationLabel, ""))),
-          EnvVar(KnativeServiceEnvVar, EnvVar.StringValue(revision.metadata.labels.getOrElse(ServiceLabel, "")))
+          EnvVar(UserPortEnvVar, userPort.toString)
         ),
         stdin = Some(false),
         tty = Some(false),
-        image = revision.status
-          .flatMap(_.imageDigest)
-          .filterNot(_ == "")
-          .getOrElse(orig.image),
+        image = orig.image,
         terminationMessagePolicy = orig.terminationMessagePolicy
           .orElse(Some(Container.TerminationMessagePolicy.FallbackToLogsOnError))
       )
@@ -354,47 +342,42 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
           userContainer,
           sidecar
         ),
-        volumes = revision.spec.volumes.getOrElse(Nil) :+ Volume("varlog", Volume.EmptyDir()),
-        serviceAccountName = revision.spec.serviceAccountName.getOrElse(""),
-        terminationGracePeriodSeconds = revision.spec.timeoutSeconds.map(_.asInstanceOf[Int]),
-        tolerations = List(
-          Pod.EqualToleration(
-            key = "loadtest",
-            value = Some("cloudstate")
-          )
-        )
+        volumes = service.spec.volumes.getOrElse(Nil) :+ Volume("varlog", Volume.EmptyDir()),
+        serviceAccountName = service.spec.serviceAccountName.getOrElse(""),
+        tolerations = service.spec.tolerations.getOrElse(Nil),
+        nodeSelector = service.spec.nodeSelector.getOrElse(Map.empty)
       )
 
-      val deploymentName = deploymentNameFor(revision)
+      val deploymentName = deploymentNameFor(service)
 
       val labels = {
-        val ls = revision.metadata.labels ++ Map(
-          RevisionLabel -> revision.name,
-          RevisionUidLabel -> revision.uid,
-          JournalLabel -> deployer.journal.name
+        val ls = service.metadata.labels ++ Map(
+          EventSourcedServiceLabel -> service.name,
+          EventSourcedServiceUidLabel -> service.uid,
+          JournalLabel -> service.spec.journal.name,
         )
-        if (!ls.contains("app")) ls + ("app" -> revision.name)
+        if (!ls.contains("app")) ls + ("app" -> service.name)
         else ls
       }
-      val annotations = revision.metadata.annotations - LastPinnedLabel
+      val annotations = service.metadata.annotations - LastPinnedLabel
       val podAnnotations = annotations ++ Seq(
         "traffic.sidecar.istio.io/includeInboundPorts" -> s"$KnativeSidecarH2cPort",
-        "traffic.sidecar.istio.io/excludeOutboundPorts" -> s"$AkkaRemotingPort,$AkkaManagementPort"
+        "traffic.sidecar.istio.io/excludeOutboundPorts" -> s"$AkkaRemotingPort,$AkkaManagementPort,9042"
       )
 
       // Create the deployment
       Deployment(
         metadata = ObjectMeta(
           name = deploymentName,
-          namespace = revision.metadata.namespace,
+          namespace = service.metadata.namespace,
           labels = labels,
           annotations = annotations,
           ownerReferences = List(
             OwnerReference(
-              apiVersion = KnativeServingApiVersion,
-              kind = RevisionKind,
-              name = revision.name,
-              uid = revision.uid,
+              apiVersion = service.apiVersion,
+              kind = service.kind,
+              name = service.name,
+              uid = service.uid,
               controller = Some(true),
               blockOwnerDeletion = Some(true)
             )
@@ -404,7 +387,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         // and then it scales back down to zero.
       ).withReplicas(1)
         .withLabelSelector(
-          RevisionUidLabel is revision.uid
+          EventSourcedServiceUidLabel is service.uid
         )
         .withTemplate(Pod.Template.Spec(
           metadata = ObjectMeta(
@@ -415,14 +398,16 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         ))
     }
 
-    private def ensureRbacPermissionsInNamespace(serviceAccountName: String) = {
+    private def ensureOtherObjectsExist(service: Resource, serviceAccountName: String, deploymentName: String) = {
       for {
         _ <- helper.ensurePodReaderRoleExists()
         _ <- helper.ensurePodReaderRoleBindingExists(serviceAccountName)
+        _ <- helper.ensureDeploymentScalerRoleExists(deploymentName, service)
+        _ <- helper.ensureDeploymentScalerRoleBindingExists(serviceAccountName, service)
+        _ <- helper.ensureServiceForEssExists(service)
       } yield ()
     }
 
-    // Must match https://github.com/knative/serving/blob/2297b69327bbc457563cefc7d36a848159a4c7c0/pkg/reconciler/revision/resources/names/names.go#L24
     private def deploymentNameFor(revision: Resource) = revision.metadata.name + "-deployment"
   }
 }

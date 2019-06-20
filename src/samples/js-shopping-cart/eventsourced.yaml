@@ -5,15 +5,10 @@ metadata:
   name: shopping-cart
 spec:
 
-  # How many replicas of the function should be deployed
-  # Eventually, this should be replaced with min/max constraints, and be dynamically scaled.
-  replicas: 3
-
   # Journal configuration
   journal:
 
-    # Name of a deployed EventSourcedJournal to use, must match the name configured above.
-    # A namespace might also be specified.
+    # Name of a deployed EventSourcedJournal to use.
     name: cassandra
 
     # Journal specific configuration
@@ -22,14 +17,17 @@ spec:
       # Since the journal is a Cassandra journal, we need to specify the keyspace to use.
       keyspace: shoppingcart
 
-  template:
-    spec:
-      # Like Knative Serving, this is the containers configuration
-      containers:
-      - image: lightbend-docker-registry.bintray.io/octo/js-shopping-cart:0.3
+  nodeSelector:
+    loadtest: cloudstate
 
-        # This enables some interesting logging to see what messages are being passed between
-        # the sidecar and the user function.
-        env:
-        - name: DEBUG
-          value: stateserve-event-sourcing
+  tolerations:
+  - key: loadtest
+    value: cloudstate
+
+  autoscaling:
+    userFunctionTargetConcurrency: 5
+    requestRateThresholdFactor: 2.0
+    scaleDownStableDeadline: 1m
+
+  containers:
+    - image: gcr.io/stateserv/js-shopping-cart:latest

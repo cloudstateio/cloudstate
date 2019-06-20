@@ -7,6 +7,9 @@
 
     <logger name="com.lightbend.statefulserverless" level="DEBUG"/>
 
+    <!-- We don't want the scalers request debug -->
+    <logger name="com.lightbend.statefulserverless.autoscaler.KubernetesDeploymentScaler" level="INFO"/>
+
     <root level="info">
         <appender-ref ref="STDOUT" />
     </root>

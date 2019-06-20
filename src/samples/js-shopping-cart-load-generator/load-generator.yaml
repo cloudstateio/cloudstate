@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: js-shopping-cart-load-generator
 spec:
-  replicas: 1
+  replicas: &replicas 1
   strategy:
     type: Recreate
   selector:
@@ -13,8 +13,8 @@ spec:
     metadata:
       labels:
         app: js-shopping-cart-load-generator
-      annotations:
-        sidecar.istio.io/inject: "false"
+#      annotations:
+#        sidecar.istio.io/inject: "false"
     spec:
       containers:
       - name: generator
@@ -33,6 +33,8 @@ spec:
           value: "80"
         - name: READ_WRITE_REQUEST_RATIO
           value: "1.0"
+        - name: MAX_RESPONSE_LAG_MS
+          value: "2000"
         - name: JAVA_OPTS
           value: "-Xms128m -Xmx128m"
 

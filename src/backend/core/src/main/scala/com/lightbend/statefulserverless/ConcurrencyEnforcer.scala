@@ -47,8 +47,8 @@ import scala.concurrent.duration.{Deadline, FiniteDuration}
   * our strategy is to just report metrics on command handling, and let event handling just happen.
   */
 object ConcurrencyEnforcer {
-  case class Action(id: String, isProxied: Boolean, start: () => Unit)
-  case class ActionCompleted(id: String)
+  case class Action(id: String, start: () => Unit)
+  case class ActionCompleted(id: String, timeNanos: Long)
 
   case class ConcurrencyEnforcerSettings(
     concurrency: Int,
@@ -60,7 +60,7 @@ object ConcurrencyEnforcer {
 
   def props(settings: ConcurrencyEnforcerSettings, statsCollector: ActorRef): Props = Props(new ConcurrencyEnforcer(settings, statsCollector))
 
-  private case class OutstandingAction(isProxied: Boolean, deadline: Deadline)
+  private case class OutstandingAction(deadline: Deadline)
 }
 
 class ConcurrencyEnforcer(settings: ConcurrencyEnforcerSettings, statsCollector: ActorRef) extends Actor with ActorLogging with Timers {
@@ -81,9 +81,9 @@ class ConcurrencyEnforcer(settings: ConcurrencyEnforcerSettings, statsCollector:
       reportCommand(a)
       queue = queue.enqueue(a)
 
-    case ActionCompleted(id) =>
+    case ActionCompleted(id, timeNanos) =>
       if (outstanding.contains(id)) {
-        completeAction(id)
+        completeAction(id, timeNanos)
       } else {
         if (queue.exists(_.id == id)) {
           // It's been completed before it's been executed, generally the state manager actor will already have
@@ -98,23 +98,21 @@ class ConcurrencyEnforcer(settings: ConcurrencyEnforcerSettings, statsCollector:
       outstanding.foreach {
         case (id, action) if action.deadline.isOverdue() =>
           log.warning("Action {} has exceeded the action timeout of {}", id, settings.actionTimeout)
-          completeAction(id)
+          completeAction(id, settings.actionTimeout.toNanos)
         case _ => // ok
       }
   }
 
   private def reportCommand(action: Action) = {
-    if (action.isProxied) statsCollector ! StatsCollector.ProxiedCommandSent
-    else statsCollector ! StatsCollector.NormalCommandSent
+    statsCollector ! StatsCollector.CommandSent
   }
 
-  private def reportReply(id: String) = {
-    if (outstanding(id).isProxied) statsCollector ! StatsCollector.ProxiedReplyReceived
-    else statsCollector ! StatsCollector.NormalReplyReceived
+  private def reportReply(timeNanos: Long) = {
+    statsCollector ! StatsCollector.ReplyReceived(timeNanos)
   }
 
-  private def completeAction(id: String) = {
-    reportReply(id)
+  private def completeAction(id: String, timeNanos: Long) = {
+    reportReply(timeNanos)
 
     outstanding -= id
     if (queue.nonEmpty) {
@@ -128,7 +126,7 @@ class ConcurrencyEnforcer(settings: ConcurrencyEnforcerSettings, statsCollector:
     if (outstanding.contains(action.id)) {
       log.warning("Action {} already outstanding?", action.id)
     }
-    outstanding += (action.id -> OutstandingAction(action.isProxied, settings.actionTimeout.fromNow))
+    outstanding += (action.id -> OutstandingAction(settings.actionTimeout.fromNow))
     action.start()
   }
 }

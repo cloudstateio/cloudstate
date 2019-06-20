@@ -17,25 +17,29 @@
 package com.lightbend.statefulserverless
 
 import akka.Done
-import akka.actor.{Actor, ActorLogging, ActorRef, CoordinatedShutdown, Props, Status, Terminated}
+import akka.actor.{Actor, ActorLogging, ActorRef, CoordinatedShutdown, PoisonPill, Props, Status, Terminated}
 import akka.cluster.Cluster
 import akka.util.Timeout
-import akka.pattern.{pipe, ask}
+import akka.pattern.pipe
 import akka.stream.Materializer
 import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
 import akka.cluster.sharding._
+import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
 import akka.grpc.GrpcClientSettings
 import com.typesafe.config.Config
 import com.lightbend.statefulserverless.grpc._
 import com.google.protobuf.empty.Empty
 import com.lightbend.statefulserverless.ConcurrencyEnforcer.ConcurrencyEnforcerSettings
 import com.lightbend.statefulserverless.StatsCollector.StatsCollectorSettings
+import com.lightbend.statefulserverless.autoscaler.Autoscaler.ScalerFactory
+import com.lightbend.statefulserverless.autoscaler.{Autoscaler, AutoscalerSettings, ClusterMembershipFacadeImpl, KubernetesDeploymentScaler, NoScaler}
 
 import scala.concurrent.duration._
 
 object ServerManager {
   final case class Configuration (
+    devMode: Boolean,
     httpInterface: String,
     httpPort: Int,
     userFunctionInterface: String,
@@ -52,6 +56,7 @@ object ServerManager {
     validate()
     def this(config: Config) = {
       this(
+        devMode                    = config.getBoolean("dev-mode-enabled"),
         httpInterface              = config.getString("http-interface"),
         httpPort                   = config.getInt("http-port"),
         userFunctionInterface      = config.getString("user-function-interface"),
@@ -90,8 +95,24 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
 
   private[this] final val clientSettings = GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
   private[this] final val client         = EntityClient(clientSettings)
-  private[this] final val statsCollector = context.actorOf(StatsCollector.props(config.statsCollectorSettings), "stats-collector")
-  private[this] final val concurrencyEnforcer = context.actorOf(ConcurrencyEnforcer.props(config.concurrencySettings, statsCollector), "concurrency-enforcer")
+  private[this] final val autoscaler     = {
+    val managerSettings = ClusterSingletonManagerSettings(system)
+    val proxySettings = ClusterSingletonProxySettings(system)
+    val autoscalerSettings = AutoscalerSettings(system)
+
+    val scalerFactory: ScalerFactory = (autoscaler, factory) => {
+      if (config.devMode) factory.actorOf(Props(new NoScaler(autoscaler)), "noScaler")
+      else factory.actorOf(KubernetesDeploymentScaler.props(autoscaler), "kubernetesDeploymentScaler")
+    }
+
+    val singleton = context.actorOf(ClusterSingletonManager.props(Autoscaler.props(autoscalerSettings,
+      scalerFactory, new ClusterMembershipFacadeImpl(Cluster(context.system))),
+      terminationMessage = PoisonPill, managerSettings), "autoscaler")
+
+    context.actorOf(ClusterSingletonProxy.props(singleton.path.toStringWithoutAddress, proxySettings), "autoscalerProxy")
+  }
+  private[this] final val statsCollector = context.actorOf(StatsCollector.props(config.statsCollectorSettings, autoscaler), "statsCollector")
+  private[this] final val concurrencyEnforcer = context.actorOf(ConcurrencyEnforcer.props(config.concurrencySettings, statsCollector), "concurrencyEnforcer")
 
   client.ready(Empty.of()) pipeTo self
 
@@ -105,16 +126,16 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
       val clusterShardingSettings = ClusterShardingSettings(system)
       val stateManager = context.watch(clusterSharding.start(
         typeName = reply.persistenceId,
-        entityProps = StateManagerSupervisor.props(client, stateManagerConfig, concurrencyEnforcer),
+        entityProps = StateManagerSupervisor.props(client, stateManagerConfig, concurrencyEnforcer, statsCollector),
         settings = clusterShardingSettings,
         messageExtractor = new Serve.RequestMessageExtractor(config.numberOfShards),
-        allocationStrategy = new DynamicLeastShardAllocationStrategy(1, 10, 10, 0.1),
+        allocationStrategy = new DynamicLeastShardAllocationStrategy(1, 10, 2, 0.0),
         handOffStopMessage = StateManager.Stop
       ))
 
       log.debug("Creating gRPC proxy for {}", reply.persistenceId)
 
-      val handler = Serve.createRoute(stateManager, config.proxyParallelism, config.relayTimeout, reply)
+      val handler = Serve.createRoute(stateManager, statsCollector, config.proxyParallelism, config.relayTimeout, reply)
 
       log.debug("Starting gRPC proxy for {}", reply.persistenceId)
 

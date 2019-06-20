@@ -19,58 +19,67 @@ package com.lightbend.statefulserverless.operator
 import java.util.Locale
 
 object OperatorConstants {
-  val StatefulServerlessGroup = "statefulserverless.lightbend.com"
-  val JournalLabel = s"$StatefulServerlessGroup/journal"
+  final val StatefulServerlessGroup = "statefulserverless.lightbend.com"
+  final val StatefulServerlessApiVersionNumber = "v1alpha1"
+  final val StatefulServerlessApiVersion = s"$StatefulServerlessGroup/$StatefulServerlessApiVersionNumber"
+  final val EventSourcedServiceKind = "EventSourcedService"
+  final val JournalLabel = s"$StatefulServerlessGroup/journal"
 
-  val KnativeServingGroup = "serving.knative.dev"
-  val KnativeServingVersion = "v1alpha1"
-  val KnativeServingApiVersion = s"$KnativeServingGroup/$KnativeServingVersion"
-  val RevisionKind = "Revision"
-  val RevisionLabel = s"$KnativeServingGroup/${RevisionKind.toLowerCase(Locale.ROOT)}"
-  val ConfigurationLabel = s"$KnativeServingGroup/configuration"
-  val ServiceLabel = s"$KnativeServingGroup/service"
-  val RevisionUidLabel = s"$KnativeServingGroup/revisionUID"
-  val LastPinnedLabel = s"$KnativeServingGroup/lastPinned"
-  val DeployerKind = "Deployer"
+  final val EventSourcedServiceLabel = s"$StatefulServerlessGroup/eventSourcedService"
+  final val EventSourcedServiceUidLabel = s"$StatefulServerlessGroup/eventSourcedServiceUID"
 
-  val RevisionConditionResourcesAvailable = "ResourcesAvailable"
-  val RevisionConditionEventSourcedOk = "EventSourcedOk"
+  final val KnativeServingGroup = "serving.knative.dev"
+  final val KnativeServingVersion = "v1alpha1"
+  final val KnativeServingApiVersion = s"$KnativeServingGroup/$KnativeServingVersion"
+  final val RevisionKind = "Revision"
+  final val RevisionLabel = s"$KnativeServingGroup/${RevisionKind.toLowerCase(Locale.ROOT)}"
+  final val ConfigurationLabel = s"$KnativeServingGroup/configuration"
+  final val ServiceLabel = s"$KnativeServingGroup/service"
+  final val RevisionUidLabel = s"$KnativeServingGroup/revisionUID"
+  final val LastPinnedLabel = s"$KnativeServingGroup/lastPinned"
+  final val DeployerKind = "Deployer"
 
-  val RevisionConditionResourcesAvailableNotOwned = "NotOwned"
+  final val ConditionOk = "Ok"
+  final val ConditionResourcesAvailable = "ResourcesAvailable"
 
-  val KnativeServingDeployerName = "KnativeServing"
-  val EventSourcedDeployerName = "EventSourced"
+  final val ConditionResourcesAvailableNotOwned = "NotOwned"
 
-  val JournalConditionType = "JournalValid"
+  final val KnativeServingDeployerName = "KnativeServing"
+  final val EventSourcedDeployerName = "EventSourced"
 
-  val TrueStatus = "True"
-  val FalseStatus = "False"
-  val UnknownStatus = "Unknown"
+  final val JournalConditionType = "JournalValid"
 
-  val PodReaderRoleName = "statefulserverless-pod-reader"
-  val PodReaderRoleBindingName = "statefulserverless-read-pods"
+  final val TrueStatus = "True"
+  final val FalseStatus = "False"
+  final val UnknownStatus = "Unknown"
 
-  val CassandraJournalType = "Cassandra"
-  val UnmanagedJournalDeployment = "Unmanaged"
+  final val PodReaderRoleName = "statefulserverless-pod-reader"
+  final val PodReaderRoleBindingName = "statefulserverless-read-pods"
 
-  val UserContainerName = "user-container"
-  val UserPortName = "user-port"
-  val DefaultUserPort = 8080
-  val UserPortEnvVar = "PORT"
+  final val DeploymentScalerRoleName = "statefulserverless-deployment-scaler"
+  final val DeploymentScalerRoleBindingName = "statefulserverless-scale-deployment"
 
-  val KnativeRevisionEnvVar = "K_REVISION"
-  val KnativeConfigruationEnvVar = "K_CONDFIGURATION"
-  val KnativeServiceEnvVar = "K_SERVICE"
+  final val CassandraJournalType = "Cassandra"
+  final val UnmanagedJournalDeployment = "Unmanaged"
 
-  val KubernetesManagedByLabel = "app.kubernetes.io/managed-by"
+  final val UserContainerName = "user-container"
+  final val UserPortName = "user-port"
+  final val DefaultUserPort = 8080
+  final val UserPortEnvVar = "PORT"
 
-  val ProtocolH2c = "h2c"
-  val SidecarPortName = "queue-port"
-  val SidecarHttpPort = 8012
-  val SidecarH2cPort = 8013
+  final val KnativeRevisionEnvVar = "K_REVISION"
+  final val KnativeConfigruationEnvVar = "K_CONDFIGURATION"
+  final val KnativeServiceEnvVar = "K_SERVICE"
 
-  val AkkaManagementPort = 8558
-  val AkkaRemotingPort = 2552
-  val MetricsPort = 9090
-  val MetricsPortName = "queue-metrics"
+  final val KubernetesManagedByLabel = "app.kubernetes.io/managed-by"
+
+  final val ProtocolH2c = "h2c"
+  final val KnativeSidecarPortName = "queue-port"
+  final val KnativeSidecarHttpPort = 8012
+  final val KnativeSidecarH2cPort = 8013
+
+  final val AkkaManagementPort = 8558
+  final val AkkaRemotingPort = 2552
+  final val MetricsPort = 9090
+  final val MetricsPortName = "queue-metrics"
 }

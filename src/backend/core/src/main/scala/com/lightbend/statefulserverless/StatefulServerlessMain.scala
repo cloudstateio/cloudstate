@@ -17,7 +17,7 @@
 package com.lightbend.statefulserverless
 
 import com.typesafe.config.Config
-import akka.actor.{ActorSystem, Props}
+import akka.actor.{ActorSelection, ActorSystem, Props}
 import akka.pattern.ask
 import akka.util.Timeout
 import akka.cluster.Cluster
@@ -35,18 +35,31 @@ final class HealthCheckReady(system: ActorSystem) extends (() => Future[Boolean]
   private[this] final val log = LoggerFactory.getLogger(getClass)
   private[this] final val timeoutMs = system.settings.config.getConfig("stateful-serverless").getDuration("ready-timeout").toMillis.millis
   private[this] final implicit val ec = system.dispatcher
-  private[this] final val selection = system.actorSelection("/user/server-manager-supervisor/server-manager")
+  private[this] final val serverManager = system.actorSelection("/user/server-manager-supervisor/server-manager")
+  private[this] final val warmup = system.actorSelection("/user/state-manager-warm-up")
   private[this] final implicit val timeout = Timeout(timeoutMs)
-  override final def apply(): Future[Boolean] =
-    selection.resolveOne().flatMap(_ ? ServerManager.Ready).mapTo[Boolean].recover { case e =>
-        log.debug("Error performing readiness check", e)
+
+  private[this] final def check(name: String, selection: ActorSelection, msg: Any) = {
+    selection.resolveOne()
+      .flatMap(_ ? msg)
+      .mapTo[Boolean]
+      .recover { case e =>
+        log.debug(s"Error performing $name readiness check", e)
         false
-    }
+      }
+  }
+
+  override final def apply(): Future[Boolean] = {
+    Future.sequence(Seq(
+      check("warmup", warmup, Warmup.Ready),
+      check("server manager", serverManager, ServerManager.Ready)
+    )).map(_.reduce(_ && _))
+  }
 }
 
 final class HealthCheckLive(system: ActorSystem) extends (() => Future[Boolean]) {
   override final def apply(): Future[Boolean] = {
-    Future.successful(true) // FIXME implement
+    Future.successful(true)
   }
 }
 
@@ -107,7 +120,7 @@ object StatefulServerlessMain {
     }
 
     // Warmup the StateManager, connect to Cassandra, etc
-    system.actorOf(Props(classOf[Warmup]), "state-manager-warm-up")
+    system.actorOf(Warmup.props, "state-manager-warm-up")
 
     system.actorOf(BackoffSupervisor.props(
       BackoffOpts.onFailure(

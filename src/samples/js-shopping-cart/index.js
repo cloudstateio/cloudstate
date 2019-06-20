@@ -14,6 +14,4 @@
  * limitations under the License.
  */
 
-console.log(require("fs").readdirSync("/opt/node-support/node_modules/grpc/src/node/extension_binary/"));
-
 require("./shoppingcart.js").start();

@@ -60,7 +60,7 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
     }
 
     private def errorStatus(spec: Option[Resource], reason: String, message: String) =
-      status(spec,FalseStatus, Some(reason), Some(message))
+      status(spec, FalseStatus, Some(reason), Some(message))
 
     override def handleChanged(resource: Resource): Future[StatusUpdate] = {
       if (resource.status.exists(_.specHash.contains(hashSpec(resource))) &&
@@ -113,22 +113,38 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
 
     private def updateServiceForDeployment(deployment: Deployment): Future[Done] = {
 
-      // todo It would be much better to use a patch here, but since Knative serving doesn't declare any validation
-      // such that it could declare a patch merge key on the conditions, we can't use that. As it is, since we
-      // fetch the resource first and update it, optimistic concurrency is used (ie, revision id), so update will
-      // fail if two things attempt to update at the same time.
-      for {
-        maybeRevision <- deployment.metadata.labels.get(RevisionLabel).map { revisionName =>
-          client.getOption[KnativeRevision.Resource](revisionName)
-        }.getOrElse(Future.successful(None))
-        _ <- maybeRevision match {
-          case Some(revision) =>
-            val status = revision.status.getOrElse(KnativeRevision.Status(None, Nil, None, None, None))
-            client.updateStatus(revision.withStatus(touchKnativeRevisionStatus(status)))
-          case None =>
-            Future.successful(Done)
-        }
-      } yield Done
+      if (deployment.metadata.labels.contains(RevisionLabel)) {
+        for {
+          maybeRevision <- deployment.metadata.labels.get(RevisionLabel).map { revisionName =>
+            client.getOption[KnativeRevision.Resource](revisionName)
+          }.getOrElse(Future.successful(None))
+          _ <- maybeRevision match {
+            case Some(revision) =>
+              val status = revision.status.getOrElse(KnativeRevision.Status(None, Nil, None, None, None))
+              client.updateStatus(revision.withStatus(touchKnativeRevisionStatus(status)))
+            case None =>
+              Future.successful(Done)
+          }
+        } yield Done
+      } else if (deployment.metadata.labels.contains(EventSourcedServiceLabel)) {
+        for {
+          maybeEventSourcedService <- deployment.metadata.labels.get(EventSourcedServiceLabel).map { serviceName =>
+            client.getOption[EventSourcedService.Resource](serviceName)
+          }.getOrElse(Future.successful(None))
+          _ <- maybeEventSourcedService match {
+            case Some(service) =>
+              val status = service.status.getOrElse(EventSourcedService.Status(Nil))
+              client.updateStatus(service.withStatus(touchEventSourcedServiceStatus(status)))
+            case None =>
+              Future.successful(Done)
+          }
+        } yield Done
+
+      } else {
+        // Don't know what deployed it, ignore.
+        Future.successful(Done)
+      }
+
     }
 
     // Here we change the validation to Unknown. It is the responsibility of the revision controller to
@@ -153,8 +169,29 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
       status.copy(conditions = conditions)
     }
 
+    private def touchEventSourcedServiceStatus(status: EventSourcedService.Status): EventSourcedService.Status = {
+      val condition = EventSourcedService.Condition(
+        `type` = JournalConditionType,
+        status = UnknownStatus,
+        reason = Some("JournalChanged"),
+        lastTransitionTime = Some(ZonedDateTime.now())
+      )
+
+      val hasExistingCondition = status.conditions.exists(_.`type` == JournalConditionType)
+      val conditions = if (hasExistingCondition) {
+        status.conditions.map {
+          case c if c.`type` == JournalConditionType => condition
+          case other => other
+        }
+      } else {
+        status.conditions :+ condition
+      }
+      status.copy(conditions = conditions)
+    }
+
     override def statusFromError(error: Throwable, existing: Option[Resource]): StatusUpdate = {
       StatusUpdate.Update(status(existing, UnknownStatus, Some("UnknownOperatorError"), Some(error.getMessage)))
     }
   }
+
 }

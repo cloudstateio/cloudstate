@@ -58,8 +58,8 @@ object LoadGeneratorActor {
   val numUsers = sys.env.getOrElse("NUM_USERS", "100").toInt
   // The number of gRPC clients to instantiate. This controls how many connections the requests will be fanned out over.
   val numClients = sys.env.getOrElse("NUM_CLIENTS", "5").toInt
-  val serviceName = sys.env.getOrElse("SHOPPING_CART_SERVICE", "shopping-cart.default.35.189.22.136.xip.io")
-  val servicePort = sys.env.getOrElse("SHOPPING_CART_SERVICE_PORT", "80").toInt
+  val serviceName = sys.env.getOrElse("SHOPPING_CART_SERVICE", "localhost")
+  val servicePort = sys.env.getOrElse("SHOPPING_CART_SERVICE_PORT", "9000").toInt
   // The ratio of read operations to write operations. A value of 0.9 means 90% of the operations will be read
   // operations.
   val readWriteRequestRatio = sys.env.getOrElse("READ_WRITE_REQUEST_RATIO", "0.9").toDouble
@@ -75,13 +75,7 @@ object LoadGeneratorActor {
   // The desired request rate. If this doesn't result in a whole number of requests per tick, the load generator will
   // randomly round up or down, weighted to the fractional portion of the number of requests per tick, to attempt to
   // achieve this rate on average.
-  // fixme: For the purposes of demoing this, we generate half the actual load requested. The reason for this is that
-  // due to https://github.com/knative/serving/issues/4277, the actual request rate reported in the UI is double what
-  // it is. I don't want to have to explain this in the demo, I just want to tell people "I'm going to generate 200
-  // req/s" and then see that in the UI. Since I don't know what the bug is that's causing the actual rate to be
-  // doubled, I can't fix that, but I can hack this so that when I request 200 req/s, it only generates 100 req/s, and
-  // therefore reports 200 req/s.
-  val requestRate = sys.env.getOrElse("REQUEST_RATE_PER_S", "200").toInt / 2
+  val requestRate = sys.env.getOrElse("REQUEST_RATE_PER_S", "1000").toInt
   val requestsPerTick: Double = tickInterval.div(1.second) * requestRate
   // The amount of time to spend ramping up. Ramp up is linear.
   val rampUpPeriodNanos = sys.env.getOrElse("RAMP_UP_S", "20").toInt.seconds.toNanos
@@ -168,6 +162,7 @@ class LoadGeneratorActor extends Actor with Timers {
     case _: Cart =>
       timers.startPeriodicTimer("tick", Tick, tickInterval)
       lastReportNanos = System.nanoTime()
+      startupTime = System.nanoTime()
       context become (running orElse report)
     case Status.Failure(err) =>
       throw err

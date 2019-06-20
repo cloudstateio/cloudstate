@@ -16,10 +16,11 @@
 
 package com.lightbend.statefulserverless
 
-import akka.actor.{Actor, ActorLogging, DeadLetterSuppression, Props, Timers}
+import akka.actor.{Actor, ActorLogging, ActorRef, DeadLetterSuppression, Props, Timers}
+import akka.cluster.Cluster
 import com.lightbend.statefulserverless.StatsCollector.StatsCollectorSettings
+import com.lightbend.statefulserverless.autoscaler.AutoscalerMetrics
 import com.typesafe.config.Config
-import io.prometheus.client.Gauge
 
 import scala.collection.mutable
 import scala.concurrent.duration._
@@ -33,36 +34,33 @@ import scala.concurrent.duration._
   */
 object StatsCollector {
 
-  def props(settings: StatsCollectorSettings): Props = Props(new StatsCollector(settings))
+  def props(settings: StatsCollectorSettings, autoscaler: ActorRef): Props = Props(new StatsCollector(settings, autoscaler))
+
+  /**
+    * A request has been received by the proxy server
+    */
+  case object RequestReceived
+
+  case class ResponseSent(timeNanos: Long)
 
   /**
     * A command has been sent to the user function.
     */
-  case class CommandSent private (proxied: Boolean)
-
-  val NormalCommandSent = CommandSent(false)
-  val ProxiedCommandSent = CommandSent(true)
+  case object CommandSent
 
   /**
     * A reply has been received from the user function.
     */
-  case class ReplyReceived private (proxied: Boolean)
+  case class ReplyReceived private(timeNanos: Long)
 
-  val NormalReplyReceived = ReplyReceived(false)
-  val ProxiedReplyReceived = ReplyReceived(true)
+  case object DatabaseOperationStarted
+
+  case class DatabaseOperationFinished(timeNanos: Long)
 
   case class StatsCollectorSettings(
-    namespace: String,
-    configName: String,
-    revisionName: String,
-    podName: String,
     reportPeriod: FiniteDuration
   ) {
     def this(config: Config) = this(
-      namespace = config.getString("namespace"),
-      configName = config.getString("config-name"),
-      revisionName = config.getString("revision-name"),
-      podName = config.getString("pod-name"),
       reportPeriod = config.getDuration("report-period").toMillis.millis
     )
   }
@@ -71,73 +69,59 @@ object StatsCollector {
 
   // 1 second in nano seconds
   private val SecondInNanos: Long = 1000000000
-
-  private val DestinationNsLabel = "destination_namespace"
-  private val DestinationConfigLabel = "destination_configuration"
-  private val DestinationRevLabel    = "destination_revision"
-  private val DestinationPodLabel    = "destination_pod"
-
-  private val labels = Array(
-    DestinationNsLabel, DestinationConfigLabel, DestinationRevLabel, DestinationPodLabel
-  )
-
-  private object gauges {
-    // These go here rather than in the actor because if the Actor happens to be instantiated twice, these will
-    // be registered twice and an exception will be thrown.
-    val OperationsPerSecond = Gauge.build("queue_operations_per_second",
-      "Number of operations per second").labelNames(labels: _*).register()
-    val ProxiedOperationsPerSecond = Gauge.build("queue_proxied_operations_per_second",
-      "Number of proxied operations per second").labelNames(labels: _*).register()
-    val AverageConcurrentRequests = Gauge.build("queue_average_concurrent_requests",
-      "Number of requests currently being handled by this pod").labelNames(labels: _*).register()
-    val AverageProxiedConcurrentRequests = Gauge.build("queue_average_proxied_concurrent_requests",
-      "Number of proxied requests currently being handled by this pod").labelNames(labels: _*).register()
-  }
 }
 
-class StatsCollector(settings: StatsCollectorSettings) extends Actor with Timers with ActorLogging {
+class StatsCollector(settings: StatsCollectorSettings, autoscaler: ActorRef) extends Actor with Timers with ActorLogging {
 
   import StatsCollector._
 
-  // These need to be in the same order as the labels registered
-  private val labelValues = {
-    val map = Map(
-      DestinationNsLabel -> settings.namespace,
-      DestinationConfigLabel -> settings.configName,
-      DestinationRevLabel -> settings.revisionName,
-      DestinationPodLabel -> settings.podName
-    )
-    labels.map(map.apply)
+  private val (address, uniqueAddressLongId) = {
+    val cluster = Cluster(context.system)
+    (cluster.selfUniqueAddress.address.toString, cluster.selfUniqueAddress.longUid)
   }
 
-  private val operationsPerSecondGauge = gauges.OperationsPerSecond.labels(labelValues: _*)
-  private val proxiedOperationsPerSecondGauge = gauges.ProxiedOperationsPerSecond.labels(labelValues:_ *)
-  private val averageConcurrentRequestsGauge = gauges.AverageConcurrentRequests.labels(labelValues:_ *)
-  private val averageProxiedConcurrentRequestsGauge = gauges.AverageProxiedConcurrentRequests.labels(labelValues: _*)
-
+  private var commandCount: Int = 0
+  private var commandTimeNanos: Long = 0
+  private var commandConcurrency: Int = 0
+  private val commandTimeNanosOnConcurrency: mutable.Map[Int, Long] = new mutable.HashMap().withDefaultValue(0)
+  private var commandLastChangedNanos: Long = System.nanoTime()
 
   private var requestCount: Int = 0
-  private var proxiedCount: Int = 0
-  private var concurrency: Int = 0
-  private var proxiedConcurrency: Int = 0
+  private var requestTimeNanos: Long = 0
+  private var requestConcurrency: Int = 0
+  private val requestTimeNanosOnConcurrency: mutable.Map[Int, Long] = new mutable.HashMap().withDefaultValue(0)
+  private var requestLastChangedNanos: Long = System.nanoTime()
 
-  private var lastChangedNanos: Long = System.nanoTime()
-  // Mutable maps for performance because these will be frequently updated
-  // Possible optimisation: use arrays for concurrency levels below a certain threshold
-  private val timeNanosOnConcurrency: mutable.Map[Int, Long] = new mutable.HashMap().withDefaultValue(0)
-  private val timeNanosOnProxiedConcurrency: mutable.Map[Int, Long] = new mutable.HashMap().withDefaultValue(0)
+  private var databaseCount: Int = 0
+  private var databaseTimeNanos: Long = 0
+  private var databaseConcurrency: Int = 0
+  private val databaseTimeNanosOnConcurrency: mutable.Map[Int, Long] = new mutable.HashMap().withDefaultValue(0)
+  private var databaseLastChangedNanos: Long = System.nanoTime()
 
-  private var lastReportedMillis = System.currentTimeMillis()
+  private var lastReportedNanos = System.nanoTime()
 
   // Report every second - this
   timers.startPeriodicTimer("tick", Tick, settings.reportPeriod)
 
-  private def updateState(): Unit = {
+  private def updateCommandState(): Unit = {
     val currentNanos = System.nanoTime()
-    val sinceLastNanos = currentNanos - lastChangedNanos
-    timeNanosOnConcurrency.update(concurrency, timeNanosOnConcurrency(concurrency) + sinceLastNanos)
-    timeNanosOnProxiedConcurrency.update(proxiedConcurrency, timeNanosOnProxiedConcurrency(proxiedConcurrency) + sinceLastNanos)
-    lastChangedNanos = currentNanos
+    val sinceLastNanos = currentNanos - commandLastChangedNanos
+    commandTimeNanosOnConcurrency.update(commandConcurrency, commandTimeNanosOnConcurrency(commandConcurrency) + sinceLastNanos)
+    commandLastChangedNanos = currentNanos
+  }
+
+  private def updateRequestState(): Unit = {
+    val currentNanos = System.nanoTime()
+    val sinceLastNanos = currentNanos - requestLastChangedNanos
+    requestTimeNanosOnConcurrency.update(requestConcurrency, requestTimeNanosOnConcurrency(requestConcurrency) + sinceLastNanos)
+    requestLastChangedNanos = currentNanos
+  }
+
+  private def updateDatabaseState(): Unit = {
+    val currentNanos = System.nanoTime()
+    val sinceLastNanos = currentNanos - databaseLastChangedNanos
+    databaseTimeNanosOnConcurrency.update(databaseConcurrency, databaseTimeNanosOnConcurrency(databaseConcurrency) + sinceLastNanos)
+    databaseLastChangedNanos = currentNanos
   }
 
 
@@ -160,46 +144,82 @@ class StatsCollector(settings: StatsCollectorSettings) extends Actor with Timers
     def toSeconds(value: Long): Double = value.asInstanceOf[Double] / SecondInNanos
 
     val totalTimeUsed = times.values.sum
-    if (totalTimeUsed > 0) {
+    val average = if (totalTimeUsed > 0) {
       times.map {
         case (c, value) => c * toSeconds(value)
       }.sum / toSeconds(totalTimeUsed)
     } else 0.0
+
+    math.max(average, 0.0)
   }
 
   override def receive: Receive = {
-    case CommandSent(proxied) =>
-      updateState()
+    case CommandSent =>
+      updateCommandState()
+      commandCount += 1
+      commandConcurrency += 1
+
+    case ReplyReceived(timeNanos) =>
+      updateCommandState()
+      commandConcurrency -= 1
+      commandTimeNanos += timeNanos
+
+    case RequestReceived =>
+      updateRequestState()
       requestCount += 1
-      concurrency += 1
-      if (proxied) {
-        proxiedCount += 1
-        proxiedConcurrency += 1
-      }
-    case ReplyReceived(proxied) =>
-      updateState()
-      concurrency -= 1
-      if (proxied) {
-        proxiedConcurrency -= 1
-      }
+      requestConcurrency += 1
+
+    case ResponseSent(timeNanos) =>
+      updateRequestState()
+      requestConcurrency -= 1
+      requestTimeNanos += timeNanos
+
+    case DatabaseOperationStarted =>
+      updateDatabaseState()
+      databaseConcurrency += 1
+
+    case DatabaseOperationFinished(timeNanos) =>
+      updateDatabaseState()
+      databaseCount += 1
+      databaseTimeNanos += timeNanos
+      databaseConcurrency -= 1
+
     case Tick =>
-      val currentTime = System.currentTimeMillis()
-      updateState()
-      val reportPeriodSeconds = Math.max(currentTime - lastReportedMillis, 1).asInstanceOf[Double] / 1000
+      val currentTime = System.nanoTime()
+      updateCommandState()
+      updateRequestState()
+      updateDatabaseState()
+      val reportPeriodNanos = Math.max(currentTime - lastReportedNanos, 1)
 
-      val avgConcurrency = weightedAverage(timeNanosOnConcurrency)
-      val avgProxiedConcurrency = weightedAverage(timeNanosOnProxiedConcurrency)
-      log.debug(s"Reporting concurrency of $avgConcurrency with $requestCount requests and current concurrency of $concurrency")
-      operationsPerSecondGauge.set(requestCount.asInstanceOf[Double] / reportPeriodSeconds)
-      proxiedOperationsPerSecondGauge.set(proxiedCount / reportPeriodSeconds)
-      averageConcurrentRequestsGauge.set(avgConcurrency)
-      averageProxiedConcurrentRequestsGauge.set(avgProxiedConcurrency)
+      val avgCommandConcurrency = weightedAverage(commandTimeNanosOnConcurrency)
+      val avgRequestConcurrency = weightedAverage(requestTimeNanosOnConcurrency)
+      val avgDatabaseConcurrency = weightedAverage(databaseTimeNanosOnConcurrency)
 
-      lastReportedMillis = currentTime
+      autoscaler ! AutoscalerMetrics(
+        address = address,
+        uniqueAddressLongId = uniqueAddressLongId,
+        metricIntervalNanos = reportPeriodNanos,
+        requestConcurrency = avgRequestConcurrency,
+        requestTimeNanos = requestTimeNanos,
+        requestCount = requestCount,
+        userFunctionConcurrency = avgCommandConcurrency,
+        userFunctionTimeNanos = commandTimeNanos,
+        userFunctionCount = commandCount,
+        databaseConcurrency = avgDatabaseConcurrency,
+        databaseTimeNanos = databaseTimeNanos,
+        databaseCount = databaseCount,
+      )
+
+
+      lastReportedNanos = currentTime
+      commandCount = 0
+      commandTimeNanosOnConcurrency.clear()
+      commandTimeNanos = 0
       requestCount = 0
-      proxiedCount = 0
-      timeNanosOnConcurrency.clear()
-      timeNanosOnProxiedConcurrency.clear()
-
+      requestTimeNanosOnConcurrency.clear()
+      requestTimeNanos = 0
+      databaseCount = 0
+      databaseTimeNanosOnConcurrency.clear()
+      databaseTimeNanos = 0
   }
 }
