@@ -59,11 +59,11 @@ Onto the `stateful-serverless-event-sourcing` Node module, which can be found in
 * [`protocol.proto`](src/protocols/backend/lightbend/serverless/entity.proto) - This is the protocol that is implemented by the library, and invoked by the Akka backend. Commands, replies, events and snapshots are serialized into `google.protobuf.Any` - the command payloads and reply payloads are the gRPC input and output messages, while the event and snapshot payloads are what gets stored to persistence. The `ready` rpc method on the `Entity` service is used by the Akka backend to ask the user function for the gRPC protobuf descriptor it wishes to be served, this uses `google.protobuf.FileDescriptorProto` to serialize the descriptor.
 * [`entity.js`](src/node-support/src/entity.js) - This is the implementation of the protocol, which adapts the protocol to the API used by the user function.
 
-Next we'll take a look at the Akka backend, which can be found in [`src/backend/core`](src/backend/core).
+Next we'll take a look at the Akka backend, which can be found in [`src/backend/core`](src/backend/core/src).
 
-* [`Serve.scala`](src/stateful-serverless-backend/src/main/scala/com/lightbend/statefulserverless/Serve.scala) - This provides the dynamically implemented gRPC interface as specified by the user function. Requests are forwarded as commands to the cluster sharded persistent entities.
+* [`Serve.scala`](src/backend/core/src/main/scala/com/lightbend/statefulserverless/Serve.scala) - This provides the dynamically implemented gRPC interface as specified by the user function. Requests are forwarded as commands to the cluster sharded persistent entities.
 * [`StateManager.scala`](src/backend/core/src/main/scala/com/lightbend/statefulserverless/StateManager.scala) - This is an Akka persistent actor that talks to the user function via the event sourcing gRPC protocol.
-* [`StatefulServerlessServer.scala`](src/backend/core/src/main/scala/com/lightbend/statefulserverless/StatefulServerlessServer.scala) - This pulls everything together, starting the Akka gRPC server, cluster sharding, and persistence.
+* [`StatefulServerlessServer.scala`](/src/backend/core/src/main/scala/com/lightbend/statefulserverless/StatefulServerlessMain.scala) - This pulls everything together, starting the Akka gRPC server, cluster sharding, and persistence.
 * [`HttpApi.scala`](src/backend/core/src/main/scala/com/lightbend/statefulserverless/HttpApi.scala) - This reads [google.api.HttpRule](src/protocols/frontend/google/api/http.proto) annotations to generate HTTP/1.1 + JSON endpoints for the gRPC service methods.
 
 ## Compliance testing
