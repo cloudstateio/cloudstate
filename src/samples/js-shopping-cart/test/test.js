@@ -23,7 +23,7 @@ const protobuf = require("protobufjs");
 require("protobufjs/ext/descriptor");
 
 const ssesPath = path.dirname(require.resolve("stateful-serverless-event-sourcing"));
-const allIncludePath = [path.join(ssesPath, "proto"), path.join(ssesPath, "proto-ext"), path.join("..", "..", "protocols", "frontend")]
+const allIncludePath = [path.join(ssesPath, "proto"), path.join(ssesPath, "protoc", "include"), path.join("..", "..", "protocols", "example")]
 const packageDefinition = protoLoader.loadSync(path.join("lightbend","serverless", "entity.proto"), {
   includeDirs: allIncludePath
 });
@@ -43,8 +43,8 @@ root.resolvePath = function (origin, target) {
   return null;
   // return path.join("../../protocols/frontend", target);
 };
-root.loadSync(path.join("example","shoppingcart","shoppingcart.proto"));
-root.loadSync(path.join("example","shoppingcart","persistence","domain.proto"));
+root.loadSync(path.join("shoppingcart","shoppingcart.proto"));
+root.loadSync(path.join("shoppingcart","persistence","domain.proto"));
 root.resolveAll();
 
 const ItemAdded = root.lookupType("com.example.shoppingcart.persistence.ItemAdded");

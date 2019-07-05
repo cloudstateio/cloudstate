@@ -1,0 +1,30 @@
+apiVersion: serving.knative.dev/v1alpha1
+kind: Service
+metadata:
+  name: shopping-cart
+spec:
+  template:
+    metadata:
+      annotations:
+        force-upgrade: one
+    spec:
+      containers:
+      - image: gcr.io/stateserv/js-shopping-cart:latest
+        ports:
+        - name: h2c
+          containerPort: 8080
+      deployer:
+        name: EventSourced
+        config:
+          # Journal configuration
+          journal:
+
+            # Name of a deployed EventSourcedJournal to use, must match the name configured above.
+            # A namespace might also be specified.
+            name: cassandra
+
+            # Journal specific configuration
+            config:
+
+              # Since the journal is a Cassandra journal, we need to specify the keyspace to use.
+              keyspace: shoppingcart

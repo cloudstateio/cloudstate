@@ -16,7 +16,8 @@
 
 package com.lightbend.statefulserverless
 
-import java.net.{URLDecoder, URLEncoder}
+import java.net.URLDecoder
+import java.util.concurrent.atomic.AtomicLong
 
 import akka.NotUsed
 import akka.actor._
@@ -28,15 +29,18 @@ import akka.cluster.sharding.ShardRegion
 import com.lightbend.statefulserverless.grpc._
 import EntityStreamIn.{Message => ESIMsg}
 import com.google.protobuf.any.{Any => pbAny}
+import com.lightbend.statefulserverless.ConcurrencyEnforcer.{Action, ActionCompleted}
 import com.lightbend.statefulserverless.StateManager.CommandFailure
+import com.lightbend.statefulserverless.internal.grpc.{GrpcEntityCommand, GrpcEntityReply, Request}
 
 import scala.collection.immutable.Queue
 
 object StateManagerSupervisor {
+
   final case class Relay(actorRef: ActorRef)
 
-  def props(client: EntityClient, configuration: StateManager.Configuration)(implicit mat: Materializer): Props =
-    Props(new StateManagerSupervisor(client, configuration))
+  def props(client: EntityClient, configuration: StateManager.Configuration, concurrencyEnforcer: ActorRef, statsCollector: ActorRef)(implicit mat: Materializer): Props =
+    Props(new StateManagerSupervisor(client, configuration, concurrencyEnforcer, statsCollector))
 }
 
 /**
@@ -49,8 +53,8 @@ object StateManagerSupervisor {
   * persistence starts feeding us events. There's a race condition if we do this in the same persistent actor. This
   * establishes that connection first.
   */
-final class StateManagerSupervisor(client: EntityClient, configuration: StateManager.Configuration)(implicit mat: Materializer)
-    extends Actor with Stash {
+final class StateManagerSupervisor(client: EntityClient, configuration: StateManager.Configuration, concurrencyEnforcer: ActorRef, statsCollector: ActorRef)(implicit mat: Materializer)
+  extends Actor with Stash {
 
   import StateManagerSupervisor._
 
@@ -61,7 +65,7 @@ final class StateManagerSupervisor(client: EntityClient, configuration: StateMan
       .mapMaterializedValue { ref =>
         self ! Relay(ref)
         NotUsed
-      }).runWith(Sink.actorRef(self, StateManager.StreamClosed)) // FIXME do we need a kill-switch here?
+      }).runWith(Sink.actorRef(self, StateManager.StreamClosed))
     context.become(waitingForRelay)
   }
 
@@ -69,7 +73,7 @@ final class StateManagerSupervisor(client: EntityClient, configuration: StateMan
     case Relay(relayRef) =>
       // Cluster sharding URL encodes entity ids, so to extract it we need to decode.
       val entityId = URLDecoder.decode(self.path.name, "utf-8")
-      val manager = context.watch(context.actorOf(StateManager.props(configuration, entityId, relayRef), "entity"))
+      val manager = context.watch(context.actorOf(StateManager.props(configuration, entityId, relayRef, concurrencyEnforcer, statsCollector), "entity"))
       context.become(forwarding(manager))
       unstashAll()
     case _ => stash()
@@ -88,19 +92,21 @@ final class StateManagerSupervisor(client: EntityClient, configuration: StateMan
 }
 
 object StateManager {
+
   final case object Stop
+
   final case object StreamClosed extends DeadLetterSuppression
 
   final case class Configuration(
     userFunctionName: String,
     passivationTimeout: Timeout,
     sendQueueSize: Int
-    )
+  )
 
-  final case class Request(
-      final val commandId: Long,
-      final val replyTo: ActorRef
-    )
+  private final case class OutstandingRequest(
+    commandId: Long,
+    replyTo: ActorRef
+  )
 
   /**
     * Exception indicating a failure that has been signalled by the user function
@@ -108,33 +114,55 @@ object StateManager {
     */
   final case class CommandFailure(msg: String) extends RuntimeException(msg)
 
-  final def props(configuration: Configuration, entityId: String, relay: ActorRef): Props =
-    Props(new StateManager(configuration, entityId, relay))
+  final def props(configuration: Configuration, entityId: String, relay: ActorRef, concurrencyEnforcer: ActorRef, statsCollector: ActorRef): Props =
+    Props(new StateManager(configuration, entityId, relay, concurrencyEnforcer, statsCollector))
+
+  /**
+    * Used to ensure the action ids sent to the concurrency enforcer are indeed unique.
+    */
+  private val actorCounter = new AtomicLong(0)
 }
 
-final class StateManager(configuration: StateManager.Configuration, entityId: String, relay: ActorRef) extends PersistentActor with ActorLogging {
+final class StateManager(configuration: StateManager.Configuration, entityId: String, relay: ActorRef,
+  concurrencyEnforcer: ActorRef, statsCollector: ActorRef) extends PersistentActor with ActorLogging {
   override final def persistenceId: String = configuration.userFunctionName + entityId
 
-  private[this] final var stashedCommands = Queue.empty[(Command, ActorRef)] // PERFORMANCE: look at options for data structures
-  private[this] final var currentRequest: StateManager.Request = null
+  private val actorId = StateManager.actorCounter.incrementAndGet()
+
+  private[this] final var stashedRequests = Queue.empty[(Request, ActorRef)] // PERFORMANCE: look at options for data structures
+  private[this] final var currentRequest: StateManager.OutstandingRequest = null
   private[this] final var stopped = false
   private[this] final var idCounter = 0l
   private[this] final var inited = false
+  private[this] final var currentActionId: String = null
+  private[this] final var reportedDatabaseOperationStarted = false
+  private[this] final var databaseOperationStartTime = 0l
+  private[this] final var commandStartTime = 0l
 
   // Set up passivation timer
   context.setReceiveTimeout(configuration.passivationTimeout.duration)
 
+  // First thing actor will do is access database
+  reportDatabaseOperationStarted()
+
   override final def postStop(): Unit = {
+    if (currentActionId != null) {
+      log.warning("Stopped but we have a current action id {}", currentActionId)
+      reportActionComplete()
+    }
+    if (reportedDatabaseOperationStarted) {
+      reportDatabaseOperationFinished()
+    }
     // This will shutdown the stream (if not already shut down)
     relay ! Status.Success(())
   }
 
   private[this] final def commandHandled(): Unit = {
     currentRequest = null
-    if (stashedCommands.nonEmpty) {
-      val (command, newStashedCommands) = stashedCommands.dequeue
-      stashedCommands = newStashedCommands
-      receiveCommand(command)
+    if (stashedRequests.nonEmpty) {
+      val ((request, sender), newStashedCommands) = stashedRequests.dequeue
+      stashedRequests = newStashedCommands
+      handleCommand(request, sender)
     } else if (stopped) {
       context.stop(self)
     }
@@ -146,7 +174,7 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
       case req => req.replyTo ! Status.Failure(new Exception(msg))
     }
     val errorNotification = Status.Failure(new Exception("Entity terminated"))
-    stashedCommands.foreach {
+    stashedRequests.foreach {
       case (_, replyTo) => replyTo ! errorNotification
     }
   }
@@ -156,16 +184,35 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
     throw new Exception(msg)
   }
 
+  private[this] final def reportActionComplete() = {
+    concurrencyEnforcer ! ActionCompleted(currentActionId, System.nanoTime() - commandStartTime)
+    currentActionId = null
+  }
+
+  private[this] final def handleCommand(request: Request, sender: ActorRef): Unit = {
+    val Request(Some(GrpcEntityCommand(_, name, payload))) = request
+    idCounter += 1
+    currentActionId = actorId + ":" + entityId + ":" + idCounter
+    val command = Command(
+      entityId = entityId,
+      id = idCounter,
+      name = name,
+      payload = payload
+    )
+    currentRequest = StateManager.OutstandingRequest(idCounter, sender)
+    commandStartTime = System.nanoTime()
+    concurrencyEnforcer ! Action(currentActionId, () => {
+      relay ! EntityStreamIn(ESIMsg.Command(command))
+    })
+  }
+
   override final def receiveCommand: PartialFunction[Any, Unit] = {
 
-    case c: Command if currentRequest != null =>
-      stashedCommands = stashedCommands.enqueue((c, sender()))
+    case r: Request if currentRequest != null =>
+      stashedRequests = stashedRequests.enqueue((r, sender()))
 
-    case c: Command =>
-      idCounter += 1
-      val commandWithId = c.copy(id = idCounter)
-      currentRequest = StateManager.Request(idCounter, sender())
-      relay ! EntityStreamIn(ESIMsg.Command(commandWithId))
+    case r: Request =>
+      handleCommand(r, sender())
 
     case EntityStreamOut(m) =>
 
@@ -179,22 +226,25 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
           crash(s"Incorrect command id in reply, expecting ${currentRequest.commandId} but got ${r.commandId}")
 
         case ESOMsg.Reply(r) =>
+          reportActionComplete()
           val commandId = currentRequest.commandId
           val events = r.events.toVector
           if (events.isEmpty) {
-            currentRequest.replyTo ! r.getPayload.value
+            currentRequest.replyTo ! GrpcEntityReply(r.getPayload.value)
             commandHandled()
           } else {
+            reportDatabaseOperationStarted()
             var eventsLeft = events.size
             persistAll(events) { _ =>
               eventsLeft -= 1
               if (eventsLeft <= 0) { // Remove this hack when switching to Akka Persistence Typed
+                reportDatabaseOperationFinished()
                 r.snapshot.foreach(saveSnapshot)
                 // Make sure that the current request is still ours
                 if (currentRequest == null || currentRequest.commandId != commandId) {
                   crash("Internal error - currentRequest changed before all events were persisted")
                 }
-                currentRequest.replyTo ! r.getPayload.value
+                currentRequest.replyTo ! GrpcEntityReply(r.getPayload.value)
                 commandHandled()
               }
             }
@@ -210,6 +260,7 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
           crash(s"Incorrect command id in failure, expecting ${currentRequest.commandId} but got ${f.commandId}")
 
         case ESOMsg.Failure(f) =>
+          reportActionComplete()
           currentRequest.replyTo ! Status.Failure(CommandFailure(f.description))
           commandHandled()
 
@@ -220,17 +271,15 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
       }
 
     case StateManager.StreamClosed =>
-      // FIXME Perhaps reconnect if `currentRequest == null`? Connection could have been timed out?
       notifyOutstandingRequests("Unexpected entity termination")
       context.stop(self)
 
     case Status.Failure(error) =>
-      // FIXME Perhaps reconnect if `currentRequest == null`? Connection could have been timed out?
       notifyOutstandingRequests("Unexpected entity termination")
       throw error
 
     case SaveSnapshotSuccess(metadata) =>
-      // Nothing to do
+    // Nothing to do
 
     case SaveSnapshotFailure(metadata, cause) =>
       log.error("Error saving snapshot", cause)
@@ -260,10 +309,30 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
       maybeInit(Some(offer))
 
     case RecoveryCompleted =>
+      reportDatabaseOperationFinished()
       maybeInit(None)
 
     case event: pbAny =>
       maybeInit(None)
       relay ! EntityStreamIn(ESIMsg.Event(Event(lastSequenceNr, Some(event))))
+  }
+
+  private def reportDatabaseOperationStarted(): Unit = {
+    if (reportedDatabaseOperationStarted) {
+      log.warning("Already reported database operation started")
+    } else {
+      databaseOperationStartTime = System.nanoTime()
+      reportedDatabaseOperationStarted = true
+      statsCollector ! StatsCollector.DatabaseOperationStarted
+    }
+  }
+
+  private def reportDatabaseOperationFinished(): Unit = {
+    if (!reportedDatabaseOperationStarted) {
+      log.warning("Hadn't reported database operation started")
+    } else {
+      reportedDatabaseOperationStarted = false
+      statsCollector ! StatsCollector.DatabaseOperationFinished(System.nanoTime() - databaseOperationStartTime)
+    }
   }
 }

@@ -13,15 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 const Entity = require("stateful-serverless-event-sourcing");
 
 const entity = new Entity(
-  ["example/shoppingcart/shoppingcart.proto", "example/shoppingcart/persistence/domain.proto"],
+  ["shoppingcart/shoppingcart.proto", "shoppingcart/persistence/domain.proto"],
   "com.example.shoppingcart.ShoppingCart",
   {
     persistenceId: "shopping-cart",
     snapshotEvery: 5, // Usually you wouldn't snapshot this frequently, but this helps to demonstrate snapshotting
-    includeDirs: [""]
+    includeDirs: ["../../protocols/example"]
   }
 );
 

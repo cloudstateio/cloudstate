@@ -26,7 +26,8 @@ import scala.concurrent.duration._
 
 object Client {
   def main(args: Array[String]): Unit = {
-    val client = new Client("127.0.0.1", 9000)
+
+    val client = new Client("35.197.173.27", 80, Some("shopping-cart.default.example.com"))
 
     val userId = "viktor"
     val productId = "1337"
@@ -55,13 +56,18 @@ object Client {
   * @param hostname
   * @param port
   */
-class Client(hostname: String, port: Int, sys: ActorSystem) {
-  def this(hostname: String, port: Int) = this(hostname, port, ActorSystem())
+class Client(hostname: String, port: Int, hostnameOverride: Option[String], sys: ActorSystem) {
+  def this(hostname: String, port: Int, hostnameOverride: Option[String] = None) = this(hostname, port, hostnameOverride, ActorSystem())
   private implicit val system = sys
   private implicit val materializer = ActorMaterializer()
   import sys.dispatcher
 
-  val service = ShoppingCartClient(GrpcClientSettings.connectToServiceAt(hostname, port).withTls(false))
+  val settings = {
+    val s = GrpcClientSettings.connectToServiceAt(hostname, port).withTls(false)
+    hostnameOverride.fold(s)(host => s.withChannelBuilderOverrides(_.overrideAuthority(host)))
+  }
+  println(s"Connecting to $hostname:$port")
+  val service = ShoppingCartClient(settings)
 
   def shutdown(): Unit = {
     await(service.close())

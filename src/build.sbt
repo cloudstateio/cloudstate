@@ -13,10 +13,12 @@ organizationName in ThisBuild := "Lightbend Inc."
 startYear in ThisBuild := Some(2019)
 licenses in ThisBuild += ("Apache-2.0", new URL("https://www.apache.org/licenses/LICENSE-2.0.txt"))
 
-val AkkaVersion = "2.5.23"
+val AkkaVersion = "2.5.23-jroper-rebalance-fix-1"
 val AkkaHttpVersion = "10.1.8+47-9ef9d823"
 val AkkaManagementVersion = "1.0.1"
-val AkkaPersistenceCassandraVersion = "0.93"
+val AkkaPersistenceCassandraVersion = "0.96"
+val PrometheusClientVersion = "0.6.0"
+val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.5.1"
 
 def common: Seq[Setting[_]] = Seq(
@@ -30,6 +32,8 @@ def common: Seq[Setting[_]] = Seq(
   // back to just our source directory.
   PB.protoSources in Compile := Seq(),
   PB.protoSources in Test := Seq(),
+
+  excludeFilter in headerResources := HiddenFileFilter || GlobFilter("reflection.proto")
 )
 
 val copyFrontendProtos = taskKey[File]("Copy the frontend protobufs")
@@ -110,7 +114,9 @@ lazy val `backend-core` = (project in file("backend/core"))
     name := "stateful-serverless-backend-core",
     libraryDependencies ++= Seq(
       "com.typesafe.akka"             %% "akka-persistence"                  % AkkaVersion,
+      "com.typesafe.akka"             %% "akka-persistence-query"            % AkkaVersion,
       "com.typesafe.akka"             %% "akka-stream"                       % AkkaVersion,
+      "com.typesafe.akka"             %% "akka-slf4j"                        % AkkaVersion,
       "com.typesafe.akka"             %% "akka-http"                         % AkkaHttpVersion,
       "com.typesafe.akka"             %% "akka-http-spray-json"              % AkkaHttpVersion,
       "com.typesafe.akka"             %% "akka-http-core"                    % AkkaHttpVersion,
@@ -118,13 +124,17 @@ lazy val `backend-core` = (project in file("backend/core"))
       "com.typesafe.akka"             %% "akka-cluster-sharding"             % AkkaVersion,
       "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
       "com.lightbend.akka.discovery"  %% "akka-discovery-kubernetes-api"     % AkkaManagementVersion,
-      "com.google.protobuf"            % "protobuf-java"                     % ProtobufVersion % "protobuf", // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
+      "com.google.protobuf"            % "protobuf-java"                     % ProtobufVersion % "protobuf",
       "com.google.protobuf"            % "protobuf-java-util"                % ProtobufVersion,
 
-      "org.scalatest"                 %% "scalatest"                         % "3.0.5" % "test",
-      "com.typesafe.akka"             %% "akka-testkit"                      % AkkaVersion % "test",
-      "com.typesafe.akka"             %% "akka-stream-testkit"               % AkkaVersion % "test",
-      "com.typesafe.akka"             %% "akka-http-testkit"                 % AkkaHttpVersion % "test"
+      "org.scalatest"                 %% "scalatest"                         % ScalaTestVersion % Test,
+      "com.typesafe.akka"             %% "akka-testkit"                      % AkkaVersion % Test,
+      "com.typesafe.akka"             %% "akka-stream-testkit"               % AkkaVersion % Test,
+      "com.typesafe.akka"             %% "akka-http-testkit"                 % AkkaHttpVersion % Test,
+      "com.thesamet.scalapb"          %% "scalapb-runtime"                   % scalapb.compiler.Version.scalapbVersion % "protobuf",
+      "io.prometheus"                  % "simpleclient"                      % PrometheusClientVersion,
+      "io.prometheus"                  % "simpleclient_common"               % PrometheusClientVersion,
+      "ch.qos.logback"                 % "logback-classic"                   % "1.2.3",
     ),
 
     backendProtos,
@@ -186,7 +196,14 @@ lazy val operator = (project in file("operator"))
     common,
     name := "stateful-serverless-operator",
     // This is a publishLocal build of this PR https://github.com/doriordan/skuber/pull/268
-    libraryDependencies += "io.skuber" %% "skuber" % "2.2.0-jroper-1",
+    libraryDependencies ++= Seq(
+      "com.typesafe.akka"  %% "akka-stream"     % AkkaVersion,
+      "com.typesafe.akka"  %% "akka-slf4j"      % AkkaVersion,
+      "com.typesafe.akka"  %% "akka-http"       % AkkaHttpVersion,
+      "io.skuber"          %% "skuber"          % "2.2.0-jroper-1",
+      "ch.qos.logback"      % "logback-classic" % "1.2.3"
+
+    ),
 
     dockerSettings,
     dockerExposedPorts := Nil,
@@ -201,6 +218,7 @@ lazy val operator = (project in file("operator"))
 
 lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"))
   .enablePlugins(AkkaGrpcPlugin)
+  .dependsOn(`backend-core`)
   .settings(
     common,
     name := "akka-js-shopping-cart-client",
@@ -215,11 +233,24 @@ lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"
       "com.typesafe.akka"  %% "akka-http-core"       % AkkaHttpVersion,
       "com.typesafe.akka"  %% "akka-http2-support"   % AkkaHttpVersion,
       "com.typesafe.akka"  %% "akka-parsing"         % AkkaVersion,
-      "com.google.protobuf" % "protobuf-java"        % ProtobufVersion % "protobuf" // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
+      "com.google.protobuf" % "protobuf-java"        % ProtobufVersion % "protobuf",
+      "com.thesamet.scalapb" %% "scalapb-runtime"    % scalapb.compiler.Version.scalapbVersion % "protobuf"
     ),
 
     frontendProtos
   )
+
+lazy val `load-generator` = (project in file("samples/js-shopping-cart-load-generator"))
+  .enablePlugins(JavaAppPackaging, DockerPlugin)
+  .dependsOn(`akka-client`)
+  .settings(
+    common,
+    name := "js-shopping-cart-load-generator",
+    dockerSettings,
+    dockerExposedPorts := Nil
+  )
+
+val copyProtocolProtosToTCK = taskKey[File]("Copy the protocol files to the tck")
 
 lazy val `tck` = (project in file("tck"))
   .enablePlugins(AkkaGrpcPlugin)
@@ -233,8 +264,8 @@ lazy val `tck` = (project in file("tck"))
       "com.typesafe.akka"  %% "akka-stream"          % AkkaVersion,
       "com.typesafe.akka"  %% "akka-http"            % AkkaHttpVersion,
       "com.typesafe.akka"  %% "akka-http-spray-json" % AkkaHttpVersion,
-      "com.google.protobuf" % "protobuf-java"        % ProtobufVersion % "protobuf", // TODO remove this, see: https://github.com/akka/akka-grpc/issues/565
-      "org.scalatest"       % "scalatest_2.12"       % "3.0.5",
+      "com.google.protobuf" % "protobuf-java"        % ProtobufVersion % "protobuf",
+      "org.scalatest"      %% "scalatest"            % ScalaTestVersion,
       "com.typesafe.akka"  %% "akka-testkit"         % AkkaVersion
     ),
 

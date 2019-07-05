@@ -16,23 +16,18 @@
 
 package com.lightbend.statefulserverless
 
-import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Try, Success, Failure}
 import akka.grpc.scaladsl.{GrpcExceptionHandler, GrpcMarshalling}
 import GrpcMarshalling.{marshalStream, unmarshalStream}
-import akka.grpc.{Codecs, ProtobufSerializer, GrpcServiceException}
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, HttpEntity, ContentTypes, HttpMethod, HttpMethods, RequestEntityAcceptance}
-import akka.http.scaladsl.model.Uri
+import akka.grpc.{Codecs, ProtobufSerializer}
+import akka.http.scaladsl.model.{HttpRequest, HttpResponse, StatusCodes, HttpEntity}
 import akka.http.scaladsl.model.Uri.Path
-import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.actor.{ActorRef, ActorSystem}
 import akka.util.{ByteString, Timeout}
 import akka.pattern.ask
 import akka.stream.Materializer
-import akka.stream.scaladsl.{Flow, Sink}
-import com.google.api.{AnnotationsProto, HttpRule, HttpProto}
+import com.google.api.{AnnotationsProto, HttpProto}
 import com.google.protobuf.{DescriptorProtos, DynamicMessage, ByteString => ProtobufByteString}
 import com.google.protobuf.empty.{EmptyProto => ProtobufEmptyProto}
 import com.google.protobuf.any.{Any => ProtobufAny, AnyProto => ProtobufAnyProto}
@@ -42,8 +37,13 @@ import com.lightbend.statefulserverless.grpc._
 import akka.cluster.sharding.ShardRegion.HashCodeMessageExtractor
 import com.lightbend.statefulserverless.StateManager.CommandFailure
 import io.grpc.Status
+import com.lightbend.statefulserverless.internal.grpc.{GrpcEntityCommand, GrpcEntityReply, Request}
+import org.slf4j.LoggerFactory
+
 
 object Serve {
+
+  private final val log = LoggerFactory.getLogger(getClass)
   // When the entity key is made up of multiple fields, this is used to separate them
   final val EntityKeyValueSeparator = "-"
   final val AnyTypeUrlHostName = "type.googleapis.com/"
@@ -57,22 +57,24 @@ object Serve {
   )
 
   private final val NotFound: PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    case req: HttpRequest => Future.successful(HttpResponse(StatusCodes.NotFound))
+    case req: HttpRequest =>
+      log.debug("Not found request: " + req.getUri())
+      Future.successful(HttpResponse(StatusCodes.NotFound))
   }
 
-  private final object ReplySerializer extends ProtobufSerializer[ProtobufByteString] {
-    override final def serialize(pbBytes: ProtobufByteString): ByteString =
-      if (pbBytes.isEmpty) {
+  private final object ReplySerializer extends ProtobufSerializer[GrpcEntityReply] {
+    override final def serialize(reply: GrpcEntityReply): ByteString =
+      if (reply.payload.isEmpty) {
         ByteString.empty
       } else {
-        ByteString.fromArrayUnsafe(pbBytes.toByteArray())
+        ByteString.fromArrayUnsafe(reply.payload.toByteArray)
       }
-    override final def deserialize(bytes: ByteString): ProtobufByteString =
-      if (bytes.isEmpty) {
-        ProtobufByteString.EMPTY
-      } else {
-        ProtobufByteString.readFrom(bytes.iterator.asInputStream)
-      }
+
+    override final def deserialize(bytes: ByteString): GrpcEntityReply =
+      GrpcEntityReply(
+        if (bytes.isEmpty) ProtobufByteString.EMPTY
+        else ProtobufByteString.readFrom(bytes.iterator.asInputStream)
+      )
   }
 
   final def createEntityIdExtractorFor(desc: Descriptor): DynamicMessage => String = {
@@ -108,30 +110,26 @@ object Serve {
     }
   }
 
-  private final class CommandSerializer(commandName: String, desc: Descriptor) extends ProtobufSerializer[Command] {
+  private final class CommandSerializer(commandName: String, desc: Descriptor) extends ProtobufSerializer[GrpcEntityCommand] {
     private[this] final val commandTypeUrl = AnyTypeUrlHostName + desc.getFullName
     private[this] final val extractId = createEntityIdExtractorFor(desc)
 
     // Should not be used in practice
-    override final def serialize(command: Command): ByteString = command.payload match {
+    override final def serialize(command: GrpcEntityCommand): ByteString = command.payload match {
       case None => ByteString.empty
       case Some(payload) => ByteString(payload.value.asReadOnlyByteBuffer())
     }
 
-    override final def deserialize(bytes: ByteString): Command = {
-      // Use of named parameters here is important, Command is a generated class and if the
-      // order of fields changes, that could silently break this code
-      // Note, we're not setting the command id. We'll leave it up to the StateManager actor
-      // to generate an id that is unique per session.
-      Command(entityId = extractId(DynamicMessage.parseFrom(desc, bytes.iterator.asInputStream)),
-              name = commandName,
-              payload = Some(ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer))))
+    override final def deserialize(bytes: ByteString): GrpcEntityCommand = {
+      GrpcEntityCommand(entityId = extractId(DynamicMessage.parseFrom(desc, bytes.iterator.asInputStream)),
+        name = commandName,
+        payload = Some(ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer))))
     }
   }
 
-  final class CommandMessageExtractor(shards: Int) extends HashCodeMessageExtractor(shards) {
+  final class RequestMessageExtractor(shards: Int) extends HashCodeMessageExtractor(shards) {
     override final def entityId(message: Any): String = message match {
-      case c: Command => c.entityId
+      case c: Request => c.command.fold("")(_.entityId)
     }
   }
 
@@ -140,23 +138,33 @@ object Serve {
     Some(descriptor).filter(_.getPackage == pkg).map(_.findServiceByName(name))
   }
 
-  def createRoute(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+  def createRoute(stateManager: ActorRef, statsCollector: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, spec: EntitySpec)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val descriptorSet = DescriptorProtos.FileDescriptorSet.parseFrom(spec.proto)
     descriptorSet.getFileList.iterator.asScala.map(
       fdp => FileDescriptor.buildFrom(fdp, DescriptorDependencies, true)
     ).map(
       descriptor => extractService(spec.serviceName, descriptor).map(
                       service =>
-                       compileProxy(stateManager, proxyParallelism, relayTimeout, service) orElse // Fast path
+                       compileProxy(stateManager, statsCollector, proxyParallelism, relayTimeout, service) orElse // Fast path
+                       handleNetworkProbe() orElse
                        Reflection.serve(descriptor) orElse // Cheap path
                        HttpApi.serve(stateManager, relayTimeout, service) orElse // Slow path
                        NotFound // No match. TODO: Consider having the caller of this method deal with this condition
                     )
     ).collectFirst({ case Some(route) => route })
-     .getOrElse(throw new Exception(s"Service ${spec.serviceName} not found in descriptors!"))
+      .getOrElse(throw new Exception(s"Service ${spec.serviceName} not found in descriptors!"))
   }
 
-  private[this] final def compileProxy(stateManager: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+  def handleNetworkProbe(): PartialFunction[HttpRequest, Future[HttpResponse]] = Function.unlift { req =>
+    req.headers.find(_.name.equalsIgnoreCase("K-Network-Probe")).map { header =>
+      Future.successful(header.value match {
+        case "queue" => HttpResponse(entity = HttpEntity("queue"))
+        case other => HttpResponse(status = StatusCodes.BadRequest, entity = HttpEntity(s"unexpected probe header value: $other"))
+      })
+    }
+  }
+
+  private[this] final def compileProxy(stateManager: ActorRef, statsCollector: ActorRef, proxyParallelism: Int, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val serviceName = serviceDesc.getFullName
     val rpcMethodSerializers = serviceDesc.getMethods.iterator.asScala.map(
       d => (Path / serviceName / d.getName, new CommandSerializer(d.getName, d.getInputType))
@@ -168,11 +176,22 @@ object Serve {
       _ => pf
     }
 
-    { case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
+    {
+      case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
+        val startTime = System.nanoTime()
         implicit val askTimeout = relayTimeout
         val responseCodec = Codecs.negotiate(req)
         unmarshalStream(req)(rpcMethodSerializers(req.uri.path), mat).
-          map(_.mapAsync(proxyParallelism)(command => (stateManager ? command).mapTo[ProtobufByteString])).
+          map(_.mapAsync(proxyParallelism) { command =>
+            statsCollector ! StatsCollector.RequestReceived
+
+            val request = Request(Some(command))
+            (stateManager ? request).mapTo[GrpcEntityReply]
+              .transform { result =>
+                statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
+                result
+              }
+          }).
           map(e => marshalStream(e, mapRequestFailureExceptions)(ReplySerializer, mat, responseCodec, sys)).
           recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
     }

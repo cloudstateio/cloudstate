@@ -8,4 +8,5 @@ before_script:
   - sbt update
 script:
   - cd samples/js-shopping-cart && npm test && cd -
+  - cd samples/js-shopping-cart && npm run dockerbuild && cd -
   - sbt test

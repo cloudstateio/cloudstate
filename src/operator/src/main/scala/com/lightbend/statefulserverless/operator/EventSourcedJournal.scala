@@ -16,17 +16,14 @@
 
 package com.lightbend.statefulserverless.operator
 
-import java.time.Instant
-
 import play.api.libs.json.{Format, JsObject, Json}
 import skuber.ResourceSpecification.Subresources
 import skuber.apiextensions.CustomResourceDefinition
-import skuber.{CustomResource, EnvVar, ListResource, ResourceDefinition}
-import skuber.json.format._
+import skuber.{CustomResource, ListResource, ResourceDefinition}
 
 object EventSourcedJournal {
 
-  type Resource = CustomResource[EventSourcedJournal.Spec, EventSourcedJournal.Status]
+  type Resource = CustomResource[EventSourcedJournal.Spec, Status]
   type ResourceList = ListResource[Resource]
 
   case class Spec(`type`: String, deployment: String, config: JsObject)
@@ -35,13 +32,7 @@ object EventSourcedJournal {
     implicit val format: Format[Spec] = Json.format
   }
 
-  case class Status(
-    specHash: Option[String],
-    image: Option[String],
-    sidecarEnv: Option[Seq[EnvVar]],
-    reason: Option[String],
-    lastApplied: Option[Instant]
-  )
+  case class Status(conditions: Option[List[Condition]], specHash: Option[String])
 
   object Status {
     implicit val format: Format[Status] = Json.format

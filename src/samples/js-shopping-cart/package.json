@@ -25,10 +25,10 @@
   },
   "//": "https://npm.community/t/npm-install-does-not-install-transitive-dependencies-of-local-dependency/2264",
   "dependencies": {
-    "stateful-serverless-event-sourcing": "file:../../node-support",
     "@grpc/proto-loader": "^0.1.0",
     "google-protobuf": "^3.0.0",
-    "grpc": "^1.11.0"
+    "grpc": "^1.11.0",
+    "stateful-serverless-event-sourcing": "file:../../node-support"
   },
   "devDependencies": {
     "chai": "4.2.0",
@@ -36,9 +36,12 @@
   },
   "scripts": {
     "test": "mocha",
-    "pretest": "protoc --include_imports --proto_path=../../protocols/backend --proto_path=../../protocols/frontend --descriptor_set_out=user-function.desc example/shoppingcart/shoppingcart.proto",
-    "preinstall": "protoc --include_imports --proto_path=../../protocols/backend --proto_path=../../protocols/frontend --descriptor_set_out=user-function.desc example/shoppingcart/shoppingcart.proto",
-    "prestart": "protoc --include_imports --proto_path=../../protocols/backend --proto_path=../../protocols/frontend --descriptor_set_out=user-function.desc example/shoppingcart/shoppingcart.proto",
-    "start": "node index.js"
+    "prestart": "compile-descriptor ../../protocols/example/shoppingcart/shoppingcart.proto",
+    "pretest": "compile-descriptor ../../protocols/example/shoppingcart/shoppingcart.proto",
+    "start": "node index.js",
+    "start-no-prestart": "node index.js",
+    "dockerbuild": "docker build -f ../../Dockerfile.js-shopping-cart -t gcr.io/stateserv/js-shopping-cart:$npm_package_version -t gcr.io/stateserv/js-shopping-cart:latest ../..",
+    "dockerpush": "docker push gcr.io/stateserv/js-shopping-cart:$npm_package_version && docker push gcr.io/stateserv/js-shopping-cart:latest",
+    "dockerbuildpush": "npm run dockerbuild && npm run dockerpush"
   }
 }
