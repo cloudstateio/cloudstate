@@ -2,7 +2,6 @@ language: scala
 before_script:
   - ./protoc-installer.sh 3.7.1
   - export PATH=$PATH:/usr/local/bin/protoc
-  - cd src
   - cd node-support && npm install && cd -
   - cd samples/js-shopping-cart && npm install && cd -
   - sbt update
