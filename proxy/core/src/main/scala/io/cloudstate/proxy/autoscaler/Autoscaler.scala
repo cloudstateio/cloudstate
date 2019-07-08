@@ -147,6 +147,7 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
 
   timers.startPeriodicTimer("tick", Tick, settings.tickPeriod)
   ddata.replicator ! Get(StateKey, ReadMajority(timeout = 5.seconds))
+  log.debug("==== START")
 
   override def receive: Receive = waitingForState(WaitingForState)
 
@@ -174,6 +175,7 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
         val haveMetricsFromAllNodes = clusterMembershipFacade.upMembers.forall(stats.contains)
 
         if (haveMetricsFromAllNodes) {
+
           state match {
             case WaitingForState =>
             // Do nothing, we don't have our own state yet
@@ -207,7 +209,8 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
     // Results of ddata state read
     case NotFound(StateKey, _) =>
       // No ddata state, assume stable
-      become(waitingForState(Stable()))
+      context.become(waitingForState(Stable()))
+      checkInit(Stable())
     case GetFailure(StateKey, _) =>
       // We failed to read from a majority, fall back to local
       ddata.replicator ! Get(StateKey, ReadLocal)
@@ -215,7 +218,7 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
     case success @ GetSuccess(StateKey, _) =>
       // We still need to wait for all the nodes in the cluster to report stats
       val newState = success.get(StateKey).value
-      become(waitingForState(newState))
+      context.become(waitingForState(newState))
       checkInit(newState)
 
     case Tick =>

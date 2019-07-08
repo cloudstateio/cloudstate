@@ -8,4 +8,4 @@ before_script:
 script:
   - cd samples/js-shopping-cart && npm test && cd -
   - cd samples/js-shopping-cart && npm run dockerbuild && cd -
-  - sbt test
+  - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' test
