@@ -15,7 +15,7 @@
  */
 
 const path = require("path");
-const debug = require("debug")("stateserve-event-sourcing");
+const debug = require("debug")("cloudstate-event-sourcing");
 // Bind to stdout
 debug.log = console.log.bind(console);
 const grpc = require("grpc");
@@ -28,7 +28,7 @@ const includeDirs = [
   path.join(__dirname, "..", "proto"),
   path.join(__dirname, "..", "protoc", "include")
 ];
-const packageDefinition = protoLoader.loadSync(path.join("lightbend","serverless", "entity.proto"), {
+const packageDefinition = protoLoader.loadSync(path.join("cloudstate", "entity.proto"), {
   includeDirs: includeDirs
 });
 const grpcDescriptor = grpc.loadPackageDefinition(packageDefinition);
@@ -50,7 +50,7 @@ function setup(entity) {
   // Get the service
   const server = new grpc.Server();
 
-  const entityService = grpcDescriptor.lightbend.serverless.Entity.service;
+  const entityService = grpcDescriptor.cloudstate.Entity.service;
 
   server.addService(entityService, {
     ready: ready,

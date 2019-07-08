@@ -1,16 +1,15 @@
 {
-  "name": "stateful-serverless-event-sourcing",
+  "name": "cloudstate-event-sourcing",
   "version": "0.2.4",
-  "description": "Support for implementing event sourced serverless functions",
+  "description": "Support for implementing CloudState event sourced functions",
   "keywords": [
     "serverless",
-    "lightbend",
-    "akka",
+    "cloudstate",
     "event-sourcing"
   ],
-  "homepage": "https://github.com/lightbend/stateful-serverless",
+  "homepage": "https://github.com/cloudstateio/cloudstate",
   "bugs": {
-    "url": "https://github.com/lightbend/stateful-serverless/issues"
+    "url": "https://github.com/cloudstateio/cloudstate"
   },
   "license": "Apache-2.0",
   "author": {
@@ -20,7 +19,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/lightbend/stateful-serverless",
+    "url": "https://github.com/cloudstate/cloudstate",
     "directory": "src/node-support"
   },
   "files": [

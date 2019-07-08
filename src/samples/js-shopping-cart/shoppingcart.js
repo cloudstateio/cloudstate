@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-const Entity = require("stateful-serverless-event-sourcing");
+const Entity = require("cloudstate-event-sourcing");
 
 const entity = new Entity(
   ["shoppingcart/shoppingcart.proto", "shoppingcart/persistence/domain.proto"],

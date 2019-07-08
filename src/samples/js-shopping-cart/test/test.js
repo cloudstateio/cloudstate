@@ -22,9 +22,9 @@ const fs = require("fs");
 const protobuf = require("protobufjs");
 require("protobufjs/ext/descriptor");
 
-const ssesPath = path.dirname(require.resolve("stateful-serverless-event-sourcing"));
+const ssesPath = path.dirname(require.resolve("cloudstate-event-sourcing"));
 const allIncludePath = [path.join(ssesPath, "proto"), path.join(ssesPath, "protoc", "include"), path.join("..", "..", "protocols", "example")]
-const packageDefinition = protoLoader.loadSync(path.join("lightbend","serverless", "entity.proto"), {
+const packageDefinition = protoLoader.loadSync(path.join("cloudstate", "entity.proto"), {
   includeDirs: allIncludePath
 });
 const descriptor = grpc.loadPackageDefinition(packageDefinition);
@@ -206,7 +206,7 @@ describe("shopping cart", () => {
     const port = server.start({
       bindPort: 0
     });
-    client = new descriptor.lightbend.serverless.Entity("127.0.0.1:" + port, grpc.credentials.createInsecure());
+    client = new descriptor.cloudstate.Entity("127.0.0.1:" + port, grpc.credentials.createInsecure());
   });
 
   after("shutdown shopping cart server", () => {

@@ -1,20 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: js-shopping-cart-load-generator
+  name: load-generator
 spec:
   replicas: &replicas 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: js-shopping-cart-load-generator
+      app: load-generator
   template:
     metadata:
       labels:
-        app: js-shopping-cart-load-generator
-#      annotations:
-#        sidecar.istio.io/inject: "false"
+        app: load-generator
     spec:
       containers:
       - name: generator

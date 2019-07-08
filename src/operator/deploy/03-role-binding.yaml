@@ -1,13 +1,11 @@
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
 metadata:
-  name: stateful-serverless-operator
+  name: cloudstate-operator
 subjects:
 - kind: ServiceAccount
   name: controller
-  # Update to the account the operator is deployed to
-  namespace: knative-serving
 roleRef:
   kind: ClusterRole
-  name: stateful-serverless-operator-role
+  name: cloudstate-operator-role
   apiGroup: rbac.authorization.k8s.io

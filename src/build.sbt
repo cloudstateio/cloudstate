@@ -1,5 +1,5 @@
-organization in ThisBuild := "com.lightbend.statefulserverless"
-name := "stateful-serverless"
+organization in ThisBuild := "io.cloudstate"
+name := "cloudstate"
 scalaVersion in ThisBuild := "2.12.8"
 
 version in ThisBuild ~= (_.replace('+', '-'))
@@ -36,9 +36,6 @@ def common: Seq[Setting[_]] = Seq(
   excludeFilter in headerResources := HiddenFileFilter || GlobFilter("reflection.proto")
 )
 
-val copyFrontendProtos = taskKey[File]("Copy the frontend protobufs")
-val copyBackendProtos = taskKey[File]("Copy the backend protobufs")
-
 // Include sources from the npm projects
 headerSources in Compile ++= {
   val nodeSupport = baseDirectory.value / "node-support"
@@ -53,7 +50,7 @@ headerSources in Compile ++= {
 }
 
 lazy val root = (project in file("."))
-  .aggregate(`backend-core`, `backend-cassandra`, `akka-client`, operator, `tck`)
+  .aggregate(`proxy-core`, `proxy-cassandra`, `akka-client`, operator, `tck`)
   .settings(common)
 
 def dockerSettings: Seq[Setting[_]] = Seq(
@@ -63,11 +60,11 @@ def dockerSettings: Seq[Setting[_]] = Seq(
   dockerUsername := sys.props.get("docker.username").orElse(Some("octo"))
 )
 
-lazy val `backend-core` = (project in file("backend/core"))
+lazy val `proxy-core` = (project in file("proxy/core"))
   .enablePlugins(JavaAppPackaging, DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin)
   .settings(
     common,
-    name := "stateful-serverless-backend-core",
+    name := "cloudstate-proxy-core",
     libraryDependencies ++= Seq(
       "com.typesafe.akka"             %% "akka-persistence"                  % AkkaVersion,
       "com.typesafe.akka"             %% "akka-persistence-query"            % AkkaVersion,
@@ -95,7 +92,7 @@ lazy val `backend-core` = (project in file("backend/core"))
 
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "backend", baseDir / "frontend", (sourceDirectory in Compile).value / "proto")
+      Seq(baseDir / "proxy", baseDir / "frontend", (sourceDirectory in Compile).value / "protos")
     },
 
     // This adds the test/protos dir and enables the ProtocPlugin to generate protos in the Test scope
@@ -113,11 +110,11 @@ lazy val `backend-core` = (project in file("backend/core"))
     fork in run := true,
 
     // In memory journal by default
-    javaOptions in run ++= Seq("-Dconfig.resource=in-memory.conf", "-Dstateful-serverless.dev-mode-enabled=true"),
+    javaOptions in run ++= Seq("-Dconfig.resource=in-memory.conf", "-Dcloudstate.proxy.dev-mode-enabled=true"),
 
-    mainClass in assembly := Some("com.lightbend.statefulserverless.StatefulServerlessMain"),
+    mainClass in assembly := Some("io.cloudstate.proxy.CloudStateProxyMain"),
 
-    assemblyJarName in assembly := "akka-backend.jar",
+    assemblyJarName in assembly := "akka-proxy.jar",
 
     test in assembly := {},
 
@@ -131,12 +128,12 @@ lazy val `backend-core` = (project in file("backend/core"))
     }
   )
 
-lazy val `backend-cassandra` = (project in file("backend/cassandra"))
+lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
   .enablePlugins(JavaAppPackaging, DockerPlugin, JavaAgent)
-  .dependsOn(`backend-core`)
+  .dependsOn(`proxy-core`)
   .settings(
     common,
-    name := "stateful-serverless-backend-cassandra",
+    name := "cloudstate-proxy-cassandra",
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-persistence-cassandra"          % AkkaPersistenceCassandraVersion,
       "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test
@@ -144,7 +141,7 @@ lazy val `backend-cassandra` = (project in file("backend/cassandra"))
     dockerSettings,
 
     fork in run := true,
-    mainClass in Compile := Some("com.lightbend.statefulserverless.StatefulServerlessMain")
+    mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain")
   )
 
 val compileK8sDescriptors = taskKey[File]("Compile the K8s descriptors into one")
@@ -153,7 +150,7 @@ lazy val operator = (project in file("operator"))
   .enablePlugins(JavaAppPackaging, DockerPlugin)
   .settings(
     common,
-    name := "stateful-serverless-operator",
+    name := "cloudstate-operator",
     // This is a publishLocal build of this PR https://github.com/doriordan/skuber/pull/268
     libraryDependencies ++= Seq(
       "com.typesafe.akka"  %% "akka-stream"     % AkkaVersion,
@@ -168,7 +165,7 @@ lazy val operator = (project in file("operator"))
     dockerExposedPorts := Nil,
     compileK8sDescriptors := doCompileK8sDescriptors(
       baseDirectory.value / "deploy",
-      baseDirectory.value / "stateful-serverless.yaml",
+      baseDirectory.value / "cloudstate.yaml",
       dockerRepository.value.get,
       dockerUsername.value.get,
       version.value
@@ -177,7 +174,6 @@ lazy val operator = (project in file("operator"))
 
 lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"))
   .enablePlugins(AkkaGrpcPlugin)
-  .dependsOn(`backend-core`)
   .settings(
     common,
     name := "akka-js-shopping-cart-client",
@@ -233,14 +229,14 @@ lazy val `tck` = (project in file("tck"))
 
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "backend")
+      Seq(baseDir / "proxy")
     },
 
     fork in test := false,
 
     parallelExecution in Test := false,
 
-    executeTests in Test := (executeTests in Test).dependsOn(`backend-core`/assembly).value
+    executeTests in Test := (executeTests in Test).dependsOn(`proxy-core`/assembly).value
   )
 
 def doCompileK8sDescriptors(dir: File, target: File, registry: String, username: String, version: String): File = {
@@ -249,7 +245,7 @@ def doCompileK8sDescriptors(dir: File, target: File, registry: String, username:
 
   val fullDescriptor = files.map(IO.read(_)).mkString("\n---\n")
 
-  val substitutedDescriptor = List("stateful-serverless-operator", "stateful-serverless-backend-cassandra")
+  val substitutedDescriptor = List("cloudstate", "cloudstate-proxy-cassandra")
     .foldLeft(fullDescriptor) { (descriptor, image) =>
       descriptor.replace(s"lightbend-docker-registry.bintray.io/octo/$image:latest",
         s"$registry/$username/$image:$version")

@@ -1,7 +1,7 @@
 # Deployment spec for a journal. A journal is a logical abstraction over a database
 # deployment, and captures how to deploy and connect to that database. Multiple
 # EventSourcedFunction's would use a single journal.
-apiVersion: statefulserverless.lightbend.com/v1alpha1
+apiVersion: cloudstate.io/v1alpha1
 kind: EventSourcedJournal
 metadata:
   name: cassandra
