@@ -19,28 +19,30 @@ package com.lightbend.statefulserverless
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Success, Failure}
+import scala.util.{Failure, Success}
 import akka.ConfigurationException
-import akka.http.scaladsl.model.{HttpRequest, HttpResponse, HttpEntity, ContentTypes, HttpMethod, HttpMethods, RequestEntityAcceptance, IllegalRequestException, StatusCodes}
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpMethod, HttpMethods, HttpRequest, HttpResponse, IllegalRequestException, RequestEntityAcceptance, StatusCodes}
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.actor.{ActorRef, ActorSystem}
-import akka.event.{Logging, LogSource}
+import akka.event.{LogSource, Logging}
 import akka.util.{ByteString, Timeout}
 import akka.pattern.ask
 import akka.stream.Materializer
 import akka.parboiled2.util.Base64
-import com.google.api.{AnnotationsProto, CustomHttpPattern, HttpRule, HttpProto}
-import com.google.protobuf.{DescriptorProtos, DynamicMessage, ByteString => ProtobufByteString, MessageOrBuilder}
+import com.google.api.{AnnotationsProto, CustomHttpPattern, HttpProto, HttpRule}
+import com.google.protobuf.{DescriptorProtos, DynamicMessage, MessageOrBuilder, ByteString => ProtobufByteString}
 import com.google.protobuf.Descriptors.{Descriptor, EnumValueDescriptor, FieldDescriptor, FileDescriptor, MethodDescriptor, ServiceDescriptor}
 import com.google.protobuf.{descriptor => ScalaPBDescriptorProtos}
 import com.google.protobuf.any.{Any => ProtobufAny}
 import com.google.protobuf.util.JsonFormat
 import com.google.protobuf.Descriptors.FieldDescriptor.JavaType
 import com.lightbend.statefulserverless.grpc._
-import java.lang.{Short => JShort, Integer => JInteger, Long => JLong, Boolean => JBoolean, Float => JFloat, Double => JDouble}
-import com.google.protobuf.{Value, ListValue, EnumValue, Struct}
+import java.lang.{Boolean => JBoolean, Double => JDouble, Float => JFloat, Integer => JInteger, Long => JLong, Short => JShort}
+
+import com.google.protobuf.{EnumValue, ListValue, Struct, Value}
+import com.lightbend.statefulserverless.internal.grpc.{GrpcEntityCommand, GrpcEntityReply, Request}
 
 // References:
 // https://cloud.google.com/endpoints/docs/grpc-service-config/reference/rpc/google.api#httprule
@@ -291,7 +293,7 @@ object HttpApi {
         inputBuilder.setField(field, value.getOrElse(requestError("Path contains value of wrong type!")))
       )
 
-    final def parseCommand(req: HttpRequest): Future[Command] = {
+    final def parseRequest(req: HttpRequest): Future[Request] = {
       if (rule.body.nonEmpty && req.entity.contentType != ContentTypes.`application/json`) {
         Future.failed(IllegalRequestException(StatusCodes.BadRequest, "Content-type must be application/json!"))
       } else {
@@ -301,12 +303,12 @@ object HttpApi {
             req.discardEntityBytes();
             parseRequestParametersInto(req.uri.query().toMultiMap, inputBuilder)
             parsePathParametersInto(req.uri.path, inputBuilder)
-            Future.successful(createCommand(inputBuilder.build))
+            Future.successful(createRequest(inputBuilder.build))
           case "*" => // Iff * body rule, then no query parameters, and only fields not mapped in path variables
-            Unmarshal(req.entity).to[String].map(str => { 
+            Unmarshal(req.entity).to[String].map(str => {
               jsonParser.merge(str, inputBuilder)
               parsePathParametersInto(req.uri.path, inputBuilder)
-              createCommand(inputBuilder.build)
+              createRequest(inputBuilder.build)
             })
           case fieldName => // Iff fieldName body rule, then all parameters not mapped in path variables
             Unmarshal(req.entity).to[String].map(str => {
@@ -316,7 +318,7 @@ object HttpApi {
               parseRequestParametersInto(req.uri.query().toMultiMap, inputBuilder)
               parsePathParametersInto(req.uri.path, inputBuilder)
               inputBuilder.setField(subField, subInputBuilder.build())
-              createCommand(inputBuilder.build)
+              createRequest(inputBuilder.build)
             })
         }
       }
@@ -326,8 +328,8 @@ object HttpApi {
       (methodPattern == ANY_METHOD || req.method == methodPattern) && pathMatches(urlPattern, req.uri.path, nofx)
 
     override final def apply(req: HttpRequest): Future[HttpResponse] =
-      parseCommand(req).
-        flatMap(command => sendCommand(command)(relayTimeout).map(createResponse)).
+      parseRequest(req).
+        flatMap(command => sendRequest(command)(relayTimeout).map(createResponse)).
         recover {
           case ire: IllegalRequestException => HttpResponse(ire.status.intValue, entity = ire.status.reason)
         }
@@ -336,16 +338,20 @@ object HttpApi {
       if(log.isDebugEnabled)
         log.debug(s"$preamble: ${msg}${msg.getAllFields().asScala.map(f => s"\n\r   * Request Field: [${f._1.getFullName}] = [${f._2}]").mkString}")
 
-    private[this] final def createCommand(request: DynamicMessage): Command = {
+    private[this] final def createRequest(request: DynamicMessage): Request = {
       debugMsg(request, "Got request")
-      Command(entityId = idExtractor(request),
-               name    = methDesc.getName,
-               payload = Some(ProtobufAny(typeUrl = Serve.AnyTypeUrlHostName + methDesc.getInputType.getFullName, value = request.toByteString)))
+      Request(
+       command = Some(GrpcEntityCommand(
+         entityId = idExtractor(request),
+         name    = methDesc.getName,
+         payload = Some(ProtobufAny(typeUrl = Serve.AnyTypeUrlHostName + methDesc.getInputType.getFullName, value = request.toByteString))
+       ))
+      )
     }
 
-    private[this] final def sendCommand(command: Command)(implicit timeout: Timeout): Future[DynamicMessage] = {
-      (stateManager ? command).mapTo[ProtobufByteString].transform({
-        case Success(bytes) =>
+    private[this] final def sendRequest(request: Request)(implicit timeout: Timeout): Future[DynamicMessage] = {
+      (stateManager ? request).mapTo[GrpcEntityReply].transform({
+        case Success(GrpcEntityReply(bytes)) =>
           val response = DynamicMessage.parseFrom(methDesc.getOutputType, bytes)
           debugMsg(response, "Got response")
           Success(response)

@@ -39,50 +39,6 @@ def common: Seq[Setting[_]] = Seq(
 val copyFrontendProtos = taskKey[File]("Copy the frontend protobufs")
 val copyBackendProtos = taskKey[File]("Copy the backend protobufs")
 
-def frontendProtos: Seq[Setting[_]] = Seq(
-  target in copyFrontendProtos := target.value / "protos",
-
-  copyFrontendProtos := {
-    val toDir = (target in copyFrontendProtos).value
-    val fromDir = file(".") / "protocols" / "frontend"
-    val toCopy = (fromDir ** "*.proto").get
-    val toSync = (toCopy pair Path.relativeTo(fromDir)).map {
-      case (file, path) => file -> toDir / path
-    }
-    Sync.sync(streams.value.cacheStoreFactory.make(copyFrontendProtos.toString()))(toSync)
-    toDir
-  },
-
-  PB.protoSources in Compile ++= Seq((target in copyFrontendProtos).value),
-
-  PB.unpackDependencies in Compile := {
-    copyFrontendProtos.value
-    (PB.unpackDependencies in Compile).value
-  }
-)
-
-def backendProtos: Seq[Setting[_]] = Seq(
-  target in copyBackendProtos := target.value / "protos",
-
-  copyBackendProtos := {
-    val toDir = (target in copyBackendProtos).value
-    val fromDir = file(".") / "protocols" / "backend"
-    val toCopy = (fromDir ** "*.proto").get
-    val toSync = (toCopy pair Path.relativeTo(fromDir)).map {
-      case (file, path) => file -> toDir / path
-    }
-    Sync.sync(streams.value.cacheStoreFactory.make(copyBackendProtos.toString()))(toSync)
-    toDir
-  },
-
-  PB.protoSources in Compile ++= Seq((target in copyBackendProtos).value),
-
-  PB.unpackDependencies in Compile := {
-    copyBackendProtos.value
-    (PB.unpackDependencies in Compile).value
-  }
-)
-
 // Include sources from the npm projects
 headerSources in Compile ++= {
   val nodeSupport = baseDirectory.value / "node-support"
@@ -137,7 +93,10 @@ lazy val `backend-core` = (project in file("backend/core"))
       "ch.qos.logback"                 % "logback-classic"                   % "1.2.3",
     ),
 
-    backendProtos,
+    PB.protoSources in Compile ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "backend", baseDir / "frontend", (sourceDirectory in Compile).value / "proto")
+    },
 
     // This adds the test/protos dir and enables the ProtocPlugin to generate protos in the Test scope
     inConfig(Test)(
@@ -237,7 +196,10 @@ lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"
       "com.thesamet.scalapb" %% "scalapb-runtime"    % scalapb.compiler.Version.scalapbVersion % "protobuf"
     ),
 
-    frontendProtos
+    PB.protoSources in Compile ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "frontend", baseDir / "example")
+    },
   )
 
 lazy val `load-generator` = (project in file("samples/js-shopping-cart-load-generator"))
@@ -269,8 +231,10 @@ lazy val `tck` = (project in file("tck"))
       "com.typesafe.akka"  %% "akka-testkit"         % AkkaVersion
     ),
 
-    backendProtos,
-    frontendProtos,
+    PB.protoSources in Compile ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "backend")
+    },
 
     fork in test := false,
 
