@@ -1,0 +1,11 @@
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: cloudstate-operator
+subjects:
+- kind: ServiceAccount
+  name: controller
+roleRef:
+  kind: ClusterRole
+  name: cloudstate-operator-role
+  apiGroup: rbac.authorization.k8s.io

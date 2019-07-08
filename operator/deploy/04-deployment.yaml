@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudstate-operator
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: cloudstate-operator
+  template:
+    metadata:
+      labels:
+        app: cloudstate-operator
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: controller
+      containers:
+      - name: operator
+        image: gcr.io/stateserv/cloudstate-operator:latest
+
+        env:
+        - name: NAMESPACES
+          # Update to comma separated list of namespaces to watch
+          value: default
+        - name: CASSANDRA_JOURNAL_IMAGE
+          value: gcr.io/stateserv/cloudstate-proxy-cassandra:latest
+        - name: JAVA_OPTS
+          value: "-Xms128m -Xmx128m"
+
+        resources:
+          limits:
+            memory: 256Mi
+          requests:
+            cpu: 0.25
+            memory: 256Mi

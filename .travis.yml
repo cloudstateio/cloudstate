@@ -2,11 +2,10 @@ language: scala
 before_script:
   - ./protoc-installer.sh 3.7.1
   - export PATH=$PATH:/usr/local/bin/protoc
-  - cd src
   - cd node-support && npm install && cd -
   - cd samples/js-shopping-cart && npm install && cd -
   - sbt update
 script:
   - cd samples/js-shopping-cart && npm test && cd -
   - cd samples/js-shopping-cart && npm run dockerbuild && cd -
-  - sbt test
+  - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' test

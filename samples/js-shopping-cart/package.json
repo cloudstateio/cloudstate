@@ -1,0 +1,46 @@
+{
+  "name": "js-shopping-cart",
+  "version": "0.1.0",
+  "description": "Sample CloudState event sourced shopping cart application",
+  "keywords": [
+    "serverless",
+    "cloudstate",
+    "event-sourcing"
+  ],
+  "homepage": "https://github.com/cloudstateio/cloudstate",
+  "bugs": {
+    "url": "https://github.com/cloudstateio/cloudstate/issues"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "James Roper",
+    "email": "jroper2@gmail.com",
+    "url": "https://jazzy.id.au"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cloudstateio/cloudstate",
+    "directory": "src/samples/js-shopping-cart"
+  },
+  "//": "https://npm.community/t/npm-install-does-not-install-transitive-dependencies-of-local-dependency/2264",
+  "dependencies": {
+    "@grpc/proto-loader": "^0.1.0",
+    "google-protobuf": "^3.0.0",
+    "grpc": "^1.11.0",
+    "cloudstate-event-sourcing": "file:../../node-support"
+  },
+  "devDependencies": {
+    "chai": "4.2.0",
+    "mocha": "^6.1.4"
+  },
+  "scripts": {
+    "test": "mocha",
+    "prestart": "compile-descriptor ../../protocols/example/shoppingcart/shoppingcart.proto",
+    "pretest": "compile-descriptor ../../protocols/example/shoppingcart/shoppingcart.proto",
+    "start": "node index.js",
+    "start-no-prestart": "node index.js",
+    "dockerbuild": "docker build -f ../../Dockerfile.js-shopping-cart -t gcr.io/stateserv/js-shopping-cart:$npm_package_version -t gcr.io/stateserv/js-shopping-cart:latest ../..",
+    "dockerpush": "docker push gcr.io/stateserv/js-shopping-cart:$npm_package_version && docker push gcr.io/stateserv/js-shopping-cart:latest",
+    "dockerbuildpush": "npm run dockerbuild && npm run dockerpush"
+  }
+}

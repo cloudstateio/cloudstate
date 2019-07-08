@@ -1,0 +1,51 @@
+{
+  "name": "cloudstate-event-sourcing",
+  "version": "0.2.4",
+  "description": "Support for implementing CloudState event sourced functions",
+  "keywords": [
+    "serverless",
+    "cloudstate",
+    "event-sourcing"
+  ],
+  "homepage": "https://github.com/cloudstateio/cloudstate",
+  "bugs": {
+    "url": "https://github.com/cloudstateio/cloudstate"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "James Roper",
+    "email": "jroper2@gmail.com",
+    "url": "https://jazzy.id.au"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cloudstate/cloudstate",
+    "directory": "src/node-support"
+  },
+  "files": [
+    "proto",
+    "src",
+    "index.js"
+  ],
+  "dependencies": {
+    "@grpc/proto-loader": "^0.1.0",
+    "google-protobuf": "^3.0.0",
+    "grpc": "^1.11.0",
+    "debug": "^4.1.1",
+    "unzipper": "^0.9.15",
+    "request": "^2.88.0",
+    "mkdirp": "^0.5.1"
+  },
+  "devDependencies": {
+    "chai": "4.2.0",
+    "mocha": "^6.1.4"
+  },
+  "bin": {
+    "download-protoc": "bin/download-protoc.js",
+    "compile-descriptor": "bin/compile-descriptor.js"
+  },
+  "scripts": {
+    "prepare": "mkdir -p ./proto; cp -r ../protocols/frontend/* ./proto/",
+    "postinstall": "bin/download-protoc.js"
+  }
+}

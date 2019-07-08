@@ -1,0 +1,175 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: eventsourcedservices.cloudstate.io
+spec:
+  group: cloudstate.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+  scope: Namespaced
+  names:
+    plural: eventsourcedservices
+    singular: eventsourcedservice
+    kind: EventSourcedService
+    shortNames:
+    - ess
+  subresources:
+    status: {}
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: eventsourcedjournals.cloudstate.io
+spec:
+  group: cloudstate.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+  scope: Namespaced
+  names:
+    plural: eventsourcedjournals
+    singular: eventsourcedjournal
+    kind: EventSourcedJournal
+    shortNames:
+    - esj
+  subresources:
+    status: {}
+  additionalPrinterColumns:
+  - name: Type
+    type: string
+    description: The type of event sourced Journal
+    JSONPath: .spec.type
+  - name: Service
+    type: string
+    description: The service that serves this journal
+    JSONPath: .spec.config.service
+  - name: Age
+    type: date
+    JSONPath: .metadata.creationTimestamp
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          type: object
+          properties:
+
+            type:
+              type: string
+              enum:
+              - Cassandra
+
+            deployment:
+              type: string
+              enum:
+              - Unmanaged
+
+            config:
+              type: object
+
+          required:
+          - type
+          - deployment
+
+
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: cloudstate-operator-role
+rules:
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - rolebindings
+  verbs:
+  - get
+  - create
+  - delete
+  - patch
+  - update
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - roles
+  verbs:
+  - get
+  - create
+  - delete
+  - patch
+  - update
+- apiGroups:
+  - cloudstate.io
+  resources:
+  - eventsourcedjournals
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cloudstate.io
+  resources:
+  - eventsourcedjournals/status
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - delete
+  - patch
+  - update
+
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: cloudstate-operator
+subjects:
+- kind: ServiceAccount
+  name: controller
+roleRef:
+  kind: ClusterRole
+  name: cloudstate-operator-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudstate-operator
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: cloudstate-operator
+  template:
+    metadata:
+      labels:
+        app: cloudstate-operator
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: controller
+      containers:
+      - name: operator
+        image: gcr.io/stateserv/cloudstate-operator:latest
+
+        env:
+        - name: NAMESPACES
+          # Update to comma separated list of namespaces to watch
+          value: default
+        - name: CASSANDRA_JOURNAL_IMAGE
+          value: gcr.io/stateserv/cloudstate-proxy-cassandra:latest
+        - name: JAVA_OPTS
+          value: "-Xms128m -Xmx128m"
+
+        resources:
+          limits:
+            memory: 256Mi
+          requests:
+            cpu: 0.25
+            memory: 256Mi
