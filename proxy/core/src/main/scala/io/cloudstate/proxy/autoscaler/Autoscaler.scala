@@ -147,7 +147,6 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
 
   timers.startPeriodicTimer("tick", Tick, settings.tickPeriod)
   ddata.replicator ! Get(StateKey, ReadMajority(timeout = 5.seconds))
-  log.debug("==== START")
 
   override def receive: Receive = waitingForState(WaitingForState)
 
