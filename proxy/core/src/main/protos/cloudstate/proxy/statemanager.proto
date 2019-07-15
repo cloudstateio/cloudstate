@@ -21,19 +21,26 @@ syntax = "proto3";
 package cloudstate.proxy;
 
 import "google/protobuf/any.proto";
+import "cloudstate/entity.proto";
 
-option java_package = "io.cloudstate.proxy.statemanager";
+option java_package = "io.cloudstate.proxy.entity";
 
-message GrpcEntityCommand {
+message UserFunctionCommand {
+    string name = 1;
+    google.protobuf.Any payload = 2;
+}
+
+message EntityCommand {
     string entity_id = 1;
     string name = 2;
     google.protobuf.Any payload = 3;
 }
 
-message ProxyRequest {
-    GrpcEntityCommand command = 1;
-}
-
-message GrpcEntityReply {
-    bytes payload = 1;
+message UserFunctionReply {
+    oneof message {
+        cloudstate.Reply reply = 1;
+        cloudstate.Forward forward = 2;
+        cloudstate.Failure failure = 3;
+    }
+    repeated cloudstate.SideEffect side_effects = 4;
 }

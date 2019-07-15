@@ -1,0 +1,201 @@
+// Copyright 2019 Lightbend Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// gRPC interface for Event Sourced Entity user functions.
+
+syntax = "proto3";
+
+package cloudstate.crdt;
+
+// Any is used so that domain events defined according to the functions business domain can be embedded inside
+// the protocol.
+import "google/protobuf/any.proto";
+import "cloudstate/entity.proto";
+
+option java_package = "io.cloudstate.crdt";
+
+// For datatypes that need to be able to compare values for equality, such as sets and maps, google.protobuf.Any
+// is not a suitable value, as protobuf serialization is not stable (see
+// https://developers.google.com/protocol-buffers/docs/encoding#implications). So instead, such values have to define
+// a string key, such that two values may be considered equal and referentially transparent.
+// In cases where the value is a string anyway, this string can simply be set in the key, and the value can be ignored.
+// In some cases, the key may be a hash of the value, if the hash function is stable and has a sufficiently low
+// collision probability.
+message KeyedEqualityValue {
+    string key = 1;
+    google.protobuf.Any value = 2;
+}
+
+message GCounterState {
+    uint64 value = 1;
+}
+
+message PNCounterState {
+    int64 value = 1;
+}
+
+message GSetState {
+    repeated KeyedEqualityValue items = 1;
+}
+
+message ORSetState {
+    repeated KeyedEqualityValue items = 1;
+}
+
+message LWWRegisterState {
+    google.protobuf.Any value = 1;
+}
+
+message FlagState {
+    bool value = 1;
+}
+
+message ORMapState {
+    repeated ORMapEntry entries = 1;
+}
+
+message ORMapEntry {
+    KeyedEqualityValue key = 1;
+    CrdtState value = 2;
+}
+
+message CrdtState {
+    oneof state {
+        GCounterState gcounter = 1;
+        PNCounterState pncounter = 2;
+        GSetState gset = 3;
+        ORSetState orset = 4;
+        LWWRegisterState lwwregister = 5;
+        FlagState flag = 6;
+        ORMapState ormap = 7;
+    }
+}
+
+message GCounterDelta {
+    uint64 increment = 1;
+}
+
+message PNCounterDelta {
+    sint64 change = 1;
+}
+
+message GSetDelta {
+    // If cleared is set, the set must be cleared before added is processed.
+    bool cleared = 1;
+    repeated string removed = 2;
+    repeated KeyedEqualityValue added = 3;
+}
+
+message ORSetDelta {
+    // If cleared is set, the set must be cleared before added is processed.
+    bool cleared = 1;
+    repeated string removed = 2;
+    repeated KeyedEqualityValue added = 3;
+}
+
+message LWWRegisterDelta {
+    google.protobuf.Any value = 1;
+    enum Clock {
+        // Use the default clock for deciding the last write, which is the system clocks
+        // milliseconds since epoch.
+        DEFAULT = 0;
+        // Use the reverse semantics with the default clock, to enable first write wins.
+        REVERSE = 1;
+        // Use a custom clock value, set using custom_clock_value.
+        CUSTOM = 2;
+        // Use a custom clock value, but automatically increment it by one if the clock
+        // value from the current value is equal to the custom_clock_value.
+        CUSTOM_AUTO_INCREMENT = 3;
+    }
+    Clock clock = 2;
+    int64 custom_clock_value = 3;
+}
+
+message FlagDelta {
+    // This message means the flag is being set. No properties needed.
+}
+
+message ORMapDelta {
+    bool cleared = 1;
+    repeated string removed = 2;
+    map<string, CrdtDelta> updated = 3;
+}
+
+message CrdtDelta {
+    oneof delta {
+        GCounterDelta gcounter = 1;
+        PNCounterDelta pncounter = 2;
+        GSetDelta gset = 3;
+        ORSetDelta orset = 4;
+        LWWRegisterDelta lwwregister = 5;
+        FlagDelta flag = 6;
+        ORMapDelta ormap = 7;
+    }
+}
+
+message CrdtInit {
+    string service_name = 1;
+    string entity_id = 2;
+    CrdtState state = 3;
+}
+
+message CrdtDelete {
+    // This is used to ensure that the message doesn't disappear when used in a oneof
+    // because an empty message can be indistinguishable from a field not set.
+    bool deleted = 1;
+}
+
+message CrdtStreamIn {
+    oneof message {
+        CrdtInit init = 1;
+        CrdtDelta changed = 2;
+        CrdtDelete deleted = 3;
+        Command command = 4;
+    }
+}
+
+message CrdtReply {
+
+    int64 command_id = 1;
+
+    oneof response {
+        Reply reply = 2;
+        Forward forward = 3;
+    }
+
+    repeated SideEffect side_effects = 4;
+
+    oneof action {
+        CrdtDelta update = 5;
+        CrdtDelete delete = 6;
+    }
+
+    enum WriteConsistency {
+        LOCAL = 0;
+        MAJORITY = 1;
+        ALL = 2;
+    }
+    WriteConsistency write_consistency = 7;
+}
+
+message CrdtStreamOut {
+    oneof message {
+        CrdtReply reply = 1;
+        Failure failure = 2;
+    }
+}
+
+service Crdt {
+    rpc handle(stream CrdtStreamIn) returns (stream CrdtStreamOut);
+}

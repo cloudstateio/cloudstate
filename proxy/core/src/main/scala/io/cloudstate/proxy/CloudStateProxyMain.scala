@@ -52,7 +52,7 @@ final class HealthCheckReady(system: ActorSystem) extends (() => Future[Boolean]
   override final def apply(): Future[Boolean] = {
     Future.sequence(Seq(
       check("warmup", warmup, Warmup.Ready),
-      check("server manager", serverManager, ServerManager.Ready)
+      check("server manager", serverManager, EntityDiscoveryManager.Ready)
     )).map(_.reduce(_ && _))
   }
 }
@@ -95,7 +95,7 @@ object CloudStateProxyMain {
     import system.dispatcher
 
     val c = system.settings.config.getConfig("cloudstate.proxy")
-    val serverConfig = new ServerManager.Configuration(c)
+    val serverConfig = new EntityDiscoveryManager.Configuration(c)
     val appConfig = new CloudStateProxyMain.Configuration(c)
 
     val cluster = Cluster(system)
@@ -119,12 +119,9 @@ object CloudStateProxyMain {
       }
     }
 
-    // Warmup the StateManager, connect to Cassandra, etc
-    system.actorOf(Warmup.props, "state-manager-warm-up")
-
     system.actorOf(BackoffSupervisor.props(
       BackoffOpts.onFailure(
-        ServerManager.props(serverConfig),
+        EntityDiscoveryManager.props(serverConfig),
         childName = "server-manager",
         minBackoff = appConfig.backoffMin,
         maxBackoff = appConfig.backoffMax,

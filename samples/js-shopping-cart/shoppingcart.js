@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-const Entity = require("cloudstate-event-sourcing");
+const EventSourced = require("cloudstate-event-sourcing").EventSourced;
 
-const entity = new Entity(
+const entity = new EventSourced(
   ["shoppingcart/shoppingcart.proto", "shoppingcart/persistence/domain.proto"],
   "com.example.shoppingcart.ShoppingCart",
   {

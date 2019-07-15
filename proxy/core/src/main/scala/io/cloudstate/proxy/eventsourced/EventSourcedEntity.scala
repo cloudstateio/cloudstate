@@ -14,33 +14,33 @@
  * limitations under the License.
  */
 
-package io.cloudstate.proxy
+package io.cloudstate.proxy.eventsourced
 
 import java.net.URLDecoder
 import java.util.concurrent.atomic.AtomicLong
 
 import akka.NotUsed
 import akka.actor._
-import akka.util.Timeout
-import akka.stream.{Materializer, OverflowStrategy}
-import akka.stream.scaladsl._
-import akka.persistence.{PersistentActor, RecoveryCompleted, SaveSnapshotFailure, SaveSnapshotSuccess, SnapshotOffer}
 import akka.cluster.sharding.ShardRegion
-import io.cloudstate.entity._
-import EntityStreamIn.{Message => ESIMsg}
+import akka.persistence._
+import akka.stream.scaladsl._
+import akka.stream.{Materializer, OverflowStrategy}
+import akka.util.Timeout
 import com.google.protobuf.any.{Any => pbAny}
-import ConcurrencyEnforcer.{Action, ActionCompleted}
-import StateManager.CommandFailure
-import io.cloudstate.proxy.statemanager.{GrpcEntityCommand, GrpcEntityReply, ProxyRequest}
+import io.cloudstate.entity._
+import io.cloudstate.eventsourced._
+import io.cloudstate.proxy.ConcurrencyEnforcer.{Action, ActionCompleted}
+import io.cloudstate.proxy.StatsCollector
+import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 
 import scala.collection.immutable.Queue
 
-object StateManagerSupervisor {
+object EventSourcedEntitySupervisor {
 
   final case class Relay(actorRef: ActorRef)
 
-  def props(client: EntityClient, configuration: StateManager.Configuration, concurrencyEnforcer: ActorRef, statsCollector: ActorRef)(implicit mat: Materializer): Props =
-    Props(new StateManagerSupervisor(client, configuration, concurrencyEnforcer, statsCollector))
+  def props(client: EventSourcedClient, configuration: EventSourcedEntity.Configuration, concurrencyEnforcer: ActorRef, statsCollector: ActorRef)(implicit mat: Materializer): Props =
+    Props(new EventSourcedEntitySupervisor(client, configuration, concurrencyEnforcer, statsCollector))
 }
 
 /**
@@ -53,19 +53,19 @@ object StateManagerSupervisor {
   * persistence starts feeding us events. There's a race condition if we do this in the same persistent actor. This
   * establishes that connection first.
   */
-final class StateManagerSupervisor(client: EntityClient, configuration: StateManager.Configuration, concurrencyEnforcer: ActorRef, statsCollector: ActorRef)(implicit mat: Materializer)
+final class EventSourcedEntitySupervisor(client: EventSourcedClient, configuration: EventSourcedEntity.Configuration, concurrencyEnforcer: ActorRef, statsCollector: ActorRef)(implicit mat: Materializer)
   extends Actor with Stash {
 
-  import StateManagerSupervisor._
+  import EventSourcedEntitySupervisor._
 
   override final def receive: Receive = PartialFunction.empty
 
   override final def preStart(): Unit = {
-    client.handle(Source.actorRef[EntityStreamIn](configuration.sendQueueSize, OverflowStrategy.fail)
+    client.handle(Source.actorRef[EventSourcedStreamIn](configuration.sendQueueSize, OverflowStrategy.fail)
       .mapMaterializedValue { ref =>
         self ! Relay(ref)
         NotUsed
-      }).runWith(Sink.actorRef(self, StateManager.StreamClosed))
+      }).runWith(Sink.actorRef(self, EventSourcedEntity.StreamClosed))
     context.become(waitingForRelay)
   }
 
@@ -73,7 +73,7 @@ final class StateManagerSupervisor(client: EntityClient, configuration: StateMan
     case Relay(relayRef) =>
       // Cluster sharding URL encodes entity ids, so to extract it we need to decode.
       val entityId = URLDecoder.decode(self.path.name, "utf-8")
-      val manager = context.watch(context.actorOf(StateManager.props(configuration, entityId, relayRef, concurrencyEnforcer, statsCollector), "entity"))
+      val manager = context.watch(context.actorOf(EventSourcedEntity.props(configuration, entityId, relayRef, concurrencyEnforcer, statsCollector), "entity"))
       context.become(forwarding(manager))
       unstashAll()
     case _ => stash()
@@ -91,31 +91,26 @@ final class StateManagerSupervisor(client: EntityClient, configuration: StateMan
   override def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
 }
 
-object StateManager {
+object EventSourcedEntity {
 
   final case object Stop
 
   final case object StreamClosed extends DeadLetterSuppression
 
   final case class Configuration(
+    serviceName: String,
     userFunctionName: String,
     passivationTimeout: Timeout,
     sendQueueSize: Int
   )
 
-  private final case class OutstandingRequest(
+  private final case class OutstandingCommand(
     commandId: Long,
     replyTo: ActorRef
   )
 
-  /**
-    * Exception indicating a failure that has been signalled by the user function
-    * in response to a command.
-    */
-  final case class CommandFailure(msg: String) extends RuntimeException(msg)
-
   final def props(configuration: Configuration, entityId: String, relay: ActorRef, concurrencyEnforcer: ActorRef, statsCollector: ActorRef): Props =
-    Props(new StateManager(configuration, entityId, relay, concurrencyEnforcer, statsCollector))
+    Props(new EventSourcedEntity(configuration, entityId, relay, concurrencyEnforcer, statsCollector))
 
   /**
     * Used to ensure the action ids sent to the concurrency enforcer are indeed unique.
@@ -123,14 +118,14 @@ object StateManager {
   private val actorCounter = new AtomicLong(0)
 }
 
-final class StateManager(configuration: StateManager.Configuration, entityId: String, relay: ActorRef,
+final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, entityId: String, relay: ActorRef,
   concurrencyEnforcer: ActorRef, statsCollector: ActorRef) extends PersistentActor with ActorLogging {
   override final def persistenceId: String = configuration.userFunctionName + entityId
 
-  private val actorId = StateManager.actorCounter.incrementAndGet()
+  private val actorId = EventSourcedEntity.actorCounter.incrementAndGet()
 
-  private[this] final var stashedRequests = Queue.empty[(ProxyRequest, ActorRef)] // PERFORMANCE: look at options for data structures
-  private[this] final var currentRequest: StateManager.OutstandingRequest = null
+  private[this] final var stashedCommands = Queue.empty[(EntityCommand, ActorRef)] // PERFORMANCE: look at options for data structures
+  private[this] final var currentCommand: EventSourcedEntity.OutstandingCommand = null
   private[this] final var stopped = false
   private[this] final var idCounter = 0l
   private[this] final var inited = false
@@ -158,10 +153,10 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
   }
 
   private[this] final def commandHandled(): Unit = {
-    currentRequest = null
-    if (stashedRequests.nonEmpty) {
-      val ((request, sender), newStashedCommands) = stashedRequests.dequeue
-      stashedRequests = newStashedCommands
+    currentCommand = null
+    if (stashedCommands.nonEmpty) {
+      val ((request, sender), newStashedCommands) = stashedCommands.dequeue
+      stashedCommands = newStashedCommands
       handleCommand(request, sender)
     } else if (stopped) {
       context.stop(self)
@@ -169,12 +164,12 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
   }
 
   private[this] final def notifyOutstandingRequests(msg: String): Unit = {
-    currentRequest match {
+    currentCommand match {
       case null =>
-      case req => req.replyTo ! Status.Failure(new Exception(msg))
+      case req => req.replyTo ! UserFunctionReply(message = UserFunctionReply.Message.Failure(Failure(description = msg)))
     }
-    val errorNotification = Status.Failure(new Exception("Entity terminated"))
-    stashedRequests.foreach {
+    val errorNotification = UserFunctionReply(message = UserFunctionReply.Message.Failure(Failure(description = "Entity terminated")))
+    stashedCommands.foreach {
       case (_, replyTo) => replyTo ! errorNotification
     }
   }
@@ -189,48 +184,59 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
     currentActionId = null
   }
 
-  private[this] final def handleCommand(request: ProxyRequest, sender: ActorRef): Unit = {
-    val ProxyRequest(Some(GrpcEntityCommand(_, name, payload))) = request
+  private[this] final def handleCommand(entityCommand: EntityCommand, sender: ActorRef): Unit = {
     idCounter += 1
     currentActionId = actorId + ":" + entityId + ":" + idCounter
     val command = Command(
       entityId = entityId,
       id = idCounter,
-      name = name,
-      payload = payload
+      name = entityCommand.name,
+      payload = entityCommand.payload
     )
-    currentRequest = StateManager.OutstandingRequest(idCounter, sender)
+    currentCommand = EventSourcedEntity.OutstandingCommand(idCounter, sender)
     commandStartTime = System.nanoTime()
     concurrencyEnforcer ! Action(currentActionId, () => {
-      relay ! EntityStreamIn(ESIMsg.Command(command))
+      relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Command(command))
     })
+  }
+
+  private final def esReplyToUfReply(reply: EventSourcedReply) = {
+    val message = reply.response match {
+      case EventSourcedReply.Response.Reply(r) => UserFunctionReply.Message.Reply(r)
+      case EventSourcedReply.Response.Forward(f) => UserFunctionReply.Message.Forward(f)
+      case EventSourcedReply.Response.Empty => UserFunctionReply.Message.Empty
+    }
+    UserFunctionReply(
+      message = message,
+      sideEffects = reply.sideEffects
+    )
   }
 
   override final def receiveCommand: PartialFunction[Any, Unit] = {
 
-    case r: ProxyRequest if currentRequest != null =>
-      stashedRequests = stashedRequests.enqueue((r, sender()))
+    case command: EntityCommand if currentCommand != null =>
+      stashedCommands = stashedCommands.enqueue((command, sender()))
 
-    case r: ProxyRequest =>
-      handleCommand(r, sender())
+    case command: EntityCommand =>
+      handleCommand(command, sender())
 
-    case EntityStreamOut(m) =>
+    case EventSourcedStreamOut(m) =>
 
-      import EntityStreamOut.{Message => ESOMsg}
+      import EventSourcedStreamOut.{Message => ESOMsg}
       m match {
 
-        case ESOMsg.Reply(r) if currentRequest == null =>
-          crash(s"Unexpected reply, had no current request: $r")
+        case ESOMsg.Reply(r) if currentCommand == null =>
+          crash(s"Unexpected reply, had no current command: $r")
 
-        case ESOMsg.Reply(r) if currentRequest.commandId != r.commandId =>
-          crash(s"Incorrect command id in reply, expecting ${currentRequest.commandId} but got ${r.commandId}")
+        case ESOMsg.Reply(r) if currentCommand.commandId != r.commandId =>
+          crash(s"Incorrect command id in reply, expecting ${currentCommand.commandId} but got ${r.commandId}")
 
         case ESOMsg.Reply(r) =>
           reportActionComplete()
-          val commandId = currentRequest.commandId
+          val commandId = currentCommand.commandId
           val events = r.events.toVector
           if (events.isEmpty) {
-            currentRequest.replyTo ! GrpcEntityReply(r.getPayload.value)
+            currentCommand.replyTo ! esReplyToUfReply(r)
             commandHandled()
           } else {
             reportDatabaseOperationStarted()
@@ -241,10 +247,10 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
                 reportDatabaseOperationFinished()
                 r.snapshot.foreach(saveSnapshot)
                 // Make sure that the current request is still ours
-                if (currentRequest == null || currentRequest.commandId != commandId) {
+                if (currentCommand == null || currentCommand.commandId != commandId) {
                   crash("Internal error - currentRequest changed before all events were persisted")
                 }
-                currentRequest.replyTo ! GrpcEntityReply(r.getPayload.value)
+                currentCommand.replyTo ! esReplyToUfReply(r)
                 commandHandled()
               }
             }
@@ -253,15 +259,15 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
         case ESOMsg.Failure(f) if f.commandId == 0 =>
           crash(s"Non command specific error from entity: ${f.description}")
 
-        case ESOMsg.Failure(f) if currentRequest == null =>
-          crash(s"Unexpected failure, had no current request: $f")
+        case ESOMsg.Failure(f) if currentCommand == null =>
+          crash(s"Unexpected failure, had no current command: $f")
 
-        case ESOMsg.Failure(f) if currentRequest.commandId != f.commandId =>
-          crash(s"Incorrect command id in failure, expecting ${currentRequest.commandId} but got ${f.commandId}")
+        case ESOMsg.Failure(f) if currentCommand.commandId != f.commandId =>
+          crash(s"Incorrect command id in failure, expecting ${currentCommand.commandId} but got ${f.commandId}")
 
         case ESOMsg.Failure(f) =>
           reportActionComplete()
-          currentRequest.replyTo ! Status.Failure(CommandFailure(f.description))
+          currentCommand.replyTo ! UserFunctionReply(message = UserFunctionReply.Message.Failure(f))
           commandHandled()
 
         case ESOMsg.Empty =>
@@ -270,7 +276,7 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
           crash("Empty or unknown message from entity output stream")
       }
 
-    case StateManager.StreamClosed =>
+    case EventSourcedEntity.StreamClosed =>
       notifyOutstandingRequests("Unexpected entity termination")
       context.stop(self)
 
@@ -285,21 +291,25 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
       log.error("Error saving snapshot", cause)
 
     case ReceiveTimeout =>
-      context.parent ! ShardRegion.Passivate(stopMessage = StateManager.Stop)
+      context.parent ! ShardRegion.Passivate(stopMessage = EventSourcedEntity.Stop)
 
-    case StateManager.Stop =>
+    case EventSourcedEntity.Stop =>
       stopped = true
-      if (currentRequest == null) {
+      if (currentCommand == null) {
         context.stop(self)
       }
   }
 
   private[this] final def maybeInit(snapshot: Option[SnapshotOffer]): Unit = {
     if (!inited) {
-      relay ! EntityStreamIn(ESIMsg.Init(Init(entityId, snapshot.map {
-        case SnapshotOffer(metadata, offeredSnapshot: pbAny) => Snapshot(metadata.sequenceNr, Some(offeredSnapshot))
-        case other => throw new IllegalStateException(s"Unexpected snapshot type received: ${other.getClass}")
-      })))
+      relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Init(EventSourcedInit(
+        serviceName = configuration.serviceName,
+        entityId = entityId,
+        snapshot = snapshot.map {
+          case SnapshotOffer(metadata, offeredSnapshot: pbAny) => EventSourcedSnapshot(metadata.sequenceNr, Some(offeredSnapshot))
+          case other => throw new IllegalStateException(s"Unexpected snapshot type received: ${other.getClass}")
+        }
+      )))
       inited = true
     }
   }
@@ -314,7 +324,7 @@ final class StateManager(configuration: StateManager.Configuration, entityId: St
 
     case event: pbAny =>
       maybeInit(None)
-      relay ! EntityStreamIn(ESIMsg.Event(Event(lastSequenceNr, Some(event))))
+      relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Event(EventSourcedEvent(lastSequenceNr, Some(event))))
   }
 
   private def reportDatabaseOperationStarted(): Unit = {

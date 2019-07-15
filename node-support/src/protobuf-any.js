@@ -19,7 +19,7 @@ const protobuf = require("protobufjs");
 const Root = protobuf.Root;
 
 const Any = protobuf
-  .loadSync(path.join(__dirname, "..", "proto-ext", "google", "protobuf", "any.proto"))
+  .loadSync(path.join(__dirname, "..", "protoc", "google", "protobuf", "any.proto"))
   .lookupType("google.protobuf.Any");
 
 

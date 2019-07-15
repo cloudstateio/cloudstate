@@ -19,29 +19,28 @@ package io.cloudstate.proxy
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success}
 import akka.ConfigurationException
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpMethod, HttpMethods, HttpRequest, HttpResponse, IllegalRequestException, RequestEntityAcceptance, StatusCodes}
 import akka.http.scaladsl.model.Uri
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.unmarshalling.Unmarshal
-import akka.actor.{ActorRef, ActorSystem}
-import akka.event.{LogSource, Logging}
-import akka.util.{ByteString, Timeout}
-import akka.pattern.ask
+import akka.actor.ActorSystem
+import akka.event.Logging
 import akka.stream.Materializer
 import akka.parboiled2.util.Base64
-import com.google.api.{AnnotationsProto, CustomHttpPattern, HttpProto, HttpRule}
-import com.google.protobuf.{DescriptorProtos, DynamicMessage, MessageOrBuilder, ByteString => ProtobufByteString}
-import com.google.protobuf.Descriptors.{Descriptor, EnumValueDescriptor, FieldDescriptor, FileDescriptor, MethodDescriptor, ServiceDescriptor}
+import com.google.api.{AnnotationsProto, HttpRule}
+import com.google.protobuf.{DynamicMessage, MessageOrBuilder, ByteString => ProtobufByteString}
+import com.google.protobuf.Descriptors.{Descriptor, EnumValueDescriptor, FieldDescriptor, MethodDescriptor}
 import com.google.protobuf.{descriptor => ScalaPBDescriptorProtos}
 import com.google.protobuf.any.{Any => ProtobufAny}
 import com.google.protobuf.util.JsonFormat
 import com.google.protobuf.Descriptors.FieldDescriptor.JavaType
 import java.lang.{Boolean => JBoolean, Double => JDouble, Float => JFloat, Integer => JInteger, Long => JLong, Short => JShort}
 
-import com.google.protobuf.{EnumValue, ListValue, Struct, Value}
-import io.cloudstate.proxy.statemanager.{GrpcEntityCommand, GrpcEntityReply, ProxyRequest}
+import com.google.protobuf.{ListValue, Struct, Value}
+import io.cloudstate.entity.{EntityDiscovery, Failure, Reply, UserFunctionError}
+import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
+import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
 
 // References:
 // https://cloud.google.com/endpoints/docs/grpc-service-config/reference/rpc/google.api#httprule
@@ -108,13 +107,11 @@ object HttpApi {
 
   final class HttpEndpoint(final val methDesc: MethodDescriptor,
                            final val rule: HttpRule,
-                           final val stateManager: ActorRef,
-                           final val relayTimeout: Timeout)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext) extends PartialFunction[HttpRequest, Future[HttpResponse]] {
+                           final val userFunctionRouter: UserFunctionRouter,
+                           final val entityDiscovery: EntityDiscovery)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext) extends PartialFunction[HttpRequest, Future[HttpResponse]] {
     private[this] final val log = Logging(sys, rule.pattern.toString) // TODO use other name?
 
     private[this] final val (methodPattern, urlPattern, bodyDescriptor, responseBodyDescriptor) = extractAndValidate()
-
-    private[this] final val idExtractor = Serve.createEntityIdExtractorFor(methDesc.getInputType)
 
     private[this] final val jsonParser  = JsonFormat.
                                                     parser.
@@ -136,6 +133,8 @@ object HttpApi {
                                                     //printingEnumsAsInts() // If you enable this, you need to fix the output for responseBody as well
                                                     //preservingProtoFieldNames(). // If you enable this, you need to fix the output for responseBody structs as well
                                                     //sortingMapKeys().
+
+    private[this] final val expectedReplyTypeUrl = Serve.AnyTypeUrlHostName + methDesc.getOutputType.getFullName
 
     // This method validates the configuration and returns values obtained by parsing the configuration
     private[this] final def extractAndValidate(): (HttpMethod, Path, Descriptor, Option[FieldDescriptor]) = {
@@ -292,22 +291,22 @@ object HttpApi {
         inputBuilder.setField(field, value.getOrElse(requestError("Path contains value of wrong type!")))
       )
 
-    final def parseRequest(req: HttpRequest): Future[ProxyRequest] = {
+    final def parseCommand(req: HttpRequest): Future[UserFunctionCommand] = {
       if (rule.body.nonEmpty && req.entity.contentType != ContentTypes.`application/json`) {
         Future.failed(IllegalRequestException(StatusCodes.BadRequest, "Content-type must be application/json!"))
       } else {
         val inputBuilder = DynamicMessage.newBuilder(methDesc.getInputType)
         rule.body match {
           case "" => // Iff empty body rule, then only query parameters
-            req.discardEntityBytes();
+            req.discardEntityBytes()
             parseRequestParametersInto(req.uri.query().toMultiMap, inputBuilder)
             parsePathParametersInto(req.uri.path, inputBuilder)
-            Future.successful(createRequest(inputBuilder.build))
+            Future.successful(createCommand(inputBuilder.build))
           case "*" => // Iff * body rule, then no query parameters, and only fields not mapped in path variables
             Unmarshal(req.entity).to[String].map(str => {
               jsonParser.merge(str, inputBuilder)
               parsePathParametersInto(req.uri.path, inputBuilder)
-              createRequest(inputBuilder.build)
+              createCommand(inputBuilder.build)
             })
           case fieldName => // Iff fieldName body rule, then all parameters not mapped in path variables
             Unmarshal(req.entity).to[String].map(str => {
@@ -317,7 +316,7 @@ object HttpApi {
               parseRequestParametersInto(req.uri.query().toMultiMap, inputBuilder)
               parsePathParametersInto(req.uri.path, inputBuilder)
               inputBuilder.setField(subField, subInputBuilder.build())
-              createRequest(inputBuilder.build)
+              createCommand(inputBuilder.build)
             })
         }
       }
@@ -327,8 +326,8 @@ object HttpApi {
       (methodPattern == ANY_METHOD || req.method == methodPattern) && pathMatches(urlPattern, req.uri.path, nofx)
 
     override final def apply(req: HttpRequest): Future[HttpResponse] =
-      parseRequest(req).
-        flatMap(request => sendRequest(request)(relayTimeout).map(createResponse)).
+      parseCommand(req).
+        flatMap(command => sendCommand(command).map(createResponse)).
         recover {
           case ire: IllegalRequestException => HttpResponse(ire.status.intValue, entity = ire.status.reason)
         }
@@ -337,26 +336,35 @@ object HttpApi {
       if(log.isDebugEnabled)
         log.debug(s"$preamble: ${msg}${msg.getAllFields().asScala.map(f => s"\n\r   * Request Field: [${f._1.getFullName}] = [${f._2}]").mkString}")
 
-    private[this] final def createRequest(request: DynamicMessage): ProxyRequest = {
-      debugMsg(request, "Got request")
-      ProxyRequest(
-       command = Some(GrpcEntityCommand(
-         entityId = idExtractor(request),
-         name    = methDesc.getName,
-         payload = Some(ProtobufAny(typeUrl = Serve.AnyTypeUrlHostName + methDesc.getInputType.getFullName, value = request.toByteString))
-       ))
-      )
+    private[this] final def createCommand(command: DynamicMessage): UserFunctionCommand = {
+      debugMsg(command, "Got request")
+      UserFunctionCommand(
+       name    = methDesc.getName,
+       payload = Some(ProtobufAny(typeUrl = Serve.AnyTypeUrlHostName + methDesc.getInputType.getFullName, value = command.toByteString))
+     )
     }
 
-    private[this] final def sendRequest(request: ProxyRequest)(implicit timeout: Timeout): Future[DynamicMessage] = {
-      (stateManager ? request).mapTo[GrpcEntityReply].transform({
-        case Success(GrpcEntityReply(bytes)) =>
-          val response = DynamicMessage.parseFrom(methDesc.getOutputType, bytes)
-          debugMsg(response, "Got response")
-          Success(response)
-        case Failure(cf: StateManager.CommandFailure) => requestError(cf.getMessage) // TODO Should we handle CommandFailures like this?
-        case Failure(t) => Failure(t)
-      })
+    private[this] final def sendCommand(command: UserFunctionCommand): Future[DynamicMessage] = {
+      userFunctionRouter.handleUnary(methDesc.getService.getFullName, command).map { reply =>
+        reply.message match {
+          case UserFunctionReply.Message.Reply(Reply(Some(payload))) =>
+            if (payload.typeUrl != expectedReplyTypeUrl) {
+              val msg = s"${methDesc.getFullName}: Expected reply type_url to be [$expectedReplyTypeUrl] but was [${payload.typeUrl}]."
+              log.warning(msg)
+              entityDiscovery.reportError(UserFunctionError("Warning: " + msg))
+            }
+            DynamicMessage.parseFrom(methDesc.getOutputType, payload.value)
+          case UserFunctionReply.Message.Forward(_) =>
+            log.error("Cannot serialize forward reply, this should have been handled by the UserFunctionRouter")
+            throw new Exception("Internal error")
+          case UserFunctionReply.Message.Failure(Failure(_, message)) =>
+            requestError(message)
+          case _ =>
+            val msg = s"${methDesc.getFullName}: return no reply."
+            entityDiscovery.reportError(UserFunctionError(msg))
+            throw new Exception(msg)
+        }
+      }
     }
 
     // FIXME Devise other way of supporting responseBody, this is waaay too costly and unproven
@@ -424,27 +432,50 @@ object HttpApi {
       }.toMap)
     )
 
-  final def serve(stateManager: ActorRef, relayTimeout: Timeout, serviceDesc: ServiceDescriptor)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+  final def serve(userFunctionRouter: UserFunctionRouter, entities: Seq[ServableEntity], entityDiscoveryClient: EntityDiscovery)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val log = Logging(sys, "HttpApi")
-    serviceDesc.getMethods.iterator.asScala.flatMap({
-      method =>
-        val rule = AnnotationsProto.http.get(convertMethodOptions(method)) match {
-          case Some(rule) =>
-            log.info(s"Using configured HTTP API endpoint using [$rule]")
-            rule
-          case None =>
-            val rule = HttpRule.of(selector = method.getFullName, // We know what thing we are proxying
-                               body = "*",                        // Parse all input
-                               responseBody = "",                 // Include all output
-                               additionalBindings = Nil,          // No need for additional bindings
-                               pattern = HttpRule.Pattern.Post((Path / "v1" / method.getName).toString))
-            log.info(s"Using generated HTTP API endpoint using [$rule]")
-            rule
-        }
-        (rule +: rule.additionalBindings).map(r => new HttpEndpoint(method, r, stateManager, relayTimeout))
+    (for {
+      entity <- entities.iterator
+      method <- entity.serviceDescriptor.getMethods.iterator.asScala
+      rule = AnnotationsProto.http.get(convertMethodOptions(method)) match {
+        case Some(rule) =>
+          log.info(s"Using configured HTTP API endpoint using [$rule]")
+          rule
+        case None =>
+          val rule = HttpRule.of(selector = method.getFullName, // We know what thing we are proxying
+            body = "*",                        // Parse all input
+            responseBody = "",                 // Include all output
+            additionalBindings = Nil,          // No need for additional bindings
+            pattern = HttpRule.Pattern.Post((Path / "v1" / method.getName).toString))
+          log.info(s"Using generated HTTP API endpoint using [$rule]")
+          rule
+      }
+      binding <- rule +: rule.additionalBindings
+    } yield {
+      new HttpEndpoint(method, binding, userFunctionRouter, entityDiscoveryClient)
     }).foldLeft(NoMatch) {
       case (NoMatch,    first) => first
       case (previous, current) => current orElse previous // Last goes first
+    }
+  }
+}
+
+private[proxy] object Names {
+  final def splitPrev(name: String): (String, String) = {
+    val dot = name.lastIndexOf('.')
+    if (dot >= 0) {
+      (name.substring(0, dot), name.substring(dot + 1))
+    } else {
+      ("", name)
+    }
+  }
+
+  final def splitNext(name: String): (String, String) = {
+    val dot = name.indexOf('.')
+    if (dot >= 0) {
+      (name.substring(0, dot), name.substring(dot + 1))
+    } else {
+      (name, "")
     }
   }
 }

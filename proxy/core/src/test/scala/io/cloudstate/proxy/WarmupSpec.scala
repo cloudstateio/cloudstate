@@ -11,8 +11,16 @@ class WarmupSpec extends TestKit(ActorSystem("WarmupSpec", ConfigFactory.load("t
   override protected def afterAll(): Unit = TestKit.shutdownActorSystem(system)
 
   "The Warmup Actor" should {
-    "successfully complete warmup" in {
-      val warmup = system.actorOf(Warmup.props)
+    "successfully complete warmup when needsWarmup is true" in {
+      val warmup = system.actorOf(Warmup.props(true))
+      awaitCond({
+        warmup ! Warmup.Ready
+        expectMsgType[Boolean]
+      })
+    }
+
+    "successfully complete warmup when needsWarmup is false" in {
+      val warmup = system.actorOf(Warmup.props(false))
       awaitCond({
         warmup ! Warmup.Ready
         expectMsgType[Boolean]

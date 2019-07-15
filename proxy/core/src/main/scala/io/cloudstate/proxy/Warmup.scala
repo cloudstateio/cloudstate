@@ -16,17 +16,19 @@
 
 package io.cloudstate.proxy
 
-import akka.actor.{Actor, ActorLogging, Props, SupervisorStrategy, Terminated}
+import akka.actor.{Actor, ActorLogging, ActorRef, Props, SupervisorStrategy, Terminated}
 import com.google.protobuf.ByteString
-import StateManager.{Configuration, Stop}
+import io.cloudstate.proxy.eventsourced.EventSourcedEntity.{Configuration, Stop}
 import Warmup.Ready
-import io.cloudstate.entity.{EntityStreamIn, EntityStreamOut, Reply}
-import io.cloudstate.proxy.statemanager.{GrpcEntityCommand, GrpcEntityReply, ProxyRequest}
+import io.cloudstate.entity.Reply
+import io.cloudstate.eventsourced.{EventSourcedReply, EventSourcedStreamIn, EventSourcedStreamOut}
+import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionCommand, UserFunctionReply}
+import io.cloudstate.proxy.eventsourced.EventSourcedEntity
 
 import scala.concurrent.duration._
 
 object Warmup {
-  def props: Props = Props(new Warmup())
+  def props(needsWarmup: Boolean): Props = Props(new Warmup(needsWarmup))
 
   case object Ready
 }
@@ -35,43 +37,48 @@ object Warmup {
   * Warms things up by starting a dummy instance of the state manager actor up, this ensures
   * Cassandra gets connected to etc, so a lot of classloading and jitting is done here.
   */
-class Warmup extends Actor with ActorLogging {
+class Warmup(needsWarmup: Boolean) extends Actor with ActorLogging {
 
-  log.debug("Starting warmup...")
+  if (needsWarmup) {
+    log.debug("Starting warmup...")
 
-  private val stateManager = context.watch(context.actorOf(StateManager.props(
-    Configuration("###warmup", 30.seconds, 100), "###warmup-entity", self, self, self
-  ), "entity"))
+    val stateManager = context.watch(context.actorOf(EventSourcedEntity.props(
+      Configuration("warmup.Service", "###warmup", 30.seconds, 100), "###warmup-entity", self, self, self
+    ), "entity"))
 
-  stateManager ! ProxyRequest(
-    command = Some(GrpcEntityCommand(
+    stateManager ! EntityCommand(
       entityId = "###warmup-entity",
       name = "foo",
       payload = Some(com.google.protobuf.any.Any("url", ByteString.EMPTY))
-    ))
-  )
+    )
 
-  override def receive: Receive = {
+    context become warmingUp(stateManager)
+  }
+
+  // Default will be overriden above if we need to warm up
+  override def receive = warm
+
+  private def warmingUp(eventSourcedEntityManager: ActorRef): Receive = {
     case Ready => sender ! false
     case ConcurrencyEnforcer.Action(_, start) =>
       log.debug("Warmup received action, starting it.")
       start()
-    case EntityStreamIn(EntityStreamIn.Message.Event(_)) =>
+    case EventSourcedStreamIn(EventSourcedStreamIn.Message.Event(_)) =>
       // Ignore
-    case EntityStreamIn(EntityStreamIn.Message.Init(_)) =>
+    case EventSourcedStreamIn(EventSourcedStreamIn.Message.Init(_)) =>
       log.debug("Warmup got init.")
       // Ignore
-    case EntityStreamIn(EntityStreamIn.Message.Command(cmd)) =>
+    case EventSourcedStreamIn(EventSourcedStreamIn.Message.Command(cmd)) =>
       log.debug("Warmup got forwarded command")
       // It's forwarded us our command, send it a reply
-      stateManager ! EntityStreamOut(EntityStreamOut.Message.Reply(Reply(
+      eventSourcedEntityManager ! EventSourcedStreamOut(EventSourcedStreamOut.Message.Reply(EventSourcedReply(
         commandId = cmd.id,
-        payload = Some(com.google.protobuf.any.Any("url", ByteString.EMPTY))
+        response = EventSourcedReply.Response.Reply(Reply(Some(com.google.protobuf.any.Any("url", ByteString.EMPTY))))
       )))
-    case _: GrpcEntityReply =>
+    case _: UserFunctionReply =>
       log.debug("Warmup got forwarded reply")
       // It's forwarded the reply, now stop it
-      stateManager ! Stop
+      eventSourcedEntityManager ! Stop
     case Terminated(_) =>
       log.info("Warmup complete")
       context.become(warm)
