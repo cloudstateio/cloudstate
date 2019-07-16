@@ -6,7 +6,7 @@ This is a living document, that will be updated as the project evolves.
 
 A CloudState service looks like this:
 
-![](high-level.png)
+![](high-level.svg)
 
 * **Ingress** - This can be Istio, Knative, or just regular ClusterIP service communication in Kubernetes. Whatever service approach is used, CloudState expects traffic to be load balanced across its pods randomly and evenly.
 * **Akka sidecar** - This sidecar is injected by the CloudState operator. All requests go through it. The sidecars of a single CloudState service form a cluster, communicating directly with each other using Akka remoting. This cluster, and the communication links between the sidecars, allows for sharding and replication of state, along with addressed P2P messaging between pods.
