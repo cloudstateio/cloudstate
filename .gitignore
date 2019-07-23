@@ -34,3 +34,4 @@ tags
 target
 target-sbt
 node_modules
+.idea/
