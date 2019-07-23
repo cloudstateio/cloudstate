@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package com.example;
+
+message Example {
+    string field1 = 1;
+    string field2 = 2;
+}
+
+message PrimitiveLike {
+    string field1 = 1;
+    string field2 = 2;
+    string field15 = 15;
+}
+
+message In {
+    string field = 1;
+}
+
+message Out {
+    string field = 1;
+}
+
+service ExampleService {
+    rpc DoSomething(In) returns (Out);
+}

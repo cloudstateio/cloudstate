@@ -37,7 +37,7 @@ import scala.collection.immutable.Queue
 
 object EventSourcedEntitySupervisor {
 
-  final case class Relay(actorRef: ActorRef)
+  private final case class Relay(actorRef: ActorRef)
 
   def props(client: EventSourcedClient, configuration: EventSourcedEntity.Configuration, concurrencyEnforcer: ActorRef, statsCollector: ActorRef)(implicit mat: Materializer): Props =
     Props(new EventSourcedEntitySupervisor(client, configuration, concurrencyEnforcer, statsCollector))

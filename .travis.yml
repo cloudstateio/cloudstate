@@ -6,6 +6,7 @@ before_script:
   - cd samples/js-shopping-cart && npm install && cd -
   - sbt update
 script:
+  - cd node-support && npm test && cd -
   - cd samples/js-shopping-cart && npm test && cd -
   - cd samples/js-shopping-cart && npm run dockerbuild && cd -
   - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' test

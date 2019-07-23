@@ -37,6 +37,7 @@ import io.cloudstate.proxy.StatsCollector.StatsCollectorSettings
 import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
 import io.cloudstate.proxy.ConcurrencyEnforcer.ConcurrencyEnforcerSettings
 import io.cloudstate.proxy.autoscaler.{Autoscaler, AutoscalerSettings, ClusterMembershipFacadeImpl, KubernetesDeploymentScaler, NoScaler}
+import io.cloudstate.proxy.crdt.CrdtSupportFactory
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
 
 import scala.concurrent.duration._
@@ -137,6 +138,8 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
 
   private val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
     EventSourced.name -> new EventSourcedSupportFactory(context.system, config, clientSettings,
+      concurrencyEnforcer = concurrencyEnforcer, statsCollector = statsCollector),
+    Crdt.name -> new CrdtSupportFactory(context.system, config, entityDiscoveryClient, clientSettings,
       concurrencyEnforcer = concurrencyEnforcer, statsCollector = statsCollector)
   )
 
@@ -241,10 +244,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
   }
 
   override final def postStop(): Unit = {
-    super.postStop()
     entityDiscoveryClient.close()
-    log.debug("shutting down")
-    system.terminate()
   }
 }
 

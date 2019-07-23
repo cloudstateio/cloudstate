@@ -1,11 +1,12 @@
 {
-  "name": "cloudstate-event-sourcing",
-  "version": "0.2.4",
-  "description": "Support for implementing CloudState event sourced functions",
+  "name": "cloudstate",
+  "version": "0.0.1",
+  "description": "Support for implementing CloudState functions",
   "keywords": [
     "serverless",
     "cloudstate",
-    "event-sourcing"
+    "event-sourcing",
+    "crdt"
   ],
   "homepage": "https://github.com/cloudstateio/cloudstate",
   "bugs": {
@@ -19,7 +20,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/cloudstate/cloudstate",
+    "url": "https://github.com/cloudstateio/cloudstate",
     "directory": "src/node-support"
   },
   "files": [
@@ -34,17 +35,20 @@
     "debug": "^4.1.1",
     "unzipper": "^0.9.15",
     "request": "^2.88.0",
-    "mkdirp": "^0.5.1"
+    "mkdirp": "^0.5.1",
+    "json-stable-stringify": "^1.0.1"
   },
   "devDependencies": {
     "chai": "4.2.0",
-    "mocha": "^6.1.4"
+    "mocha": "^6.1.4",
+    "nyc": "^14.1.1"
   },
   "bin": {
     "download-protoc": "bin/download-protoc.js",
     "compile-descriptor": "bin/compile-descriptor.js"
   },
   "scripts": {
+    "test": "mocha --recursive",
     "prepare": "mkdir -p ./proto; cp -r ../protocols/frontend/* ./proto/",
     "postinstall": "bin/download-protoc.js"
   }

@@ -144,6 +144,19 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain")
   )
 
+lazy val `proxy-tests` = (project in file("proxy/proxy-tests"))
+  .dependsOn(`proxy-core`, `akka-client`)
+  .settings(
+    common,
+    name := "cloudstate-proxy-tests",
+    fork in Test := true,
+    baseDirectory in Test := (baseDirectory in ThisBuild).value,
+    libraryDependencies ++= Seq(
+      "org.scalatest"     %% "scalatest"    % ScalaTestVersion % Test,
+      "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
+    )
+  )
+
 val compileK8sDescriptors = taskKey[File]("Compile the K8s descriptors into one")
 
 lazy val operator = (project in file("operator"))
@@ -172,11 +185,11 @@ lazy val operator = (project in file("operator"))
     )
   )
 
-lazy val `akka-client` = (project in file("samples/akka-js-shopping-cart-client"))
+lazy val `akka-client` = (project in file("samples/akka-client"))
   .enablePlugins(AkkaGrpcPlugin)
   .settings(
     common,
-    name := "akka-js-shopping-cart-client",
+    name := "akka-client",
 
     fork in run := true,
 

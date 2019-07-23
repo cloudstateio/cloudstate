@@ -1,17 +1,17 @@
-package io.cloudstate.samples.shoppingcart
+package io.cloudstate.samples
 
 import akka.actor.ActorSystem
-import akka.stream.ActorMaterializer
 import akka.grpc.GrpcClientSettings
+import akka.stream.ActorMaterializer
 import com.example.shoppingcart._
 
-import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
 
-object Client {
+object ShoppingCartClient {
   def main(args: Array[String]): Unit = {
 
-    val client = new Client("35.197.173.27", 80, Some("shopping-cart.default.example.com"))
+    val client = new ShoppingCartClient("35.197.173.27", 80, Some("shopping-cart.default.example.com"))
 
     val userId = "viktor"
     val productId = "1337"
@@ -36,11 +36,11 @@ object Client {
 }
 
 /**
-  * Designed for use in the REPL, run sbt console and then new com.example.Client("localhost", 9000)
+  * Designed for use in the REPL, run sbt console and then new io.cloudstate.samples.ShoppingCartClient("localhost", 9000)
   * @param hostname
   * @param port
   */
-class Client(hostname: String, port: Int, hostnameOverride: Option[String], sys: ActorSystem) {
+class ShoppingCartClient(hostname: String, port: Int, hostnameOverride: Option[String], sys: ActorSystem) {
   def this(hostname: String, port: Int, hostnameOverride: Option[String] = None) = this(hostname, port, hostnameOverride, ActorSystem())
   private implicit val system = sys
   private implicit val materializer = ActorMaterializer()
@@ -51,7 +51,7 @@ class Client(hostname: String, port: Int, hostnameOverride: Option[String], sys:
     hostnameOverride.fold(s)(host => s.withChannelBuilderOverrides(_.overrideAuthority(host)))
   }
   println(s"Connecting to $hostname:$port")
-  val service = ShoppingCartClient(settings)
+  val service = com.example.shoppingcart.ShoppingCartClient(settings)
 
   def shutdown(): Unit = {
     await(service.close())

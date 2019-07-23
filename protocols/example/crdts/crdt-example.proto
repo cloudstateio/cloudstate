@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+import "cloudstate/entitykey.proto";
+
+package com.example.crdts;
+
+message UpdateCounter {
+    string key = 1 [(.cloudstate.entity_key) = true];
+    int64 value = 2;
+}
+
+message CounterValue {
+    int64 value = 1;
+}
+
+message Get {
+    string key = 1 [(.cloudstate.entity_key) = true];
+}
+
+message SomeValue {
+    string key = 1;
+    string description = 2;
+}
+
+message MutateSet {
+    string key = 1 [(.cloudstate.entity_key) = true];
+    bool clear = 2;
+    repeated SomeValue remove = 3;
+    repeated SomeValue add = 4;
+}
+
+message SetSize {
+    int32 size = 1;
+}
+
+message SetValue {
+    repeated SomeValue items = 1;
+}
+
+service CrdtExample {
+    rpc IncrementGCounter(UpdateCounter) returns (CounterValue);
+    rpc GetGCounter(Get) returns (CounterValue);
+
+    rpc UpdatePNCounter(UpdateCounter) returns (CounterValue);
+    rpc GetPNCounter(Get) returns (CounterValue);
+
+    rpc MutateGSet(MutateSet) returns (SetSize);
+    rpc GetGSet(Get) returns (SetValue);
+
+    rpc MutateORSet(MutateSet) returns (SetSize);
+    rpc GetORSet(Get) returns (SetValue);
+}

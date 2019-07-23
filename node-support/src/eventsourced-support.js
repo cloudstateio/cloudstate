@@ -15,7 +15,6 @@
  */
 
 const path = require("path");
-const util = require("util");
 const grpc = require("grpc");
 const protoLoader = require("@grpc/proto-loader");
 
@@ -23,16 +22,7 @@ const debug = require("debug")("cloudstate-event-sourcing");
 // Bind to stdout
 debug.log = console.log.bind(console);
 const AnySupport = require("./protobuf-any");
-
-class ContextFailure extends Error {
-  constructor(msg) {
-    super(msg);
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, ContextFailure);
-    }
-    this.name = "ContextFailure";
-  }
-}
+const CommandHelper = require("./command-helper");
 
 class EventSourcedSupport {
 
@@ -46,12 +36,8 @@ class EventSourcedSupport {
     this.allEntities = allEntities;
   }
 
-  serialize(obj) {
-    return this.anySupport.serialize(obj);
-  }
-
-  lookupDescriptor(any) {
-    return this.anySupport.lookupDescriptor(any);
+  serialize(obj, requireJsonType) {
+    return AnySupport.serialize(obj, this.options.serializeAllowPrimitives, this.options.serializeFallbackToJson, requireJsonType);
   }
 
   deserialize(any) {
@@ -90,13 +76,13 @@ class EventSourcedEntityHandler {
     // The current entity state, serialized to an Any
     this.anyState = null;
 
-    // The current state descriptor
-    this.stateDescriptor = null;
-
     // The current sequence number
     this.sequence = 0;
 
     this.streamId = Math.random().toString(16).substr(2, 7);
+
+    this.commandHelper = new CommandHelper(this.entityId, support.service, this.streamId, call,
+      this.commandHandlerFactory.bind(this), support.allEntities, debug);
 
     this.streamDebug("Started new stream")
   }
@@ -105,10 +91,55 @@ class EventSourcedEntityHandler {
     debug("%s [%s] - " + msg, ...[this.streamId, this.entityId].concat(args));
   }
 
+  commandHandlerFactory(commandName) {
+    return this.withBehaviorAndState((behavior, state) => {
+
+      if (behavior.commandHandlers.hasOwnProperty(commandName)) {
+
+        return (command, ctx, reply, ensureActive, commandDebug) => {
+          const events = [];
+
+          ctx.emit = (event) => {
+            ensureActive();
+
+            const serEvent = this.entity.serialize(event, true);
+            events.push(serEvent);
+            commandDebug("Emitting event '%s'", serEvent.type_url);
+          };
+
+          const userReply = behavior.commandHandlers[commandName](command, state, ctx);
+
+          // Invoke event handlers first
+          let snapshot = false;
+          events.forEach(event => {
+            this.handleEvent(event);
+            this.sequence++;
+            if (this.sequence % this.entity.options.snapshotEvery === 0) {
+              snapshot = true;
+            }
+          });
+
+          if (events.length > 0) {
+            commandDebug("Emitting %d events", events.length);
+          }
+          reply.events = events;
+
+          if (snapshot) {
+            commandDebug("Snapshotting current state with type '%s'", this.anyState.type_url);
+            reply.snapshot = this.anyState
+          }
+
+          return userReply;
+        };
+      } else {
+        return null;
+      }
+    });
+  }
+
   handleSnapshot(snapshot) {
     this.sequence = snapshot.snapshotSequence;
     this.streamDebug("Handling snapshot with type '%s' at sequence %s", snapshot.snapshot.type_url, this.sequence);
-    this.stateDescriptor = this.entity.lookupDescriptor(snapshot.snapshot);
     this.anyState = snapshot.snapshot;
   }
 
@@ -138,7 +169,7 @@ class EventSourcedEntityHandler {
 
     } else if (eventSourcedStreamIn.command) {
 
-      this.handleCommand(eventSourcedStreamIn.command);
+      this.commandHelper.handleCommand(eventSourcedStreamIn.command);
 
     }
   }
@@ -170,223 +201,17 @@ class EventSourcedEntityHandler {
   }
 
   updateState(stateObj) {
-    this.stateDescriptor = stateObj.constructor;
-    this.anyState = this.entity.serialize(stateObj);
+    this.anyState = this.entity.serialize(stateObj, false);
   }
 
   withBehaviorAndState(callback) {
-    if (this.stateDescriptor == null) {
+    if (this.anyState == null) {
       this.updateState(this.entity.initial(this.entityId));
     }
-    // If the state is empty, anyState.value could be null or undefined, handle that
-    let buffer = this.anyState.value;
-    if (typeof buffer === "undefined") {
-      buffer = new Buffer(0)
-    }
-    const stateObj = this.stateDescriptor.decode(buffer);
+    const stateObj = this.entity.deserialize(this.anyState);
     const behavior = this.entity.behavior(stateObj);
-    callback(behavior, stateObj);
+    return callback(behavior, stateObj);
   }
-
-  serializeEffect(method, message) {
-    let serviceName, commandName;
-    // We support either the grpc method, or a protobufjs method being passed
-    if (typeof method.path === "string") {
-      const r = new RegExp("^/([^/]+)/([^/]+)$").exec(method.path);
-      if (r == null) {
-        throw new Error(util.format("Not a valid gRPC method path '%s' on object '%o'", method.path, method));
-      }
-      serviceName = r[1];
-      commandName = r[2];
-    } else if (method.type === "rpc") {
-      serviceName = method.parent.name;
-      commandName = method.name;
-    }
-
-    const service = this.entity.allEntities[serviceName];
-
-    if (service !== undefined) {
-      const command = service.methods[commandName];
-      if (command !== undefined) {
-        const payload = this.entity.serialize(command.resolvedRequestType.create(message));
-        return {
-          serviceName: serviceName,
-          commandName: commandName,
-          payload: payload
-        };
-      } else {
-        throw new Error(util.format("Command [%s] unknown on service [%s].", commandName, serviceName))
-      }
-    } else {
-      throw new Error(util.format("Service [%s] has not been registered as an entity in this user function, and so can't be used as a side effect or forward.", service))
-    }
-  }
-
-  serializeSideEffect(method, message, synchronous) {
-    const msg = this.serializeEffect(method, message);
-    msg.synchronous = synchronous;
-    return msg;
-  }
-
-  handleCommand(command) {
-    const commandDebug = (msg, ...args) => {
-      debug("%s [%s] (%s) - " + msg, ...[this.streamId, this.entityId, command.id].concat(args));
-    };
-
-    commandDebug("Received command '%s' with type '%s'", command.name, command.payload.type_url);
-
-    if (!this.entity.service.methods.hasOwnProperty(command.name)) {
-      commandDebug("Command '%s' unknown", command.name);
-      this.call.write({
-        failure: {
-          commandId: command.id,
-          description: "Unknown command named " + command.name
-        }
-      })
-    } else {
-
-      try {
-        const grpcMethod = this.entity.service.methods[command.name];
-
-        // todo maybe reconcile whether the command URL of the Any type matches the gRPC response type
-        let commandBuffer = command.payload.value;
-        if (typeof commandBuffer === "undefined") {
-          commandBuffer = new Buffer(0)
-        }
-        const deserCommand = grpcMethod.resolvedRequestType.decode(commandBuffer);
-
-        this.withBehaviorAndState((behavior, state) => {
-
-          if (behavior.commandHandlers.hasOwnProperty(command.name)) {
-
-            const events = [];
-            const effects = [];
-            let active = true;
-            const ensureActive = () =>  {
-              if (!active) {
-                throw new Error("Command context no longer active!");
-              }
-            };
-            let error = null;
-            let reply;
-            let forward = null;
-
-            try {
-              reply = behavior.commandHandlers[command.name](deserCommand, state, {
-                entityId: this.entityId,
-                emit: (event) => {
-                  ensureActive();
-
-                  const serEvent = this.entity.serialize(event);
-                  events.push(serEvent);
-                  commandDebug("Emitting event '%s'", serEvent.type_url);
-                },
-                fail: (msg) => {
-                  ensureActive();
-                  // We set it here to ensure that even if the user catches the error, for
-                  // whatever reason, we will still fail as instructed.
-                  error = new ContextFailure(msg);
-                  // Then we throw, to end processing of the command.
-                  throw error;
-                },
-                effect: (method, message, synchronous = false) => {
-                  ensureActive();
-                  effects.push(this.serializeSideEffect(method, message, synchronous))
-                },
-                thenForward: (method, message) => {
-                  forward = this.serializeEffect(method, message);
-                }
-              });
-            } catch (err) {
-              if (error == null) {
-                // If the error field isn't null, then that means we were explicitly told
-                // to fail, so we can ignore this thrown error and fail gracefully with a
-                // failure message. Otherwise, we rethrow, and handle by closing the connection
-                // higher up.
-                throw err;
-              }
-            } finally {
-              active = false;
-            }
-
-            if (error !== null) {
-              commandDebug("Command failed with message '%s'", error.message);
-              this.call.write({
-                failure: {
-                  commandId: command.id,
-                  description: error.message
-                }
-              });
-            } else {
-
-              // Invoke event handlers first
-              let snapshot = false;
-              events.forEach(event => {
-                this.handleEvent(event);
-                this.sequence++;
-                if (this.sequence % this.entity.options.snapshotEvery === 0) {
-                  snapshot = true;
-                }
-              });
-
-              const msgReply = {
-                commandId: command.id,
-                events: events,
-                sideEffects: effects
-              };
-
-              if (snapshot) {
-                commandDebug("Snapshotting current state with type '%s'", this.anyState.type_url);
-                msgReply.snapshot = this.anyState
-              }
-
-              if (forward != null) {
-                msgReply.forward = forward;
-                commandDebug("Sending reply with %d events, %d side effects and forwarding to '%s.%s'",
-                  msgReply.events.length, msgReply.sideEffects.length, forward.serviceName, forward.commandName);
-              } else {
-                msgReply.reply = {
-                  payload: this.entity.serialize(grpcMethod.resolvedResponseType.create(reply))
-                };
-                commandDebug("Sending reply with %d events, %d side effects and reply type '%s'",
-                  msgReply.events.length, msgReply.sideEffects.length, msgReply.reply.payload.typeUrl);
-              }
-
-              this.call.write({
-                reply: msgReply
-              });
-            }
-
-          } else {
-            const msg = "No handler register for command '" + command.name + "'";
-            commandDebug(msg);
-            this.call.write({
-              failure: {
-                commandId: command.id,
-                description: msg
-              }
-            })
-          }
-
-        });
-
-      } catch (err) {
-        const error = "Error handling command '" + command.name + "'";
-        commandDebug(error);
-        console.error(err);
-
-        this.call.write({
-          failure: {
-            commandId: command.id,
-            description: error + ": " + err
-          }
-        });
-
-        this.call.end();
-      }
-    }
-  }
-
 
   onEnd() {
     this.streamDebug("Stream terminating");

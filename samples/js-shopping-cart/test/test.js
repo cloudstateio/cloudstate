@@ -20,9 +20,8 @@ const grpc = require("grpc");
 const protoLoader = require("@grpc/proto-loader");
 const fs = require("fs");
 const protobuf = require("protobufjs");
-require("protobufjs/ext/descriptor");
 
-const ssesPath = path.dirname(require.resolve("cloudstate-event-sourcing"));
+const ssesPath = path.dirname(require.resolve("cloudstate"));
 const allIncludePath = [
   path.join(ssesPath, "proto"),
   path.join(ssesPath, "protoc", "include"),
@@ -63,7 +62,7 @@ const Cart = root.lookupType("com.example.shoppingcart.persistence.Cart");
 
 // Start server
 const shoppingCartEntity = require("../shoppingcart.js");
-const CloudState = require("cloudstate-event-sourcing").CloudState;
+const CloudState = require("cloudstate").CloudState;
 const server = new CloudState();
 server.addEntity(shoppingCartEntity);
 
