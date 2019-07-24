@@ -19,34 +19,29 @@ package io.cloudstate.tck
 import akka.NotUsed
 import akka.actor.{ActorSystem, Scheduler}
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{Source, Sink}
+import akka.stream.scaladsl.{Sink, Source}
 import akka.pattern.after
-
 import akka.grpc.GrpcClientSettings
 import com.google.protobuf.{ByteString => ProtobufByteString}
-
 import org.scalatest._
 import com.typesafe.config.Config
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.Try
-
 import java.util.{Map => JMap}
 import java.util.concurrent.TimeUnit
 import java.io.File
 
 import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
-import akka.http.scaladsl.model.{HttpRequest, HttpProtocols, HttpMethods, HttpEntity, HttpResponse, ContentTypes, StatusCode, StatusCodes}
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpMethods, HttpProtocols, HttpRequest, HttpResponse, StatusCodes}
 import akka.http.scaladsl.unmarshalling._
-
 import io.cloudstate.entity._
 import com.example.shoppingcart._
-
 import akka.testkit.TestProbe
-
 import com.google.protobuf.empty.Empty
+import io.cloudstate.eventsourced.{EventSourced, EventSourcedClient, EventSourcedHandler, EventSourcedInit, EventSourcedReply, EventSourcedStreamIn, EventSourcedStreamOut}
 
 object CloudStateTCK {
   private[this] final val PROXY   = "proxy"
@@ -100,36 +95,60 @@ object CloudStateTCK {
   final val noWait = 0.seconds
 
   // FIXME add interception to enable asserting exchanges
-  final class EntityInterceptor(val client: EntityClient, val fromBackend: TestProbe, val fromFrontend: TestProbe)(implicit ec: ExecutionContext) extends Entity {
+  final class EventSourcedInterceptor(val client: EventSourcedClient, val fromBackend: TestProbe, val fromFrontend: TestProbe)(implicit ec: ExecutionContext) extends EventSourced {
 
     private final val fromBackendInterceptor = Sink.actorRef[AnyRef](fromBackend.ref, "BACKEND_TERMINATED")
     private final val fromFrontendInterceptor = Sink.actorRef[AnyRef](fromFrontend.ref, "FRONTEND_TERMINATED")
 
-    override def handle(in: Source[EntityStreamIn, NotUsed]): Source[EntityStreamOut, NotUsed] =
+    override def handle(in: Source[EventSourcedStreamIn, NotUsed]): Source[EventSourcedStreamOut, NotUsed] =
       client.handle(in.alsoTo(fromBackendInterceptor)).alsoTo(fromFrontendInterceptor)
+  }
 
-    override def ready(in: Empty): Future[EntitySpec] = {
-      import scala.util.{Success, Failure}
-      fromBackend.ref ! in
-      client.ready(in).andThen {
+  // FIXME add interception to enable asserting exchanges
+  final class EntityDiscoveryInterceptor(val client: EntityDiscoveryClient, val fromBackend: TestProbe, val fromFrontend: TestProbe)(implicit ec: ExecutionContext) extends EntityDiscovery {
+    import scala.util.{Success, Failure}
+
+    override def discover(info: ProxyInfo): Future[EntitySpec] = {
+      fromBackend.ref ! info
+      client.discover(info).andThen {
         case Success(es) => fromFrontend.ref ! es
         case Failure(f)  => fromFrontend.ref ! f
+      }
+    }
+
+    override def reportError(error: UserFunctionError): Future[Empty] = {
+      fromBackend.ref ! error
+      client.reportError(error).andThen {
+        case Success(e) => fromFrontend.ref ! e
+        case Failure(f) => fromFrontend.ref ! f
       }
     }
   }
 
   def attempt[T](op: => Future[T], delay: FiniteDuration, retries: Int)(implicit ec: ExecutionContext, s: Scheduler): Future[T] =
     Future.unit.flatMap(_ => op) recoverWith { case _ if retries > 0 => after(delay, s)(attempt(op, delay, retries - 1)) }
+
+  final val proxyInfo = ProxyInfo(
+    protocolMajorVersion = 0,
+    protocolMinorVersion = 1,
+    proxyName = "TCK",
+    proxyVersion = "0.1",
+    supportedEntityTypes = Seq(EventSourced.name)
+  )
 }
 
 class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration) extends AsyncWordSpec with MustMatchers with BeforeAndAfterAll {
   import CloudStateTCK._
+
             private[this] final val system                               = ActorSystem("CloudStateTCK")
             private[this] final val mat                                  = ActorMaterializer()(system)
-            private[this] final val fromBackend                          = TestProbe("fromBackend")(system)
-            private[this] final val fromFrontend                         = TestProbe("fromFrontend")(system)
+            private[this] final val discoveryFromBackend                 = TestProbe("discoveryFromBackend")(system)
+            private[this] final val discoveryFromFrontend                = TestProbe("discoveryFromFrontend")(system)
+            private[this] final val eventSourcedFromBackend              = TestProbe("eventSourcedFromBackend")(system)
+            private[this] final val eventSourcedFromFrontend             = TestProbe("eventSourcedFromFrontend")(system)
   @volatile private[this] final var shoppingClient:  ShoppingCartClient  = _
-  @volatile private[this] final var entityClient:    EntityClient        = _
+  @volatile private[this] final var entityDiscoveryClient: EntityDiscoveryClient  = _
+  @volatile private[this] final var eventSourcedClient: EventSourcedClient  = _
   @volatile private[this] final var backendProcess:  Process             = _
   @volatile private[this] final var frontendProcess: Process             = _
   @volatile private[this] final var tckProxy:        ServerBinding       = _
@@ -151,11 +170,11 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     pb
   }
 
-  def buildTCKProxy(client: EntityClient, implementation: Entity): Future[ServerBinding] = {
+  def buildTCKProxy(entityDiscovery: EntityDiscovery, eventSourced: EventSourced): Future[ServerBinding] = {
     implicit val s = system
     implicit val m = mat
     Http().bindAndHandleAsync(
-        handler = EntityHandler(implementation),
+        handler = EntityDiscoveryHandler.partial(entityDiscovery) orElse EventSourcedHandler.partial(eventSourced),
         interface = config.tckHostname,
         port = config.tckPort,
         connectionContext = HttpConnectionContext(http2 = UseHttp2.Always)
@@ -173,11 +192,18 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
 
     frontendProcess = fp
 
-    val ec = EntityClient(GrpcClientSettings.connectToServiceAt(config.frontend.hostname, config.frontend.port)(system).withTls(false))(mat, mat.executionContext)
+    val clientSettings = GrpcClientSettings.connectToServiceAt(config.frontend.hostname, config.frontend.port)(system).withTls(false)
 
-    entityClient = ec
+    val edc = EntityDiscoveryClient(clientSettings)(mat, mat.executionContext)
 
-    val tp = Await.result(buildTCKProxy(ec, new EntityInterceptor(ec, fromBackend, fromFrontend)(system.dispatcher)), 10.seconds)
+    entityDiscoveryClient = edc
+
+    val esc = EventSourcedClient(clientSettings)(mat, mat.executionContext)
+
+    eventSourcedClient = esc
+
+    val tp = Await.result(buildTCKProxy(new EntityDiscoveryInterceptor(edc, discoveryFromBackend, discoveryFromFrontend),
+      new EventSourcedInterceptor(esc, eventSourcedFromBackend, eventSourcedFromFrontend)(system.dispatcher)), 10.seconds)
 
     tckProxy = tp
 
@@ -205,21 +231,24 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
       Option(shoppingClient).foreach(c => Await.result(c.close(), 10.seconds))
     finally
       try Option(backendProcess).foreach(destroy)
-        finally Option(entityClient).foreach(c => Await.result(c.close(), 10.seconds))
+        finally Seq(entityDiscoveryClient, eventSourcedClient).foreach(c => Await.result(c.close(), 10.seconds))
           try Option(frontendProcess).foreach(destroy)
             finally Await.ready(tckProxy.unbind().transformWith(_ => system.terminate())(system.dispatcher), 30.seconds)
   }
 
   final def fromFrontend_expectEntitySpec(within: FiniteDuration): EntitySpec = {
-    val spec = fromFrontend.expectMsgType[EntitySpec](within)
+    val spec = discoveryFromFrontend.expectMsgType[EntitySpec](within)
     spec.proto must not be ProtobufByteString.EMPTY
-    spec.serviceName must not be empty
-    spec.persistenceId must not be empty
+    spec.entities must not be empty
+    spec.entities.head.serviceName must not be empty
+    spec.entities.head.persistenceId must not be empty
+    // fixme event sourced?
+    spec.entities.head.entityType must not be empty
     spec
   }
 
-  final def fromBackend_expectInit(within: FiniteDuration): Init = {
-    val init = fromBackend.expectMsgType[EntityStreamIn](noWait)
+  final def fromBackend_expectInit(within: FiniteDuration): EventSourcedInit = {
+    val init = eventSourcedFromBackend.expectMsgType[EventSourcedStreamIn](noWait)
     init must not be(null)
     init.message must be('init)
     init.message.init must be(defined)
@@ -227,7 +256,7 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
   }
 
   final def fromBackend_expectCommand(within: FiniteDuration): Command = {
-    val command = fromBackend.expectMsgType[EntityStreamIn](noWait)
+    val command = eventSourcedFromBackend.expectMsgType[EventSourcedStreamIn](noWait)
     command must not be(null)  // FIXME validate Command
     command.message must be('command)
     command.message.command must be(defined)
@@ -236,8 +265,8 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     c
   }
 
-  final def fromFrontend_expectReply(events: Int, within: FiniteDuration): Reply = {
-    val reply = fromFrontend.expectMsgType[EntityStreamOut](noWait)
+  final def fromFrontend_expectReply(events: Int, within: FiniteDuration): EventSourcedReply = {
+    val reply = eventSourcedFromFrontend.expectMsgType[EventSourcedStreamOut](noWait)
     reply must not be(null)
     reply.message must be('reply)
     reply.message.reply must be(defined)
@@ -247,26 +276,27 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
   }
 
   final def fromFrontend_expectFailure(within: FiniteDuration): Failure = {
-    val failure = fromFrontend.expectMsgType[EntityStreamOut](noWait)
+    val failure = eventSourcedFromFrontend.expectMsgType[EventSourcedStreamOut](noWait)
     failure must not be(null)
     failure.message must be('failure)
     failure.message.failure must be(defined)
     failure.message.failure.get
   }
 
-  final def correlate(cmd: Command, reply: Reply)     = cmd.id must be(reply.commandId)
+  final def correlate(cmd: Command, reply: EventSourcedReply)     = cmd.id must be(reply.commandId)
   final def correlate(cmd: Command, failure: Failure) = cmd.id must be(failure.commandId)
-  final def unrelated(cmd: Command, reply: Reply)     = cmd.id must not be reply.commandId
+  final def unrelated(cmd: Command, reply: EventSourcedReply)     = cmd.id must not be reply.commandId
   final def unrelated(cmd: Command, failure: Failure) = cmd.id must not be failure.commandId
 
   ("The TCK for" + config.name) must {
     implicit val scheduler = system.scheduler
 
     "verify that the user function process responds" in {
-      attempt(entityClient.ready(Empty()), 4.seconds, 10) map { spec =>
+      attempt(entityDiscoveryClient.discover(proxyInfo), 4.seconds, 10) map { spec =>
         spec.proto must not be ProtobufByteString.EMPTY
-        spec.serviceName must not be empty
-        spec.persistenceId must not be empty
+        spec.entities must not be empty
+        spec.entities.head.serviceName must not be empty
+        spec.entities.head.persistenceId must not be empty
       }
     }
 
@@ -275,7 +305,10 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
       attempt(shoppingClient.getCart(GetShoppingCart(userId)), 4.seconds, 10) map {
         cart =>
           // Interaction test
-          fromBackend.expectMsg(Empty())
+          val proxyInfo = discoveryFromBackend.expectMsgType[ProxyInfo]
+          proxyInfo.supportedEntityTypes must contain(EventSourced.name)
+          proxyInfo.protocolMajorVersion must be >= 0
+          proxyInfo.protocolMinorVersion must be >= 0
 
           fromFrontend_expectEntitySpec(noWait)
 
@@ -283,8 +316,8 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
 
           correlate(fromBackend_expectCommand(noWait), fromFrontend_expectReply(events = 0, noWait))
 
-          fromBackend.expectNoMsg(noWait)
-          fromFrontend.expectNoMsg(noWait)
+          eventSourcedFromBackend.expectNoMsg(noWait)
+          eventSourcedFromFrontend.expectNoMsg(noWait)
 
           // Semantical test
           cart must not be(null)
@@ -333,8 +366,8 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
           set + cmd.id
         }
 
-        fromBackend.expectNoMsg(noWait)
-        fromFrontend.expectNoMsg(noWait)
+        eventSourcedFromBackend.expectNoMsg(noWait)
+        eventSourcedFromFrontend.expectNoMsg(noWait)
 
         commands must have(size(11)) // Verify command id uniqueness
 

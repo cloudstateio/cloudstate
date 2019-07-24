@@ -14,4 +14,5 @@
  * limitations under the License.
  */
 
-module.exports = require("./src/entity");
+module.exports.CloudState = require("./src/cloudstate");
+module.exports.EventSourced = require("./src/eventsourced");

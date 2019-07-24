@@ -17,27 +17,31 @@
 package io.cloudstate.proxy
 
 import akka.Done
-import akka.actor.{Actor, ActorLogging, ActorRef, CoordinatedShutdown, PoisonPill, Props, Status, Terminated}
+import akka.actor.{Actor, ActorLogging, CoordinatedShutdown, PoisonPill, Props, Status}
 import akka.cluster.Cluster
 import akka.util.Timeout
 import akka.pattern.pipe
 import akka.stream.Materializer
 import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
-import akka.cluster.sharding._
 import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
 import akka.grpc.GrpcClientSettings
+import com.google.protobuf.DescriptorProtos
+import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.typesafe.config.Config
 import io.cloudstate.entity._
-import com.google.protobuf.empty.Empty
+import io.cloudstate.crdt.Crdt
+import io.cloudstate.eventsourced.EventSourced
+import io.cloudstate.function.StatelessFunction
 import io.cloudstate.proxy.StatsCollector.StatsCollectorSettings
 import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
 import io.cloudstate.proxy.ConcurrencyEnforcer.ConcurrencyEnforcerSettings
 import io.cloudstate.proxy.autoscaler.{Autoscaler, AutoscalerSettings, ClusterMembershipFacadeImpl, KubernetesDeploymentScaler, NoScaler}
+import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
 
 import scala.concurrent.duration._
 
-object ServerManager {
+object EntityDiscoveryManager {
   final case class Configuration (
     devMode: Boolean,
     httpInterface: String,
@@ -76,25 +80,42 @@ object ServerManager {
       )
     }
 
-    private[this] final def validate(): Unit = {
+    private def validate(): Unit = {
       require(proxyParallelism > 0, s"proxy-parallelism must be greater than 0 but was $proxyParallelism")
       require(numberOfShards > 0, s"number-of-shards must be greater than 0 but was $numberOfShards")
       require(relayOutputBufferSize > 0, "relay-buffer-size must be greater than 0 but was $relayOutputBufferSize")
     }
   }
 
-  def props(config: Configuration)(implicit mat: Materializer): Props = Props(new ServerManager(config))
+  def props(config: Configuration)(implicit mat: Materializer): Props = Props(new EntityDiscoveryManager(config))
 
   final case object Ready // Responds with true / false
+
+  final val supportedEntityTypes = Seq(
+    EventSourced.name,
+    StatelessFunction.name,
+    Crdt.name
+  )
+
+  final val proxyInfo = ProxyInfo(
+    protocolMajorVersion = 0,
+    protocolMinorVersion = 1,
+    proxyName = "Akka",
+    // todo make the build inject this
+    proxyVersion = "0.1",
+    supportedEntityTypes = supportedEntityTypes
+  )
+
+  final case class ServableEntity(serviceName: String, serviceDescriptor: ServiceDescriptor, userFunctionTypeSupport: UserFunctionTypeSupport)
 }
 
-class ServerManager(config: ServerManager.Configuration)(implicit mat: Materializer) extends Actor with ActorLogging {
+class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(implicit mat: Materializer) extends Actor with ActorLogging {
   import context.system
   import context.dispatcher
-  import ServerManager.Ready
+  import EntityDiscoveryManager.Ready
 
   private[this] final val clientSettings = GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
-  private[this] final val client         = EntityClient(clientSettings)
+  private[this] final val entityDiscoveryClient         = EntityDiscoveryClient(clientSettings)
   private[this] final val autoscaler     = {
     val managerSettings = ClusterSingletonManagerSettings(system)
     val proxySettings = ClusterSingletonProxySettings(system)
@@ -114,49 +135,78 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
   private[this] final val statsCollector = context.actorOf(StatsCollector.props(config.statsCollectorSettings, autoscaler), "statsCollector")
   private[this] final val concurrencyEnforcer = context.actorOf(ConcurrencyEnforcer.props(config.concurrencySettings, statsCollector), "concurrencyEnforcer")
 
-  client.ready(Empty.of()) pipeTo self
+  private val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
+    EventSourced.name -> new EventSourcedSupportFactory(context.system, config, clientSettings,
+      concurrencyEnforcer = concurrencyEnforcer, statsCollector = statsCollector)
+  )
+
+  entityDiscoveryClient.discover(EntityDiscoveryManager.proxyInfo) pipeTo self
 
   override def receive: Receive = {
-    case reply: EntitySpec =>
+    case spec: EntitySpec =>
       log.debug("Received EntitySpec from user function")
-      val stateManagerConfig = StateManager.Configuration(reply.persistenceId, config.passivationTimeout, config.relayOutputBufferSize)
 
-      log.debug("Starting StateManager for {}", reply.persistenceId)
-      val clusterSharding = ClusterSharding(system)
-      val clusterShardingSettings = ClusterShardingSettings(system)
-      val stateManager = context.watch(clusterSharding.start(
-        typeName = reply.persistenceId,
-        entityProps = StateManagerSupervisor.props(client, stateManagerConfig, concurrencyEnforcer, statsCollector),
-        settings = clusterShardingSettings,
-        messageExtractor = new Serve.RequestMessageExtractor(config.numberOfShards),
-        allocationStrategy = new DynamicLeastShardAllocationStrategy(1, 10, 2, 0.0),
-        handOffStopMessage = StateManager.Stop
-      ))
+      try {
+        val descriptorSet = DescriptorProtos.FileDescriptorSet.parseFrom(spec.proto)
+        val descriptors = FileDescriptorBuilder.build(descriptorSet)
 
-      log.debug("Creating gRPC proxy for {}", reply.persistenceId)
+        if (spec.entities.isEmpty) {
+          throw EntityDiscoveryException("No entities were reported by the discover call!")
+        }
 
-      val handler = Serve.createRoute(stateManager, statsCollector, config.proxyParallelism, config.relayTimeout, reply)
+        val entities = spec.entities.map { entity =>
 
-      log.debug("Starting gRPC proxy for {}", reply.persistenceId)
+          val serviceDescriptor = descriptors.collectFirst(Function.unlift(descriptor => extractService(entity.serviceName, descriptor)))
+            .getOrElse(throw EntityDiscoveryException(s"Service [${entity.serviceName}] not found in descriptors!"))
 
-      // Don't actually bind until we have a cluster
-      Cluster(context.system).registerOnMemberUp {
-        Http().bindAndHandleAsync(
-          handler = handler,
-          interface = config.httpInterface,
-          port = config.httpPort,
-          connectionContext = HttpConnectionContext(http2 = UseHttp2.Negotiated)
-        ) pipeTo self
+          supportFactories.get(entity.entityType) match {
+            case Some(factory) => EntityDiscoveryManager.ServableEntity(
+              entity.serviceName, serviceDescriptor, factory.build(entity, serviceDescriptor))
+            case None => throw EntityDiscoveryException(s"Service [${entity.serviceName}] has declared an unsupported entity type [${entity.entityType}]. Supported types are ${EntityDiscoveryManager.supportedEntityTypes.mkString(",")}")
+          }
+        }
+
+        val router = new UserFunctionRouter(entities, entityDiscoveryClient)
+
+        val handler = Serve.createRoute(entities, router, statsCollector, entityDiscoveryClient, descriptors)
+
+        log.debug("Starting gRPC proxy")
+
+        // Don't actually bind until we have a cluster
+        Cluster(context.system).registerOnMemberUp {
+          Http().bindAndHandleAsync(
+            handler = handler,
+            interface = config.httpInterface,
+            port = config.httpPort,
+            connectionContext = HttpConnectionContext(http2 = UseHttp2.Negotiated)
+          ) pipeTo self
+        }
+
+        // Start warmup
+        system.actorOf(Warmup.props(spec.entities.exists(_.entityType == EventSourced.name)), "state-manager-warm-up")
+
+        context.become(binding)
+
+
+      } catch {
+        case e @ EntityDiscoveryException(message) =>
+          entityDiscoveryClient.reportError(UserFunctionError(message))
+          throw e
       }
 
-      context.become(binding(stateManager))
+
     case Ready => sender ! false
     case Status.Failure(cause) =>
       // Failure to load the entity spec is not fatal, simply crash and let the backoff supervisor restart us
       throw cause
   }
 
-  private[this] final def binding(stateManager: ActorRef): Receive = {
+  private[this] final def extractService(serviceName: String, descriptor: FileDescriptor): Option[ServiceDescriptor] = {
+    val (pkg, name) = Names.splitPrev(serviceName)
+    Some(descriptor).filter(_.getPackage == pkg).map(_.findServiceByName(name))
+  }
+
+  private[this] final def binding: Receive = {
     case binding: ServerBinding =>
       log.info(s"CloudState proxy online at ${binding.localAddress}")
 
@@ -175,11 +225,7 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
         Http().shutdownAllConnectionPools().map(_ => Done)
       }
 
-      context.become(running(stateManager))
-
-    case Terminated(`stateManager`) =>
-      log.error("StateManager terminated during initialization of server")
-      system.terminate()
+      context.become(running)
 
     case Status.Failure(cause) =>
       // Failure to bind the HTTP server is fatal, terminate
@@ -190,15 +236,16 @@ class ServerManager(config: ServerManager.Configuration)(implicit mat: Materiali
   }
 
   /** Nothing to do when running */
-  private[this] final def running(stateManager: ActorRef): Receive = {
-    case Terminated(`stateManager`) => // TODO How to handle the termination of the stateManager during runtime?
+  private[this] final def running: Receive = {
     case Ready => sender ! true
   }
 
   override final def postStop(): Unit = {
     super.postStop()
-    client.close()
+    entityDiscoveryClient.close()
     log.debug("shutting down")
     system.terminate()
   }
 }
+
+case class EntityDiscoveryException(message: String) extends RuntimeException(message)

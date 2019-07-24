@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package io.cloudstate.proxy
+package io.cloudstate.proxy.eventsourced
 
-import akka.persistence.{SelectedSnapshot, SnapshotMetadata, SnapshotSelectionCriteria}
 import akka.persistence.snapshot.SnapshotStore
+import akka.persistence.{SelectedSnapshot, SnapshotMetadata, SnapshotSelectionCriteria}
 
 import scala.concurrent.Future
 

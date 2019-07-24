@@ -1,4 +1,4 @@
-package io.cloudstate.proxy
+package io.cloudstate.proxy.eventsourced
 
 import akka.actor.ActorRef
 import akka.cluster.sharding.ShardCoordinator.ShardAllocationStrategy

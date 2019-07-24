@@ -16,23 +16,45 @@
 
 package io.cloudstate.proxy
 
+import akka.actor.ActorRef
+
 import scala.concurrent.duration._
-import akka.ConfigurationException
+import akka.{ConfigurationException, Done, NotUsed}
 import akka.util.Timeout
 import akka.http.scaladsl.testkit.ScalatestRouteTest
+import akka.stream.scaladsl.Flow
 import org.scalatest._
 import akka.testkit.TestProbe
 import io.cloudstate.proxy.test._
-import com.google.protobuf.Descriptors.FileDescriptor
+import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
+import com.google.protobuf.empty.Empty
+import io.cloudstate.entity.{EntityDiscovery, EntityDiscoveryClient, EntitySpec, ProxyInfo, UserFunctionError}
+import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
+import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
+
+import scala.concurrent.Future
 
 class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
-  val timeout = Timeout(10.seconds)
+  implicit val timeout = Timeout(10.seconds)
+  import akka.pattern.ask
+
+  private val mockEntityDiscovery = new EntityDiscovery {
+    override def discover(in: ProxyInfo): Future[EntitySpec] = ???
+    override def reportError(in: UserFunctionError): Future[Empty] = ???
+  }
 
   def assertConfigurationFailure(d: FileDescriptor, n: String, msg: String): Assertion = {
     intercept[ConfigurationException] {
       val service = d.findServiceByName(n)
       service must not be(null)
-      HttpApi.serve(TestProbe().ref, timeout, service)
+      val probe = TestProbe().ref
+      val entity = ServableEntity(service.getFullName, service, new UserFunctionTypeSupport {
+        override def handler: Flow[UserFunctionCommand, UserFunctionReply, NotUsed] =
+          Flow[UserFunctionCommand].mapAsync(1)(handleUnary)
+        override def handleUnary(command: UserFunctionCommand): Future[UserFunctionReply] =
+          (probe ? command).mapTo[UserFunctionReply]
+      })
+      HttpApi.serve(new UserFunctionRouter(Seq(entity), mockEntityDiscovery), Seq(entity), mockEntityDiscovery)
     }.getMessage must equal(msg)
   }
 

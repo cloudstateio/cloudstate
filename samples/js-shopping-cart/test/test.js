@@ -23,10 +23,20 @@ const protobuf = require("protobufjs");
 require("protobufjs/ext/descriptor");
 
 const ssesPath = path.dirname(require.resolve("cloudstate-event-sourcing"));
-const allIncludePath = [path.join(ssesPath, "proto"), path.join(ssesPath, "protoc", "include"), path.join("..", "..", "protocols", "example")]
-const packageDefinition = protoLoader.loadSync(path.join("cloudstate", "entity.proto"), {
-  includeDirs: allIncludePath
-});
+const allIncludePath = [
+  path.join(ssesPath, "proto"),
+  path.join(ssesPath, "protoc", "include"),
+  path.join("..", "..", "protocols", "frontend"),
+  path.join("..", "..", "protocols", "example")
+];
+const packageDefinition = protoLoader.loadSync(
+  [
+    path.join("cloudstate", "entity.proto"),
+    path.join("cloudstate", "eventsourced.proto")
+  ],
+  {
+    includeDirs: allIncludePath
+  });
 const descriptor = grpc.loadPackageDefinition(packageDefinition);
 
 const root = new protobuf.Root();
@@ -52,45 +62,29 @@ const ItemRemoved = root.lookupType("com.example.shoppingcart.persistence.ItemRe
 const Cart = root.lookupType("com.example.shoppingcart.persistence.Cart");
 
 // Start server
-const server = require("../shoppingcart.js");
+const shoppingCartEntity = require("../shoppingcart.js");
+const CloudState = require("cloudstate-event-sourcing").CloudState;
+const server = new CloudState();
+server.addEntity(shoppingCartEntity);
 
-let client;
+let discoveryClient;
+let eventSourcedClient;
 
 let commandId = 0;
 
-// Work around https://github.com/dcodeIO/protobuf.js/issues/1196
-function filterOneofIndex(obj) {
-  Object.keys(obj).forEach(key => {
-    const value = obj[key];
-    if (key === "oneofIndex") {
-      if (value === 0) {
-        delete obj[key];
-      }
-    } else if (typeof value === "object") {
-      filterOneofIndex(value);
-    } else if (Array.isArray(value)) {
-      value.forEach(item => {
-        if (typeof item === "object") {
-          filterOneofIndex(item)
-        }
-      })
-    }
-  });
-}
-
-function invokeReady() {
+function invokeDiscover() {
   return new Promise((resolve, reject) => {
-    client.ready({}, (err, descriptor) => {
+    discoveryClient.discover({}, (err, descriptor) => {
       if (err) {
         reject(err);
       } else {
-        filterOneofIndex(descriptor.proto);
+        descriptor.entities.should.have.lengthOf(1);
         resolve({
           proto: descriptor.proto,
           root: protobuf.Root.fromDescriptor({
             file: [descriptor.proto]
           }).resolveAll(),
-          serviceName: descriptor.serviceName
+          serviceName: descriptor.entities[0].serviceName
         });
       }
     });
@@ -98,9 +92,10 @@ function invokeReady() {
 }
 
 function callAndInit(snapshot) {
-  const call = client.handle();
+  const call = eventSourcedClient.handle();
   call.write({
     init: {
+      serviceName: "com.example.shoppingcart.ShoppingCart",
       entityKey: "123",
       snapshot: snapshot
     }
@@ -168,7 +163,7 @@ function sendCommand(call, name, payload) {
   return nextMessage(call).then(msg => {
     should.exist(msg.reply);
     msg.reply.commandId.toNumber().should.equal(cid);
-    msg.reply.decodedPayload = decodeAny(root, msg.reply.payload);
+    msg.reply.decodedPayload = decodeAny(root, msg.reply.reply.payload);
     if (msg.reply.events) {
       msg.reply.decodedEvents = msg.reply.events.map(event => {
         return decodeAny(root, event);
@@ -206,7 +201,8 @@ describe("shopping cart", () => {
     const port = server.start({
       bindPort: 0
     });
-    client = new descriptor.cloudstate.Entity("127.0.0.1:" + port, grpc.credentials.createInsecure());
+    discoveryClient = new descriptor.cloudstate.EntityDiscovery("127.0.0.1:" + port, grpc.credentials.createInsecure());
+    eventSourcedClient = new descriptor.cloudstate.eventsourced.EventSourced("127.0.0.1:" + port, grpc.credentials.createInsecure());
   });
 
   after("shutdown shopping cart server", () => {
