@@ -23,9 +23,10 @@ const GSet = require("./gset");
 const ORSet = require("./orset");
 const LWWRegister = require("./lwwregister");
 const Flag = require("./flag");
+const ORMap = require("./ormap");
 
-const Clocks = protobufHelper.moduleRoot.lookupEnum("cloudstate.crdt.CrdtClock").values;
-const Empty = protobufHelper.moduleRoot.lookupType("google.protobuf.Empty");
+const Clocks = protobufHelper.moduleRoot.cloudstate.crdt.CrdtClock.values;
+const Empty = protobufHelper.moduleRoot.google.protobuf.Empty;
 
 /**
  * Instantiate a CRDT for the given wire protobuf state.
@@ -60,5 +61,6 @@ module.exports = {
   ORSet: ORSet,
   LWWRegister: LWWRegister,
   Flag: Flag,
+  ORMap: ORMap,
   Clocks: Clocks
 };

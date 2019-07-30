@@ -43,11 +43,4 @@ module.exports.moduleIncludeDirs = [
   path.join(__dirname, "..", "protoc", "include")
 ];
 
-module.exports.moduleRoot = module.exports.loadSync([
-  path.join("cloudstate", "crdt.proto"),
-  path.join("cloudstate", "entity.proto"),
-  path.join("cloudstate", "entitykey.proto"),
-  path.join("cloudstate", "eventsourced.proto"),
-  path.join("google", "protobuf", "empty.proto"),
-  path.join("google", "protobuf", "any.proto")
-], module.exports.moduleIncludeDirs);
+module.exports.moduleRoot = require("../proto/protobuf-bundle");

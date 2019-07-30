@@ -51,18 +51,60 @@ class Crdt {
       includeDirs: allIncludeDirs
     });
     this.grpc = grpc.loadPackageDefinition(packageDefinition);
+
+    this.onStateSet = (state, entityId) => undefined;
+    this.defaultValue = (entityId) => null;
   }
 
   entityType() {
     return crdtServices.entityType();
   }
 
+  /**
+   * Lookup a Protobuf message type.
+   */
   lookupType(messageType) {
     return this.root.lookupType(messageType);
   }
 
+  /**
+   * Set the command handlers for this CRDT service.
+   *
+   * @param handlers An object, with keys equalling the names of the commands (as they appear in the protobuf file)
+   *        and values being functions that take the command, and context.
+   */
   setCommandHandlers(handlers) {
     this.commandHandlers = handlers;
+  }
+
+  /**
+   * Set a callback which is invoked anytime the current state of the entity is set.
+   *
+   * This can be used to initialise the CRDT with transient state, such as a default value generator for ORMap.
+   *
+   * Events that can trigger this:
+   *   - Setting the state manually on the context, via ctx.state = ...
+   *   - The proxy pushing the current state on init.
+   *   - The proxy pushing a new state to replace the current state.
+   *
+   * It is not called when deltas are received.
+   *
+   * @param handler A function that takes the state, and the entity id.
+   */
+  setOnStateSet(handler) {
+    this.onStateSet = handler;
+  }
+
+  /**
+   * Set a callback for generating the default CRDT when no state is set.
+   *
+   * This can be used to ensure that command handlers always have a state to work with, eliminating the need for
+   * null checks.
+   *
+   * @param callback A function that takes the current entity id, and returns a CRDT.
+   */
+  setDefaultValue(callback) {
+    this.defaultValue = callback;
   }
 
   register(allEntities) {

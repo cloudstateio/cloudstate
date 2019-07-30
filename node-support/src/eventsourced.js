@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-const path = require("path");
 const fs = require("fs");
 const protobufHelper = require("./protobuf-helper");
 const grpc = require("grpc");

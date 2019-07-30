@@ -73,7 +73,11 @@ class MockCall {
 const call = new MockCall();
 function createHandler(commandHandler, state = undefined) {
    const entity = new support.CrdtSupport(root, ExampleService, {
-     DoSomething: commandHandler
+     commandHandlers: {
+       DoSomething: commandHandler
+     },
+     onStateSet: () => undefined,
+     defaultValue: () => null,
    }, {});
    return entity.create(call, CrdtInit.decode(CrdtInit.encode({
      entityId: "foo",

@@ -17,14 +17,14 @@
 const crdt = require("cloudstate").crdt;
 
 const entity = new crdt.Crdt(
-  ["crdts/crdt-example.proto", "shoppingcart/persistence/domain.proto"],
+  "crdts/crdt-example.proto",
   "com.example.crdts.CrdtExample",
   {
     includeDirs: ["../../protocols/example"]
   }
 );
 
-entity.setCommandHandlers({
+entity.commandHandlers = {
   IncrementGCounter: incrementGCounter,
   GetGCounter: getGCounter,
   UpdatePNCounter: updatePNCounter,
@@ -33,7 +33,7 @@ entity.setCommandHandlers({
   GetGSet: getGSet,
   MutateORSet: mutateORSet,
   GetORSet: getORSet
-});
+};
 
 function incrementGCounter(update, ctx) {
   if (update.value < 0) {

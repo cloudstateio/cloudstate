@@ -33,7 +33,11 @@ class CrdtServices {
   }
 
   addService(entity, allEntities) {
-    this.services[entity.serviceName] = new CrdtSupport(entity.root, entity.service, entity.commandHandlers, allEntities);
+    this.services[entity.serviceName] = new CrdtSupport(entity.root, entity.service, {
+      commandHandlers: entity.commandHandlers,
+      onStateSet: entity.onStateSet,
+      defaultValue: entity.defaultValue
+    }, allEntities);
   }
 
   entityType() {
@@ -103,11 +107,13 @@ class CrdtServices {
 
 class CrdtSupport {
 
-  constructor(root, service, commandHandlers, allEntities) {
+  constructor(root, service, handlers, allEntities) {
     this.root = root;
     this.service = service;
     this.anySupport = new AnySupport(this.root);
-    this.commandHandlers = commandHandlers;
+    this.commandHandlers = handlers.commandHandlers;
+    this.onStateSet = handlers.onStateSet;
+    this.defaultValue = handlers.defaultValue;
     this.allEntities = allEntities;
   }
 
@@ -152,6 +158,14 @@ class CrdtHandler {
 
         let deleted = false;
         const noState = this.currentState === null;
+        let defaultValue = false;
+        if (noState) {
+          this.currentState = this.entity.defaultValue();
+          if (this.currentState !== null) {
+            this.entity.onStateSet(this.currentState, this.entityId);
+            defaultValue = true;
+          }
+        }
 
         ctx.delete = () => {
           ensureActive();
@@ -177,6 +191,7 @@ class CrdtHandler {
               throw new Error(util.format("%o is not a CRDT", state));
             } else {
               this.currentState = state;
+              this.entity.onStateSet(this.currentState, this.entityId);
             }
           }
         });
@@ -187,8 +202,12 @@ class CrdtHandler {
           commandDebug("Deleting entity");
           reply.delete = {};
         } else if (this.currentState !== null && noState) {
-          commandDebug("Creating entity");
-          reply.create = this.currentState.getStateAndResetDelta();
+          if (defaultValue && this.currentState.getAndResetDelta() === null) {
+            // No action, the entity wasn't touched from its default
+          } else {
+            commandDebug("Creating entity");
+            reply.create = this.currentState.getStateAndResetDelta();
+          }
         } else if (this.currentState !== null) {
           const delta = this.currentState.getAndResetDelta();
           if (delta != null) {
@@ -212,7 +231,8 @@ class CrdtHandler {
     if (this.currentState === null) {
       this.currentState = crdts.createCrdtForState(state);
     }
-    this.currentState.applyState(state, this.entity.anySupport);
+    this.currentState.applyState(state, this.entity.anySupport, crdts.createCrdtForState);
+    this.entity.onStateSet(this.currentState, this.entityId);
   }
 
   onData(crdtStreamIn) {
@@ -236,7 +256,7 @@ class CrdtHandler {
       this.handleState(crdtStreamIn.state);
     } else if (crdtStreamIn.changed) {
       this.streamDebug("Received delta for CRDT type %s", crdtStreamIn.changed.delta);
-      this.currentState.applyDelta(crdtStreamIn.changed, this.entity.anySupport);
+      this.currentState.applyDelta(crdtStreamIn.changed, this.entity.anySupport, crdts.createCrdtForState);
     } else if (crdtStreamIn.deleted) {
       this.streamDebug("CRDT deleted");
     } else if (crdtStreamIn.command) {

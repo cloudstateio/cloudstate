@@ -21,7 +21,7 @@ const protobuf = require("protobufjs");
 const Long = require("long");
 const stableJsonStringify = require("json-stable-stringify");
 
-const Any = protobufHelper.moduleRoot.lookupType("google.protobuf.Any");
+const Any = protobufHelper.moduleRoot.google.protobuf.Any;
 
 // To allow primitive types to be stored, CloudState defines a number of primitive type URLs, based on protobuf types.
 // The serialized values are valid protobuf messages that contain a value of that type as their single field at index
