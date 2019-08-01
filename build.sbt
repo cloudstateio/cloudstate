@@ -80,9 +80,9 @@ lazy val `proxy-core` = (project in file("proxy/core"))
       "com.oracle.substratevm"        % "svm"                                % "19.1.1" % "provided", // Only needed for compilation
 
       // Adds configuration to let Graal Native Image (SubstrateVM) work
-      "com.github.vmencik"           %% "graal-akka-actor"                   % GraalAkkaVersion,
-      "com.github.vmencik"           %% "graal-akka-stream"                  % GraalAkkaVersion,
-      "com.github.vmencik"           %% "graal-akka-http"                    % GraalAkkaVersion,
+      "com.github.vmencik"           %% "graal-akka-actor"                   % GraalAkkaVersion % "provided", // Only needed for compilation
+      "com.github.vmencik"           %% "graal-akka-stream"                  % GraalAkkaVersion % "provided", // Only needed for compilation
+      "com.github.vmencik"           %% "graal-akka-http"                    % GraalAkkaVersion % "provided", // Only needed for compilation
 
       "com.typesafe.akka"             %% "akka-remote"                       % AkkaVersion excludeAll(
         ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
