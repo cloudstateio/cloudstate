@@ -2,7 +2,6 @@ package io.cloudstate.tck
 
 import org.scalatest._
 import com.typesafe.config.{Config, ConfigFactory}
-import io.cloudstate.tck.CloudStateTCK
 
 import scala.collection.JavaConverters._
 

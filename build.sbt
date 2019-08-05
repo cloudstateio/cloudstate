@@ -1,13 +1,12 @@
 organization in ThisBuild := "io.cloudstate"
 name := "cloudstate"
-scalaVersion in ThisBuild := "2.12.8"
+scalaVersion in ThisBuild := "2.12.9"
 
 version in ThisBuild ~= (_.replace('+', '-'))
 dynver in ThisBuild ~= (_.replace('+', '-'))
 
 // Needed for our fork of skuber
 resolvers in ThisBuild += Resolver.bintrayRepo("jroper", "maven")   // TODO: Remove once skuber has the required functionality
-resolvers in ThisBuild += Resolver.bintrayRepo("akka", "snapshots") // TODO: Remove once Akka Http 10.1.9 is out
 
 organizationName in ThisBuild := "Lightbend Inc."
 startYear in ThisBuild := Some(2019)
@@ -16,7 +15,7 @@ licenses in ThisBuild += ("Apache-2.0", new URL("https://www.apache.org/licenses
 val GrpcJavaVersion                 = "1.22.1"
 val GraalAkkaVersion                = "0.4.1"
 val AkkaVersion                     = "2.5.23-jroper-rebalance-fix-1"
-val AkkaHttpVersion                 = "10.1.8+47-9ef9d823"
+val AkkaHttpVersion                 = "10.1.9"
 val AkkaManagementVersion           = "1.0.1"
 val AkkaPersistenceCassandraVersion = "0.96"
 val PrometheusClientVersion         = "0.6.0"
