@@ -20,41 +20,26 @@ const grpc = require("grpc");
 const protoLoader = require("@grpc/proto-loader");
 const fs = require("fs");
 const protobuf = require("protobufjs");
+const protobufHelper = require("cloudstate/src/protobuf-helper");
 
-const ssesPath = path.dirname(require.resolve("cloudstate"));
-const allIncludePath = [
-  path.join(ssesPath, "proto"),
-  path.join(ssesPath, "protoc", "include"),
-  path.join("..", "..", "protocols", "frontend"),
+const allIncludeDirs = protobufHelper.moduleIncludeDirs.concat([
   path.join("..", "..", "protocols", "example")
-];
+]);
+
 const packageDefinition = protoLoader.loadSync(
   [
     path.join("cloudstate", "entity.proto"),
     path.join("cloudstate", "eventsourced.proto")
   ],
   {
-    includeDirs: allIncludePath
+    includeDirs: allIncludeDirs
   });
 const descriptor = grpc.loadPackageDefinition(packageDefinition);
 
-const root = new protobuf.Root();
-root.resolvePath = function (origin, target) {
-  for (var _i = 0; _i < allIncludePath.length; _i++) {
-    let fullPath = path.join(allIncludePath[_i], target);
-    try {
-      fs.accessSync(fullPath, fs.constants.R_OK);
-      return fullPath;
-    } catch (err) {
-      continue;
-    }
-  }
-  return null;
-  // return path.join("../../protocols/frontend", target);
-};
-root.loadSync(path.join("shoppingcart","shoppingcart.proto"));
-root.loadSync(path.join("shoppingcart","persistence","domain.proto"));
-root.resolveAll();
+const root = protobufHelper.loadSync([
+  path.join("shoppingcart","shoppingcart.proto"),
+  path.join("shoppingcart","persistence","domain.proto")
+], allIncludeDirs);
 
 const ItemAdded = root.lookupType("com.example.shoppingcart.persistence.ItemAdded");
 const ItemRemoved = root.lookupType("com.example.shoppingcart.persistence.ItemRemoved");
@@ -162,7 +147,8 @@ function sendCommand(call, name, payload) {
   return nextMessage(call).then(msg => {
     should.exist(msg.reply);
     msg.reply.commandId.toNumber().should.equal(cid);
-    msg.reply.decodedPayload = decodeAny(root, msg.reply.reply.payload);
+    should.exist(msg.reply.clientAction.reply);
+    msg.reply.decodedPayload = decodeAny(root, msg.reply.clientAction.reply.payload);
     if (msg.reply.events) {
       msg.reply.decodedEvents = msg.reply.events.map(event => {
         return decodeAny(root, event);

@@ -125,7 +125,6 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
       val msg = toUserFunction.expectMsgType[CrdtStreamIn]
       msg.message.streamCancelled.value.id should ===(cid)
 
-      println("About to update")
       update(_ :+ 2)
       toUserFunction.expectNoMessage(200.millis)
       update(_ :+ 6)
