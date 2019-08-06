@@ -86,6 +86,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
       "com.typesafe.akka"             %% "akka-remote"                       % AkkaVersion excludeAll(
         ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
         ExclusionRule("io.aeron"),          // we're using Artery-TCP
+        ExclusionRule("org.agrona"),        // and we don't need this either
       ),
       "com.typesafe.akka"             %% "akka-persistence"                  % AkkaVersion,
       "com.typesafe.akka"             %% "akka-persistence-query"            % AkkaVersion,
@@ -96,8 +97,16 @@ lazy val `proxy-core` = (project in file("proxy/core"))
       "com.typesafe.akka"             %% "akka-http-core"                    % AkkaHttpVersion,
       "com.typesafe.akka"             %% "akka-http2-support"                % AkkaHttpVersion,
       "com.typesafe.akka"             %% "akka-cluster-sharding"             % AkkaVersion exclude("org.lmdbjava", "lmdbjava"),
-      "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
-      "com.lightbend.akka.discovery"  %% "akka-discovery-kubernetes-api"     % AkkaManagementVersion,
+      "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion excludeAll(
+        ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
+        ExclusionRule("io.aeron"),          // we're using Artery-TCP
+        ExclusionRule("org.agrona"),        // and we don't need this either
+      ),
+      "com.lightbend.akka.discovery"  %% "akka-discovery-kubernetes-api"     % AkkaManagementVersion excludeAll(
+        ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
+        ExclusionRule("io.aeron"),          // we're using Artery-TCP
+        ExclusionRule("org.agrona"),        // and we don't need this either
+      ),
       "com.google.protobuf"            % "protobuf-java"                     % ProtobufVersion % "protobuf",
       "com.google.protobuf"            % "protobuf-java-util"                % ProtobufVersion,
 
@@ -157,11 +166,6 @@ lazy val `proxy-core` = (project in file("proxy/core"))
       "-H:-PrintUniverse", // if "+" prints out all classes which are included
       "-H:-NativeArchitecture", // if "+" Compiles the native image to customize to the local CPU arch
       "-H:Class=" + "io.cloudstate.proxy.CloudStateProxyMain",
-
-      // We need to point Native Image Generator towards which native libraries it can link to
-      // Example: export JAVA_LIBRARY_PATH=/Library/Java/JavaVirtualMachines/adoptopenjdk-11.jdk/Contents/Home/lib
-      "-Djava.library.path=" + System.getenv("$JAVA_LIBRARY_PATH"), // FIXME Might want to move this to a sbt setting?
-
       "--verbose",
       //"--no-server", // Uncomment to not use the native-image build server, to avoid potential cache problems with builds
       //"--report-unsupported-elements-at-runtime", // Hopefully a self-explanatory flag

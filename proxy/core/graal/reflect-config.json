@@ -856,23 +856,7 @@
   "allDeclaredFields":true
 },
 {
-  "name":"io.cloudstate.proxy.InMemSnapshotStore",
-  "allDeclaredFields":true,
-  "allDeclaredConstructors":true
-},
-{
-  "name":"io.cloudstate.proxy.ServerManager",
-  "allDeclaredFields":true
-},
-{
-  "name":"io.cloudstate.proxy.StateManager",
-  "allDeclaredFields":true
-},
-{
-  "name":"io.cloudstate.proxy.StateManager$CommandFailure"
-},
-{
-  "name":"io.cloudstate.proxy.StateManagerSupervisor",
+  "name":"io.cloudstate.proxy.EntityDiscoveryManager",
   "allDeclaredFields":true
 },
 {
@@ -890,6 +874,19 @@
 {
   "name":"io.cloudstate.proxy.autoscaler.NoScaler",
   "allDeclaredFields":true
+},
+{
+  "name":"io.cloudstate.proxy.eventsourced.EventSourcedEntity",
+  "allDeclaredFields":true
+},
+{
+  "name":"io.cloudstate.proxy.eventsourced.EventSourcedEntitySupervisor",
+  "allDeclaredFields":true
+},
+{
+  "name":"io.cloudstate.proxy.eventsourced.InMemSnapshotStore",
+  "allDeclaredFields":true,
+  "allDeclaredConstructors":true
 },
 {
   "name":"io.grpc.internal.DnsNameResolverProvider"

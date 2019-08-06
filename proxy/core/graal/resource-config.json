@@ -9,6 +9,7 @@
     {"pattern":"library.properties"}, 
     {"pattern":"org/slf4j/impl/StaticLoggerBinder.class"}, 
     {"pattern":"reference.conf"}, 
+    {"pattern":"simplelogger.properties"}, 
     {"pattern":"version.conf"}
   ]
 }
