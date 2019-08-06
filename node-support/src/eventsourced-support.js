@@ -96,22 +96,22 @@ class EventSourcedEntityHandler {
 
       if (behavior.commandHandlers.hasOwnProperty(commandName)) {
 
-        return (command, ctx, reply, ensureActive, commandDebug) => {
-          const events = [];
+        return (command, ctx) => {
+          ctx.events = [];
 
-          ctx.emit = (event) => {
-            ensureActive();
+          ctx.context.emit = (event) => {
+            ctx.ensureActive();
 
             const serEvent = this.entity.serialize(event, true);
-            events.push(serEvent);
-            commandDebug("Emitting event '%s'", serEvent.type_url);
+            ctx.events.push(serEvent);
+            ctx.commandDebug("Emitting event '%s'", serEvent.type_url);
           };
 
-          const userReply = behavior.commandHandlers[commandName](command, state, ctx);
+          const userReply = behavior.commandHandlers[commandName](command, state, ctx.context);
 
           // Invoke event handlers first
           let snapshot = false;
-          events.forEach(event => {
+          ctx.events.forEach(event => {
             this.handleEvent(event);
             this.sequence++;
             if (this.sequence % this.entity.options.snapshotEvery === 0) {
@@ -119,14 +119,14 @@ class EventSourcedEntityHandler {
             }
           });
 
-          if (events.length > 0) {
-            commandDebug("Emitting %d events", events.length);
+          if (ctx.events.length > 0) {
+            ctx.commandDebug("Emitting %d events", ctx.events.length);
           }
-          reply.events = events;
+          ctx.reply.events = ctx.events;
 
           if (snapshot) {
-            commandDebug("Snapshotting current state with type '%s'", this.anyState.type_url);
-            reply.snapshot = this.anyState
+            ctx.commandDebug("Snapshotting current state with type '%s'", this.anyState.type_url);
+            ctx.reply.snapshot = this.anyState
           }
 
           return userReply;

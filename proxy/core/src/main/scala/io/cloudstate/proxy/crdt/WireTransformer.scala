@@ -1,5 +1,7 @@
 package io.cloudstate.proxy.crdt
 
+import akka.cluster.ClusterEvent.CurrentClusterState
+import akka.cluster.MemberStatus
 import akka.cluster.ddata.LWWRegister.Clock
 import akka.cluster.ddata._
 import io.cloudstate.crdt._
@@ -10,7 +12,27 @@ import com.google.protobuf.any.{Any => ProtoAny}
   */
 object WireTransformer {
 
-  def toWireState(state: ReplicatedData): CrdtState = {
+  private val Zero = BigInt(0)
+
+  private def voteState(vote: Vote)(implicit clusterState: CurrentClusterState, selfUniqueAddress: SelfUniqueAddress): VoteState = {
+    var votesFor = 0
+    var votes = 0
+    var selfVote = false
+    clusterState.members.foreach { member =>
+      if (member.status == MemberStatus.Up || member.status == MemberStatus.WeaklyUp) {
+        votes += 1
+        if (vote.state.getOrElse(member.uniqueAddress, Zero).testBit(0)) {
+          votesFor += 1
+          if (member.uniqueAddress == selfUniqueAddress.uniqueAddress) {
+            selfVote = true
+          }
+        }
+      }
+    }
+    VoteState(votesFor, votes, selfVote)
+  }
+
+  def toWireState(state: ReplicatedData)(implicit clusterState: CurrentClusterState, selfUniqueAddress: SelfUniqueAddress): CrdtState = {
     import CrdtState.{State => S}
 
     CrdtState(state match {
@@ -30,6 +52,8 @@ object WireTransformer {
         S.Ormap(ORMapState(ormap.entries.map {
           case (k, value) => ORMapEntry(Some(k), Some(toWireState(value)))
         }.toSeq))
+      case vote: Vote =>
+        S.Vote(voteState(vote))
       case _ =>
         // todo handle better
         throw new RuntimeException("Unknown CRDT: " + state)
@@ -127,6 +151,13 @@ object WireTransformer {
           case other => throw IncompatibleCrdtChange(s"ORMap is incompatible with CRDT $other")
         })
 
+      case D.Vote(VoteDelta(selfVote, _, _)) =>
+        (Vote.empty, {
+          case vote: Vote =>
+            vote.vote(selfVote)
+          case other => throw IncompatibleCrdtChange(s"Vote is incompatible with CRDT $other")
+        })
+
       case D.Empty =>
         throw UserFunctionProtocolError("Empty delta")
     }
@@ -144,6 +175,7 @@ object WireTransformer {
       case S.Ormap(ORMapState(items)) => items.foldLeft(ORMap.empty[ProtoAny, ReplicatedData]) {
         case (ormap, ORMapEntry(Some(key), Some(state))) => ormap.put(selfUniqueAddress, key, stateToCrdt(state))
       }
+      case S.Vote(VoteState(_, _, selfVote)) => Vote.empty.vote(selfVote)
       case S.Empty => throw UserFunctionProtocolError("Unknown state or state not set")
     }
   }
@@ -174,11 +206,14 @@ object WireTransformer {
 
   }
 
-  def detectChange(original: ReplicatedData, changed: ReplicatedData): CrdtChange = {
+  def detectChange(original: ReplicatedData, changed: ReplicatedData)(implicit clusterState: CurrentClusterState, selfUniqueAddress: SelfUniqueAddress): CrdtChange = {
     import CrdtChange._
     import CrdtDelta.{Delta => D}
 
     changed match {
+
+      // Fast path, especially for ORMap
+      case same if original eq changed => NoChange
 
       case gcounter: GCounter =>
         original match {
@@ -308,6 +343,26 @@ object WireTransformer {
 
           case _ => IncompatibleChange
 
+        }
+
+      case vote: Vote =>
+
+        original match {
+          case old: Vote =>
+            val newState = voteState(vote)
+            val oldState = voteState(old)
+
+            if (newState != oldState) {
+              Updated(CrdtDelta(D.Vote(VoteDelta(
+                selfVote = newState.selfVote,
+                votesForDelta = newState.votesFor - oldState.votesFor,
+                totalVotersDelta = newState.totalVoters - oldState.totalVoters
+              ))))
+            } else {
+              NoChange
+            }
+
+          case _ => IncompatibleChange
         }
 
       case _ =>

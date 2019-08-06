@@ -1,7 +1,7 @@
 package io.cloudstate.proxy.crdt
 
 import akka.cluster.ddata.{ORSet, ORSetKey}
-import io.cloudstate.crdt.{CrdtDelta, CrdtReply, CrdtState, ORSetDelta, ORSetState}
+import io.cloudstate.crdt.{CrdtDelta, CrdtReply, CrdtState, CrdtStateAction, ORSetDelta, ORSetState}
 import com.google.protobuf.any.{Any => ProtoAny}
 
 import scala.concurrent.duration._
@@ -24,11 +24,11 @@ class ORSetCrdtEntitySpec extends AbstractCrdtEntitySpec {
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.orset.value
 
   def createSet(elements: ProtoAny*) = {
-    CrdtReply.Action.Create(CrdtState(CrdtState.State.Orset(ORSetState(elements))))
+    CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Orset(ORSetState(elements))))
   }
 
   def updateSet(added: Seq[ProtoAny] = Nil, removed: Seq[ProtoAny] = Nil, cleared: Boolean = false) = {
-    CrdtReply.Action.Update(CrdtDelta(CrdtDelta.Delta.Orset(ORSetDelta(added = added, removed = removed, cleared = cleared))))
+    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Orset(ORSetDelta(added = added, removed = removed, cleared = cleared))))
   }
 
   "The ORSet CrdtEntity" should {

@@ -19,8 +19,8 @@ const Long = require("long");
 const GCounter = require("../../src/crdts/gcounter");
 const protobufHelper = require("../../src/protobuf-helper");
 
-const CrdtDelta = protobufHelper.moduleRoot.lookupType("cloudstate.crdt.CrdtDelta");
-const CrdtState = protobufHelper.moduleRoot.lookupType("cloudstate.crdt.CrdtState");
+const CrdtDelta = protobufHelper.moduleRoot.cloudstate.crdt.CrdtDelta;
+const CrdtState = protobufHelper.moduleRoot.cloudstate.crdt.CrdtState;
 
 function roundTripDelta(delta) {
   return CrdtDelta.decode(CrdtDelta.encode(delta).finish());

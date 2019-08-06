@@ -1,8 +1,9 @@
 package io.cloudstate.proxy.crdt
 
-import akka.cluster.ddata.{GCounter, GCounterKey, PNCounter, PNCounterKey}
+import akka.actor.PoisonPill
+import akka.cluster.ddata.{PNCounter, PNCounterKey}
 import io.cloudstate.crdt._
-import io.cloudstate.entity.UserFunctionError
+import io.cloudstate.proxy.entity.UserFunctionReply
 
 import scala.concurrent.duration._
 
@@ -25,7 +26,7 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.pncounter.value
 
   def updateCounter(update: Long) = {
-    CrdtReply.Action.Update(CrdtDelta(CrdtDelta.Delta.Pncounter(PNCounterDelta(update))))
+    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Pncounter(PNCounterDelta(update))))
   }
 
   "The CrdtEntity" should {
@@ -62,7 +63,7 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
       toUserFunction.expectNoMessage(200.millis)
       update(_ :+ 6)
       toUserFunction.expectNoMessage(200.millis)
-      sendAndExpectReply(cid, updateCounter(2), CrdtReply.WriteConsistency.ALL)
+      sendAndExpectReply(cid, updateCounter(2), CrdtWriteConsistency.ALL)
       expectDelta().change shouldBe 9
     }
 
@@ -90,10 +91,54 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
       update(_ :+ 6)
       toUserFunction.expectNoMessage(200.millis)
       val cid2 = sendAndExpectCommand("cmd", command)
-      sendAndExpectReply(cid1, updateCounter(2), CrdtReply.WriteConsistency.ALL)
+      sendAndExpectReply(cid1, updateCounter(2), CrdtWriteConsistency.ALL)
       toUserFunction.expectNoMessage(200.millis)
       sendAndExpectReply(cid2, updateCounter(4))
       expectDelta().change shouldBe 9
+    }
+
+    "allow streaming messages" in {
+      update(_ :+ 5)
+      createAndExpectInit()
+      val (cid, stream) = sendAndExpectStreamedCommand("cmd", command)
+      sendReply(cid)
+      stream.expectMsgType[UserFunctionReply]
+
+      sendStreamedMessage(cid, Some(element1))
+      val reply = stream.expectMsgType[UserFunctionReply]
+      reply.clientAction.value.action.reply.value.payload.value should ===(element1)
+
+      sendStreamedMessage(cid, endStream = true)
+      expectTerminated(stream.testActor)
+    }
+
+    "drop all updates while a stream cancelled message is being handled, then replay" in {
+      update(_ :+ 5)
+      createAndExpectInit()
+      val (cid, stream) = sendAndExpectStreamedCommand("cmd", command)
+      sendReply(cid)
+      stream.expectMsgType[UserFunctionReply]
+
+      stream.testActor ! PoisonPill
+      expectTerminated(stream.testActor)
+
+      val msg = toUserFunction.expectMsgType[CrdtStreamIn]
+      msg.message.streamCancelled.value.id should ===(cid)
+
+      println("About to update")
+      update(_ :+ 2)
+      toUserFunction.expectNoMessage(200.millis)
+      update(_ :+ 6)
+      toUserFunction.expectNoMessage(200.millis)
+
+      fromUserFunction ! CrdtStreamOut(CrdtStreamOut.Message.StreamCancelledResponse(
+        CrdtStreamCancelledResponse(cid, stateAction = Some(CrdtStateAction(CrdtWriteConsistency.LOCAL, updateCounter(3))))))
+
+      expectDelta().change should be(8)
+      eventually {
+        get().value.toLong should be(16)
+      }
+
     }
 
 

@@ -86,6 +86,9 @@ message CrdtStreamIn {
 
         // A command, may be sent at any time.
         Command command = 5;
+
+        // A stream has been cancelled.
+        StreamCancelled stream_cancelled = 6;
     }
 }
 
@@ -94,8 +97,12 @@ message CrdtStreamOut {
     oneof message {
         // A reply to an incoming command. Either one reply, or one failure, must be sent in response to each command.
         CrdtReply reply = 1;
+        // A streamed message.
+        CrdtStreamedMessage streamed_message = 2;
+        // A stream cancelled response, may be sent in response to stream_cancelled.
+        CrdtStreamCancelledResponse stream_cancelled_response = 3;
         // A failure. Either sent in response to a command, or sent if some other error occurs.
-        Failure failure = 2;
+        Failure failure = 4;
     }
 }
 
@@ -124,6 +131,9 @@ message CrdtState {
 
         // An Observed-Removed Map
         ORMapState ormap = 7;
+
+        // A vote
+        VoteState vote = 8;
     }
 }
 
@@ -211,6 +221,19 @@ message ORMapEntry {
     CrdtState value = 2;
 }
 
+// A Vote. This allows nodes to vote on something.
+message VoteState {
+
+    // The number of votes for
+    uint32 votes_for = 1;
+
+    // The total number of voters
+    uint32 total_voters = 2;
+
+    // The vote of the current node, which is included in the above two numbers
+    bool self_vote = 3;
+}
+
 // A CRDT delta
 //
 // Deltas only carry the change in value, not the full value (unless
@@ -223,6 +246,7 @@ message CrdtDelta {
         LWWRegisterDelta lwwregister = 5;
         FlagDelta flag = 6;
         ORMapDelta ormap = 7;
+        VoteDelta vote = 8;
     }
 }
 
@@ -269,6 +293,17 @@ message ORMapEntryDelta {
     CrdtDelta delta = 2;
 }
 
+message VoteDelta {
+    // Only set by the user to change the nodes current vote.
+    bool self_vote = 1;
+
+    // Only set by the proxy to update the number of votes. Indicates an increase or decrease in votes for.
+    int32 votes_for_delta = 2;
+
+    // Only set by the proxy to update the number of votes. Indicates an increase or decrease in number of voters.
+    int32 total_voters_delta = 3;
+}
+
 message CrdtInit {
     string service_name = 1;
     string entity_id = 2;
@@ -278,30 +313,52 @@ message CrdtInit {
 message CrdtDelete {
 }
 
-
 message CrdtReply {
 
     int64 command_id = 1;
 
-    oneof response {
-        Reply reply = 2;
-        Forward forward = 3;
-    }
+    ClientAction client_action = 2;
 
     repeated SideEffect side_effects = 4;
 
+    CrdtStateAction state_action = 5;
+}
+
+message CrdtStateAction {
     oneof action {
         CrdtState create = 5;
         CrdtDelta update = 6;
         CrdtDelete delete = 7;
     }
 
-    enum WriteConsistency {
-        LOCAL = 0;
-        MAJORITY = 1;
-        ALL = 2;
-    }
-    WriteConsistency write_consistency = 8;
+    CrdtWriteConsistency write_consistency = 8;
+}
+
+// May be sent as often as liked if the first reply set streamed to true
+message CrdtStreamedMessage {
+
+    int64 command_id = 1;
+
+    ClientAction client_action = 2;
+
+    repeated SideEffect side_effects = 3;
+
+    // Indicates the stream should end, no messages may be sent for this command after this.
+    bool end_stream = 4;
+}
+
+message CrdtStreamCancelledResponse {
+    int64 command_id = 1;
+
+    repeated SideEffect side_effects = 2;
+
+    CrdtStateAction state_action = 3;
+}
+
+enum CrdtWriteConsistency {
+    LOCAL = 0;
+    MAJORITY = 1;
+    ALL = 2;
 }
 
 enum CrdtClock {

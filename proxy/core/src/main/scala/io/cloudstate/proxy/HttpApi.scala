@@ -38,7 +38,7 @@ import com.google.protobuf.Descriptors.FieldDescriptor.JavaType
 import java.lang.{Boolean => JBoolean, Double => JDouble, Float => JFloat, Integer => JInteger, Long => JLong, Short => JShort}
 
 import com.google.protobuf.{ListValue, Struct, Value}
-import io.cloudstate.entity.{EntityDiscovery, Failure, Reply, UserFunctionError}
+import io.cloudstate.entity.{ClientAction, EntityDiscovery, Failure, Reply, UserFunctionError}
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
 
@@ -346,18 +346,18 @@ object HttpApi {
 
     private[this] final def sendCommand(command: UserFunctionCommand): Future[DynamicMessage] = {
       userFunctionRouter.handleUnary(methDesc.getService.getFullName, command).map { reply =>
-        reply.message match {
-          case UserFunctionReply.Message.Reply(Reply(Some(payload))) =>
+        reply.clientAction match {
+          case Some(ClientAction(ClientAction.Action.Reply(Reply(Some(payload))))) =>
             if (payload.typeUrl != expectedReplyTypeUrl) {
               val msg = s"${methDesc.getFullName}: Expected reply type_url to be [$expectedReplyTypeUrl] but was [${payload.typeUrl}]."
               log.warning(msg)
               entityDiscovery.reportError(UserFunctionError("Warning: " + msg))
             }
             DynamicMessage.parseFrom(methDesc.getOutputType, payload.value)
-          case UserFunctionReply.Message.Forward(_) =>
+          case Some(ClientAction(ClientAction.Action.Forward(_))) =>
             log.error("Cannot serialize forward reply, this should have been handled by the UserFunctionRouter")
             throw new Exception("Internal error")
-          case UserFunctionReply.Message.Failure(Failure(_, message)) =>
+          case Some(ClientAction(ClientAction.Action.Failure(Failure(_, message)))) =>
             requestError(message)
           case _ =>
             val msg = s"${methDesc.getFullName}: return no reply."

@@ -49,7 +49,7 @@ class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
       service must not be(null)
       val probe = TestProbe().ref
       val entity = ServableEntity(service.getFullName, service, new UserFunctionTypeSupport {
-        override def handler: Flow[UserFunctionCommand, UserFunctionReply, NotUsed] =
+        override def handler(command: String): Flow[UserFunctionCommand, UserFunctionReply, NotUsed] =
           Flow[UserFunctionCommand].mapAsync(1)(handleUnary)
         override def handleUnary(command: UserFunctionCommand): Future[UserFunctionReply] =
           (probe ? command).mapTo[UserFunctionReply]

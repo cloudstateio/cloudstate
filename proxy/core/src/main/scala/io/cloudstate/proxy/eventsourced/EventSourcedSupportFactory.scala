@@ -54,7 +54,7 @@ class EventSourcedSupportFactory(system: ActorSystem, config: EntityDiscoveryMan
 private class EventSourcedSupport(eventSourcedEntity: ActorRef, parallelism: Int, private implicit val relayTimeout: Timeout) extends EntityTypeSupport {
   import akka.pattern.ask
 
-  override def handler: Flow[EntityCommand, UserFunctionReply, NotUsed] =
+  override def handler(method: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed] =
     Flow[EntityCommand].mapAsync(parallelism)(command => (eventSourcedEntity ? command).mapTo[UserFunctionReply])
 
   override def handleUnary(command: EntityCommand): Future[UserFunctionReply] =

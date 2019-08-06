@@ -34,13 +34,10 @@ message EntityCommand {
     string entity_id = 1;
     string name = 2;
     google.protobuf.Any payload = 3;
+    bool streamed = 4;
 }
 
 message UserFunctionReply {
-    oneof message {
-        cloudstate.Reply reply = 1;
-        cloudstate.Forward forward = 2;
-        cloudstate.Failure failure = 3;
-    }
-    repeated cloudstate.SideEffect side_effects = 4;
+    ClientAction client_action = 1;
+    repeated cloudstate.SideEffect side_effects = 2;
 }

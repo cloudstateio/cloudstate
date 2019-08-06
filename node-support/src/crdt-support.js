@@ -36,7 +36,9 @@ class CrdtServices {
     this.services[entity.serviceName] = new CrdtSupport(entity.root, entity.service, {
       commandHandlers: entity.commandHandlers,
       onStateSet: entity.onStateSet,
-      defaultValue: entity.defaultValue
+      defaultValue: entity.defaultValue,
+      onStateChange: entity.onStateChange,
+      onStreamCancelled: entity.onStreamCancelled
     }, allEntities);
   }
 
@@ -115,6 +117,8 @@ class CrdtSupport {
     this.onStateSet = handlers.onStateSet;
     this.defaultValue = handlers.defaultValue;
     this.allEntities = allEntities;
+    this.onStateChange = handlers.onStateChange;
+    this.onStreamCancelled = handlers.onStreamCancelled;
   }
 
   create(call, init) {
@@ -149,77 +153,128 @@ class CrdtHandler {
       this.commandHandlerFactory.bind(this), support.allEntities, debug);
 
     this.streamDebug("Started new stream")
+
+    this.subscribers = new Map();
   }
 
-  commandHandlerFactory(commandName) {
+  commandHandlerFactory(commandName, grpcMethod) {
     if (this.entity.commandHandlers.hasOwnProperty(commandName)) {
 
-      return (command, ctx, reply, ensureActive, commandDebug) => {
+      return (command, ctx) => {
 
-        let deleted = false;
-        const noState = this.currentState === null;
-        let defaultValue = false;
-        if (noState) {
-          this.currentState = this.entity.defaultValue();
-          if (this.currentState !== null) {
-            this.entity.onStateSet(this.currentState, this.entityId);
-            defaultValue = true;
+        this.addStateManagementToContext(ctx);
+
+        ctx.subscription = null;
+        ctx.context.subscribe = (subscriptionContext) => {
+          ctx.ensureActive();
+          if (!ctx.streamed) {
+            throw new Error("Cannot subscribe to updates from non streamed command")
           }
-        }
-
-        ctx.delete = () => {
-          ensureActive();
-          if (this.currentState === null) {
-            throw new Error("Can't delete entity that hasn't been created.");
-          } else if (noState) {
-            this.currentState = null;
+          if (subscriptionContext === undefined) {
+            ctx.subscription = {};
           } else {
-            deleted = true;
+            ctx.subscription = subscriptionContext;
           }
+          return this;
         };
 
-        Object.defineProperty(ctx, "state", {
-          get: () => {
-            ensureActive();
-            return this.currentState;
-          },
-          set: (state) => {
-            ensureActive();
-            if (this.currentState !== null) {
-              throw new Error("Cannot create a new CRDT after it's been created.")
-            } else if (typeof state.getAndResetDelta !== "function") {
-              throw new Error(util.format("%o is not a CRDT", state));
-            } else {
-              this.currentState = state;
-              this.entity.onStateSet(this.currentState, this.entityId);
-            }
-          }
+        Object.defineProperty(ctx.context, "streamed", {
+          get: () => ctx.streamed === true
         });
 
-        const userReply = this.entity.commandHandlers[commandName](command, ctx);
-
-        if (deleted) {
-          commandDebug("Deleting entity");
-          reply.delete = {};
-        } else if (this.currentState !== null && noState) {
-          if (defaultValue && this.currentState.getAndResetDelta() === null) {
-            // No action, the entity wasn't touched from its default
-          } else {
-            commandDebug("Creating entity");
-            reply.create = this.currentState.getStateAndResetDelta();
-          }
-        } else if (this.currentState !== null) {
-          const delta = this.currentState.getAndResetDelta();
-          if (delta != null) {
-            commandDebug("Updating entity");
-            reply.update = delta;
-          }
+        const userReply = this.entity.commandHandlers[commandName](command, ctx.context);
+        if (ctx.streamed && ctx.subscription === null) {
+          // todo relax this requirement
+          throw new Error("Streamed commands must be subscribed to using ctx.subscribe()");
         }
+
+        this.setStateActionOnReply(ctx);
+
+        if (ctx.subscription !== null) {
+          this.subscribers.set(ctx.commandId.toString(), {
+            commandId: ctx.commandId,
+            grpcMethod: grpcMethod,
+            userContext: ctx.subscription
+          });
+        }
+
         return userReply;
       };
     } else {
       return null;
     }
+  }
+
+  setStateActionOnReply(ctx) {
+    if (ctx.deleted) {
+      ctx.commandDebug("Deleting entity");
+      ctx.reply.stateAction = {
+        delete: {}
+      };
+      this.currentState = null;
+      this.handleStateChange();
+    } else if (this.currentState !== null && ctx.noState) {
+      if (ctx.defaultValue && this.currentState.getAndResetDelta() === null) {
+        // No action, the entity wasn't touched from its default
+      } else {
+        ctx.commandDebug("Creating entity");
+        ctx.reply.stateAction = {
+          create: this.currentState.getStateAndResetDelta()
+        };
+        this.handleStateChange();
+      }
+    } else if (this.currentState !== null) {
+      const delta = this.currentState.getAndResetDelta();
+      if (delta != null) {
+        ctx.commandDebug("Updating entity");
+        ctx.reply.stateAction = {
+          update: delta
+        };
+        this.handleStateChange();
+      }
+    }
+  }
+
+  addStateManagementToContext(ctx) {
+    ctx.deleted = false;
+    ctx.noState = this.currentState === null;
+    ctx.defaultValue = false;
+    if (ctx.noState) {
+      this.currentState = this.entity.defaultValue();
+      if (this.currentState !== null) {
+        this.entity.onStateSet(this.currentState, this.entityId);
+        ctx.defaultValue = true;
+      }
+    }
+
+    ctx.context.delete = () => {
+      ctx.ensureActive();
+      if (this.currentState === null) {
+        throw new Error("Can't delete entity that hasn't been created.");
+      } else if (ctx.noState) {
+        this.currentState = null;
+      } else {
+        ctx.deleted = true;
+      }
+    };
+
+    Object.defineProperty(ctx.context, "state", {
+      get: () => {
+        ctx.ensureActive();
+        return this.currentState;
+      },
+      set: (state) => {
+        ctx.ensureActive();
+        if (this.currentState !== null) {
+          throw new Error("Cannot create a new CRDT after it's been created.")
+        } else if (typeof state.getAndResetDelta !== "function") {
+          throw new Error(util.format("%o is not a CRDT", state));
+        } else {
+          this.currentState = state;
+          this.entity.onStateSet(this.currentState, this.entityId);
+        }
+      }
+    });
   }
 
   streamDebug(msg, ...args) {
@@ -251,16 +306,135 @@ class CrdtHandler {
     }
   }
 
+  pushToSubscriber(subscriber, msg, endStream) {
+    const streamedMessage = {
+      commandId: subscriber.commandId
+    };
+    if (msg !== undefined) {
+      const serializedMessage = AnySupport.serialize(subscriber.grpcMethod.resolvedResponseType.create(msg), false, false, false);
+      streamedMessage.clientAction = {
+        reply: {
+          payload: serializedMessage
+        }
+      }
+    }
+    if (endStream) {
+      streamedMessage.endStream = true;
+    }
+    this.call.write({
+      streamedMessage: streamedMessage
+    });
+  }
+
+  handleStateChange() {
+    if (this.subscribers.size > 0) {
+      const ctx = {};
+      Object.defineProperty(ctx, "state", {
+        get: () => {
+          return this.currentState;
+        }
+      });
+      Object.defineProperty(ctx, "subscribers", {
+        get: () => {
+          return this.subscribers.keys();
+        }
+      });
+      ctx.getSubscriber = (id) => {
+        if (this.subscribers.has(id)) {
+          return this.subscribers.get(id).userContext;
+        }
+      };
+      ctx.push = (subscriberId, msg) => {
+        if (msg === undefined) {
+          throw new Error("Cannot push no message");
+        }
+        if (this.subscribers.has(subscriberId)) {
+          this.pushToSubscriber(this.subscribers.get(subscriberId), msg, false);
+        } else {
+          throw new Error("Unknown subscriber: " + subscriberId);
+        }
+      };
+      ctx.pushToAll = (msg) => {
+        this.subscribers.forEach(subscriber => {
+          this.pushToSubscriber(subscriber, msg, false);
+        });
+      };
+      ctx.end = (subscriberId, msg) => {
+        if (this.subscribers.has(subscriberId)) {
+          this.pushToSubscriber(this.subscribers.get(subscriberId), msg, true);
+          this.subscribers.delete(subscriberId);
+        } else {
+          throw new Error("Unknown subscriber: " + subscriberId);
+        }
+      };
+      ctx.endAll = (msg) => {
+        this.subscribers.forEach(subscriber => {
+          this.pushToSubscriber(subscriber, msg, true);
+        });
+        this.subscribers.clear();
+      };
+
+      this.entity.onStateChange(ctx);
+      if (this.currentState.getAndResetDelta() !== null) {
+        this.call.write({
+          failure: {
+            commandId: 0,
+            description: "State change handler attempted to modify state"
+          }
+        });
+        this.call.end();
+        throw new Error("State change handler attempted to modify state");
+      }
+    }
+  }
+
+  handleStreamCancelled(cancelled) {
+    const subscriberKey = cancelled.id.toString();
+    if (this.subscribers.has(subscriberKey)) {
+      const subscriber = this.subscribers.get(subscriberKey);
+      this.subscribers.delete(subscriberKey);
+
+      const ctx = this.commandHelper.createContext(cancelled.id);
+      ctx.context.subscription = subscriber.userContext;
+      ctx.reply = {};
+      this.addStateManagementToContext(ctx);
+
+      try {
+        this.entity.onStreamCancelled(ctx.context);
+        this.setStateActionOnReply(ctx);
+      } catch (e) {
+        this.call.write({
+          failure: {
+            commandId: cancelled.id,
+            description: util.format("Error: %o", e)
+          }
+        });
+        this.call.end();
+        throw e;
+      }
+
+      this.call.write({
+        streamCancelledResponse: ctx.reply
+      });
+    }
+  }
+
   handleCrdtStreamIn(crdtStreamIn) {
     if (crdtStreamIn.state) {
       this.handleState(crdtStreamIn.state);
+      this.handleStateChange();
     } else if (crdtStreamIn.changed) {
       this.streamDebug("Received delta for CRDT type %s", crdtStreamIn.changed.delta);
       this.currentState.applyDelta(crdtStreamIn.changed, this.entity.anySupport, crdts.createCrdtForState);
+      this.handleStateChange();
     } else if (crdtStreamIn.deleted) {
       this.streamDebug("CRDT deleted");
+      this.currentState = null;
+      this.handleStateChange();
     } else if (crdtStreamIn.command) {
       this.commandHelper.handleCommand(crdtStreamIn.command);
+    } else if (crdtStreamIn.streamCancelled) {
+      this.handleStreamCancelled(crdtStreamIn.streamCancelled)
     } else {
       this.call.write({
         failure: {

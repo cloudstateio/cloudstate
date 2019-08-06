@@ -36,11 +36,11 @@ class ORMapCrdtEntitySpec extends AbstractCrdtEntitySpec {
   }
 
   def createMap(elements: Seq[ORMapEntry]) = {
-    CrdtReply.Action.Create(CrdtState(CrdtState.State.Ormap(ORMapState(elements))))
+    CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Ormap(ORMapState(elements))))
   }
 
   def updateMap(added: Seq[(ProtoAny, CrdtState)] = Nil, removed: Seq[ProtoAny] = Nil, updated: Seq[(ProtoAny, CrdtDelta)] = Nil, cleared: Boolean = false) = {
-    CrdtReply.Action.Update(CrdtDelta(CrdtDelta.Delta.Ormap(ORMapDelta(
+    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Ormap(ORMapDelta(
       added = added.map(e => ORMapEntry(Some(e._1), Some(e._2))),
       updated = updated.map(e => ORMapEntryDelta(Some(e._1), Some(e._2))),
       removed = removed,

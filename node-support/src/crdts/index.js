@@ -24,8 +24,9 @@ const ORSet = require("./orset");
 const LWWRegister = require("./lwwregister");
 const Flag = require("./flag");
 const ORMap = require("./ormap");
+const Vote = require("./vote");
 
-const Clocks = protobufHelper.moduleRoot.cloudstate.crdt.CrdtClock.values;
+const Clocks = protobufHelper.moduleRoot.cloudstate.crdt.CrdtClock;
 const Empty = protobufHelper.moduleRoot.google.protobuf.Empty;
 
 /**
@@ -62,5 +63,6 @@ module.exports = {
   LWWRegister: LWWRegister,
   Flag: Flag,
   ORMap: ORMap,
+  Vote: Vote,
   Clocks: Clocks
 };

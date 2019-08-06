@@ -166,9 +166,9 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
   private[this] final def notifyOutstandingRequests(msg: String): Unit = {
     currentCommand match {
       case null =>
-      case req => req.replyTo ! UserFunctionReply(message = UserFunctionReply.Message.Failure(Failure(description = msg)))
+      case req => req.replyTo ! createFailure(msg)
     }
-    val errorNotification = UserFunctionReply(message = UserFunctionReply.Message.Failure(Failure(description = "Entity terminated")))
+    val errorNotification = createFailure("Entity terminated")
     stashedCommands.foreach {
       case (_, replyTo) => replyTo ! errorNotification
     }
@@ -201,14 +201,15 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
   }
 
   private final def esReplyToUfReply(reply: EventSourcedReply) = {
-    val message = reply.response match {
-      case EventSourcedReply.Response.Reply(r) => UserFunctionReply.Message.Reply(r)
-      case EventSourcedReply.Response.Forward(f) => UserFunctionReply.Message.Forward(f)
-      case EventSourcedReply.Response.Empty => UserFunctionReply.Message.Empty
-    }
     UserFunctionReply(
-      message = message,
+      clientAction = reply.clientAction,
       sideEffects = reply.sideEffects
+    )
+  }
+
+  private final def createFailure(message: String) = {
+    UserFunctionReply(
+      clientAction = Some(ClientAction(ClientAction.Action.Failure(Failure(description = message))))
     )
   }
 
@@ -267,7 +268,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
 
         case ESOMsg.Failure(f) =>
           reportActionComplete()
-          currentCommand.replyTo ! UserFunctionReply(message = UserFunctionReply.Message.Failure(f))
+          currentCommand.replyTo ! createFailure(f.description)
           commandHandled()
 
         case ESOMsg.Empty =>

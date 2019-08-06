@@ -3,7 +3,7 @@ package io.cloudstate.proxy
 import akka.NotUsed
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Sink, Source}
-import io.cloudstate.entity.{EntityDiscovery, Forward, SideEffect, UserFunctionError}
+import io.cloudstate.entity.{ClientAction, EntityDiscovery, Forward, SideEffect, UserFunctionError}
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
 
@@ -37,9 +37,11 @@ class UserFunctionRouter(entities: Seq[ServableEntity], entityDiscovery: EntityD
               routeMessage(trace, RouteReason.SideEffect, serviceName, commandName, payload, synchronous)
           }
 
-      val nextAction = response.message match {
-        case UserFunctionReply.Message.Forward(Forward(serviceName, commandName, payload)) =>
+      val nextAction = response.clientAction match {
+        case Some(ClientAction(ClientAction.Action.Forward(Forward(serviceName, commandName, payload)))) =>
           routeMessage(trace, RouteReason.Forwarded, serviceName, commandName, payload, synchronous = true)
+        case None | Some(ClientAction(ClientAction.Action.Empty)) =>
+          Source.empty
         case _ =>
           Source.single(response)
       }
@@ -63,8 +65,8 @@ class UserFunctionRouter(entities: Seq[ServableEntity], entityDiscovery: EntityD
     }
 
     afterSideEffects.flatMap { _ =>
-      response.message match {
-        case UserFunctionReply.Message.Forward(Forward(serviceName, commandName, payload)) =>
+      response.clientAction match {
+        case Some(ClientAction(ClientAction.Action.Forward(Forward(serviceName, commandName, payload)))) =>
           routeMessageUnary(trace, RouteReason.Forwarded, serviceName, commandName, payload)
         case _ =>
           Future.successful(response)
@@ -79,7 +81,7 @@ class UserFunctionRouter(entities: Seq[ServableEntity], entityDiscovery: EntityD
       case Some(EntityCommands(_, entitySupport, commands)) =>
         if (commands(commandName)) {
           Source.single(UserFunctionCommand(commandName, payload))
-            .via(entitySupport.handler)
+            .via(entitySupport.handler(commandName))
             .via(route((routeReason, serviceName, commandName) :: trace))
         } else {
           reportErrorSource(routeReason, trace, s"Service [$serviceName] does not have a command named: [$commandName]")

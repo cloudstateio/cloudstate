@@ -24,11 +24,11 @@ class GCounterCrdtEntitySpec extends AbstractCrdtEntitySpec {
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.gcounter.value
 
   def create(value: Long) = {
-    CrdtReply.Action.Create(CrdtState(CrdtState.State.Gcounter(GCounterState(value))))
+    CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Gcounter(GCounterState(value))))
   }
 
   def updateCounter(increment: Long) = {
-    CrdtReply.Action.Update(CrdtDelta(CrdtDelta.Delta.Gcounter(GCounterDelta(increment))))
+    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Gcounter(GCounterDelta(increment))))
   }
 
   "The GCounter CrdtEntity" should {

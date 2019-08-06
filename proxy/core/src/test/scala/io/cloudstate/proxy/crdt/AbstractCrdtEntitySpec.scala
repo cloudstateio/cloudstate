@@ -1,6 +1,6 @@
 package io.cloudstate.proxy.crdt
 
-import akka.NotUsed
+import akka.{Done, NotUsed}
 import akka.actor.{ActorRef, ActorSystem, PoisonPill}
 import akka.cluster.Cluster
 import akka.cluster.ddata.Replicator._
@@ -57,7 +57,7 @@ abstract class AbstractCrdtEntitySpec extends TestKit(ActorSystem("test", Abstra
 
   private val ddata = DistributedData(system)
   protected implicit val selfUniqueAddress: SelfUniqueAddress = ddata.selfUniqueAddress
-  private implicit val mat: Materializer = ActorMaterializer()
+  protected implicit val mat: Materializer = ActorMaterializer()
   private val cluster = Cluster(system)
 
   // These are set and read in the entities
@@ -100,6 +100,16 @@ abstract class AbstractCrdtEntitySpec extends TestKit(ActorSystem("test", Abstra
     expectCommand(name, payload)
   }
 
+  protected def sendAndExpectStreamedCommand(name: String, payload: ProtoAny): (Long, TestProbe) = {
+    entity ! EntityCommand(entityId, name, Some(payload), true)
+    val source = expectMsgType[Source[UserFunctionReply, NotUsed]]
+    val streamProbe = TestProbe()
+    watch(streamProbe.testActor)
+    source.runWith(Sink.actorRef(streamProbe.testActor, PoisonPill))
+
+    (expectCommand(name, payload, true), streamProbe)
+  }
+
   protected def expectState(): S = {
     inside(toUserFunction.expectMsgType[CrdtStreamIn].message) {
       case CrdtStreamIn.Message.State(state) => extractState(state.state)
@@ -112,36 +122,43 @@ abstract class AbstractCrdtEntitySpec extends TestKit(ActorSystem("test", Abstra
     }
   }
 
-  protected def sendAndExpectReply(commandId: Long, action: CrdtReply.Action = CrdtReply.Action.Empty,
-    writeConsistency: CrdtReply.WriteConsistency = CrdtReply.WriteConsistency.LOCAL): UserFunctionReply = {
+  protected def sendAndExpectReply(commandId: Long, action: CrdtStateAction.Action = CrdtStateAction.Action.Empty,
+    writeConsistency: CrdtWriteConsistency = CrdtWriteConsistency.LOCAL): UserFunctionReply = {
     val reply = doSendAndExpectReply(commandId, action, writeConsistency)
-    inside(reply.message) {
-      case UserFunctionReply.Message.Empty => reply
+    reply.clientAction shouldBe None
+    reply
+  }
+
+  protected def sendStreamedMessage(commandId: Long, payload: Option[ProtoAny] = None, endStream: Boolean = false): Unit = {
+    fromUserFunction ! CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(CrdtStreamedMessage(commandId = commandId,
+      sideEffects = Nil, clientAction = payload.map(p => ClientAction(ClientAction.Action.Reply(Reply(Some(p))))), endStream = endStream)))
+  }
+
+  protected def sendAndExpectFailure(commandId: Long, action: CrdtStateAction.Action = CrdtStateAction.Action.Empty,
+    writeConsistency: CrdtWriteConsistency = CrdtWriteConsistency.LOCAL): Failure = {
+    val reply = doSendAndExpectReply(commandId, action, writeConsistency)
+    inside(reply.clientAction) {
+      case Some(ClientAction(ClientAction.Action.Failure(failure))) => failure
     }
   }
 
-  protected def sendAndExpectFailure(commandId: Long, action: CrdtReply.Action = CrdtReply.Action.Empty,
-    writeConsistency: CrdtReply.WriteConsistency = CrdtReply.WriteConsistency.LOCAL): Failure = {
-    val reply = doSendAndExpectReply(commandId, action, writeConsistency)
-    inside(reply.message) {
-      case UserFunctionReply.Message.Failure(failure) => failure
-    }
-  }
-
-  protected def doSendAndExpectReply(commandId: Long, action: CrdtReply.Action, writeConsistency: CrdtReply.WriteConsistency): UserFunctionReply = {
+  protected def sendReply(commandId: Long, action: CrdtStateAction.Action = CrdtStateAction.Action.Empty, writeConsistency: CrdtWriteConsistency = CrdtWriteConsistency.LOCAL) = {
     fromUserFunction ! CrdtStreamOut(CrdtStreamOut.Message.Reply(CrdtReply(commandId = commandId, sideEffects = Nil,
-      writeConsistency = writeConsistency, response = CrdtReply.Response.Empty,
-      action = action)))
+      clientAction = None, stateAction = Some(CrdtStateAction(action = action, writeConsistency = writeConsistency)))))
+  }
 
+  protected def doSendAndExpectReply(commandId: Long, action: CrdtStateAction.Action, writeConsistency: CrdtWriteConsistency): UserFunctionReply = {
+    sendReply(commandId, action, writeConsistency)
     expectMsgType[UserFunctionReply]
   }
 
-  protected def expectCommand(name: String, payload: ProtoAny): Long = {
+  protected def expectCommand(name: String, payload: ProtoAny, streamed: Boolean = false): Long = {
     inside(toUserFunction.expectMsgType[CrdtStreamIn].message) {
-      case CrdtStreamIn.Message.Command(Command(eid, cid, n, p)) =>
+      case CrdtStreamIn.Message.Command(Command(eid, cid, n, p, s)) =>
         eid should ===(entityId)
         n should ===(name)
         p shouldBe Some(payload)
+        s shouldBe streamed
         cid
     }
   }

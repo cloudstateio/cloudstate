@@ -24,11 +24,11 @@ class FlagCrdtEntitySpec extends AbstractCrdtEntitySpec {
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.flag.value
 
   def create(value: Boolean) = {
-    CrdtReply.Action.Create(CrdtState(CrdtState.State.Flag(FlagState(value))))
+    CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Flag(FlagState(value))))
   }
 
   def enable(value: Boolean = true) = {
-    CrdtReply.Action.Update(CrdtDelta(CrdtDelta.Delta.Flag(FlagDelta(value))))
+    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Flag(FlagDelta(value))))
   }
 
   "The Flag CrdtEntity" should {

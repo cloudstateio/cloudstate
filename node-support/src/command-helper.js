@@ -47,12 +47,10 @@ module.exports = class CommandHelper {
    * @param command The command to handle.
    */
   handleCommand(command) {
-    const commandDebug = (msg, ...args) => {
-      this.debug("%s [%s] (%s) - " + msg, ...[this.streamId, this.entityId, command.id].concat(args));
-    };
+    const ctx = this.createContext(command.id);
 
     if (!this.service.methods.hasOwnProperty(command.name)) {
-      commandDebug("Command '%s' unknown", command.name);
+      ctx.commandDebug("Command '%s' unknown", command.name);
       this.call.write({
         failure: {
           commandId: command.id,
@@ -71,48 +69,20 @@ module.exports = class CommandHelper {
         }
         const deserCommand = grpcMethod.resolvedRequestType.decode(commandBuffer);
 
-        const handler = this.handlerFactory(command.name);
+        const handler = this.handlerFactory(command.name, grpcMethod);
 
         if (handler !== null) {
 
-          const effects = [];
-
-          let active = true;
-          const ensureActive = () => {
-            if (!active) {
-              throw new Error("Command context no longer active!");
-            }
-          };
-
-          let error = null;
+          ctx.streamed = command.streamed;
           const reply = {};
-          let userReply = null;
-          let forward = null;
+          ctx.reply = reply;
 
-          const ctx = {
-            entityId: this.entityId,
-            fail: (msg) => {
-              ensureActive();
-              // We set it here to ensure that even if the user catches the error, for
-              // whatever reason, we will still fail as instructed.
-              error = new ContextFailure(msg);
-              // Then we throw, to end processing of the command.
-              throw error;
-            },
-            effect: (method, message, synchronous = false) => {
-              ensureActive();
-              effects.push(this.serializeSideEffect(method, message, synchronous))
-            },
-            thenForward: (method, message) => {
-              ensureActive();
-              forward = this.serializeEffect(method, message);
-            }
-          };
+          let userReply = null;
 
           try {
-            userReply = handler(deserCommand, ctx, reply, ensureActive, commandDebug);
+            userReply = handler(deserCommand, ctx);
           } catch (err) {
-            if (error === null) {
+            if (ctx.error === null) {
               // If the error field isn't null, then that means we were explicitly told
               // to fail, so we can ignore this thrown error and fail gracefully with a
               // failure message. Otherwise, we rethrow, and handle by closing the connection
@@ -120,30 +90,36 @@ module.exports = class CommandHelper {
               throw err;
             }
           } finally {
-            active = false;
+            ctx.active = false;
           }
 
-          if (error !== null) {
-            commandDebug("Command failed with message '%s'", error.message);
+          if (ctx.error !== null) {
+            ctx.commandDebug("Command failed with message '%s'", ctx.error.message);
             this.call.write({
               failure: {
                 commandId: command.id,
-                description: error.message
+                description: ctx.error.message
               }
             });
           } else {
 
             reply.commandId = command.id;
-            reply.sideEffects = effects;
+            reply.sideEffects = ctx.effects;
 
-            if (forward !== null) {
-              reply.forward = forward;
-              commandDebug("Sending forward to %s.%s with %d side effects.", forward.serviceName, forward.commandName, effects.length);
-            } else {
-              reply.reply = {
-                payload: AnySupport.serialize(grpcMethod.resolvedResponseType.create(userReply), false, false)
+            if (ctx.forward !== null) {
+              reply.clientAction = {
+                forward: ctx.forward
               };
-              commandDebug("Sending reply with type [%s] with %d side effects.", reply.reply.payload.type_url, effects.length);
+              ctx.commandDebug("Sending forward to %s.%s with %d side effects.", ctx.forward.serviceName, ctx.forward.commandName, ctx.effects.length);
+            } else if (userReply !== undefined) {
+              reply.clientAction = {
+                reply: {
+                  payload: AnySupport.serialize(grpcMethod.resolvedResponseType.create(userReply), false, false)
+                }
+              };
+              ctx.commandDebug("Sending reply with type [%s] with %d side effects.", reply.clientAction.reply.payload.type_url, ctx.effects.length);
+            } else {
+              ctx.commandDebug("Sending no reply with %d side effects.", reply.clientAction.reply.payload.type_url, ctx.effects.length);
             }
 
             this.call.write({
@@ -153,7 +129,7 @@ module.exports = class CommandHelper {
 
         } else {
           const msg = "No handler registered for command '" + command.name + "', we have: " + Object.keys(this.entity.commandHandlers);
-          commandDebug(msg);
+          ctx.commandDebug(msg);
           this.call.write({
             failure: {
               commandId: command.id,
@@ -163,7 +139,7 @@ module.exports = class CommandHelper {
         }
       } catch (err) {
         const error = "Error handling command '" + command.name + "'";
-        commandDebug(error);
+        ctx.commandDebug(error);
         console.error(err);
 
         this.call.write({
@@ -177,6 +153,46 @@ module.exports = class CommandHelper {
       }
     }
 
+  }
+
+  createContext(commandId) {
+    const accessor = {};
+
+    accessor.commandDebug = (msg, ...args) => {
+      this.debug("%s [%s] (%s) - " + msg, ...[this.streamId, this.entityId, commandId].concat(args));
+    };
+
+    accessor.commandId = commandId;
+    accessor.effects = [];
+    accessor.active = true;
+    accessor.ensureActive = () => {
+      if (!accessor.active) {
+        throw new Error("Command context no longer active!");
+      }
+    };
+    accessor.error = null;
+    accessor.forward = null;
+
+    accessor.context = {
+      entityId: this.entityId,
+      effect: (method, message, synchronous = false) => {
+        accessor.ensureActive();
+        accessor.effects.push(this.serializeSideEffect(method, message, synchronous))
+      },
+      thenForward: (method, message) => {
+        accessor.ensureActive();
+        accessor.forward = this.serializeEffect(method, message);
+      },
+      fail: (msg) => {
+        accessor.ensureActive();
+        // We set it here to ensure that even if the user catches the error, for
+        // whatever reason, we will still fail as instructed.
+        accessor.error = new ContextFailure(msg);
+        // Then we throw, to end processing of the command.
+        throw error;
+      },
+    };
+    return accessor;
   }
 
   serializeEffect(method, message) {

@@ -18,8 +18,8 @@ const should = require("chai").should();
 const Flag = require("../../src/crdts/flag");
 const protobufHelper = require("../../src/protobuf-helper");
 
-const CrdtDelta = protobufHelper.moduleRoot.lookupType("cloudstate.crdt.CrdtDelta");
-const CrdtState = protobufHelper.moduleRoot.lookupType("cloudstate.crdt.CrdtState");
+const CrdtDelta = protobufHelper.moduleRoot.cloudstate.crdt.CrdtDelta;
+const CrdtState = protobufHelper.moduleRoot.cloudstate.crdt.CrdtState;
 
 function roundTripDelta(delta) {
   return CrdtDelta.decode(CrdtDelta.encode(delta).finish());

@@ -32,9 +32,9 @@ const In = root.lookupType("com.example.In");
 const Out = root.lookupType("com.example.Out");
 const ExampleService = root.lookupService("com.example.ExampleService");
 
-const CrdtStreamIn = protobufHelper.moduleRoot.lookupType("cloudstate.crdt.CrdtStreamIn");
-const CrdtStreamOut = protobufHelper.moduleRoot.lookupType("cloudstate.crdt.CrdtStreamOut");
-const CrdtInit = protobufHelper.moduleRoot.lookupType("cloudstate.crdt.CrdtInit");
+const CrdtStreamIn = protobufHelper.moduleRoot.cloudstate.crdt.CrdtStreamIn;
+const CrdtStreamOut = protobufHelper.moduleRoot.cloudstate.crdt.CrdtStreamOut;
+const CrdtInit = protobufHelper.moduleRoot.cloudstate.crdt.CrdtInit;
 
 const outMsg = {
   field: "ok"
@@ -50,7 +50,7 @@ class MockCall {
   }
 
   write(msg) {
-    this.written.push(msg);
+    this.written.push(CrdtStreamOut.decode(CrdtStreamOut.encode(msg).finish()));
   }
 
   end() {
@@ -71,18 +71,30 @@ class MockCall {
 }
 
 const call = new MockCall();
-function createHandler(commandHandler, state = undefined) {
-   const entity = new support.CrdtSupport(root, ExampleService, {
-     commandHandlers: {
-       DoSomething: commandHandler
-     },
-     onStateSet: () => undefined,
-     defaultValue: () => null,
-   }, {});
-   return entity.create(call, CrdtInit.decode(CrdtInit.encode({
-     entityId: "foo",
-     state: state
-   }).finish()));
+function createHandler(commandHandler, state = undefined, otherHandlers = {}) {
+  otherHandlers.commandHandlers = {
+    DoSomething: commandHandler
+  };
+  return create(otherHandlers, state);
+}
+function create(handlers = {}, state = undefined) {
+  const entity = new support.CrdtSupport(root, ExampleService, {
+    ...{
+      commandHandlers: {
+        DoSomething: () => outMsg,
+        StreamSomething: () => outMsg
+      },
+      onStateSet: () => undefined,
+      defaultValue: () => null,
+      onStateChange: () => undefined,
+      onStreamCancelled: () => undefined
+    },
+    ...handlers
+  }, {});
+  return entity.create(call, CrdtInit.decode(CrdtInit.encode({
+    entityId: "foo",
+    state: state
+  }).finish()));
 }
 
 // This ensures we have the field names right, rather than just matching them between
@@ -91,35 +103,43 @@ function roundTripCrdtStreamIn(msg) {
   return CrdtStreamIn.decode(CrdtStreamIn.encode(msg).finish());
 }
 
-function handleCommand(handler, command) {
-  const response = doHandleCommand(handler, command);
+function handleCommand(handler, command, name = "DoSomething", id = 10, streamed = false) {
+  const response = doHandleCommand(handler, command, name, id, streamed);
   if (response.failure !== null) {
     throw new Error(response.failure.description)
   }
   const reply = response.reply;
-  reply.commandId.should.eql(Long.fromNumber(10));
+  reply.commandId.should.eql(Long.fromNumber(id));
   return reply;
 }
 
-function doHandleCommand(handler, command) {
+function doHandleCommand(handler, command, name = "DoSomething", id = 10, streamed = false) {
   send(handler, {
     command: {
       entityId: "foo",
-      id: 10,
-      name: "DoSomething",
-      payload: AnySupport.serialize(In.create(command))
+      id: id,
+      name: name,
+      payload: AnySupport.serialize(In.create(command)),
+      streamed: streamed
     }
   });
-  return CrdtStreamOut.decode(CrdtStreamOut.encode(call.get()).finish());
+  return call.get();
 }
 
-function handleFailedCommand(handler, command) {
-  const response = doHandleCommand(handler, command);
+function handleFailedCommand(handler, command, name = "DoSomething", id = 10, streamed = false) {
+  const response = doHandleCommand(handler, command, name, id, streamed);
   if (response.failure !== null) {
     return response.failure;
   } else {
     response.reply.should.be.null;
+    response.failure.should.not.be.null;
   }
+}
+
+function expectFailure() {
+  const response = call.get();
+  response.failure.should.not.be.null;
+  return response.failure;
 }
 
 function send(handler, streamIn) {
@@ -127,9 +147,11 @@ function send(handler, streamIn) {
 }
 
 function assertHasNoAction(reply) {
-  should.equal(reply.create, null);
-  should.equal(reply.update, null);
-  should.equal(reply.delete, null);
+  if (reply.stateAction !== null) {
+    should.equal(reply.stateAction.create, null);
+    should.equal(reply.stateAction.update, null);
+    should.equal(reply.stateAction.delete, null);
+  }
 }
 
 describe("CrdtHandler", () => {
@@ -142,7 +164,7 @@ describe("CrdtHandler", () => {
 
     const reply = handleCommand(handler, inMsg);
     assertHasNoAction(reply);
-    anySupport.deserialize(reply.reply.payload).field.should.equal(outMsg.field);
+    anySupport.deserialize(reply.clientAction.reply.payload).field.should.equal(outMsg.field);
   });
 
   it("should populate state with the state from init if present", () => {
@@ -165,7 +187,7 @@ describe("CrdtHandler", () => {
     });
 
     const reply = handleCommand(handler, inMsg);
-    reply.create.gcounter.value.toNumber().should.equal(0);
+    reply.stateAction.create.gcounter.value.toNumber().should.equal(0);
   });
 
   it("should send an update when the state is updated", () => {
@@ -178,7 +200,7 @@ describe("CrdtHandler", () => {
       }
     });
     const reply = handleCommand(handler, inMsg);
-    reply.update.gcounter.increment.toNumber().should.equal(3);
+    reply.stateAction.update.gcounter.increment.toNumber().should.equal(3);
   });
 
   it("should set the state when it receives a state message", () => {
@@ -244,7 +266,7 @@ describe("CrdtHandler", () => {
       }
     });
     const reply = handleCommand(handler, inMsg);
-    reply.delete.should.not.be.null;
+    reply.stateAction.delete.should.not.be.null;
   });
 
   it("should not allow deleting an entity that hasn't been created", () => {
@@ -253,6 +275,169 @@ describe("CrdtHandler", () => {
       return outMsg;
     });
     handleFailedCommand(handler, inMsg);
-  })
+  });
+
+  it("should allow streaming", () => {
+    const handler = create({
+      commandHandlers: {
+        StreamSomething: (cmd, ctx) => {
+          ctx.streamed.should.equal(true);
+          ctx.subscribe("foo");
+          return outMsg;
+        }
+      },
+      onStateChange: (ctx) => {
+        const subscribers = Array.from(ctx.subscribers);
+        subscribers.should.have.lengthOf(1);
+        ctx.getSubscriber(subscribers[0]).should.equal("foo");
+        ctx.state.value.should.equal(5);
+        ctx.pushToAll({field: "pushed"});
+      }
+    }, {
+      gcounter: {
+        value: 2
+      }
+    });
+
+    handleCommand(handler, inMsg, "StreamSomething", 5, true);
+    send(handler, {
+      changed: {
+        gcounter: {
+          increment: 3
+        }
+      }
+    });
+    const streamed = call.get().streamedMessage;
+    streamed.commandId.toNumber().should.equal(5);
+    anySupport.deserialize(streamed.clientAction.reply.payload).field.should.equal("pushed");
+  });
+
+  it("should not allow subscribing a non streamed command", () => {
+    const handler = create({
+      commandHandlers: {
+        StreamSomething: (cmd, ctx) => {
+          ctx.streamed.should.equal(false);
+          ctx.subscribe("foo");
+          return outMsg;
+        }
+      }
+    });
+
+    handleFailedCommand(handler, inMsg, "StreamSomething", 5, false);
+  });
+
+  it("should require streamed commands to be subscribed to", () => {
+    const handler = create({
+      commandHandlers: {
+        StreamSomething: (cmd, ctx) => {
+          ctx.streamed.should.equal(true);
+          return outMsg;
+        }
+      }
+    });
+
+    handleFailedCommand(handler, inMsg, "StreamSomething", 5, true);
+  });
+
+  it("should not invoke onStateChange when there are no subscriptions", () => {
+    const handler = create({
+      commandHandlers: {
+        DoSomething: (cmd, ctx) => {
+          return outMsg;
+        }
+      },
+      onStateChange: () => {
+        throw new Error("Invoked!");
+      }
+    });
+
+    handleCommand(handler, inMsg);
+    send(handler, {
+      state: {
+        gcounter: {
+          value: 3
+        }
+      }
+    });
+    call.expectNoWrites();
+  });
+
+  it("should allow closing a stream", () => {
+    let ended = false;
+
+    const handler = create({
+      commandHandlers: {
+        StreamSomething: (cmd, ctx) => {
+          ctx.subscribe();
+          return outMsg;
+        }
+      },
+      onStateChange: (ctx) => {
+        if (!ended) {
+          ctx.end("5");
+          ended = true;
+        } else {
+          throw new Error("Invoked!")
+        }
+      }
+    }, {
+      gcounter: {
+        value: 2
+      }
+    });
+
+    handleCommand(handler, inMsg, "StreamSomething", 5, true);
+    send(handler, {
+      changed: {
+        gcounter: {
+          increment: 3
+        }
+      }
+    });
+    const streamed = call.get().streamedMessage;
+    streamed.endStream.should.be.true;
+    send(handler, {
+      changed: {
+        gcounter: {
+          increment: 3
+        }
+      }
+    });
+    call.expectNoWrites();
+  });
+
+  it("should handle stream cancelled events", () => {
+    const handler = create({
+      commandHandlers: {
+        StreamSomething: (cmd, ctx) => {
+          ctx.subscribe("foo");
+          return outMsg;
+        }
+      },
+      onStreamCancelled: (ctx) => {
+        ctx.subscription.should.equal("foo");
+        ctx.state.value.should.equal(2);
+        ctx.state.increment(3);
+      },
+      onStateChange: () => {
+        // Shouldn't be invoked even though it's updated because there's no subscribers left
+        throw new Error("Invoked!")
+      }
+    }, {
+      gcounter: {
+        value: 2
+      }
+    });
+
+    handleCommand(handler, inMsg, "StreamSomething", 5, true);
+    send(handler, {
+      streamCancelled: {
+        id: 5
+      }
+    });
+    const response = call.get();
+    response.streamCancelledResponse.stateAction.update.gcounter.increment.toNumber().should.equal(3);
+
+  });
 
 });

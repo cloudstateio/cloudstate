@@ -141,18 +141,18 @@ object Serve {
             val pipeline: Source[ProtobufByteString, NotUsed] = commands
               .via(handler.flow)
               .map { reply =>
-                reply.message match {
-                  case UserFunctionReply.Message.Reply(Reply(Some(payload))) =>
+                reply.clientAction match {
+                  case Some(ClientAction(ClientAction.Action.Reply(Reply(Some(payload))))) =>
                     if (payload.typeUrl != handler.expectedReplyTypeUrl) {
                       val msg = s"${handler.fullCommandName}: Expected reply type_url to be [${handler.expectedReplyTypeUrl}] but was [${payload.typeUrl}]."
                       log.warn(msg)
                       entityDiscoveryClient.reportError(UserFunctionError("Warning: " + msg))
                     }
                     Some(payload.value)
-                  case UserFunctionReply.Message.Forward(_) =>
+                  case Some(ClientAction(ClientAction.Action.Forward(_))) =>
                     log.error("Cannot serialize forward reply, this should have been handled by the UserFunctionRouter")
                     None
-                  case UserFunctionReply.Message.Failure(Failure(_, message)) =>
+                  case Some(ClientAction(ClientAction.Action.Failure(Failure(_, message)))) =>
                     throw CommandException(message)
                   case _ =>
                     None

@@ -18,7 +18,7 @@ const util = require("util");
 const protobufHelper = require("../protobuf-helper");
 const AnySupport = require("../protobuf-any");
 
-const Clocks = protobufHelper.moduleRoot.cloudstate.crdt.CrdtClock.values;
+const Clocks = protobufHelper.moduleRoot.cloudstate.crdt.CrdtClock;
 
 function LWWRegister(value, clock = Clocks.DEFAULT, customClockValue = 0) {
   if (value === null || value === undefined) {

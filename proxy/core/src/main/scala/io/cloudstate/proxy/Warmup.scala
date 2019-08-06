@@ -20,7 +20,7 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props, SupervisorStrategy, Ter
 import com.google.protobuf.ByteString
 import io.cloudstate.proxy.eventsourced.EventSourcedEntity.{Configuration, Stop}
 import Warmup.Ready
-import io.cloudstate.entity.Reply
+import io.cloudstate.entity.{ClientAction, Reply}
 import io.cloudstate.eventsourced.{EventSourcedReply, EventSourcedStreamIn, EventSourcedStreamOut}
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionCommand, UserFunctionReply}
 import io.cloudstate.proxy.eventsourced.EventSourcedEntity
@@ -73,7 +73,7 @@ class Warmup(needsWarmup: Boolean) extends Actor with ActorLogging {
       // It's forwarded us our command, send it a reply
       eventSourcedEntityManager ! EventSourcedStreamOut(EventSourcedStreamOut.Message.Reply(EventSourcedReply(
         commandId = cmd.id,
-        response = EventSourcedReply.Response.Reply(Reply(Some(com.google.protobuf.any.Any("url", ByteString.EMPTY))))
+        clientAction = Some(ClientAction(ClientAction.Action.Reply(Reply(Some(com.google.protobuf.any.Any("url", ByteString.EMPTY))))))
       )))
     case _: UserFunctionReply =>
       log.debug("Warmup got forwarded reply")

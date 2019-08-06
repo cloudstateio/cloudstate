@@ -23,4 +23,5 @@ message Out {
 
 service ExampleService {
     rpc DoSomething(In) returns (Out);
+    rpc StreamSomething(In) returns (stream Out);
 }

@@ -24,11 +24,11 @@ class LWWRegisterCrdtEntitySpec extends AbstractCrdtEntitySpec {
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.lwwregister.value
 
   def create(element: ProtoAny) = {
-    CrdtReply.Action.Create(CrdtState(CrdtState.State.Lwwregister(LWWRegisterState(value = Some(element)))))
+    CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Lwwregister(LWWRegisterState(value = Some(element)))))
   }
 
   def updateRegister(element: ProtoAny, clock: CrdtClock = CrdtClock.DEFAULT, customClockValue: Long = 0) = {
-    CrdtReply.Action.Update(CrdtDelta(CrdtDelta.Delta.Lwwregister(LWWRegisterDelta(value = Some(element), clock = clock, customClockValue = customClockValue))))
+    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Lwwregister(LWWRegisterDelta(value = Some(element), clock = clock, customClockValue = customClockValue))))
   }
 
   "The LWWRegister CrdtEntity" should {

@@ -64,21 +64,20 @@ message EventSourcedReply {
     // The id of the command being replied to. Must match the input command.
     int64 command_id = 1;
 
-    oneof response {
-        Reply reply = 2;
-        Forward forward = 3;
-    }
+    // The action to take
+    ClientAction client_action = 2;
 
-    repeated SideEffect side_effects = 4;
+    // Any side effects to perform
+    repeated SideEffect side_effects = 3;
 
     // A list of events to persist - these will be persisted before the reply
     // is sent.
-    repeated google.protobuf.Any events = 5;
+    repeated google.protobuf.Any events = 4;
 
     // An optional snapshot to persist. It is assumed that this snapshot will have
     // the state of any events in the events field applied to it. It is illegal to
     // send a snapshot without sending any events.
-    google.protobuf.Any snapshot = 6;
+    google.protobuf.Any snapshot = 5;
 }
 
 // Input message type for the gRPC stream in.

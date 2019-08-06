@@ -54,6 +54,8 @@ class Crdt {
 
     this.onStateSet = (state, entityId) => undefined;
     this.defaultValue = (entityId) => null;
+    this.onStateChange = (ctx) => undefined;
+    this.onStreamCancelled = (ctx) => undefined;
   }
 
   entityType() {
@@ -105,6 +107,29 @@ class Crdt {
    */
   setDefaultValue(callback) {
     this.defaultValue = callback;
+  }
+
+  /**
+   * Set a callback for handling state change events.
+   *
+   * This will be invoked whenever there are any active subscribers, and allows updates to be pushed to those
+   * subscribers.
+   *
+   * The CRDT must not be modified by this handler, doing so will trigger an error.
+   */
+  setOnStateChange(handler) {
+    this.onStateChange = handler;
+  }
+
+  /**
+   * Set a callback for handling stream cancelled events.
+   *
+   * This will be invoked whenever a streamed call cancels.
+   *
+   * The CRDT state may be modified by the handler.
+   */
+  setOnStreamCancelled(handler) {
+    this.onStreamCancelled = handler;
   }
 
   register(allEntities) {

@@ -13,7 +13,7 @@ import scala.concurrent.Future
 
 trait UserFunctionTypeSupport {
 
-  def handler: Flow[UserFunctionCommand, UserFunctionReply, NotUsed]
+  def handler(command: String): Flow[UserFunctionCommand, UserFunctionReply, NotUsed]
 
   def handleUnary(command: UserFunctionCommand): Future[UserFunctionReply]
 
@@ -29,7 +29,7 @@ trait UserFunctionTypeSupportFactory {
 abstract class EntityTypeSupportFactory extends UserFunctionTypeSupportFactory {
   override final def build(entity: Entity, serviceDescriptor: ServiceDescriptor): UserFunctionTypeSupport = {
     val idExtractors = serviceDescriptor.getMethods.asScala
-      .map(method => method.getName -> new EntityIdExtractor(method))
+      .map(method => method.getName -> new EntityMethodDescriptor(method))
       .toMap
 
     new EntityUserFunctionTypeSupport(serviceDescriptor, idExtractors, buildEntityTypeSupport(entity, serviceDescriptor))
@@ -39,11 +39,11 @@ abstract class EntityTypeSupportFactory extends UserFunctionTypeSupportFactory {
 
 }
 
-private object EntityIdExtractor {
+private object EntityMethodDescriptor {
   final val Separator = "-"
 }
 
-private final class EntityIdExtractor(method: MethodDescriptor) {
+final class EntityMethodDescriptor(val method: MethodDescriptor) {
   /**
     * ScalaPB doesn't do this conversion for us unfortunately.
     * By doing it, we can use EntitykeyProto.entityKey.get() to read the entity key nicely.
@@ -75,37 +75,38 @@ private final class EntityIdExtractor(method: MethodDescriptor) {
 
     fields.length match {
       case 1 => dm.getField(fields.head).toString
-      case _ => fields.iterator.map(dm.getField).mkString(EntityIdExtractor.Separator)
+      case _ => fields.iterator.map(dm.getField).mkString(EntityMethodDescriptor.Separator)
     }
 
   }
 }
 
 private final class EntityUserFunctionTypeSupport(serviceDescriptor: ServiceDescriptor,
-  idExtractors: Map[String, EntityIdExtractor], entityTypeSupport: EntityTypeSupport) extends UserFunctionTypeSupport {
+  methodDescriptors: Map[String, EntityMethodDescriptor], entityTypeSupport: EntityTypeSupport) extends UserFunctionTypeSupport {
 
-  override def handler: Flow[UserFunctionCommand, UserFunctionReply, NotUsed] =
-    Flow[UserFunctionCommand].map(ufToEntityCommand).via(entityTypeSupport.handler)
+  override def handler(name: String): Flow[UserFunctionCommand, UserFunctionReply, NotUsed] = {
+    val method = methodDescriptor(name)
+    Flow[UserFunctionCommand].map(ufToEntityCommand(method)).via(entityTypeSupport.handler(method))
+  }
 
 
   override def handleUnary(command: UserFunctionCommand): Future[UserFunctionReply] = {
-    entityTypeSupport.handleUnary(ufToEntityCommand(command))
+    entityTypeSupport.handleUnary(ufToEntityCommand(methodDescriptor(command.name))(command))
   }
 
-  private def ufToEntityCommand(command: UserFunctionCommand): EntityCommand = {
-    idExtractors.get(command.name) match {
-      case Some(extractor) =>
-        val entityId = extractor.extractId(command.payload.fold(ByteString.EMPTY)(_.value))
-        EntityCommand(entityId = entityId, name = command.name, payload = command.payload)
-      case None =>
-        throw EntityDiscoveryException(s"Unknown command ${command.name} on service ${serviceDescriptor.getFullName}")
-    }
+  private def ufToEntityCommand(method: EntityMethodDescriptor): UserFunctionCommand => EntityCommand = { command =>
+    val entityId = method.extractId(command.payload.fold(ByteString.EMPTY)(_.value))
+    EntityCommand(entityId = entityId, name = command.name, payload = command.payload)
   }
+
+  private def methodDescriptor(name: String): EntityMethodDescriptor =
+    methodDescriptors
+      .getOrElse(name, throw EntityDiscoveryException(s"Unknown command $name on service ${serviceDescriptor.getFullName}"))
 }
 
 trait EntityTypeSupport {
 
-  def handler: Flow[EntityCommand, UserFunctionReply, NotUsed]
+  def handler(methodDescriptor: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed]
 
   def handleUnary(command: EntityCommand): Future[UserFunctionReply]
 

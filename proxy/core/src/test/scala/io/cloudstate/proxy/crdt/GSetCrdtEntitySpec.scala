@@ -24,11 +24,11 @@ class GSetCrdtEntitySpec extends AbstractCrdtEntitySpec {
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.gset.value
 
   def createSet(elements: ProtoAny*) = {
-    CrdtReply.Action.Create(CrdtState(CrdtState.State.Gset(GSetState(elements))))
+    CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Gset(GSetState(elements))))
   }
 
   def updateSet(elements: ProtoAny*) = {
-    CrdtReply.Action.Update(CrdtDelta(CrdtDelta.Delta.Gset(GSetDelta(elements))))
+    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Gset(GSetDelta(elements))))
   }
 
   "The GSet CrdtEntity" should {

@@ -8,7 +8,7 @@ import akka.event.Logging
 import akka.grpc.GrpcClientSettings
 import akka.pattern.ask
 import akka.stream.Materializer
-import akka.stream.scaladsl.Flow
+import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
 import io.cloudstate.crdt.CrdtClient
@@ -45,9 +45,9 @@ class CrdtSupportFactory(system: ActorSystem, config: EntityDiscoveryManager.Con
   }
 
   private def validate(serviceDescriptor: ServiceDescriptor): Unit = {
-    val streamedMethods = serviceDescriptor.getMethods.asScala.filter(m => m.toProto.getClientStreaming || m.toProto.getServerStreaming)
+    val streamedMethods = serviceDescriptor.getMethods.asScala.filter(m => m.toProto.getClientStreaming)
     if (streamedMethods.nonEmpty) {
-      throw EntityDiscoveryException(s"CRDT entities do not support streamed methods, but ${serviceDescriptor.getFullName} has the following streamed methods: ${streamedMethods.map(_.getName).mkString(",")}")
+      throw EntityDiscoveryException(s"CRDT entities do not support streaming in from the client, but ${serviceDescriptor.getFullName} has the following streamed methods: ${streamedMethods.map(_.getName).mkString(",")}")
     }
   }
 }
@@ -55,11 +55,18 @@ class CrdtSupportFactory(system: ActorSystem, config: EntityDiscoveryManager.Con
 private class CrdtSupport(crdtEntity: ActorRef, parallelism: Int, private implicit val relayTimeout: Timeout) extends EntityTypeSupport {
   import akka.pattern.ask
 
-  override def handler: Flow[EntityCommand, UserFunctionReply, NotUsed] =
-    Flow[EntityCommand].mapAsync(parallelism)(command => (crdtEntity ? command).mapTo[UserFunctionReply])
+  override def handler(method: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed] = {
+    if (method.method.toProto.getServerStreaming) {
+      Flow[EntityCommand]
+        .mapAsync(parallelism)(command => (crdtEntity ? command).mapTo[Source[UserFunctionReply, NotUsed]])
+        .flatMapConcat(identity)
+    } else {
+      Flow[EntityCommand].mapAsync(parallelism)(command => (crdtEntity ? command).mapTo[UserFunctionReply])
+    }
+  }
 
   override def handleUnary(command: EntityCommand): Future[UserFunctionReply] =
     (crdtEntity ? command).mapTo[UserFunctionReply]
 }
 
-
+case class StreamedCrdtCommand(command: EntityCommand)
