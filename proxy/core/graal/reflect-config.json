@@ -154,6 +154,10 @@
 },
 {
   "name":"akka.cluster.OnMemberStatusChangedListener",
+  "fields" : [
+      { "name" : "context", "allowWrite" : true },
+      { "name" : "self", "allowWrite" : true }
+    ],
   "allDeclaredFields":true,
   "allDeclaredConstructors":true
 },
@@ -430,13 +434,17 @@
   "allDeclaredFields":true
 },
 {
+  "name":"akka.persistence.journal.ReplayFilter",
+  "fields" : [
+      { "name" : "context", "allowWrite" : true },
+      { "name" : "self", "allowWrite" : true }
+    ],
+  "allDeclaredFields":true
+},
+{
   "name":"akka.persistence.journal.AsyncWriteJournal$Resequencer",
   "allDeclaredFields":true,
   "methods":[{"name":"<init>","parameterTypes":[] }]
-},
-{
-  "name":"akka.persistence.journal.ReplayFilter",
-  "allDeclaredFields":true
 },
 {
   "name":"akka.persistence.journal.inmem.InmemJournal",
@@ -877,6 +885,10 @@
 },
 {
   "name":"io.cloudstate.proxy.eventsourced.EventSourcedEntity",
+  "fields" : [
+      { "name" : "context", "allowWrite" : true },
+      { "name" : "self", "allowWrite" : true }
+    ],
   "allDeclaredFields":true
 },
 {
