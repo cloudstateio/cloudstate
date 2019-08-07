@@ -29,8 +29,14 @@ object AbstractCrdtEntitySpec {
       |akka.actor.provider = cluster
       |# Make the tests run faster
       |akka.cluster.distributed-data.notify-subscribers-interval = 50ms
-      |akka.remote.netty.tcp.port = 0
-    """.stripMargin)
+      |akka.remote {
+      |  enabled-transports = []
+      |  artery {
+      |    enabled = on
+      |    transport = tcp
+      |    canonical.port = 0
+      |  }
+      |}""".stripMargin)
 
   final val ServiceName = "some.ServiceName"
   final val UserFunctionName = "user-function-name"
