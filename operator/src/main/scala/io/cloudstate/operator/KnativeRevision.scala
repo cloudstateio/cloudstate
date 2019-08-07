@@ -93,8 +93,8 @@ object KnativeRevision {
       val configPath = __ \ "config"
       (__ \ "name").read[String].flatMap {
         case OperatorConstants.KnativeServingDeployerName => Reads.pure(KnativeServingDeployer)
-        case OperatorConstants.EventSourcedDeployerName =>
-          configPath.read[EventSourcedDeployer].map(identity)
+        case OperatorConstants.CloudStateDeployerName =>
+          configPath.read[CloudStateDeployer].map(identity)
         case other =>
           configPath.readNullable[JsValue]
             .map(config => UnknownDeployer(other, config))
@@ -106,22 +106,22 @@ object KnativeRevision {
         (__ \ "config").writeNullable[JsValue]
       )((dep: Deployer) => dep match {
       case KnativeServingDeployer => (KnativeServingDeployerName, None)
-      case es: EventSourcedDeployer =>
-        (OperatorConstants.EventSourcedDeployerName, Some(Json.toJson(es)(EventSourcedDeployer.format)))
+      case es: CloudStateDeployer =>
+        (OperatorConstants.CloudStateDeployerName, Some(Json.toJson(es)(CloudStateDeployer.format)))
       case UnknownDeployer(name, config) => (name, config)
     })
   }
 
   case object KnativeServingDeployer extends Deployer
 
-  case class EventSourcedDeployer(
+  case class CloudStateDeployer(
     journal: Journal,
     sidecarResources: Option[Resource.Requirements],
     sidecarJvmMemory: Option[String]
   ) extends Deployer
 
-  object EventSourcedDeployer {
-    implicit val format: Format[EventSourcedDeployer] = Json.format
+  object CloudStateDeployer {
+    implicit val format: Format[CloudStateDeployer] = Json.format
   }
 
   case class UnknownDeployer(name: String, config: Option[JsValue]) extends Deployer

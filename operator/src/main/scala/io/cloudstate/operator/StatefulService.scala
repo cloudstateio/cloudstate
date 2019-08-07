@@ -9,7 +9,7 @@ import play.api.libs.functional.syntax._
 import play.api.libs.json._
 import skuber.json.format._
 
-object EventSourcedService {
+object StatefulService {
 
   import OperatorConstants._
 
@@ -21,7 +21,7 @@ object EventSourcedService {
     volumes: Option[List[Volume]],
     serviceAccountName: Option[String],
     autoscaling: Option[Autoscaling],
-    journal: Journal,
+    journal: Option[Journal],
     sidecarResources: Option[Resource.Requirements],
     sidecarJvmMemory: Option[String],
     nodeSelector: Option[Map[String, String]],
@@ -123,7 +123,7 @@ object EventSourcedService {
   implicit val eventSourcedServiceResourceDefinition = ResourceDefinition[Resource](
     group = CloudStateGroup,
     version = CloudStateApiVersionNumber,
-    kind = EventSourcedServiceKind,
+    kind = StatefulServiceKind,
     shortNames = List("ess"),
     subresources = Some(Subresources()
       .withStatusSubresource

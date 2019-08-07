@@ -51,7 +51,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
 
     override def handleChanged(resource: Resource): Future[StatusUpdate] = {
       resource.spec.deployer match {
-        case Some(esd: EventSourcedDeployer) =>
+        case Some(esd: CloudStateDeployer) =>
           reconcile(resource, esd)
         case _ =>
           Future.successful(StatusUpdate.None)
@@ -61,7 +61,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
     override def handleDeleted(resource: Resource): Future[Done] = {
 
       resource.spec.deployer match {
-        case Some(esd: EventSourcedDeployer) =>
+        case Some(esd: CloudStateDeployer) =>
           for {
             maybeExisting <- client.getOption[Deployment](deploymentNameFor(resource))
             _ <- maybeExisting match {
@@ -124,18 +124,18 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       }
     }
 
-    private def reconcile(revision: KnativeRevision.Resource, deployer: EventSourcedDeployer) = {
+    private def reconcile(revision: KnativeRevision.Resource, deployer: CloudStateDeployer) = {
       val deploymentName = deploymentNameFor(revision)
 
       for {
-        maybeJournal <- client.getOption[EventSourcedJournal.Resource](deployer.journal.name)
+        maybeJournal <- client.getOption[Journal.Resource](deployer.journal.name)
         maybeDeployment <- client.getOption[Deployment](deploymentName)
         statusUpdate <- reconcileDeployment(revision, deployer, maybeJournal, maybeDeployment)
       } yield statusUpdate
     }
 
-    private def reconcileDeployment(revision: KnativeRevision.Resource, deployer: EventSourcedDeployer,
-      maybeJournal: Option[EventSourcedJournal.Resource], maybeDeployment: Option[Deployment]) = {
+    private def reconcileDeployment(revision: KnativeRevision.Resource, deployer: CloudStateDeployer,
+      maybeJournal: Option[Journal.Resource], maybeDeployment: Option[Deployment]) = {
       val deploymentName = deploymentNameFor(revision)
 
       // for expression over eithers, only progresses when they return Right, otherwise we end up with Left of condition
@@ -213,8 +213,8 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       }
     }
 
-    private def validateJournal(revision: KnativeRevision.Resource, deployer: EventSourcedDeployer,
-      maybeJournal: Option[EventSourcedJournal.Resource]): Either[KnativeRevision.Condition, Container] = {
+    private def validateJournal(revision: KnativeRevision.Resource, deployer: CloudStateDeployer,
+      maybeJournal: Option[Journal.Resource]): Either[KnativeRevision.Condition, Container] = {
       maybeJournal match {
         case None =>
           Left(errorCondition(JournalConditionType, "JournalNotFound", s"Journal with name ${deployer.journal.name} not found."))
@@ -247,7 +247,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       }
     }
 
-    private def createCassandraSideCar(revision: KnativeRevision.Resource, deployer: EventSourcedDeployer,
+    private def createCassandraSideCar(revision: KnativeRevision.Resource, deployer: CloudStateDeployer,
       service: String, keyspace: String) = {
       createSideCar(revision, deployer, CassandraJournalImage, List(
         EnvVar("CASSANDRA_CONTACT_POINTS", service),
@@ -255,7 +255,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       ))
     }
 
-    private def createSideCar(revision: KnativeRevision.Resource, deployer: EventSourcedDeployer, image: String, env: Seq[EnvVar]) = {
+    private def createSideCar(revision: KnativeRevision.Resource, deployer: CloudStateDeployer, image: String, env: Seq[EnvVar]) = {
       val jvmMemory = deployer.sidecarJvmMemory.getOrElse("256m")
       val sidecarResources = deployer.sidecarResources.getOrElse(Resource.Requirements(
         limits = Map(
@@ -319,7 +319,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
 
     }
 
-    private def createDeployment(revision: KnativeRevision.Resource, deployer: EventSourcedDeployer, sidecar: Container) = {
+    private def createDeployment(revision: KnativeRevision.Resource, deployer: CloudStateDeployer, sidecar: Container) = {
 
       // validate? It should already be validated.
       val orig = revision.spec.containers.head

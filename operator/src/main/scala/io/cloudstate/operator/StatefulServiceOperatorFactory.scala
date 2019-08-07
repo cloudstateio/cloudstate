@@ -27,33 +27,36 @@ import skuber.apps.v1.Deployment
 
 import scala.concurrent.{ExecutionContext, Future}
 
-import EventSourcedService.Resource
+import StatefulService.Resource
 
-class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionContext)
-  extends OperatorFactory[EventSourcedService.Status, Resource] {
+class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionContext)
+  extends OperatorFactory[StatefulService.Status, Resource] {
 
   private val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "gcr.io/stateserv/cloudstate-proxy-cassandra:latest")
+  private val InMemoryJournalImage = sys.env.getOrElse("IN_MEMORY_JOURNAL_IMAGE", "gcr.io/stateserv/cloudstate-proxy-in-memory:latest")
+  private val NoJournalImage = sys.env.getOrElse("NO_JOURNAL_IMAGE", "gcr.io/stateserv/cloudstate-proxy:latest")
 
   import OperatorConstants._
 
-  override def apply(client: KubernetesClient): Operator = new EventSourcedServiceOperator(client)
+  override def apply(client: KubernetesClient): Operator = new StatefulServiceOperator(client)
 
-  class EventSourcedServiceOperator(client: KubernetesClient) extends Operator {
+  class StatefulServiceOperator(client: KubernetesClient) extends Operator {
 
     private val helper = new ResourceHelper(client)
 
-    private def isOwnedByEventSourcedServiceController(deployment: Deployment): Boolean = {
+    private def isOwnedByStatefulServiceController(deployment: Deployment): Boolean = {
       deployment.metadata.ownerReferences
         .find(_.controller.contains(true))
         .exists(ref => ref.apiVersion.startsWith(CloudStateGroup + "/")
-          && ref.kind == EventSourcedServiceKind)
+          && ref.kind == StatefulService)
     }
 
     override def handleChanged(resource: Resource): Future[StatusUpdate] = {
       val deploymentName = deploymentNameFor(resource)
 
       for {
-        maybeJournal <- client.getOption[EventSourcedJournal.Resource](resource.spec.journal.name)
+        maybeJournal <- resource.spec.journal.map(journal => client.getOption[Journal.Resource](journal.name))
+          .getOrElse(Future.successful(None))
         maybeDeployment <- client.getOption[Deployment](deploymentName)
         statusUpdate <- reconcileDeployment(resource, maybeJournal, maybeDeployment)
       } yield statusUpdate
@@ -64,7 +67,7 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
       for {
         maybeExisting <- client.getOption[Deployment](deploymentNameFor(resource))
         _ <- maybeExisting match {
-          case Some(existing) if isOwnedByEventSourcedServiceController(existing) =>
+          case Some(existing) if isOwnedByStatefulServiceController(existing) =>
             println("Deleting deployment " + existing.name)
             client.delete[Deployment](existing.name)
           case Some(existing) =>
@@ -81,7 +84,7 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
     override def statusFromError(error: Throwable, existing: Option[Resource]): StatusUpdate = {
       existing match {
         case Some(service) =>
-          updateCondition(service, EventSourcedService.Condition(
+          updateCondition(service, StatefulService.Condition(
             `type` = ConditionResourcesAvailable,
             status = UnknownStatus,
             reason = Some("UnknownError"),
@@ -95,8 +98,8 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
       }
     }
 
-    private def updateCondition(service: Resource, conditions: EventSourcedService.Condition*): StatusUpdate = {
-      val status = service.status.getOrElse(new EventSourcedService.Status(Nil))
+    private def updateCondition(service: Resource, conditions: StatefulService.Condition*): StatusUpdate = {
+      val status = service.status.getOrElse(new StatefulService.Status(Nil))
 
       if (conditions.forall(condition => status.conditions.exists(c =>
         c.`type` == condition.`type` &&
@@ -115,7 +118,7 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
       }
     }
 
-    private def reconcileDeployment(service: Resource, maybeJournal: Option[EventSourcedJournal.Resource],
+    private def reconcileDeployment(service: Resource, maybeJournal: Option[Journal.Resource],
       maybeDeployment: Option[Deployment]) = {
 
       val deploymentName = deploymentNameFor(service)
@@ -161,12 +164,12 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
         for {
           _ <- ensureOtherObjectsExist(service, service.spec.serviceAccountName.getOrElse("default"), deploymentName)
           _ <- deploymentFuture
-        } yield updateCondition(service, EventSourcedService.Condition(
+        } yield updateCondition(service, StatefulService.Condition(
           `type` = JournalConditionType,
           status = TrueStatus,
           severity = Some("Info"),
           lastTransitionTime = Some(ZonedDateTime.now())
-        ), EventSourcedService.Condition(
+        ), StatefulService.Condition(
           `type` = ConditionResourcesAvailable,
           status = TrueStatus,
           severity = Some("Info"),
@@ -183,15 +186,15 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
     }
 
     private def errorCondition(`type`: String, reason: String, message: String) = {
-      EventSourcedService.Condition(`type`, FalseStatus, Some("Error"), Some(ZonedDateTime.now()), Some(reason), Some(message))
+      StatefulService.Condition(`type`, FalseStatus, Some("Error"), Some(ZonedDateTime.now()), Some(reason), Some(message))
     }
 
-    private def verifyWeOwnDeployment(name: String, maybeDeployment: Option[Deployment]): Either[EventSourcedService.Condition, Done] = {
+    private def verifyWeOwnDeployment(name: String, maybeDeployment: Option[Deployment]): Either[StatefulService.Condition, Done] = {
       maybeDeployment match {
         case None =>
           Right(Done)
         case Some(deployment) =>
-          if (isOwnedByEventSourcedServiceController(deployment)) {
+          if (isOwnedByStatefulServiceController(deployment)) {
             Right(Done)
           } else {
             Left(errorCondition(ConditionResourcesAvailable, ConditionResourcesAvailableNotOwned,
@@ -200,18 +203,20 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
       }
     }
 
-    private def validateJournal(service: Resource, maybeJournal: Option[EventSourcedJournal.Resource]): Either[EventSourcedService.Condition, Container] = {
-      maybeJournal match {
-        case None =>
-          Left(errorCondition(JournalConditionType, "JournalNotFound", s"Journal with name ${service.spec.journal.name} not found."))
-        case Some(journal) =>
+    private def validateJournal(service: Resource, maybeJournal: Option[Journal.Resource]): Either[StatefulService.Condition, Container] = {
+      (maybeJournal, service.spec.journal) match {
+        case (_, None) =>
+          Right(createNoJournalSidecar(service))
+        case (None, Some(journalConfig)) =>
+          Left(errorCondition(JournalConditionType, "JournalNotFound", s"Journal with name ${journalConfig.name} not found."))
+        case (Some(journal), Some(journalConfig)) =>
           journal.spec.`type` match {
             case `CassandraJournalType` =>
               journal.spec.deployment match {
                 case `UnmanagedJournalDeployment` =>
                   (journal.spec.config \ "service").asOpt[String] match {
                     case Some(serviceName) =>
-                      service.spec.journal.config.flatMap(config => (config \ "keyspace").asOpt[String]) match {
+                      journalConfig.config.flatMap(config => (config \ "keyspace").asOpt[String]) match {
                         case Some(keyspace) =>
                           Right(createCassandraSideCar(service, serviceName, keyspace))
                         case None =>
@@ -226,6 +231,8 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
                   Left(errorCondition(JournalConditionType, "UnknownDeploymentType",
                     s"Unknown Cassandra deployment type: $unknown, supported types for Cassandra are: Unmanaged"))
               }
+            case `InMemoryJournalType` =>
+              Right(createInMemorySidecar(service))
             case unknown =>
               Left(errorCondition(JournalConditionType, "UnknownJournalType",
                 s"Unknown journal type: $unknown, supported types are: Cassandra"))
@@ -238,6 +245,14 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
         EnvVar("CASSANDRA_CONTACT_POINTS", serviceName),
         EnvVar("CASSANDRA_KEYSPACE", keyspace)
       ))
+    }
+
+    private def createInMemorySidecar(serviceResource: Resource) = {
+      createSideCar(serviceResource, InMemoryJournalImage, Nil)
+    }
+
+    private def createNoJournalSidecar(serviceResource: Resource) = {
+      createSideCar(serviceResource, NoJournalImage, Nil)
     }
 
     private def createSideCar(service: Resource, image: String, env: List[EnvVar]) = {
@@ -285,7 +300,7 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
           EnvVar("REMOTING_PORT", AkkaRemotingPort.toString),
           EnvVar("MANAGEMENT_PORT", AkkaManagementPort.toString),
           EnvVar("SELECTOR_LABEL_VALUE", service.name),
-          EnvVar("SELECTOR_LABEL", EventSourcedServiceLabel),
+          EnvVar("SELECTOR_LABEL", StatefulServiceLabel),
           EnvVar("REQUIRED_CONTACT_POINT_NR", "1"),
           EnvVar("JAVA_OPTS", s"-Xms$jvmMemory -Xmx$jvmMemory")
         ),
@@ -352,10 +367,9 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
 
       val labels = {
         val ls = service.metadata.labels ++ Map(
-          EventSourcedServiceLabel -> service.name,
-          EventSourcedServiceUidLabel -> service.uid,
-          JournalLabel -> service.spec.journal.name,
-        )
+          StatefulServiceLabel -> service.name,
+          StatefulServiceUidLabel -> service.uid
+        ) ++ service.spec.journal.map(j => JournalLabel -> j.name)
         if (!ls.contains("app")) ls + ("app" -> service.name)
         else ls
       }
@@ -387,7 +401,7 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
         // and then it scales back down to zero.
       ).withReplicas(1)
         .withLabelSelector(
-          EventSourcedServiceUidLabel is service.uid
+          StatefulServiceUidLabel is service.uid
         )
         .withTemplate(Pod.Template.Spec(
           metadata = ObjectMeta(
@@ -404,7 +418,7 @@ class EventSourcedServiceOperatorFactory(implicit mat: Materializer, ec: Executi
         _ <- helper.ensurePodReaderRoleBindingExists(serviceAccountName)
         _ <- helper.ensureDeploymentScalerRoleExists(deploymentName, service)
         _ <- helper.ensureDeploymentScalerRoleBindingExists(serviceAccountName, service)
-        _ <- helper.ensureServiceForEssExists(service)
+        _ <- helper.ensureServiceForStatefulServiceExists(service)
       } yield ()
     }
 

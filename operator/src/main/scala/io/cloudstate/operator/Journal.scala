@@ -21,9 +21,9 @@ import skuber.ResourceSpecification.Subresources
 import skuber.apiextensions.CustomResourceDefinition
 import skuber.{CustomResource, ListResource, ResourceDefinition}
 
-object EventSourcedJournal {
+object Journal {
 
-  type Resource = CustomResource[EventSourcedJournal.Spec, Status]
+  type Resource = CustomResource[Journal.Spec, Status]
   type ResourceList = ListResource[Resource]
 
   case class Spec(`type`: String, deployment: String, config: JsObject)
@@ -38,11 +38,11 @@ object EventSourcedJournal {
     implicit val format: Format[Status] = Json.format
   }
 
-  implicit val eventSourcedJournalResourceDefinition = ResourceDefinition[Resource](
+  implicit val journalResourceDefinition = ResourceDefinition[Resource](
     group = "cloudstate.io",
     version = "v1alpha1",
-    kind = "EventSourcedJournal",
-    shortNames = List("esj"),
+    kind = "Journal",
+    shortNames = Nil,
     subresources = Some(Subresources()
       .withStatusSubresource
     )

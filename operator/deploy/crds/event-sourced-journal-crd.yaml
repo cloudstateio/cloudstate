@@ -1,7 +1,7 @@
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
-  name: eventsourcedjournals.cloudstate.io
+  name: journals.cloudstate.io
 spec:
   group: cloudstate.io
   versions:
@@ -10,11 +10,9 @@ spec:
       storage: true
   scope: Namespaced
   names:
-    plural: eventsourcedjournals
-    singular: eventsourcedjournal
-    kind: EventSourcedJournal
-    shortNames:
-    - esj
+    plural: journals
+    singular: journal
+    kind: Journal
   subresources:
     status: {}
   additionalPrinterColumns:

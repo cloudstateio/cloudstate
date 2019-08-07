@@ -17,14 +17,14 @@ class ResourceHelper(client: KubernetesClient)(implicit ec: ExecutionContext) {
     KubernetesManagedByLabel -> CloudStateGroup
   )
 
-  def ensureServiceForEssExists(service: EventSourcedService.Resource): Future[Service] = {
+  def ensureServiceForStatefulServiceExists(service: StatefulService.Resource): Future[Service] = {
     val expectedService = Service(
       metadata = createMetadata(service.name, Some(service)),
     ).setPort(Service.Port(
       name = "grpc",
       port = 80,
       targetPort = Some(Left(KnativeSidecarH2cPort))
-    )).withSelector(EventSourcedServiceUidLabel -> service.uid)
+    )).withSelector(StatefulServiceUidLabel -> service.uid)
     ensureObjectOwnedByUsExists[Service](expectedService, Some(service)) { existing =>
       existing.copy(spec = existing.spec.map(_.copy(
         ports = expectedService.spec.get.ports,

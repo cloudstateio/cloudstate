@@ -56,7 +56,8 @@ object EntityDiscoveryManager {
     numberOfShards: Int,
     proxyParallelism: Int,
     concurrencySettings: ConcurrencyEnforcerSettings,
-    statsCollectorSettings: StatsCollectorSettings
+    statsCollectorSettings: StatsCollectorSettings,
+    journalEnabled: Boolean
   ) {
     validate()
     def this(config: Config) = {
@@ -77,7 +78,8 @@ object EntityDiscoveryManager {
           actionTimeout = config.getDuration("action-timeout").toMillis.millis,
           cleanupPeriod = config.getDuration("action-timeout-poll-period").toMillis.millis
         ),
-        statsCollectorSettings     = new StatsCollectorSettings(config.getConfig("stats"))
+        statsCollectorSettings     = new StatsCollectorSettings(config.getConfig("stats")),
+        journalEnabled             = config.getBoolean("journal-enabled")
       )
     }
 
@@ -92,13 +94,7 @@ object EntityDiscoveryManager {
 
   final case object Ready // Responds with true / false
 
-  final val supportedEntityTypes = Seq(
-    EventSourced.name,
-    StatelessFunction.name,
-    Crdt.name
-  )
-
-  final val proxyInfo = ProxyInfo(
+  final def proxyInfo(supportedEntityTypes: Seq[String]) = ProxyInfo(
     protocolMajorVersion = 0,
     protocolMinorVersion = 1,
     proxyName = "Akka",
@@ -137,13 +133,16 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
   private[this] final val concurrencyEnforcer = context.actorOf(ConcurrencyEnforcer.props(config.concurrencySettings, statsCollector), "concurrencyEnforcer")
 
   private val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
-    EventSourced.name -> new EventSourcedSupportFactory(context.system, config, clientSettings,
-      concurrencyEnforcer = concurrencyEnforcer, statsCollector = statsCollector),
     Crdt.name -> new CrdtSupportFactory(context.system, config, entityDiscoveryClient, clientSettings,
       concurrencyEnforcer = concurrencyEnforcer, statsCollector = statsCollector)
-  )
+  ) ++ {
+    if (config.journalEnabled)
+      Map(EventSourced.name -> new EventSourcedSupportFactory(context.system, config, clientSettings,
+        concurrencyEnforcer = concurrencyEnforcer, statsCollector = statsCollector))
+    else Map.empty
+  }
 
-  entityDiscoveryClient.discover(EntityDiscoveryManager.proxyInfo) pipeTo self
+  entityDiscoveryClient.discover(EntityDiscoveryManager.proxyInfo(supportFactories.keys.toSeq)) pipeTo self
 
   override def receive: Receive = {
     case spec: EntitySpec =>
@@ -165,7 +164,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
           supportFactories.get(entity.entityType) match {
             case Some(factory) => EntityDiscoveryManager.ServableEntity(
               entity.serviceName, serviceDescriptor, factory.build(entity, serviceDescriptor))
-            case None => throw EntityDiscoveryException(s"Service [${entity.serviceName}] has declared an unsupported entity type [${entity.entityType}]. Supported types are ${EntityDiscoveryManager.supportedEntityTypes.mkString(",")}")
+            case None => throw EntityDiscoveryException(s"Service [${entity.serviceName}] has declared an unsupported entity type [${entity.entityType}]. Supported types are ${supportFactories.keys.mkString(",")}")
           }
         }
 

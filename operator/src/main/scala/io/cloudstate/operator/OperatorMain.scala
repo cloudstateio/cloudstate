@@ -29,6 +29,6 @@ object OperatorMain extends App {
 
   val runner = new OperatorRunner()
   //runner.start(namespaces, new KnativeRevisionOperatorFactory())
-  runner.start(namespaces, new EventSourcedJournalOperatorFactory())
-  runner.start(namespaces, new EventSourcedServiceOperatorFactory())
+  runner.start(namespaces, new JournalOperatorFactory())
+  runner.start(namespaces, new StatefulServiceOperatorFactory())
 }

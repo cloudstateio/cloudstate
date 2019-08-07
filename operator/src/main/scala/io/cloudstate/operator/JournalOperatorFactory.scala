@@ -30,17 +30,17 @@ import scala.concurrent.{ExecutionContext, Future}
 import skuber.apps.v1.DeploymentList
 import skuber.apps.v1.Deployment
 
-class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: ExecutionContext) extends
-  OperatorFactory[EventSourcedJournal.Status, EventSourcedJournal.Resource] {
+class JournalOperatorFactory(implicit mat: Materializer, ec: ExecutionContext) extends
+  OperatorFactory[Journal.Status, Journal.Resource] {
 
   import OperatorConstants._
-  import EventSourcedJournal.Resource
+  import Journal.Resource
 
-  override def apply(client: KubernetesClient): Operator = new EventSourcedJournalOperator(client)
+  override def apply(client: KubernetesClient): Operator = new JournalOperator(client)
 
-  class EventSourcedJournalOperator(client: KubernetesClient) extends Operator {
+  class JournalOperator(client: KubernetesClient) extends Operator {
 
-    private def status(spec: Option[Resource], status: String, reason: Option[String] = None, message: Option[String] = None) = EventSourcedJournal.Status(
+    private def status(spec: Option[Resource], status: String, reason: Option[String] = None, message: Option[String] = None) = Journal.Status(
       conditions = Some(List(
         Condition(
           `type` = JournalConditionType,
@@ -80,6 +80,7 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
               case unknown =>
                 Some(errorStatus(Some(resource), "UnknownDeploymentType", s"Unknown Cassandra deployment type: $unknown, supported types for Cassandra are: Unmanaged"))
             }
+          case `InMemoryJournalType` => None
           case unknown =>
             Some(errorStatus(Some(resource), "UnknownJournalType", s"Unknown journal type: $unknown, supported types are: Cassandra"))
         }
@@ -126,15 +127,15 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
               Future.successful(Done)
           }
         } yield Done
-      } else if (deployment.metadata.labels.contains(EventSourcedServiceLabel)) {
+      } else if (deployment.metadata.labels.contains(StatefulServiceLabel)) {
         for {
-          maybeEventSourcedService <- deployment.metadata.labels.get(EventSourcedServiceLabel).map { serviceName =>
-            client.getOption[EventSourcedService.Resource](serviceName)
+          maybeStatefulService <- deployment.metadata.labels.get(StatefulServiceLabel).map { serviceName =>
+            client.getOption[StatefulService.Resource](serviceName)
           }.getOrElse(Future.successful(None))
-          _ <- maybeEventSourcedService match {
+          _ <- maybeStatefulService match {
             case Some(service) =>
-              val status = service.status.getOrElse(EventSourcedService.Status(Nil))
-              client.updateStatus(service.withStatus(touchEventSourcedServiceStatus(status)))
+              val status = service.status.getOrElse(StatefulService.Status(Nil))
+              client.updateStatus(service.withStatus(touchStatefulServiceStatus(status)))
             case None =>
               Future.successful(Done)
           }
@@ -169,8 +170,8 @@ class EventSourcedJournalOperatorFactory(implicit mat: Materializer, ec: Executi
       status.copy(conditions = conditions)
     }
 
-    private def touchEventSourcedServiceStatus(status: EventSourcedService.Status): EventSourcedService.Status = {
-      val condition = EventSourcedService.Condition(
+    private def touchStatefulServiceStatus(status: StatefulService.Status): StatefulService.Status = {
+      val condition = StatefulService.Condition(
         `type` = JournalConditionType,
         status = UnknownStatus,
         reason = Some("JournalChanged"),
