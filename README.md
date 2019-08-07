@@ -70,6 +70,10 @@ Next we'll take a look at the Akka proxy, which can be found in [`proxy/core`](p
 
 The [TCK](tck/src/test/resources/application.conf) makes it possible to verify that combinations of backends and frontends behaves as expected. In order to make a frontend eligible for testing in the TCK a sample application implementing a simple [Shopping Cart](samples/js-shopping-cart) (here showcased with the Node.js frontend) is required.
 
+## GraalVM Native Image generation
+
+The Akka-based Proxy Sidecar Reference Implementation can be generated into a native executable via GraalVM `native-image`, instructions for doing so is available [here](GRAALVM.md).
+
 ## Docs
 - See the [rationale](RATIONALE.md) document for a more context.
 - Read the current [documentation](docs/README.md) and [spec](SPEC.md). 
