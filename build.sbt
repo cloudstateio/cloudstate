@@ -61,6 +61,58 @@ def dockerSettings: Seq[Setting[_]] = Seq(
   dockerUsername := sys.props.get("docker.username").orElse(Some("octo"))
 )
 
+def sharedNativeImageSettings = Seq(
+      //"-O1", // Optimization level
+      "-H:IncludeResources=.+\\.conf",
+      "-H:IncludeResources=.+\\.properties",
+      "-H:+AllowVMInspection",
+      "-H:-RuntimeAssertions",
+      "-H:+ReportExceptionStackTraces",
+      "-H:-PrintUniverse", // if "+" prints out all classes which are included
+      "-H:-NativeArchitecture", // if "+" Compiles the native image to customize to the local CPU arch
+      "-H:Class=" + "io.cloudstate.proxy.CloudStateProxyMain",
+      "--verbose",
+      //"--no-server", // Uncomment to not use the native-image build server, to avoid potential cache problems with builds
+      //"--report-unsupported-elements-at-runtime", // Hopefully a self-explanatory flag
+      "--enable-url-protocols=http,https",
+      "--allow-incomplete-classpath",
+      "--no-fallback",
+      "--initialize-at-build-time"
+        + Seq(
+          "org.slf4j",
+          "scala",
+          "akka.dispatch.affinity",
+          "akka.util",
+          "com.google.Protobuf"
+        ).mkString("=",",","")
+      ,
+      "--initialize-at-run-time=" +
+        Seq(
+          "akka.protobuf.DescriptorProtos",
+
+          // We want to delay initialization of these to load the config at runtime
+          "com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder",
+          "com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder",
+
+          // These are to make up for the lack of shaded configuration for svm/native-image in grpc-netty-shaded
+          "com.sun.jndi.dns.DnsClient",
+          "io.grpc.netty.shaded.io.netty.handler.codec.http2.Http2CodecUtil",
+          "io.grpc.netty.shaded.io.netty.handler.codec.http2.DefaultHttp2FrameWriter",
+          "io.grpc.netty.shaded.io.netty.handler.codec.http.HttpObjectEncoder",
+          "io.grpc.netty.shaded.io.netty.handler.codec.http.websocketx.WebSocket00FrameEncoder",
+          "io.grpc.netty.shaded.io.netty.handler.ssl.util.ThreadLocalInsecureRandom",
+          "io.grpc.netty.shaded.io.netty.handler.ssl.ConscryptAlpnSslEngine",
+          "io.grpc.netty.shaded.io.netty.handler.ssl.JettyNpnSslEngine",
+          "io.grpc.netty.shaded.io.netty.handler.ssl.ReferenceCountedOpenSslEngine",
+          "io.grpc.netty.shaded.io.netty.handler.ssl.JdkNpnApplicationProtocolNegotiator",
+          "io.grpc.netty.shaded.io.netty.handler.ssl.ReferenceCountedOpenSslServerContext",
+          "io.grpc.netty.shaded.io.netty.handler.ssl.ReferenceCountedOpenSslClientContext",
+          "io.grpc.netty.shaded.io.netty.handler.ssl.util.BouncyCastleSelfSignedCertGenerator",
+          "io.grpc.netty.shaded.io.netty.handler.ssl.ReferenceCountedOpenSslContext",
+          "io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel",
+        ).mkString(",")
+      )
+
 lazy val `proxy-core` = (project in file("proxy/core"))
   .enablePlugins(JavaAppPackaging, DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin, GraalVMNativeImagePlugin)
   .settings(
@@ -141,7 +193,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     fork in run := true,
 
     // In memory journal by default
-    javaOptions in run ++= Seq("-Dconfig.resource=in-memory.conf", "-Dcloudstate.proxy.dev-mode-enabled=true"),
+    javaOptions in run ++= Seq("-Dcloudstate.proxy.dev-mode-enabled=true"),
 
     mainClass in assembly := Some("io.cloudstate.proxy.CloudStateProxyMain"),
     assemblyJarName in assembly := "akka-proxy.jar",
@@ -149,80 +201,55 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     // logLevel in assembly := Level.Debug,
     assemblyMergeStrategy in assembly := {
       /*ADD CUSTOMIZATIONS HERE*/
+      case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
       case x =>
         val oldStrategy = (assemblyMergeStrategy in assembly).value
         oldStrategy(x)
     },
 
+    graalVMNativeImageOptions ++= sharedNativeImageSettings,
     graalVMNativeImageOptions ++= Seq(
-      //"-O1", // Optimization level
       "-H:ResourceConfigurationFiles=" + baseDirectory.value / "graal" / "resource-config.json",
       "-H:ReflectionConfigurationFiles=" + baseDirectory.value / "graal" / "reflect-config.json",
-      "-H:IncludeResources=.+\\.conf",
-      "-H:IncludeResources=.+\\.properties",
-      "-H:+AllowVMInspection",
-      "-H:-RuntimeAssertions",
-      "-H:+ReportExceptionStackTraces",
-      "-H:-PrintUniverse", // if "+" prints out all classes which are included
-      "-H:-NativeArchitecture", // if "+" Compiles the native image to customize to the local CPU arch
-      "-H:Class=" + "io.cloudstate.proxy.CloudStateProxyMain",
-      "--verbose",
-      //"--no-server", // Uncomment to not use the native-image build server, to avoid potential cache problems with builds
-      //"--report-unsupported-elements-at-runtime", // Hopefully a self-explanatory flag
-      "--enable-url-protocols=http,https",
-      "--allow-incomplete-classpath",
-      "--no-fallback",
-      "--initialize-at-build-time"
-        + Seq(
-          "org.slf4j",
-          "scala",
-          "akka.dispatch.affinity",
-          "akka.util",
-          "com.google.Protobuf"
-        ).mkString("=",",","")
-      ,
-      "--initialize-at-run-time=" +
-        Seq(
-          "akka.protobuf.DescriptorProtos",
-
-          // We want to delay initialization of these to load the config at runtime
-          "com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder",
-          "com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder",
-
-          // These are to make up for the lack of shaded configuration for svm/native-image in grpc-netty-shaded
-          "com.sun.jndi.dns.DnsClient",
-          "io.grpc.netty.shaded.io.netty.handler.codec.http2.Http2CodecUtil",
-          "io.grpc.netty.shaded.io.netty.handler.codec.http2.DefaultHttp2FrameWriter",
-          "io.grpc.netty.shaded.io.netty.handler.codec.http.HttpObjectEncoder",
-          "io.grpc.netty.shaded.io.netty.handler.codec.http.websocketx.WebSocket00FrameEncoder",
-          "io.grpc.netty.shaded.io.netty.handler.ssl.util.ThreadLocalInsecureRandom",
-          "io.grpc.netty.shaded.io.netty.handler.ssl.ConscryptAlpnSslEngine",
-          "io.grpc.netty.shaded.io.netty.handler.ssl.JettyNpnSslEngine",
-          "io.grpc.netty.shaded.io.netty.handler.ssl.ReferenceCountedOpenSslEngine",
-          "io.grpc.netty.shaded.io.netty.handler.ssl.JdkNpnApplicationProtocolNegotiator",
-          "io.grpc.netty.shaded.io.netty.handler.ssl.ReferenceCountedOpenSslServerContext",
-          "io.grpc.netty.shaded.io.netty.handler.ssl.ReferenceCountedOpenSslClientContext",
-          "io.grpc.netty.shaded.io.netty.handler.ssl.util.BouncyCastleSelfSignedCertGenerator",
-          "io.grpc.netty.shaded.io.netty.handler.ssl.ReferenceCountedOpenSslContext",
-          "io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel",
-        ).mkString(",")
+      "-H:DynamicProxyConfigurationFiles=" + baseDirectory.value / "graal" / "proxy-config.json",
     )
   )
 
 lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
-  .enablePlugins(JavaAppPackaging, DockerPlugin, JavaAgent)
+  .enablePlugins(JavaAppPackaging, DockerPlugin, JavaAgent, GraalVMNativeImagePlugin)
   .dependsOn(`proxy-core`)
   .settings(
     common,
     name := "cloudstate-proxy-cassandra",
     libraryDependencies ++= Seq(
-      "com.typesafe.akka" %% "akka-persistence-cassandra"          % AkkaPersistenceCassandraVersion,
-      "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test
+      "com.typesafe.akka"            %% "akka-persistence-cassandra"        % AkkaPersistenceCassandraVersion excludeAll(
+        ExclusionRule("io.aeron"),   // we're using Artery-TCP
+        ExclusionRule("org.agrona"), // and we don't need this either
+        ExclusionRule("com.github.jnr"), // Can't native-image this, so we don't need this either
+      ),
+      "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test,
+
+      // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
+      "org.graalvm.sdk"               % "graal-sdk"                          % "19.1.1" % "provided", // Only needed for compilation
+      "com.oracle.substratevm"        % "svm"                                % "19.1.1" % "provided", // Only needed for compilation
+
+      // Adds configuration to let Graal Native Image (SubstrateVM) work
+      "com.github.vmencik"           %% "graal-akka-actor"                   % GraalAkkaVersion % "provided", // Only needed for compilation
+      "com.github.vmencik"           %% "graal-akka-stream"                  % GraalAkkaVersion % "provided", // Only needed for compilation
+      "com.github.vmencik"           %% "graal-akka-http"                    % GraalAkkaVersion % "provided", // Only needed for compilation
     ),
     dockerSettings,
 
     fork in run := true,
-    mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain")
+    mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
+
+    graalVMNativeImageOptions ++= sharedNativeImageSettings,
+    graalVMNativeImageOptions ++= Seq(
+      "-H:ResourceConfigurationFiles=" + baseDirectory.value / "graal" / "resource-config.json",
+      "-H:ReflectionConfigurationFiles=" + baseDirectory.value / "graal" / "reflect-config.json",
+      "-H:DynamicProxyConfigurationFiles=" + baseDirectory.value / "graal" / "proxy-config.json",
+      "-H:IncludeResourceBundles=com.datastax.driver.core.Driver",
+    )
   )
 
 lazy val `proxy-tests` = (project in file("proxy/proxy-tests"))
