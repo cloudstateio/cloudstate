@@ -22,10 +22,16 @@ OpenJDK 64-Bit GraalVM CE 19.1.1 (build 25.222-b08-jvmci-19.1-b01, mixed mode)
 
 Also, verify that you've added GraalVM correctly by checking that `native-image` is available as a command.
 
-Then start creating the binary:
+Then either start creating the binary with the in-memory storage:
 
 ```bash
 sbt proxy-core/graalvm-native-image:packageBin
+```
+
+or the Cassandra-client based storage binary:
+
+```bash
+sbt proxy-cassandra/graalvm-native-image:packageBin
 ```
 
 Example output:
@@ -54,7 +60,7 @@ Example output:
 The executable generated is located here:
 *../cloudstate/proxy/core/target/graalvm-native-image/./cloudstate-proxy-core*
 
-## Running the generated executable
+## Running a generated executable
 
 The binary will have to dynamically link to a *SunEC* provider, and needs to source it either from the present working dir, or via the **java.library.path**, this is achieved by passing in the following property when executing the binary:  *-Djava.library.path=<path-to-JRE>/lib*
 
@@ -62,8 +68,14 @@ Example: **-Djava.library.path=/Library/Java/JavaVirtualMachines/adoptopenjdk-11
 
 Supplying the runtime configuration, for the simplest experience, you can give it the pre-packaged dev-mode.conf, example: *-Dconfig.resource=dev-mode.conf*
 
-Full example of running the executable: 
+Full example of running the in-memory storage executable: 
 
 ```bash
 cloudstate/proxy/core/target/graalvm-native-image/./cloudstate-proxy-core -Djava.library.path=/Library/Java/JavaVirtualMachines/adoptopenjdk-11.jdk/Contents/Home/lib -Dconfig.resource=dev-mode.conf
+```
+
+Or with the Cassandra client storage:
+
+```bash
+cloudstate/proxy/cassandra/target/graalvm-native-image/./cloudstate-proxy-cassandra -Djava.library.path=/Library/Java/JavaVirtualMachines/adoptopenjdk-11.jdk/Contents/Home/lib
 ```
