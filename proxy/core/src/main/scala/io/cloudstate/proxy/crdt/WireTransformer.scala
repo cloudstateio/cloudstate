@@ -12,7 +12,7 @@ import com.google.protobuf.any.{Any => ProtoAny}
   */
 object WireTransformer {
 
-  private val Zero = BigInt(0)
+  private[this] final val Zero = BigInt(0)
 
   private def voteState(vote: Vote)(implicit clusterState: CurrentClusterState, selfUniqueAddress: SelfUniqueAddress): VoteState = {
     var votesFor = 0

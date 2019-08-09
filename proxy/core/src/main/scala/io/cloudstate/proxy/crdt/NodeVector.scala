@@ -9,7 +9,7 @@ import akka.cluster.ddata.{DeltaReplicatedData, FastMerge, RemovedNodePruning, R
   * The values of the vector must have a stable merge function, implemented by [[mergeValues()]], which is used to
   * merge different values for the same node when encountered.
   */
-@SerialVersionUID(1L)
+@SerialVersionUID(1L) // FIXME Java Serialization?
 abstract class NodeVector[V](private val state: Map[UniqueAddress, V])
   extends DeltaReplicatedData
     with ReplicatedDelta

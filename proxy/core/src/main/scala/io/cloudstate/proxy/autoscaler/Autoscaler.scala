@@ -10,7 +10,7 @@ import scala.concurrent.duration._
 
 import io.cloudstate.proxy.autoscaler._
 
-case class AutoscalerSettings(
+final case class AutoscalerSettings(
 
   /**
     * Target concurrency on user functions.
@@ -90,12 +90,12 @@ object AutoscalerSettings {
 
 object Autoscaler {
 
-  case class Sample(
+  final case class Sample(
     receivedNanos: Long,
     metrics: AutoscalerMetrics
   )
 
-  private case class Summary(
+  private final case class Summary(
     clusterMembers: Int,
     requestConcurrency: Double,
     databaseConcurrency: Double,
@@ -106,8 +106,8 @@ object Autoscaler {
     databaseTimeMillis: Double
   )
 
-  case class Deployment(name: String, ready: Int, scale: Int, upgrading: Boolean)
-  case class Scale(name: String, scale: Int)
+  final case class Deployment(name: String, ready: Int, scale: Int, upgrading: Boolean)
+  final case class Scale(name: String, scale: Int)
 
   case object Tick extends DeadLetterSuppression
 
@@ -133,17 +133,17 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
 
   import Autoscaler._
 
-  private val scaler = scalerFactory(self, context)
+  private[this] final val scaler = scalerFactory(self, context)
 
-  private val ddata = DistributedData(context.system)
+  private[this] final val ddata = DistributedData(context.system)
   import ddata.selfUniqueAddress
-  private val StateKey = LWWRegisterKey[AutoscalerState]("autoscaler")
-  private val EmptyState = LWWRegister.create[AutoscalerState](WaitingForState)
+  private[this] final val StateKey = LWWRegisterKey[AutoscalerState]("autoscaler")
+  private[this] final val EmptyState = LWWRegister.create[AutoscalerState](WaitingForState)
 
-  private var stats = Map.empty[UniqueAddress, Queue[Sample]].withDefaultValue(Queue.empty)
-  private var deployment: Option[Deployment] = None
+  private[this] final var stats = Map.empty[UniqueAddress, Queue[Sample]].withDefaultValue(Queue.empty)
+  private[this] final var deployment: Option[Deployment] = None
 
-  private var reportHeaders = 0
+  private[this] final var reportHeaders = 0
 
   timers.startPeriodicTimer("tick", Tick, settings.tickPeriod)
   ddata.replicator ! Get(StateKey, ReadMajority(timeout = 5.seconds))

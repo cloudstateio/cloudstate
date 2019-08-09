@@ -22,26 +22,26 @@ import scala.concurrent.Future
 import scala.util.control.NonFatal
 
 object KubernetesDeploymentScaler {
-  private case class DeploymentList(
+  private final case class DeploymentList(
     items: List[Deployment]
   )
 
-  private case class Deployment(
+  private final case class Deployment(
     metadata: Metadata,
     spec: DeploymentSpec,
     status: Option[DeploymentStatus]
   )
 
-  private case class Metadata(
+  private final case class Metadata(
     name: String,
     namespace: String,
   )
 
-  private case class DeploymentSpec(
+  private final case class DeploymentSpec(
     replicas: Int
   )
 
-  private case class DeploymentStatus(
+  private final case class DeploymentStatus(
     readyReplicas: Option[Int],
     conditions: Option[List[DeploymentCondition]]
   )
@@ -60,22 +60,22 @@ object KubernetesDeploymentScaler {
     */
   private final val DeploymentProgressingReasonNotUpgrading = "NewReplicaSetAvailable"
 
-  private case class DeploymentCondition(
+  private final case class DeploymentCondition(
     `type`: String,
     reason: String
   )
 
-  private case class Scale(
+  private final case class Scale(
     metadata: Metadata,
     spec: ScaleSpec,
     status: Option[ScaleStatus]
   )
 
-  private case class ScaleSpec(
+  private final case class ScaleSpec(
     replicas: Option[Int]
   )
 
-  private case class ScaleStatus(
+  private final case class ScaleStatus(
     replicas: Option[Int]
   )
 
@@ -107,24 +107,24 @@ class KubernetesDeploymentScaler(autoscaler: ActorRef) extends Actor with ActorL
   implicit val mat: Materializer = ActorMaterializer()
 
   // A lot of the below is copied shamelessly from KubernetesApiServiceDiscovery
-  private val http = Http()(context.system)
-  private val kubernetesSettings = Settings(context.system)
-  private val clusterBootstrapSettings = ClusterBootstrapSettings(context.system.settings.config, context.system.log)
-  private val httpsTrustStoreConfig =
+  private[this] final val http = Http()(context.system)
+  private[this] final val kubernetesSettings = Settings(context.system)
+  private[this] final val clusterBootstrapSettings = ClusterBootstrapSettings(context.system.settings.config, context.system.log)
+  private[this] final val httpsTrustStoreConfig =
     TrustStoreConfig(data = None, filePath = Some(kubernetesSettings.apiCaPath)).withStoreType("PEM")
-  private val httpsConfig =
+  private[this] final val httpsConfig =
     AkkaSSLConfig()(context.system).mapSettings(
       s => s.withTrustManagerConfig(s.trustManagerConfig.withTrustStoreConfigs(Seq(httpsTrustStoreConfig))))
-  private val httpsContext = http.createClientHttpsContext(httpsConfig)
-  private val apiToken = readConfigVarFromFilesystem(kubernetesSettings.apiTokenPath, "api-token") getOrElse ""
-  private val deployNamespace = kubernetesSettings.podNamespace orElse
+  private[this] final val httpsContext = http.createClientHttpsContext(httpsConfig)
+  private[this] final val apiToken = readConfigVarFromFilesystem(kubernetesSettings.apiTokenPath, "api-token") getOrElse ""
+  private[this] final val deployNamespace = kubernetesSettings.podNamespace orElse
     readConfigVarFromFilesystem(kubernetesSettings.podNamespacePath, "pod-namespace") getOrElse "default"
-  private val serviceName = clusterBootstrapSettings.contactPointDiscovery.serviceName  getOrElse {
+  private[this] final val serviceName = clusterBootstrapSettings.contactPointDiscovery.serviceName  getOrElse {
     throw new RuntimeException("No service name defined")
   }
-  private val host = sys.env(kubernetesSettings.apiServiceHostEnvName)
-  private val port = sys.env(kubernetesSettings.apiServicePortEnvName).toInt
-  private val appsV1ApiPath = Uri.Path / "apis" / "apps" / "v1" / "namespaces" / deployNamespace
+  private[this] final val host = sys.env(kubernetesSettings.apiServiceHostEnvName)
+  private[this] final val port = sys.env(kubernetesSettings.apiServicePortEnvName).toInt
+  private[this] final val appsV1ApiPath = Uri.Path / "apis" / "apps" / "v1" / "namespaces" / deployNamespace
 
 
   // Rather than polling, we could watch the resource

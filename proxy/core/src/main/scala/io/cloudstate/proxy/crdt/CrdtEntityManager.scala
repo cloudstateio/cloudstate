@@ -21,7 +21,7 @@ final class CrdtEntityManager(entityProps: Props) extends Actor with ActorLoggin
 
   // Set of entities being passivated. If a new command arrives while it is being passivated, it will be buffered in
   // the queue, and the entity will be restarted once it finishes shutting down, and the queue drained to it.
-  private var passivating = Map.empty[String, Queue[(EntityCommand, ActorRef)]]
+  private[this] final var passivating = Map.empty[String, Queue[(EntityCommand, ActorRef)]]
 
   override def receive: Receive = {
 

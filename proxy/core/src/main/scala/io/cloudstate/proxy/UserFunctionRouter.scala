@@ -12,7 +12,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 class UserFunctionRouter(entities: Seq[ServableEntity], entityDiscovery: EntityDiscovery)(implicit mat: Materializer, ec: ExecutionContext) {
 
-  private val entityCommands = entities.map {
+  private[this] final val entityCommands = entities.map {
     case ServableEntity(serviceName, serviceDescriptor, entitySupport) =>
       serviceName -> EntityCommands(serviceName, entitySupport,
         serviceDescriptor.getMethods.asScala.map(_.getName).toSet)

@@ -10,7 +10,7 @@ import Autoscaler.{Deployment, Scale}
   */
 class NoScaler(autoscaler: ActorRef) extends Actor with ActorLogging {
 
-  private val cluster = Cluster(context.system)
+  private[this] final val cluster = Cluster(context.system)
 
   cluster.subscribe(self, classOf[ClusterDomainEvent])
   sendDeployment()

@@ -47,10 +47,10 @@ import scala.concurrent.duration.{Deadline, FiniteDuration}
   * our strategy is to just report metrics on command handling, and let event handling just happen.
   */
 object ConcurrencyEnforcer {
-  case class Action(id: String, start: () => Unit)
-  case class ActionCompleted(id: String, timeNanos: Long)
+  final case class Action(id: String, start: () => Unit)
+  final case class ActionCompleted(id: String, timeNanos: Long)
 
-  case class ConcurrencyEnforcerSettings(
+  final case class ConcurrencyEnforcerSettings(
     concurrency: Int,
     actionTimeout: FiniteDuration,
     cleanupPeriod: FiniteDuration
@@ -60,14 +60,14 @@ object ConcurrencyEnforcer {
 
   def props(settings: ConcurrencyEnforcerSettings, statsCollector: ActorRef): Props = Props(new ConcurrencyEnforcer(settings, statsCollector))
 
-  private case class OutstandingAction(deadline: Deadline)
+  private final case class OutstandingAction(deadline: Deadline)
 }
 
 class ConcurrencyEnforcer(settings: ConcurrencyEnforcerSettings, statsCollector: ActorRef) extends Actor with ActorLogging with Timers {
   import ConcurrencyEnforcer._
 
-  private var outstanding = Map.empty[String, OutstandingAction]
-  private var queue = Queue.empty[Action]
+  private[this] final var outstanding = Map.empty[String, OutstandingAction]
+  private[this] final var queue = Queue.empty[Action]
 
   timers.startPeriodicTimer("tick", Tick, settings.cleanupPeriod)
 

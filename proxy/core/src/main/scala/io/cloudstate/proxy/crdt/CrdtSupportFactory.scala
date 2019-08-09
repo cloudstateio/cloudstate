@@ -23,9 +23,9 @@ import scala.concurrent.duration._
 class CrdtSupportFactory(system: ActorSystem, config: EntityDiscoveryManager.Configuration, discovery: EntityDiscovery,
   grpcClientSettings: GrpcClientSettings, concurrencyEnforcer: ActorRef, statsCollector: ActorRef)(implicit ec: ExecutionContext, mat: Materializer) extends EntityTypeSupportFactory {
 
-  private final val log = Logging.getLogger(system, this.getClass)
+  private[this] final val log = Logging.getLogger(system, this.getClass)
 
-  private val crdtClient = CrdtClient(grpcClientSettings)
+  private[this] final val crdtClient = CrdtClient(grpcClientSettings)
 
   override def buildEntityTypeSupport(entity: Entity, serviceDescriptor: ServiceDescriptor): EntityTypeSupport = {
     val crdtEntityConfig = CrdtEntity.Configuration(entity.serviceName, entity.persistenceId, config.passivationTimeout, config.relayOutputBufferSize, 3.seconds, 5.seconds)

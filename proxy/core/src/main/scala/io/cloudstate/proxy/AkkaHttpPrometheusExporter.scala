@@ -35,7 +35,7 @@ import scala.concurrent.Future
   */
 class AkkaHttpPrometheusExporter(metricsPort: Int, registry: CollectorRegistry = CollectorRegistry.defaultRegistry)(implicit system: ActorSystem, mat: Materializer) {
 
-  private val PrometheusContentType = ContentType.parse(TextFormat.CONTENT_TYPE_004).right.get
+  private[this] final val PrometheusContentType = ContentType.parse(TextFormat.CONTENT_TYPE_004).right.get
 
   private def routes = get {
     (path("metrics") | pathSingleSlash) {

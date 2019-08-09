@@ -55,5 +55,5 @@ class DynamicLeastShardAllocationStrategy(rebalanceThreshold: Int, maxSimultaneo
     } else emptyRebalanceResult
   }
 
-  private val emptyRebalanceResult = Future.successful(Set.empty[ShardId])
+  private[this] final val emptyRebalanceResult = Future.successful(Set.empty[ShardId])
 }

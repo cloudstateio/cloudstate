@@ -41,7 +41,7 @@ object StatsCollector {
     */
   case object RequestReceived
 
-  case class ResponseSent(timeNanos: Long)
+  final case class ResponseSent(timeNanos: Long)
 
   /**
     * A command has been sent to the user function.
@@ -51,13 +51,13 @@ object StatsCollector {
   /**
     * A reply has been received from the user function.
     */
-  case class ReplyReceived private(timeNanos: Long)
+  final case class ReplyReceived private(timeNanos: Long)
 
   case object DatabaseOperationStarted
 
-  case class DatabaseOperationFinished(timeNanos: Long)
+  final case class DatabaseOperationFinished(timeNanos: Long)
 
-  case class StatsCollectorSettings(
+  final case class StatsCollectorSettings(
     reportPeriod: FiniteDuration
   ) {
     def this(config: Config) = this(
@@ -68,7 +68,7 @@ object StatsCollector {
   private case object Tick extends DeadLetterSuppression
 
   // 1 second in nano seconds
-  private val SecondInNanos: Long = 1000000000
+  private final val SecondInNanos: Long = 1000000000
 }
 
 class StatsCollector(settings: StatsCollectorSettings, autoscaler: ActorRef) extends Actor with Timers with ActorLogging {

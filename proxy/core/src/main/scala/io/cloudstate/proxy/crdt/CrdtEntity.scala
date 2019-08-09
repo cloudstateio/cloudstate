@@ -41,7 +41,7 @@ object CrdtEntity {
     writeTimeout: FiniteDuration
   )
 
-  private case class InitiatorReply(commandId: Long, userFunctionReply: UserFunctionReply)
+  private final case class InitiatorReply(commandId: Long, userFunctionReply: UserFunctionReply)
 
   def props(client: Crdt, configuration: CrdtEntity.Configuration, entityDiscovery: EntityDiscovery)(implicit mat: Materializer) =
     Props(new CrdtEntity(client, configuration, entityDiscovery))
@@ -66,30 +66,30 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
 
   import CrdtEntity._
 
-  private val entityId = URLDecoder.decode(self.path.name, "utf-8")
+  private[this] final val entityId = URLDecoder.decode(self.path.name, "utf-8")
 
-  private val ddata = DistributedData(context.system)
+  private[this] final val ddata = DistributedData(context.system)
 
   import ddata.selfUniqueAddress
 
-  private implicit val cluster: Cluster = Cluster(context.system)
-  private implicit def clusterState: CurrentClusterState = cluster.state
-  private val replicator = ddata.replicator
-  private val key = AnyKey(configuration.userFunctionName + "-" + entityId)
+  private[this] final implicit val cluster: Cluster = Cluster(context.system)
+  private[this] final implicit def clusterState: CurrentClusterState = cluster.state
+  private[this] final val replicator = ddata.replicator
+  private[this] final val key = AnyKey(configuration.userFunctionName + "-" + entityId)
 
-  private var relay: ActorRef = _
-  private var state: Option[ReplicatedData] = _
-  private var idCounter = 0l
+  private[this] final var relay: ActorRef = _
+  private[this] final var state: Option[ReplicatedData] = _
+  private[this] final var idCounter = 0l
   // This is used to know whether there are currently outstanding operations on the user function where it could change
   // its state. To ensure we stay in sync, we don't respond to any entity changes during this time.
-  private var outstandingMutatingOperations = 0
+  private[this] final var outstandingMutatingOperations = 0
   // Outstanding operations waiting to send a reply. Almost equivalent to outstandingMutatingOperations, except that
   // operations are removed from this map before the above is decremented, since the reply is sent in parallel to
   // requesting the updated state.
-  private var outstanding = Map.empty[Long, Initiator]
-  private var streamedCalls = Map.empty[Long, ActorRef]
-  private var closingStreams = Set.empty[Long]
-  private var stopping = false
+  private[this] final var outstanding = Map.empty[Long, Initiator]
+  private[this] final var streamedCalls = Map.empty[Long, ActorRef]
+  private[this] final var closingStreams = Set.empty[Long]
+  private[this] final var stopping = false
 
   import context.dispatcher
 
