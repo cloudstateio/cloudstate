@@ -24,7 +24,7 @@ import akka.pattern.after
 import akka.grpc.GrpcClientSettings
 import com.google.protobuf.{ByteString => ProtobufByteString}
 import org.scalatest._
-import com.typesafe.config.Config
+import com.typesafe.config.{Config, ConfigFactory}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
@@ -32,6 +32,7 @@ import scala.util.Try
 import java.util.{Map => JMap}
 import java.util.concurrent.TimeUnit
 import java.io.File
+import java.net.InetAddress
 
 import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
@@ -56,6 +57,7 @@ object CloudStateTCK {
     port: Int,
     directory: File,
     command: Array[String],
+    stopCommand: Option[Array[String]],
     envVars: JMap[String, Object]
   ) {
     def this(config: Config) = this(
@@ -63,6 +65,7 @@ object CloudStateTCK {
       port       =          config.getInt(   PORT     ),
       directory  = new File(config.getString("directory")),
       command    =          config.getList(  "command").unwrapped.toArray.map(_.toString),
+      stopCommand =         Some(config.getList("stop-command").unwrapped().toArray.map(_.toString)).filter(_.nonEmpty),
       envVars    =          config.getConfig("env-vars").root.unwrapped,
     )
     def validate(): Unit = {
@@ -71,24 +74,32 @@ object CloudStateTCK {
       require(command.nonEmpty, "Configured command missing")
     }
   }
+
   final case class Configuration private(
     name: String,
     proxy: ProcSpec,
     frontend: ProcSpec,
     tckHostname: String,
     tckPort: Int) {
-    def this(config: Config) = this(
-      name        = config.getString(NAME),
-      proxy     = new ProcSpec(config.getConfig(PROXY)),
-      frontend    = new ProcSpec(config.getConfig(FRONTEND)),
-      tckHostname = config.getString(TCK + "." + HOSTNAME),
-      tckPort     = config.getInt(   TCK + "." + PORT)
-    )
 
     def validate(): Unit = {
       proxy.validate()
       frontend.validate()
       // FIXME implement
+    }
+  }
+
+  object Configuration {
+    def apply(config: Config): Configuration = {
+      val reference = ConfigFactory.defaultReference().getConfig("cloudstate-tck")
+      val c = config.withFallback(reference)
+      Configuration(
+        name        = c.getString(NAME),
+        proxy       = new ProcSpec(c.getConfig(PROXY)),
+        frontend    = new ProcSpec(c.getConfig(FRONTEND)),
+        tckHostname = c.getString(TCK + "." + HOSTNAME),
+        tckPort     = c.getInt(   TCK + "." + PORT)
+      )
     }
   }
 
@@ -154,8 +165,9 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
   @volatile private[this] final var tckProxy:        ServerBinding       = _
 
   def process(ps: ProcSpec): ProcessBuilder = {
+    val localhost = InetAddress.getLocalHost.getHostAddress
     val pb =
-      new ProcessBuilder(ps.command:_*).
+      new ProcessBuilder(ps.command.map(_.replace("%LOCALHOST%", localhost)):_*).
       inheritIO().
       directory(ps.directory)
 
@@ -220,8 +232,11 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
   }
 
   override final def afterAll(): Unit = {
-    def destroy(p: Process): Unit = while(p.isAlive) {
-      p.destroy()
+    def destroy(spec: ProcSpec)(p: Process): Unit = while(p.isAlive) {
+      spec.stopCommand match {
+        case Some(stopCommand) => new ProcessBuilder(stopCommand: _*).inheritIO().directory(spec.directory).start()
+        case None => p.destroy()
+      }
       p.waitFor(5, TimeUnit.SECONDS) || {
         p.destroyForcibly()
         true // todo revisit this
@@ -230,9 +245,9 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     try
       Option(shoppingClient).foreach(c => Await.result(c.close(), 10.seconds))
     finally
-      try Option(backendProcess).foreach(destroy)
+      try Option(backendProcess).foreach(destroy(config.proxy))
         finally Seq(entityDiscoveryClient, eventSourcedClient).foreach(c => Await.result(c.close(), 10.seconds))
-          try Option(frontendProcess).foreach(destroy)
+          try Option(frontendProcess).foreach(destroy(config.frontend))
             finally Await.ready(tckProxy.unbind().transformWith(_ => system.terminate())(system.dispatcher), 30.seconds)
   }
 

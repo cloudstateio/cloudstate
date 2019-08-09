@@ -39,8 +39,6 @@
     "pretest": "compile-descriptor ../../protocols/example/shoppingcart/shoppingcart.proto",
     "start": "node index.js",
     "start-no-prestart": "node index.js",
-    "dockerbuild": "docker build -f ../../Dockerfile.js-shopping-cart -t gcr.io/stateserv/js-shopping-cart:$npm_package_version -t gcr.io/stateserv/js-shopping-cart:latest ../..",
-    "dockerpush": "docker push gcr.io/stateserv/js-shopping-cart:$npm_package_version && docker push gcr.io/stateserv/js-shopping-cart:latest",
-    "dockerbuildpush": "npm run dockerbuild && npm run dockerpush"
+    "dockerbuild": "docker build -f ../../Dockerfile.js-shopping-cart -t js-shopping-cart:$npm_package_version -t js-shopping-cart:latest ../.."
   }
 }

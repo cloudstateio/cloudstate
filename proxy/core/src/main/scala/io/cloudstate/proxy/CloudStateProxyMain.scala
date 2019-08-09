@@ -26,6 +26,7 @@ import akka.management.scaladsl.AkkaManagement
 import akka.pattern.{BackoffOpts, BackoffSupervisor}
 import akka.stream.ActorMaterializer
 import org.slf4j.LoggerFactory
+import sun.misc.Signal
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -99,6 +100,20 @@ object CloudStateProxyMain {
     val appConfig = new CloudStateProxyMain.Configuration(c)
 
     val cluster = Cluster(system)
+
+    if (sys.props.get("org.graalvm.nativeimage.imagecode").contains("runtime")) {
+      system.log.info("Registering SIGTERM handler...")
+      // By default, Graal/SubstrateVM doesn't register any signal handlers, which means shutdown
+      // hooks don't get executed (so no graceful leaving of the cluster). Worse, if the process
+      // is the entrypoint for a Docker container (ie, it has pid 1) then it won't respond to TERM
+      // at all, because Linux does not implement the default TERM handling if pid is 1, the result
+      // being that the process will be killed after the configured termination timeout. So, we we
+      // need to register a TERM signal handler.
+      Signal.handle(new Signal("TERM"), _ => System.exit(0))
+
+      // And may as well register INT (Ctrl+C) while we're at it
+      Signal.handle(new Signal("INT"), _ => System.exit(0))
+    }
 
     // Bootstrap the cluster
     if (appConfig.devMode) {
