@@ -36,7 +36,7 @@ import io.cloudstate.function.StatelessFunction
 import io.cloudstate.proxy.StatsCollector.StatsCollectorSettings
 import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
 import io.cloudstate.proxy.ConcurrencyEnforcer.ConcurrencyEnforcerSettings
-import io.cloudstate.proxy.autoscaler.{Autoscaler, AutoscalerSettings, ClusterMembershipFacadeImpl, KubernetesDeploymentScaler, NoScaler}
+import io.cloudstate.proxy.autoscaler.{Autoscaler, AutoscalerSettings, ClusterMembershipFacadeImpl, KubernetesDeploymentScaler, NoAutoscaler, NoScaler}
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
 
@@ -114,20 +114,24 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
   private[this] final val clientSettings = GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
   private[this] final val entityDiscoveryClient         = EntityDiscoveryClient(clientSettings)
   private[this] final val autoscaler     = {
-    val managerSettings = ClusterSingletonManagerSettings(system)
-    val proxySettings = ClusterSingletonProxySettings(system)
     val autoscalerSettings = AutoscalerSettings(system)
+    if (autoscalerSettings.enabled) {
+      val managerSettings = ClusterSingletonManagerSettings(system)
+      val proxySettings = ClusterSingletonProxySettings(system)
 
-    val scalerFactory: ScalerFactory = (autoscaler, factory) => {
-      if (config.devMode) factory.actorOf(Props(new NoScaler(autoscaler)), "noScaler")
-      else factory.actorOf(KubernetesDeploymentScaler.props(autoscaler), "kubernetesDeploymentScaler")
+      val scalerFactory: ScalerFactory = (autoscaler, factory) => {
+        if (config.devMode) factory.actorOf(Props(new NoScaler(autoscaler)), "noScaler")
+        else factory.actorOf(KubernetesDeploymentScaler.props(autoscaler), "kubernetesDeploymentScaler")
+      }
+
+      val singleton = context.actorOf(ClusterSingletonManager.props(Autoscaler.props(autoscalerSettings,
+        scalerFactory, new ClusterMembershipFacadeImpl(Cluster(context.system))),
+        terminationMessage = PoisonPill, managerSettings), "autoscaler")
+
+      context.actorOf(ClusterSingletonProxy.props(singleton.path.toStringWithoutAddress, proxySettings), "autoscalerProxy")
+    } else {
+      context.actorOf(Props(new NoAutoscaler), "noAutoscaler")
     }
-
-    val singleton = context.actorOf(ClusterSingletonManager.props(Autoscaler.props(autoscalerSettings,
-      scalerFactory, new ClusterMembershipFacadeImpl(Cluster(context.system))),
-      terminationMessage = PoisonPill, managerSettings), "autoscaler")
-
-    context.actorOf(ClusterSingletonProxy.props(singleton.path.toStringWithoutAddress, proxySettings), "autoscalerProxy")
   }
   private[this] final val statsCollector = context.actorOf(StatsCollector.props(config.statsCollectorSettings, autoscaler), "statsCollector")
   private[this] final val concurrencyEnforcer = context.actorOf(ConcurrencyEnforcer.props(config.concurrencySettings, statsCollector), "concurrencyEnforcer")
@@ -164,7 +168,10 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
           supportFactories.get(entity.entityType) match {
             case Some(factory) => EntityDiscoveryManager.ServableEntity(
               entity.serviceName, serviceDescriptor, factory.build(entity, serviceDescriptor))
-            case None => throw EntityDiscoveryException(s"Service [${entity.serviceName}] has declared an unsupported entity type [${entity.entityType}]. Supported types are ${supportFactories.keys.mkString(",")}")
+            case None if entity.entityType == EventSourced.name =>
+              throw EntityDiscoveryException(s"Service [${entity.serviceName}] has declared an event sourced entity, however, this proxy does not have a configured journal. A journal must be configured in this stateful services resource if event sourcing is to be used.")
+            case None =>
+              throw EntityDiscoveryException(s"Service [${entity.serviceName}] has declared an unsupported entity type [${entity.entityType}]. Supported types are ${supportFactories.keys.mkString(",")}")
           }
         }
 

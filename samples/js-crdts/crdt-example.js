@@ -32,7 +32,9 @@ entity.commandHandlers = {
   MutateGSet: mutateGSet,
   GetGSet: getGSet,
   MutateORSet: mutateORSet,
-  GetORSet: getORSet
+  GetORSet: getORSet,
+  Connect: connect,
+  Monitor: monitor
 };
 
 function incrementGCounter(update, ctx) {
@@ -139,6 +141,53 @@ function getORSet(get, ctx) {
   };
 }
 
+function connect(user, ctx) {
+  if (ctx.state === null) {
+    ctx.state = new crdt.Vote();
+    ctx.state.users = 0;
+  }
+  ctx.subscribe({
+    connected: true
+  });
+  ctx.state.vote = true;
+  ctx.state.users = ctx.state.users + 1;
+}
+
+function monitor(user, ctx) {
+  if (ctx.state === null) {
+    ctx.state = new crdt.Vote();
+    ctx.state.users = 0;
+  }
+  ctx.subscribe({
+    lastOnlineStatus: ctx.state.atLeastOne
+  });
+  return {
+    online: ctx.state.atLeastOne
+  };
+}
+
+entity.onStateChange = (ctx) => {
+  ctx.subscribers.forEach(key => {
+    const subscription = ctx.getSubscriber(key);
+    if (subscription.lastOnlineStatus !== undefined) {
+      if (subscription.lastOnlineStatus !== ctx.state.atLeastOne) {
+        subscription.lastOnlineStatus = ctx.state.atLeastOne;
+        ctx.push(key, {
+          online: ctx.state.atLeastOne
+        });
+      }
+    }
+  })
+};
+
+entity.onStreamCancelled = (ctx) => {
+  if (ctx.subscription.connected === true) {
+    ctx.state.users = ctx.state.users - 1;
+    if (ctx.state.users === 0) {
+      ctx.state.vote = false;
+    }
+  }
+};
 
 // Export the entity
 module.exports = entity;

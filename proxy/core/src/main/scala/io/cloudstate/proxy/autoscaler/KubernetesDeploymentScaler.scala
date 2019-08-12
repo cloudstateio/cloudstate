@@ -80,6 +80,8 @@ object KubernetesDeploymentScaler {
   )
 
   private object JsonFormat extends SprayJsonSupport with DefaultJsonProtocol {
+    // todo don't use the reflection based methods to deserialize here since it just creates more work for us
+    // in the graal reflection config
     implicit val metadataFormat: JsonFormat[Metadata] = jsonFormat2(Metadata)
     implicit val scaleSpecFormat: JsonFormat[ScaleSpec] = jsonFormat1(ScaleSpec)
     implicit val scaleStatusFormat: JsonFormat[ScaleStatus] = jsonFormat1(ScaleStatus)

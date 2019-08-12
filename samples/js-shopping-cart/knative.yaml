@@ -14,7 +14,7 @@ spec:
         - name: h2c
           containerPort: 8080
       deployer:
-        name: EventSourced
+        name: CloudState
         config:
           # Journal configuration
           journal:

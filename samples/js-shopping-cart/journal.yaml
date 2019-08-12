@@ -2,7 +2,7 @@
 # deployment, and captures how to deploy and connect to that database. Multiple
 # EventSourcedFunction's would use a single journal.
 apiVersion: cloudstate.io/v1alpha1
-kind: EventSourcedJournal
+kind: Journal
 metadata:
   name: cassandra
 spec:

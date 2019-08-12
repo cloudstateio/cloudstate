@@ -34,7 +34,7 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
 
   private val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "gcr.io/stateserv/cloudstate-proxy-cassandra:latest")
   private val InMemoryJournalImage = sys.env.getOrElse("IN_MEMORY_JOURNAL_IMAGE", "gcr.io/stateserv/cloudstate-proxy-in-memory:latest")
-  private val NoJournalImage = sys.env.getOrElse("NO_JOURNAL_IMAGE", "gcr.io/stateserv/cloudstate-proxy:latest")
+  private val NoJournalImage = sys.env.getOrElse("NO_JOURNAL_IMAGE", "gcr.io/stateserv/cloudstate-proxy-no-journal:latest")
 
   import OperatorConstants._
 
@@ -272,6 +272,7 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       val autoscalingEnvVars: List[EnvVar] = service.spec.autoscaling match {
         case Some(autoscaling) =>
           Seq[(String, Option[_])](
+            "AUTOSCALER_ENABLED" -> autoscaling.enabled,
             "USER_FUNCTION_TARGET_CONCURRENCY" -> autoscaling.userFunctionTargetConcurrency,
             "REQUEST_TARGET_CONCURRENCY" -> autoscaling.requestTargetConcurrency,
             "TARGET_CONCURRENCY_WINDOW" -> autoscaling.targetConcurrencyWindow,

@@ -13,6 +13,11 @@ import io.cloudstate.proxy.autoscaler._
 final case class AutoscalerSettings(
 
   /**
+    * Whether autoscaling is enabled.
+    */
+  enabled: Boolean,
+
+  /**
     * Target concurrency on user functions.
     */
   targetUserFunctionConcurrency: Int,
@@ -72,6 +77,7 @@ object AutoscalerSettings {
     val requestRate = autoscalerConfig.getConfig("request-rate")
 
     AutoscalerSettings(
+      enabled = autoscalerConfig.getBoolean("enabled"),
       targetUserFunctionConcurrency = targetConcurrency.getInt("user-function"),
       targetRequestConcurrency = targetConcurrency.getInt("request"),
       targetConcurrencyWindow = targetConcurrency.getDuration("window").toMillis.millis,

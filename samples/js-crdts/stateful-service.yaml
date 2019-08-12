@@ -1,0 +1,8 @@
+# Deployment spec for our CRDT examples
+apiVersion: cloudstate.io/v1alpha1
+kind: StatefulService
+metadata:
+  name: crdts
+spec:
+  containers:
+    - image: gcr.io/stateserv/js-crdts:latest

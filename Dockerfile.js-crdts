@@ -1,0 +1,19 @@
+FROM node:8.15
+
+# Copy and install deps. This is done as a separate step as an optimization, so changes to the programs files
+# don't require the npm install to be redone
+RUN mkdir -p /opt/samples/js-crdts
+RUN mkdir -p /opt/protocols/example
+COPY node-support /opt/node-support
+COPY samples/js-shopping-cart/package.json /opt/samples/js-crdts/
+RUN cd /opt/node-support && npm install && cd /opt/samples/js-crdts && npm install
+
+# Now copy the entire app
+COPY samples/js-crdts /opt/samples/js-crdts
+COPY protocols/example /opt/protocols/example
+WORKDIR /opt/samples/js-crdts
+RUN npm run prestart
+
+# run
+EXPOSE 8080
+CMD ["npm", "run", "start-no-prestart"]
