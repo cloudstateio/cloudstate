@@ -1,16 +1,32 @@
-organization in ThisBuild := "io.cloudstate"
+import java.util.Date
+
+import com.typesafe.sbt.packager.docker.DockerChmodType
+
+inThisBuild(Seq(
+  organization := "io.cloudstate",
+  version := dynverGitDescribeOutput.value.mkVersion(versionFmt, "latest"),
+  dynver := sbtdynver.DynVer.getGitDescribeOutput(new Date).mkVersion(versionFmt, "latest"),
+
+  scalaVersion := "2.12.9",
+
+  // Needed for our fork of skuber
+  resolvers += Resolver.bintrayRepo("jroper", "maven"), // TODO: Remove once skuber has the required functionality
+
+  organizationName := "Lightbend Inc.",
+  startYear := Some(2019),
+  licenses += ("Apache-2.0", new URL("https://www.apache.org/licenses/LICENSE-2.0.txt"))
+))
+
+// Make sure the version doesn't change each time it gets built, this ensures we don't rebuild the native image
+// every time we build a docker image based on it, since we actually build 3 different docker images for the proxy
+// command.
+def versionFmt(out: sbtdynver.GitDescribeOutput): String = {
+  val dirtySuffix = if (out.isDirty()) "-dev" else ""
+  if (out.isCleanAfterTag) out.ref.dropV.value
+  else out.ref.dropV.value + out.commitSuffix.mkString("-", "-", "") + dirtySuffix
+}
+
 name := "cloudstate"
-scalaVersion in ThisBuild := "2.12.9"
-
-version in ThisBuild ~= (_.replace('+', '-'))
-dynver in ThisBuild ~= (_.replace('+', '-'))
-
-// Needed for our fork of skuber
-resolvers in ThisBuild += Resolver.bintrayRepo("jroper", "maven")   // TODO: Remove once skuber has the required functionality
-
-organizationName in ThisBuild := "Lightbend Inc."
-startYear in ThisBuild := Some(2019)
-licenses in ThisBuild += ("Apache-2.0", new URL("https://www.apache.org/licenses/LICENSE-2.0.txt"))
 
 val GrpcJavaVersion                 = "1.22.1"
 val GraalAkkaVersion                = "0.4.1"
@@ -54,15 +70,79 @@ lazy val root = (project in file("."))
   .aggregate(`proxy-core`, `proxy-cassandra`, `akka-client`, operator, `tck`)
   .settings(common)
 
+lazy val proxyDockerBuild = settingKey[Option[(String, String)]]("Docker artifact name and configuration file which gets overridden by the buildProxy command")
+
 def dockerSettings: Seq[Setting[_]] = Seq(
-  dockerBaseImage := "adoptopenjdk/openjdk8",
+  proxyDockerBuild := None,
+  
   dockerUpdateLatest := true,
-  dockerRepository := sys.props.get("docker.registry").orElse(Some("lightbend-docker-registry.bintray.io")),
-  dockerUsername := sys.props.get("docker.username").orElse(Some("octo"))
+  dockerRepository := sys.props.get("docker.registry"),
+  dockerUsername := sys.props.get("docker.username"),
+  dockerAlias := {
+    val old = dockerAlias.value
+    proxyDockerBuild.value match {
+      case Some((dockerName, _)) => old.withName(dockerName)
+      case None => old
+    }
+  },
+  dockerAliases := {
+    val old = dockerAliases.value
+    val single = dockerAlias.value
+    // So basically, by default we *just* publish latest, but if -Ddocker.tag.version is passed,
+    // we publish both latest and a tag for the version.
+    if (!sys.props.get("docker.tag.version").forall(_ == "false")) {
+      old
+    } else {
+      Seq(single.withTag(Some("latest")))
+    }
+  },
+  dockerEntrypoint := {
+    val old = dockerEntrypoint.value
+    proxyDockerBuild.value match {
+      case Some((_, configResource)) => old :+ s"-Dconfig.resource=$configResource"
+      case None => old
+    }
+  }
+)
+
+def buildProxyCommand(commandName: String, project: => Project, name: String, configResource: String): Command = 
+  Command.single(
+    commandName, 
+    Help((s"$commandName <task>", s"Execute the given docker scoped task (eg, publishLocal or publish) for the the $name build of the proxy."))
+  ) { (state, command) =>
+    List(
+      s"project ${project.id}",
+      s"""set proxyDockerBuild := Some(("cloudstate-proxy-$name", "$configResource"))""",
+      s"docker:$command",
+      "set proxyDockerBuild := None",
+      "project root"
+    ) ::: state
+  }
+
+commands ++= Seq(
+  buildProxyCommand("dockerBuildDevMode", `proxy-core`, "dev-mode", "dev-mode.conf"),
+  buildProxyCommand("dockerBuildNoJournal", `proxy-core`, "no-journal", "no-journal.conf"),
+  buildProxyCommand("dockerBuildInMemory", `proxy-core`, "in-memory", "cloudstate-common.conf")
+)
+
+// Shared settings for native image and docker builds
+def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
+  graalVMVersion := Some("19.1.1"),
+  graalVMNativeImageOptions ++= sharedNativeImageSettings,
+
+  (mappings in Universal) := Seq(
+    (packageBin in GraalVMNativeImage).value -> s"bin/${executableScriptName.value}"
+  ),
+  dockerBaseImage := "bitnami/minideb",
+  // Need to make sure it has group execute permission
+  dockerChmodType := DockerChmodType.Custom("u+x,g+x"),
 )
 
 def sharedNativeImageSettings = Seq(
       //"-O1", // Optimization level
+      "-H:ResourceConfigurationFiles=/opt/graalvm/stage/resources/resource-config.json",
+      "-H:ReflectionConfigurationFiles=/opt/graalvm/stage/resources/reflect-config.json",
+      "-H:DynamicProxyConfigurationFiles=/opt/graalvm/stage/resources/proxy-config.json",
       "-H:IncludeResources=.+\\.conf",
       "-H:IncludeResources=.+\\.properties",
       "-H:+AllowVMInspection",
@@ -114,7 +194,7 @@ def sharedNativeImageSettings = Seq(
       )
 
 lazy val `proxy-core` = (project in file("proxy/core"))
-  .enablePlugins(JavaAppPackaging, DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin, GraalVMNativeImagePlugin)
+  .enablePlugins(DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin, GraalVMPlugin)
   .settings(
     common,
     name := "cloudstate-proxy-core",
@@ -207,16 +287,11 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         oldStrategy(x)
     },
 
-    graalVMNativeImageOptions ++= sharedNativeImageSettings,
-    graalVMNativeImageOptions ++= Seq(
-      "-H:ResourceConfigurationFiles=" + baseDirectory.value / "graal" / "resource-config.json",
-      "-H:ReflectionConfigurationFiles=" + baseDirectory.value / "graal" / "reflect-config.json",
-      "-H:DynamicProxyConfigurationFiles=" + baseDirectory.value / "graal" / "proxy-config.json",
-    )
+    nativeImageDockerSettings
   )
 
 lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
-  .enablePlugins(JavaAppPackaging, DockerPlugin, JavaAgent, GraalVMNativeImagePlugin)
+  .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin)
   .dependsOn(`proxy-core`)
   .settings(
     common,
@@ -238,16 +313,12 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
       "com.github.vmencik"           %% "graal-akka-stream"                  % GraalAkkaVersion % "provided", // Only needed for compilation
       "com.github.vmencik"           %% "graal-akka-http"                    % GraalAkkaVersion % "provided", // Only needed for compilation
     ),
-    dockerSettings,
-
+    
     fork in run := true,
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
 
-    graalVMNativeImageOptions ++= sharedNativeImageSettings,
+    nativeImageDockerSettings,
     graalVMNativeImageOptions ++= Seq(
-      "-H:ResourceConfigurationFiles=" + baseDirectory.value / "graal" / "resource-config.json",
-      "-H:ReflectionConfigurationFiles=" + baseDirectory.value / "graal" / "reflect-config.json",
-      "-H:DynamicProxyConfigurationFiles=" + baseDirectory.value / "graal" / "proxy-config.json",
       "-H:IncludeResourceBundles=com.datastax.driver.core.Driver",
     )
   )
@@ -283,6 +354,7 @@ lazy val operator = (project in file("operator"))
     ),
 
     dockerSettings,
+    dockerBaseImage := "adoptopenjdk/openjdk8",
     dockerExposedPorts := Nil,
     compileK8sDescriptors := doCompileK8sDescriptors(
       baseDirectory.value / "deploy",

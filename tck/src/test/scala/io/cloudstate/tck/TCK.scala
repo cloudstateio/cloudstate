@@ -8,5 +8,5 @@ import scala.collection.JavaConverters._
 class TCK extends Suites(ConfigFactory.load().getConfigList("cloudstate-tck.combinations").
            iterator.
            asScala.
-           map(c => new CloudStateTCK(new CloudStateTCK.Configuration(c))).
+           map(c => new CloudStateTCK(CloudStateTCK.Configuration(c))).
            toVector: _*) with SequentialNestedSuiteExecution
