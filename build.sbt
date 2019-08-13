@@ -67,7 +67,7 @@ headerSources in Compile ++= {
 }
 
 lazy val root = (project in file("."))
-  .aggregate(`proxy-core`, `proxy-cassandra`, `akka-client`, operator, `tck`)
+  .aggregate(`proxy-core`, `proxy-cassandra`, `java-support`,`akka-client`, operator, `tck`)
   .settings(common)
 
 lazy val proxyDockerBuild = settingKey[Option[(String, String)]]("Docker artifact name and configuration file which gets overridden by the buildProxy command")
@@ -373,6 +373,25 @@ lazy val operator = (project in file("operator"))
       dockerUsername.value,
       version.value
     )
+  )
+
+lazy val `java-support` = (project in file("java-support"))
+  .enablePlugins(ProtobufPlugin)
+  .settings(
+    name := "java-support",
+
+    (version in ProtobufConfig) := ProtobufVersion,
+    (sourceDirectory in ProtobufConfig) := (baseDirectory in ThisBuild).value / "protocols" / "frontend",
+
+    javacOptions in Compile := Seq("-encoding", "UTF-8"),
+
+    libraryDependencies ++= Seq(
+      "io.grpc"               % "grpc-netty-shaded"    % GrpcJavaVersion,
+      "io.grpc"               % "grpc-core"            % GrpcJavaVersion,
+      "com.google.protobuf"   % "protobuf-java"        % ProtobufVersion % "protobuf",
+    ),
+
+
   )
 
 lazy val `akka-client` = (project in file("samples/akka-client"))
