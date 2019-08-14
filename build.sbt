@@ -404,8 +404,8 @@ lazy val `java-support` = (project in file("java-support"))
 
     javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
 
-    akkaGrpcGeneratedSources := Seq(AkkaGrpc.Server),
-    akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Scala),
+    akkaGrpcGeneratedSources in Compile := Seq(AkkaGrpc.Server),
+    akkaGrpcGeneratedLanguages in Compile := Seq(AkkaGrpc.Scala), // FIXME should be Java, but here be dragons
 
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
