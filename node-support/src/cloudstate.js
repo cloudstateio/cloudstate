@@ -99,7 +99,7 @@ module.exports = class CloudState {
       };
     });
     callback(null, {
-      proto: fs.readFileSync("user-function.desc"),
+      proto: fs.readFileSync("user-function.desc"), // Why not serve "this.proto"? We already load it in the constructor…
       entities: entities
     });
   }
