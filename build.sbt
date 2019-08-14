@@ -67,7 +67,7 @@ headerSources in Compile ++= {
 }
 
 lazy val root = (project in file("."))
-  .aggregate(`proxy-core`, `proxy-cassandra`, `java-support`,`akka-client`, operator, `tck`)
+  .aggregate(`proxy-core`, `proxy-cassandra`, `java-support`, `java-shopping-cart`,`akka-client`, operator, `tck`)
   .settings(common)
 
 lazy val proxyDockerBuild = settingKey[Option[(String, String)]]("Docker artifact name and configuration file which gets overridden by the buildProxy command")
@@ -376,22 +376,56 @@ lazy val operator = (project in file("operator"))
   )
 
 lazy val `java-support` = (project in file("java-support"))
-  .enablePlugins(ProtobufPlugin)
+  .enablePlugins(AkkaGrpcPlugin)
   .settings(
     name := "java-support",
 
-    (version in ProtobufConfig) := ProtobufVersion,
-    (sourceDirectory in ProtobufConfig) := (baseDirectory in ThisBuild).value / "protocols" / "frontend",
-
-    javacOptions in Compile := Seq("-encoding", "UTF-8"),
-
     libraryDependencies ++= Seq(
-      "io.grpc"               % "grpc-netty-shaded"    % GrpcJavaVersion,
-      "io.grpc"               % "grpc-core"            % GrpcJavaVersion,
-      "com.google.protobuf"   % "protobuf-java"        % ProtobufVersion % "protobuf",
+      // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
+      "io.grpc"                       % "grpc-core"                          % GrpcJavaVersion,
+      "io.grpc"                       % "grpc-netty-shaded"                  % GrpcJavaVersion,
+
+      "com.typesafe.akka"             %% "akka-stream"                       % AkkaVersion,
+      "com.typesafe.akka"             %% "akka-slf4j"                        % AkkaVersion,
+      "com.typesafe.akka"             %% "akka-http"                         % AkkaHttpVersion,
+      "com.typesafe.akka"             %% "akka-http-spray-json"              % AkkaHttpVersion,
+      "com.typesafe.akka"             %% "akka-http-core"                    % AkkaHttpVersion,
+      "com.typesafe.akka"             %% "akka-http2-support"                % AkkaHttpVersion,
+      "com.google.protobuf"            % "protobuf-java"                     % ProtobufVersion % "protobuf",
+      "com.google.protobuf"            % "protobuf-java-util"                % ProtobufVersion,
+
+      "org.scalatest"                 %% "scalatest"                         % ScalaTestVersion % Test,
+      "com.typesafe.akka"             %% "akka-testkit"                      % AkkaVersion % Test,
+      "com.typesafe.akka"             %% "akka-stream-testkit"               % AkkaVersion % Test,
+      "com.typesafe.akka"             %% "akka-http-testkit"                 % AkkaHttpVersion % Test,
+      "com.thesamet.scalapb"          %% "scalapb-runtime"                   % scalapb.compiler.Version.scalapbVersion % "protobuf",
+      "org.slf4j"                      % "slf4j-simple"                      % "1.7.26"
     ),
 
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
 
+    akkaGrpcGeneratedSources := Seq(AkkaGrpc.Server),
+
+    PB.protoSources in Compile ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "frontend")
+    },
+  )
+
+lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
+  .dependsOn(`java-support`)
+  .enablePlugins(AkkaGrpcPlugin)
+  .settings(
+    name := "java-shopping-cart",
+
+    akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
+
+    PB.protoSources in Compile ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "example", (sourceDirectory in Compile).value / "protos")
+    },
+
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
   )
 
 lazy val `akka-client` = (project in file("samples/akka-client"))
