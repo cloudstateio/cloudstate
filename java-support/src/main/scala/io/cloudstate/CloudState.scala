@@ -16,7 +16,7 @@
 
 package io.cloudstate
 
-import io.cloudstate.impl.EntityDiscoveryAndSourcingImpl
+import io.cloudstate.impl.{EventSourcedImpl, EntityDiscoveryImpl, CrdtImpl}
 
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -30,6 +30,7 @@ import java.util.Objects.requireNonNull
 
 import io.cloudstate.entity.{EntityDiscoveryHandler, EntityDiscovery}
 import io.cloudstate.eventsourced.{EventSourcedHandler, EventSourced}
+import io.cloudstate.crdt.{CrdtHandler, Crdt}
 
 import scala.concurrent.Future
 import java.util.concurrent.CompletionStage
@@ -59,7 +60,9 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
 
   private final val configuration = new CloudState.Configuration(system.settings.config.getConfig("cloudstate"))
 
-  private final val impl = new EntityDiscoveryAndSourcingImpl(system, service)
+  private final val eventSourceImpl = new EventSourcedImpl(system, service)
+  private final val entityDiscoveryImpl = new EntityDiscoveryImpl(system, service)
+  private final val crdtImpl = new CrdtImpl(system, service)
 
   def this(_service: StatefulService) {
     this(
@@ -73,8 +76,9 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
   }
 
   private[this] def createRoutes(): PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    EntityDiscoveryHandler.partial(impl) orElse
-    EventSourcedHandler.partial(impl) orElse
+    CrdtHandler.partial(crdtImpl) orElse
+    EventSourcedHandler.partial(eventSourceImpl) orElse
+    EntityDiscoveryHandler.partial(entityDiscoveryImpl) orElse
     { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }
   }
 
