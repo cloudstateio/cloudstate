@@ -59,12 +59,13 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
 
   private final val configuration = new CloudState.Configuration(system.settings.config.getConfig("cloudstate"))
 
-  private final val impl = new EntityDiscoveryAndSourcingImpl(system)
+  private final val impl = new EntityDiscoveryAndSourcingImpl(system, service)
 
   def this(_service: StatefulService) {
     this(
       {
         val conf = ConfigFactory.load()
+        // We do this to apply the cloud-state specific akka configuration to the ActorSystem we create for hosting the user function
         ActorSystem("StatefulService", conf.getConfig("cloudstate.system").withFallback(conf))
       }, 
       _service
@@ -78,15 +79,19 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
   }
 
   def run(): CompletionStage[Done] = {
-    // FIXME due to some issues with the Java code generation for the protocols, this looks messy. Revisit once Java generation works as intended.
-    FutureConverters.toJava(Http.get(system).bindAndHandleAsync(
+    val serverBindingFuture = Http.get(system).bindAndHandleAsync(
         createRoutes(),
         configuration.userFunctionInterface,
         configuration.userFunctionPort,
-        HttpConnectionContext(UseHttp2.Always))).thenCompose(_ => FutureConverters.toJava(system.terminate())).thenApply(_ => Done)
+        HttpConnectionContext(UseHttp2.Always))
+    FutureConverters.toJava(serverBindingFuture).thenCompose(_ => terminate())
   }
+
+  def terminate(): CompletionStage[Done] =
+    FutureConverters.toJava(system.terminate()).thenApply(_ => Done)
 }
 
+// This class will describe the stateless service and is created and passed by the user into a CloudState instance.
 abstract class StatefulService {
 
 }

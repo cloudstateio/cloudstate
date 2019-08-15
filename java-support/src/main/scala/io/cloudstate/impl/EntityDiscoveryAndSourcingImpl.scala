@@ -16,12 +16,13 @@
 
 package io.cloudstate.impl
 
+import io.cloudstate.StatefulService
 import io.cloudstate.entity._
 import io.cloudstate.eventsourced._
 
 import akka.actor.ActorSystem
 
-class EntityDiscoveryAndSourcingImpl(system: ActorSystem) extends EntityDiscovery with EventSourced {
+class EntityDiscoveryAndSourcingImpl(system: ActorSystem, service: StatefulService) extends EntityDiscovery with EventSourced {
 
     /**
    * The stream. One stream will be established per active entity.
