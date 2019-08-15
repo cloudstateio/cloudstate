@@ -1494,22 +1494,6 @@
   "allPublicMethods":true
 },
 {
-  "name":"akka.discovery.kubernetes.KubernetesApiServiceDiscovery",
-  "methods": [{"name":"<init>","parameterTypes":["akka.actor.ActorSystem"] }]
-},
-{
-  "name":"akka.management.cluster.bootstrap.LowestAddressJoinDecider",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ActorSystem","akka.management.cluster.bootstrap.ClusterBootstrapSettings"] }]
-},
-{
-  "name":"akka.management.cluster.bootstrap.ClusterBootstrap$",
-  "fields":[{"name":"MODULE$"}]
-},
-{
-  "name":"akka.management.HealthCheckRoutes",
-  "methods":[{"name":"<init>", "parameterTypes":["akka.actor.ExtendedActorSystem"]}]
-},
-{
   "name":"io.cloudstate.proxy.HealthCheckReady",
   "methods":[{"name":"<init>","parameterTypes":["akka.actor.ActorSystem"] }]
 },
@@ -1522,63 +1506,50 @@
   "methods":[{"name":"<init>","parameterTypes":["akka.actor.ActorSystem"] }]
 },
 {
-  "name":"akka.discovery.kubernetes.PodList$ContainerPort",
-  "allDeclaredFields":true,
-  "allPublicMethods":true,
-  "allPublicConstructors":true
+  "name":"io.cloudstate.proxy.HealthCheckReady",
+  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ActorSystem"] }]
 },
 {
-  "name":"akka.discovery.kubernetes.PodList$Container",
-  "allDeclaredFields":true,
-  "allPublicMethods":true,
-  "allPublicConstructors":true
+  "name":"io.cloudstate.proxy.HealthCheckLive",
+  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ActorSystem"] }]
 },
 {
-  "name":"akka.discovery.kubernetes.PodList$PodSpec",
-  "allDeclaredFields":true,
-  "allPublicMethods":true,
-  "allPublicConstructors":true
+  "name":"io.cloudstate.proxy.crdt.CrdtSerializers",
+  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"]}]
 },
 {
-  "name":"akka.discovery.kubernetes.PodList$PodStatus",
-  "allDeclaredFields":true,
-  "allPublicMethods":true,
-  "allPublicConstructors":true
+  "name":"io.cloudstate.proxy.crdt.Vote"
 },
 {
-  "name":"akka.discovery.kubernetes.PodList$Metadata",
-  "allDeclaredFields":true,
-  "allPublicMethods":true,
-  "allPublicConstructors":true
+  "name":"io.cloudstate.proxy.entity.UserFunctionCommand",
+  "allPublicMethods": true
 },
 {
-  "name":"akka.discovery.kubernetes.PodList$Pod",
-  "allDeclaredFields":true,
-  "allPublicMethods":true,
-  "allPublicConstructors":true
+  "name":"io.cloudstate.proxy.entity.EntityCommand",
+  "allPublicMethods": true
 },
 {
-  "name":"akka.discovery.kubernetes.PodList",
-  "allDeclaredFields":true,
-  "allPublicMethods":true,
-  "allPublicConstructors":true
+  "name":"io.cloudstate.proxy.entity.UserFunctionReply",
+  "allPublicMethods": true
 },
 {
-  "name":"akka.management.cluster.bootstrap.contactpoint.HttpBootstrapJsonProtocol$SeedNode",
-  "allDeclaredFields":true,
-  "allPublicMethods":true,
-  "allPublicConstructors":true
+  "name":"io.cloudstate.proxy.autoscaler.AutoscalerMetrics",
+  "allPublicMethods": true
 },
 {
-  "name":"akka.management.cluster.bootstrap.contactpoint.HttpBootstrapJsonProtocol$ClusterMember",
-  "allDeclaredFields":true,
-  "allPublicMethods":true,
-  "allPublicConstructors":true
+  "name":"io.cloudstate.proxy.autoscaler.Stable",
+  "allPublicMethods": true
 },
 {
-  "name":"akka.management.cluster.bootstrap.contactpoint.HttpBootstrapJsonProtocol$SeedNodes",
-  "allDeclaredFields":true,
-  "allPublicMethods":true,
-  "allPublicConstructors":true
+  "name":"io.cloudstate.proxy.autoscaler.Upgrading",
+  "allPublicMethods": true
+},
+{
+  "name":"io.cloudstate.proxy.autoscaler.ScalingUp",
+  "allPublicMethods": true
+},
+{
+  "name":"io.cloudstate.proxy.autoscaler.ScalingDown",
+  "allPublicMethods": true
 }
 ]
