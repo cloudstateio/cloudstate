@@ -53,16 +53,24 @@ object CloudState {
   }
 }
 
+/**
+ * Current Java API:
+ * public static class UserFunction {
+ *   public static void main(String[] args) {
+ *      new CloudState(new StatefulService(…)).run();
+ *   }
+ * }
+ **/
 final class CloudState private[this](_system: ActorSystem, _service: StatefulService) {
   final val service = requireNonNull(_service, "StatefulService must not be null!")
-  implicit final val system = _system
-  implicit final val materializer: Materializer = ActorMaterializer()
+  private[this] implicit final val system = _system
+  private[this] implicit final val materializer: Materializer = ActorMaterializer()
 
-  private final val configuration = new CloudState.Configuration(system.settings.config.getConfig("cloudstate"))
+  private[this] final val configuration = new CloudState.Configuration(system.settings.config.getConfig("cloudstate"))
 
-  private final val eventSourceImpl = new EventSourcedImpl(system, service)
-  private final val entityDiscoveryImpl = new EntityDiscoveryImpl(system, service)
-  private final val crdtImpl = new CrdtImpl(system, service)
+  private[this] final val eventSourceImpl = new EventSourcedImpl(system, service)
+  private[this] final val entityDiscoveryImpl = new EntityDiscoveryImpl(system, service)
+  private[this] final val crdtImpl = new CrdtImpl(system, service)
 
   def this(_service: StatefulService) {
     this(
@@ -97,5 +105,5 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
 
 // This class will describe the stateless service and is created and passed by the user into a CloudState instance.
 abstract class StatefulService {
-
+  // FIXME add all User Function configuration to this class
 }
