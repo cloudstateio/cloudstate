@@ -5,4 +5,4 @@ metadata:
   name: crdts
 spec:
   containers:
-    - image: gcr.io/stateserv/js-crdts:latest
+    - image: cloudstateio/js-crdts:latest

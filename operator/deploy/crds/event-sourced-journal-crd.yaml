@@ -27,27 +27,4 @@ spec:
   - name: Age
     type: date
     JSONPath: .metadata.creationTimestamp
-  validation:
-    openAPIV3Schema:
-      properties:
-        spec:
-          type: object
-          properties:
-
-            type:
-              type: string
-              enum:
-              - Cassandra
-
-            deployment:
-              type: string
-              enum:
-              - Unmanaged
-
-            config:
-              type: object
-
-          required:
-          - type
-          - deployment
 

@@ -123,7 +123,7 @@ def dockerBuildCassandraCommand =
 commands ++= Seq(
   buildProxyCommand("dockerBuildDevMode", `proxy-core`, "dev-mode", "dev-mode.conf"),
   buildProxyCommand("dockerBuildNoJournal", `proxy-core`, "no-journal", "no-journal.conf"),
-  buildProxyCommand("dockerBuildInMemory", `proxy-core`, "in-memory", "cloudstate-common.conf"),
+  buildProxyCommand("dockerBuildInMemory", `proxy-core`, "in-memory", "in-memory.conf"),
   dockerBuildCassandraCommand
 )
 
@@ -369,8 +369,8 @@ lazy val operator = (project in file("operator"))
     compileK8sDescriptors := doCompileK8sDescriptors(
       baseDirectory.value / "deploy",
       baseDirectory.value / "cloudstate.yaml",
-      dockerRepository.value.get,
-      dockerUsername.value.get,
+      dockerRepository.value,
+      dockerUsername.value,
       version.value
     )
   )
@@ -446,17 +446,18 @@ lazy val `tck` = (project in file("tck"))
     executeTests in Test := (executeTests in Test).dependsOn(`proxy-core`/assembly).value
   )
 
-def doCompileK8sDescriptors(dir: File, target: File, registry: String, username: String, version: String): File = {
+def doCompileK8sDescriptors(dir: File, target: File, registry: Option[String], username: Option[String], version: String): File = {
   val files = ((dir / "crds") * "*.yaml").get ++
     (dir * "*.yaml").get.sortBy(_.getName)
 
   val fullDescriptor = files.map(IO.read(_)).mkString("\n---\n")
 
-  val substitutedDescriptor = List("cloudstate", "cloudstate-proxy-cassandra")
-    .foldLeft(fullDescriptor) { (descriptor, image) =>
-      descriptor.replace(s"lightbend-docker-registry.bintray.io/octo/$image:latest",
-        s"$registry/$username/$image:$version")
-    }
+  val user = username.getOrElse("cloudstateio")
+  val registryAndUsername = registry.fold(user)(r => s"$r/$user")
+  val substitutedDescriptor = fullDescriptor.replaceAll(
+    "image: cloudstateio/(.*):latest", 
+    s"image: $registryAndUsername/$$1:$version"
+  )
 
   IO.write(target, substitutedDescriptor)
   target

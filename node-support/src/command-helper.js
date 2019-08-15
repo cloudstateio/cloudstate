@@ -126,7 +126,7 @@ module.exports = class CommandHelper {
       ctx.commandDebug("%s failed with message '%s'", desc, ctx.error.message);
       this.call.write({
         failure: {
-          commandId: command.id,
+          commandId: ctx.commandId,
           description: ctx.error.message
         }
       });

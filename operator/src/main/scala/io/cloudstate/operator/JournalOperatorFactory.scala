@@ -69,10 +69,10 @@ class JournalOperatorFactory(implicit mat: Materializer, ec: ExecutionContext) e
         Future.successful(StatusUpdate.None)
       } else {
         val maybeErrorStatus = resource.spec.`type` match {
-          case `CassandraJournalType` =>
+          case Some(`CassandraJournalType`) =>
             resource.spec.deployment match {
-              case `UnmanagedJournalDeployment` =>
-                (resource.spec.config \ "service").asOpt[String] match {
+              case Some(`UnmanagedJournalDeployment`) =>
+                resource.spec.config.flatMap(c => (c \ "service").asOpt[String]) match {
                   case Some(_) => None
                   case None =>
                     Some(errorStatus(Some(resource), "MissingServiceName", "No service name declared in unmanaged Cassandra journal"))
@@ -80,7 +80,7 @@ class JournalOperatorFactory(implicit mat: Materializer, ec: ExecutionContext) e
               case unknown =>
                 Some(errorStatus(Some(resource), "UnknownDeploymentType", s"Unknown Cassandra deployment type: $unknown, supported types for Cassandra are: Unmanaged"))
             }
-          case `InMemoryJournalType` => None
+          case Some(`InMemoryJournalType`) => None
           case unknown =>
             Some(errorStatus(Some(resource), "UnknownJournalType", s"Unknown journal type: $unknown, supported types are: Cassandra"))
         }

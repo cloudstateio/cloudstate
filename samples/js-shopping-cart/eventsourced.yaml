@@ -9,13 +9,7 @@ spec:
   journal:
 
     # Name of a deployed EventSourcedJournal to use.
-    name: cassandra
-
-    # Journal specific configuration
-    config:
-
-      # Since the journal is a Cassandra journal, we need to specify the keyspace to use.
-      keyspace: shoppingcart
+    name: inmemory
 
   containers:
-    - image: gcr.io/stateserv/js-shopping-cart:latest
+    - image: cloudstateio/js-shopping-cart:latest

@@ -32,9 +32,9 @@ import StatefulService.Resource
 class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionContext)
   extends OperatorFactory[StatefulService.Status, Resource] {
 
-  private val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "gcr.io/stateserv/cloudstate-proxy-cassandra:latest")
-  private val InMemoryJournalImage = sys.env.getOrElse("IN_MEMORY_JOURNAL_IMAGE", "gcr.io/stateserv/cloudstate-proxy-in-memory:latest")
-  private val NoJournalImage = sys.env.getOrElse("NO_JOURNAL_IMAGE", "gcr.io/stateserv/cloudstate-proxy-no-journal:latest")
+  private val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "cloudstateio/cloudstate-proxy-cassandra:latest")
+  private val InMemoryJournalImage = sys.env.getOrElse("IN_MEMORY_JOURNAL_IMAGE", "cloudstateio/cloudstate-proxy-in-memory:latest")
+  private val NoJournalImage = sys.env.getOrElse("NO_JOURNAL_IMAGE", "cloudstateio/cloudstate-proxy-no-journal:latest")
 
   import OperatorConstants._
 
@@ -211,10 +211,10 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
           Left(errorCondition(JournalConditionType, "JournalNotFound", s"Journal with name ${journalConfig.name} not found."))
         case (Some(journal), Some(journalConfig)) =>
           journal.spec.`type` match {
-            case `CassandraJournalType` =>
+            case Some(`CassandraJournalType`) =>
               journal.spec.deployment match {
-                case `UnmanagedJournalDeployment` =>
-                  (journal.spec.config \ "service").asOpt[String] match {
+                case Some(`UnmanagedJournalDeployment`) =>
+                  journal.spec.config.flatMap(c => (c \ "service").asOpt[String]) match {
                     case Some(serviceName) =>
                       journalConfig.config.flatMap(config => (config \ "keyspace").asOpt[String]) match {
                         case Some(keyspace) =>
@@ -231,7 +231,7 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
                   Left(errorCondition(JournalConditionType, "UnknownDeploymentType",
                     s"Unknown Cassandra deployment type: $unknown, supported types for Cassandra are: Unmanaged"))
               }
-            case `InMemoryJournalType` =>
+            case Some(`InMemoryJournalType`) =>
               Right(createInMemorySidecar(service))
             case unknown =>
               Left(errorCondition(JournalConditionType, "UnknownJournalType",
