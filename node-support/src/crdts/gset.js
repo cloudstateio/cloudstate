@@ -72,7 +72,7 @@ function GSet() {
   };
 
   this.applyDelta = function (delta, anySupport) {
-    if (delta.gset === undefined) {
+    if (!delta.gset) {
       throw new Error(util.format("Cannot apply delta %o to GSet", delta));
     }
     if (delta.gset.added !== undefined) {
@@ -101,7 +101,7 @@ function GSet() {
   };
 
   this.applyState = function (state, anySupport) {
-    if (state.gset === undefined) {
+    if (!state.gset) {
       throw new Error(util.format("Cannot apply state %o to GSet", state));
     }
     currentValue.clear();

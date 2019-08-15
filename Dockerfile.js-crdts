@@ -16,4 +16,5 @@ RUN npm run prestart
 
 # run
 EXPOSE 8080
-CMD ["npm", "run", "start-no-prestart"]
+ENV DEBUG=cloudstate*
+ENTRYPOINT ["npm", "run", "start-no-prestart"]

@@ -61,11 +61,11 @@ describe("Vote", () => {
     vote.applyState(voteState(5, 3, false))
     vote.applyDelta(roundTripDelta({
       vote: {
-        totalVotersDelta: -1,
-        votesForDelta: 1,
+        totalVoters: 4,
+        votesFor: 2,
       }
     }));
-    vote.votesFor.should.equal(4);
+    vote.votesFor.should.equal(2);
     vote.totalVoters.should.equal(4);
     vote.vote.should.equal(false);
   });

@@ -81,8 +81,7 @@ object Vote {
 final case class Vote private[crdt] (
   private[crdt] val state: Map[UniqueAddress, BigInt] = Map.empty,
   override val delta: Option[Vote] = None)
-  extends NodeVector[BigInt](state)
-    with ReplicatedDataSerialization {
+  extends NodeVector[BigInt](state) {
 
   type T = Vote
 

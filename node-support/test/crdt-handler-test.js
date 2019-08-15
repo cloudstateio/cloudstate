@@ -282,24 +282,21 @@ describe("CrdtHandler", () => {
       commandHandlers: {
         StreamSomething: (cmd, ctx) => {
           ctx.streamed.should.equal(true);
-          ctx.subscribe("foo");
+          ctx.onStateChange = (state, ctx) => {
+            ctx.state.value.should.equal(5);
+            return {field: "pushed"};
+          };
           return outMsg;
         }
       },
-      onStateChange: (ctx) => {
-        const subscribers = Array.from(ctx.subscribers);
-        subscribers.should.have.lengthOf(1);
-        ctx.getSubscriber(subscribers[0]).should.equal("foo");
-        ctx.state.value.should.equal(5);
-        ctx.pushToAll({field: "pushed"});
-      }
     }, {
       gcounter: {
         value: 2
       }
     });
 
-    handleCommand(handler, inMsg, "StreamSomething", 5, true);
+    const reply = handleCommand(handler, inMsg, "StreamSomething", 5, true);
+    reply.streamed.should.be.true;
     send(handler, {
       changed: {
         gcounter: {
@@ -317,7 +314,7 @@ describe("CrdtHandler", () => {
       commandHandlers: {
         StreamSomething: (cmd, ctx) => {
           ctx.streamed.should.equal(false);
-          ctx.subscribe("foo");
+          ctx.onStateChange = () => undefined;
           return outMsg;
         }
       }
@@ -326,7 +323,8 @@ describe("CrdtHandler", () => {
     handleFailedCommand(handler, inMsg, "StreamSomething", 5, false);
   });
 
-  it("should require streamed commands to be subscribed to", () => {
+
+  it("should not allow not subscribing to a streamed command", () => {
     const handler = create({
       commandHandlers: {
         StreamSomething: (cmd, ctx) => {
@@ -336,30 +334,8 @@ describe("CrdtHandler", () => {
       }
     });
 
-    handleFailedCommand(handler, inMsg, "StreamSomething", 5, true);
-  });
-
-  it("should not invoke onStateChange when there are no subscriptions", () => {
-    const handler = create({
-      commandHandlers: {
-        DoSomething: (cmd, ctx) => {
-          return outMsg;
-        }
-      },
-      onStateChange: () => {
-        throw new Error("Invoked!");
-      }
-    });
-
-    handleCommand(handler, inMsg);
-    send(handler, {
-      state: {
-        gcounter: {
-          value: 3
-        }
-      }
-    });
-    call.expectNoWrites();
+    const reply = handleCommand(handler, inMsg, "StreamSomething", 5, true);
+    reply.streamed.should.be.false;
   });
 
   it("should allow closing a stream", () => {
@@ -368,18 +344,16 @@ describe("CrdtHandler", () => {
     const handler = create({
       commandHandlers: {
         StreamSomething: (cmd, ctx) => {
-          ctx.subscribe();
+          ctx.onStateChange = (state, ctx) => {
+            if (!ended) {
+              ctx.end();
+            } else {
+              throw new Error("Invoked!")
+            }
+          };
           return outMsg;
         }
       },
-      onStateChange: (ctx) => {
-        if (!ended) {
-          ctx.end("5");
-          ended = true;
-        } else {
-          throw new Error("Invoked!")
-        }
-      }
     }, {
       gcounter: {
         value: 2
@@ -410,18 +384,12 @@ describe("CrdtHandler", () => {
     const handler = create({
       commandHandlers: {
         StreamSomething: (cmd, ctx) => {
-          ctx.subscribe("foo");
+          ctx.onStreamCancel = (state, ctx) => {
+            state.value.should.equal(2);
+            state.increment(3);
+          };
           return outMsg;
         }
-      },
-      onStreamCancelled: (ctx) => {
-        ctx.subscription.should.equal("foo");
-        ctx.state.value.should.equal(2);
-        ctx.state.increment(3);
-      },
-      onStateChange: () => {
-        // Shouldn't be invoked even though it's updated because there's no subscribers left
-        throw new Error("Invoked!")
       }
     }, {
       gcounter: {
@@ -436,6 +404,7 @@ describe("CrdtHandler", () => {
       }
     });
     const response = call.get();
+    response.streamCancelledResponse.commandId.toNumber().should.equal(5);
     response.streamCancelledResponse.stateAction.update.gcounter.increment.toNumber().should.equal(3);
 
   });

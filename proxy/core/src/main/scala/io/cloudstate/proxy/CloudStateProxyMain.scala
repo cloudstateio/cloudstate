@@ -16,6 +16,9 @@
 
 package io.cloudstate.proxy
 
+import java.util.concurrent.ThreadLocalRandom
+import java.util.concurrent.atomic.AtomicLong
+
 import com.typesafe.config.Config
 import akka.actor.{ActorSelection, ActorSystem, Props}
 import akka.pattern.ask
@@ -90,7 +93,39 @@ object CloudStateProxyMain {
     }
   }
 
+  private val isGraalVM = sys.props.get("org.graalvm.nativeimage.imagecode").contains("runtime")
+
+  /**
+    * Work around for https://github.com/oracle/graal/issues/1610.
+    *
+    * ThreadLocalRandom gets initialized with a static seed generator, from this generator all seeds for
+    * each thread are generated, but this gets computed at build time when compiling a native image, which
+    * means that you get the same sequence of seeds each time you run the native image, and one serious
+    * consequence of this is that every cluster node ends up with the same UID, and that causes big problems.
+    * We can't tell Graal not to initialize at build time because it's already loaded by Graal itself.
+    * So, we have to reset that field ourselves.
+    */
+  private def initializeThreadLocalRandom(): Unit = {
+    // MurmurHash3 64 bit mixer to give an even distribution of seeds:
+    // https://github.com/aappleby/smhasher/wiki/MurmurHash3
+    def mix64(z: Long): Long = {
+      val z1 = (z ^ (z >>> 33)) * 0xff51afd7ed558ccdL
+      val z2 = (z1 ^ (z1 >>> 33)) * 0xc4ceb9fe1a85ec53L
+      z2 ^ (z2 >>> 33)
+    }
+
+    val seed = mix64(System.currentTimeMillis) ^ mix64(System.nanoTime)
+    val field = classOf[ThreadLocalRandom].getDeclaredField("seeder")
+    field.setAccessible(true)
+    field.get(null).asInstanceOf[AtomicLong].set(seed)
+  }
+
   def main(args: Array[String]): Unit = {
+    // Must do this first, before anything uses ThreadLocalRandom
+    if (isGraalVM) {
+      initializeThreadLocalRandom()
+    }
+
     implicit val system = ActorSystem("cloudstate-proxy")
     implicit val materializer = ActorMaterializer()
     import system.dispatcher
@@ -101,7 +136,7 @@ object CloudStateProxyMain {
 
     val cluster = Cluster(system)
 
-    if (sys.props.get("org.graalvm.nativeimage.imagecode").contains("runtime")) {
+    if (isGraalVM) {
       system.log.info("Registering SIGTERM handler...")
       // By default, Graal/SubstrateVM doesn't register any signal handlers, which means shutdown
       // hooks don't get executed (so no graceful leaving of the cluster). Worse, if the process

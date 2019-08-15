@@ -294,14 +294,12 @@ message ORMapEntryDelta {
 }
 
 message VoteDelta {
-    // Only set by the user to change the nodes current vote.
+    // Only set by the user function to change the nodes current vote.
     bool self_vote = 1;
 
-    // Only set by the proxy to update the number of votes. Indicates an increase or decrease in votes for.
-    int32 votes_for_delta = 2;
-
-    // Only set by the proxy to update the number of votes. Indicates an increase or decrease in number of voters.
-    int32 total_voters_delta = 3;
+    // Only set by the proxy to change the votes for and total voters.
+    int32 votes_for = 2;
+    int32 total_voters = 3;
 }
 
 message CrdtInit {
@@ -322,6 +320,12 @@ message CrdtReply {
     repeated SideEffect side_effects = 4;
 
     CrdtStateAction state_action = 5;
+
+    // If the request was streamed, setting this to true indicates that the command should
+    // be handled as a stream. Subsequently, the user function may send CrdtStreamedMessage,
+    // and a CrdtStreamCancelled message will be sent if the stream is cancelled (though
+    // not if the a CrdtStreamedMessage ends the stream first).
+    bool streamed = 6;
 }
 
 message CrdtStateAction {

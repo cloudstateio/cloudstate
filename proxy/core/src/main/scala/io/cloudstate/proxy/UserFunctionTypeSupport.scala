@@ -96,7 +96,7 @@ private final class EntityUserFunctionTypeSupport(serviceDescriptor: ServiceDesc
 
   private def ufToEntityCommand(method: EntityMethodDescriptor): UserFunctionCommand => EntityCommand = { command =>
     val entityId = method.extractId(command.payload.fold(ByteString.EMPTY)(_.value))
-    EntityCommand(entityId = entityId, name = command.name, payload = command.payload)
+    EntityCommand(entityId = entityId, name = command.name, payload = command.payload, streamed = method.method.isServerStreaming)
   }
 
   private def methodDescriptor(name: String): EntityMethodDescriptor =

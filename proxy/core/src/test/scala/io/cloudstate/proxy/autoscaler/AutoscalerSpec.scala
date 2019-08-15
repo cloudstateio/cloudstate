@@ -49,6 +49,7 @@ class AutoscalerSpec extends TestKit(ActorSystem("AutoscalerSpec", ConfigFactory
     ensureScalerStateIs(initialState)
 
     val settings = AutoscalerSettings(
+      enabled = true,
       targetUserFunctionConcurrency = targetUserFunctionConcurrency,
       targetRequestConcurrency = targetRequestConcurrency,
       targetConcurrencyWindow = targetConcurrencyWindow,

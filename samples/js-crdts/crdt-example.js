@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+
 const crdt = require("cloudstate").crdt;
 
 const entity = new crdt.Crdt(
@@ -141,51 +142,76 @@ function getORSet(get, ctx) {
   };
 }
 
+/**
+ * User presence feature.
+ *
+ * This is a streamed call. As long as a user (id given by the entity id) is connected
+ * to it, they are considered to be online.
+ *
+ * Here we use a Vote CRDT, which if at least one node votes is true, will be true.
+ * So when the user connects, we invoke the connect() method (which we have defined
+ * by enriching the CRDT in onStateSet), which will manage our vote accordingly.
+ *
+ * When they disconnect, the onStreamCancel callback is invoked, and we disconnect,
+ * removing our vote if this is the last connection to this CRDT.
+ */
 function connect(user, ctx) {
   if (ctx.state === null) {
     ctx.state = new crdt.Vote();
-    ctx.state.users = 0;
   }
-  ctx.subscribe({
-    connected: true
-  });
-  ctx.state.vote = true;
-  ctx.state.users = ctx.state.users + 1;
+  if (ctx.streamed) {
+    ctx.onStreamCancel = state => {
+      state.disconnect();
+    };
+    ctx.state.connect();
+  }
 }
 
+/**
+ * User presence monitoring call.
+ *
+ * This is a streamed call. We add a onStateChange callback, so that whenever the CRDT
+ * changes, if the online status has changed, we return it.
+ */
 function monitor(user, ctx) {
   if (ctx.state === null) {
     ctx.state = new crdt.Vote();
-    ctx.state.users = 0;
   }
-  ctx.subscribe({
-    lastOnlineStatus: ctx.state.atLeastOne
-  });
-  return {
-    online: ctx.state.atLeastOne
-  };
+  let online = ctx.state.atLeastOne;
+  if (ctx.streamed) {
+    ctx.onStateChange = state => {
+      if (online !== state.atLeastOne) {
+        online = state.atLeastOne;
+        return {online};
+      }
+    };
+  }
+  return {online};
 }
 
-entity.onStateChange = (ctx) => {
-  ctx.subscribers.forEach(key => {
-    const subscription = ctx.getSubscriber(key);
-    if (subscription.lastOnlineStatus !== undefined) {
-      if (subscription.lastOnlineStatus !== ctx.state.atLeastOne) {
-        subscription.lastOnlineStatus = ctx.state.atLeastOne;
-        ctx.push(key, {
-          online: ctx.state.atLeastOne
-        });
+/**
+ * This is invoked whenever a new state is created, either by setting
+ * ctx.state = myCrdt, or when the server pushes a new state. This is provided to allow
+ * us to configure the CRDT, or enrich it with additional non replicated state, in this
+ * case, for the vote CRDT, we add the number of users connected to this node to it,
+ * so that only remove our vote when that number goes down to zero.
+ */
+entity.onStateSet = state => {
+  if (state instanceof crdt.Vote) {
+    state.users = 0;
+    // Enrich the state with callbacks for users connected
+    state.connect = () => {
+      state.users += 1;
+      if (state.users === 1) {
+        state.vote = true;
       }
-    }
-  })
-};
-
-entity.onStreamCancelled = (ctx) => {
-  if (ctx.subscription.connected === true) {
-    ctx.state.users = ctx.state.users - 1;
-    if (ctx.state.users === 0) {
-      ctx.state.vote = false;
-    }
+    };
+    state.disconnect = () => {
+      state.users -= 1;
+      if (state.users === 0) {
+        state.vote = false;
+      }
+    };
   }
 };
 

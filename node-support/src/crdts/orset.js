@@ -111,7 +111,7 @@ function ORSet() {
   };
 
   this.applyDelta = function (delta, anySupport) {
-    if (delta.orset === undefined) {
+    if (!delta.orset) {
       throw new Error(util.format("Cannot apply delta %o to ORSet", delta));
     }
     if (delta.orset.cleared) {
@@ -157,7 +157,7 @@ function ORSet() {
   };
 
   this.applyState = function (state, anySupport) {
-    if (state.orset === undefined) {
+    if (!state.orset) {
       throw new Error(util.format("Cannot apply state %o to ORSet", state));
     }
     currentValue.clear();

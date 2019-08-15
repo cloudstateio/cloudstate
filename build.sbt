@@ -272,7 +272,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     inConfig(Test)(
       sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
         PB.protoSources ++= Seq(sourceDirectory.value / "protos"),
-        akkaGrpcGeneratedSources := Seq(AkkaGrpc.Server),
+        akkaGrpcGeneratedSources := Seq(AkkaGrpc.Server, AkkaGrpc.Client),
       )
     ),
 

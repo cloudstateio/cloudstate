@@ -4,6 +4,7 @@ import java.net.URLEncoder
 
 import akka.{Done, NotUsed}
 import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
+import akka.cluster.ddata.DistributedData
 import akka.event.Logging
 import akka.grpc.GrpcClientSettings
 import akka.pattern.ask
@@ -34,6 +35,10 @@ class CrdtSupportFactory(system: ActorSystem, config: EntityDiscoveryManager.Con
 
     val crdtEntityProps = CrdtEntity.props(crdtClient, crdtEntityConfig, discovery)
     val crdtEntityManager = system.actorOf(CrdtEntityManager.props(crdtEntityProps), URLEncoder.encode(entity.serviceName, "utf-8"))
+
+    // Ensure the ddata replicator is started, to ensure state replication starts immediately, and also ensure the first
+    // request to the first CRDT doesn't timeout
+    DistributedData(system)
 
     val coordinatedShutdown = CoordinatedShutdown(system)
     coordinatedShutdown.addTask(CoordinatedShutdown.PhaseClusterShardingShutdownRegion, "shutdown-crdt-" + entity.serviceName) { () =>

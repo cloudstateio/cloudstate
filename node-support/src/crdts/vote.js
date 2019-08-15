@@ -84,11 +84,11 @@ function Vote() {
   };
 
   this.applyDelta = function (delta) {
-    if (delta.vote === undefined) {
+    if (!delta.vote) {
       throw new Error(util.format("Cannot apply delta %o to Vote", delta));
     }
-    currentVotesFor += delta.vote.votesForDelta;
-    currentTotalVoters += delta.vote.totalVotersDelta;
+    currentVotesFor = delta.vote.votesFor;
+    currentTotalVoters = delta.vote.totalVoters;
   };
 
   this.getStateAndResetDelta = function () {
@@ -103,7 +103,7 @@ function Vote() {
   };
 
   this.applyState = function (state) {
-    if (state.vote === undefined) {
+    if (!state.vote) {
       throw new Error(util.format("Cannot apply state %o to Vote", state));
     }
     currentSelfVote = state.vote.selfVote;
