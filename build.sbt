@@ -77,7 +77,7 @@ def dockerSettings: Seq[Setting[_]] = Seq(
   
   dockerUpdateLatest := true,
   dockerRepository := sys.props.get("docker.registry"),
-  dockerUsername := sys.props.get("docker.username"),
+  dockerUsername := sys.props.get("docker.username").orElse(Some("cloudstateio")),
   dockerAlias := {
     val old = dockerAlias.value
     proxyDockerBuild.value match {
@@ -137,6 +137,7 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   ),
   dockerBaseImage := "bitnami/java:11-prod",
   // Need to make sure it has group execute permission
+  // Note I think this is leading to quite large docker images :(
   dockerChmodType := DockerChmodType.Custom("u+x,g+x"),
   dockerEntrypoint := {
     val old = dockerEntrypoint.value
