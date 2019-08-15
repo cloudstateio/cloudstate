@@ -1,6 +1,6 @@
 # Deployment spec for our shopping cart event sourced function
 apiVersion: cloudstate.io/v1alpha1
-kind: EventSourcedService
+kind: StatefulService
 metadata:
   name: shopping-cart
 spec:
@@ -9,25 +9,7 @@ spec:
   journal:
 
     # Name of a deployed EventSourcedJournal to use.
-    name: cassandra
-
-    # Journal specific configuration
-    config:
-
-      # Since the journal is a Cassandra journal, we need to specify the keyspace to use.
-      keyspace: shoppingcart
-
-  nodeSelector:
-    loadtest: cloudstate
-
-  tolerations:
-  - key: loadtest
-    value: cloudstate
-
-  autoscaling:
-    userFunctionTargetConcurrency: 5
-    requestRateThresholdFactor: 2.0
-    scaleDownStableDeadline: 1m
+    name: inmemory
 
   containers:
-    - image: gcr.io/stateserv/js-shopping-cart:latest
+    - image: cloudstateio/js-shopping-cart:latest

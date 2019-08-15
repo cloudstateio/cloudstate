@@ -148,9 +148,10 @@ abstract class AbstractCrdtEntitySpec extends TestKit(ActorSystem("test", Abstra
     }
   }
 
-  protected def sendReply(commandId: Long, action: CrdtStateAction.Action = CrdtStateAction.Action.Empty, writeConsistency: CrdtWriteConsistency = CrdtWriteConsistency.LOCAL) = {
+  protected def sendReply(commandId: Long, action: CrdtStateAction.Action = CrdtStateAction.Action.Empty,
+    writeConsistency: CrdtWriteConsistency = CrdtWriteConsistency.LOCAL, streamed: Boolean = false) = {
     fromUserFunction ! CrdtStreamOut(CrdtStreamOut.Message.Reply(CrdtReply(commandId = commandId, sideEffects = Nil,
-      clientAction = None, stateAction = Some(CrdtStateAction(action = action, writeConsistency = writeConsistency)))))
+      clientAction = None, stateAction = Some(CrdtStateAction(action = action, writeConsistency = writeConsistency)), streamed = streamed)))
   }
 
   protected def doSendAndExpectReply(commandId: Long, action: CrdtStateAction.Action, writeConsistency: CrdtWriteConsistency): UserFunctionReply = {

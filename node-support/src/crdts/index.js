@@ -33,22 +33,26 @@ const Empty = protobufHelper.moduleRoot.google.protobuf.Empty;
  * Instantiate a CRDT for the given wire protobuf state.
  *
  * @param state
- * @returns {Flag|LWWRegister|ORSet|GSet|PNCounter|GCounter}
+ * @returns {Flag|LWWRegister|ORSet|GSet|PNCounter|GCounter|ORMap|Vote}
  */
 function createCrdtForState(state) {
-  if (state.gcounter !== undefined) {
+  if (state.gcounter) {
     return new GCounter();
-  } else if (state.pncounter !== undefined) {
+  } else if (state.pncounter) {
     return new PNCounter();
-  } else if (state.gset !== undefined) {
+  } else if (state.gset) {
     return new GSet();
-  } else if (state.orset !== undefined) {
+  } else if (state.orset) {
     return new ORSet();
-  } else if (state.lwwregister !== undefined) {
+  } else if (state.lwwregister) {
     // It needs to be initialised with a value
     return new LWWRegister(Empty.create({}));
-  } else if (state.flag !== undefined) {
+  } else if (state.flag) {
     return new Flag();
+  } else if (state.ormap) {
+    return new ORMap();
+  } else if (state.vote) {
+    return new Vote();
   } else {
     throw new Error(util.format("Unknown CRDT: %o", state))
   }

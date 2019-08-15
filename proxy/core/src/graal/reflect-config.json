@@ -1212,5 +1212,52 @@
 {
   "name":"sun.reflect.Reflection",
   "methods":[{"name":"getCallerClass","parameterTypes":["int"] }]
+},
+{
+  "name":"io.cloudstate.proxy.HealthCheckReady",
+  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ActorSystem"] }]
+},
+{
+  "name":"io.cloudstate.proxy.HealthCheckLive",
+  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ActorSystem"] }]
+},
+{
+  "name":"io.cloudstate.proxy.crdt.CrdtSerializers",
+  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"]}]
+},
+{
+  "name":"io.cloudstate.proxy.crdt.Vote"
+},
+{
+  "name":"io.cloudstate.proxy.entity.UserFunctionCommand",
+  "allPublicMethods": true
+},
+{
+  "name":"io.cloudstate.proxy.entity.EntityCommand",
+  "allPublicMethods": true
+},
+{
+  "name":"io.cloudstate.proxy.entity.UserFunctionReply",
+  "allPublicMethods": true
+},
+{
+  "name":"io.cloudstate.proxy.autoscaler.AutoscalerMetrics",
+  "allPublicMethods": true
+},
+{
+  "name":"io.cloudstate.proxy.autoscaler.Stable",
+  "allPublicMethods": true
+},
+{
+  "name":"io.cloudstate.proxy.autoscaler.Upgrading",
+  "allPublicMethods": true
+},
+{
+  "name":"io.cloudstate.proxy.autoscaler.ScalingUp",
+  "allPublicMethods": true
+},
+{
+  "name":"io.cloudstate.proxy.autoscaler.ScalingDown",
+  "allPublicMethods": true
 }
 ]

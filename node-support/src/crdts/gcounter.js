@@ -58,7 +58,7 @@ function GCounter() {
   };
 
   this.applyDelta = function (delta) {
-    if (delta.gcounter === undefined) {
+    if (!delta.gcounter) {
       throw new Error(util.format("Cannot apply delta %o to GCounter", delta));
     }
     currentValue = currentValue.add(delta.gcounter.increment);
@@ -74,7 +74,7 @@ function GCounter() {
   };
 
   this.applyState = function (state) {
-    if (state.gcounter === undefined) {
+    if (!state.gcounter) {
       throw new Error(util.format("Cannot apply state %o to GCounter", state));
     }
     currentValue = Long.fromValue(state.gcounter.value);

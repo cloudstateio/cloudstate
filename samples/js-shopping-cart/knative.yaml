@@ -9,12 +9,12 @@ spec:
         force-upgrade: one
     spec:
       containers:
-      - image: gcr.io/stateserv/js-shopping-cart:latest
+      - image: cloudstateio/js-shopping-cart:latest
         ports:
         - name: h2c
           containerPort: 8080
       deployer:
-        name: EventSourced
+        name: CloudState
         config:
           # Journal configuration
           journal:

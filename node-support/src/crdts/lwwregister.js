@@ -80,7 +80,7 @@ function LWWRegister(value, clock = Clocks.DEFAULT, customClockValue = 0) {
   };
 
   this.applyDelta = function (delta, anySupport) {
-    if (delta.lwwregister === undefined) {
+    if (!delta.lwwregister) {
       throw new Error(util.format("Cannot apply delta %o to LWWRegister", delta));
     }
     currentValue = anySupport.deserialize(delta.lwwregister.value);
@@ -102,7 +102,7 @@ function LWWRegister(value, clock = Clocks.DEFAULT, customClockValue = 0) {
   };
 
   this.applyState = function (state, anySupport) {
-    if (state.lwwregister === undefined) {
+    if (!state.lwwregister) {
       throw new Error(util.format("Cannot apply state %o to ORSet", state));
     }
     currentValue = anySupport.deserialize(state.lwwregister.value);

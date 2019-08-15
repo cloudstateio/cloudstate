@@ -39,8 +39,8 @@
     "pretest": "compile-descriptor ../../protocols/example/crdts/crdt-example.proto",
     "start": "node index.js",
     "start-no-prestart": "node index.js",
-    "dockerbuild": "docker build -f ../../Dockerfile.js-crdts -t gcr.io/stateserv/crdt-example:$npm_package_version -t gcr.io/stateserv/js-crdts:latest ../..",
-    "dockerpush": "docker push gcr.io/stateserv/js-crdts:$npm_package_version && docker push gcr.io/stateserv/js-crdts:latest",
+    "dockerbuild": "docker build -f ../../Dockerfile.js-crdts -t cloudstateio/js-crdts:latest ../..",
+    "dockerpush": "docker push cloudstateio/js-crdts:latest",
     "dockerbuildpush": "npm run dockerbuild && npm run dockerpush"
   }
 }

@@ -26,7 +26,7 @@ object Journal {
   type Resource = CustomResource[Journal.Spec, Status]
   type ResourceList = ListResource[Resource]
 
-  case class Spec(`type`: String, deployment: String, config: JsObject)
+  case class Spec(`type`: Option[String], deployment: Option[String], config: Option[JsObject])
 
   object Spec {
     implicit val format: Format[Spec] = Json.format

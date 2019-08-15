@@ -101,7 +101,7 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
       update(_ :+ 5)
       createAndExpectInit()
       val (cid, stream) = sendAndExpectStreamedCommand("cmd", command)
-      sendReply(cid)
+      sendReply(cid, streamed = true)
       stream.expectMsgType[UserFunctionReply]
 
       sendStreamedMessage(cid, Some(element1))
@@ -116,7 +116,7 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
       update(_ :+ 5)
       createAndExpectInit()
       val (cid, stream) = sendAndExpectStreamedCommand("cmd", command)
-      sendReply(cid)
+      sendReply(cid, streamed = true)
       stream.expectMsgType[UserFunctionReply]
 
       stream.testActor ! PoisonPill
@@ -140,6 +140,33 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
 
     }
 
+    "drop all updates while a stream cancelled message is being handled that performs no action, then replay" in {
+      update(_ :+ 5)
+      createAndExpectInit()
+      val (cid, stream) = sendAndExpectStreamedCommand("cmd", command)
+      sendReply(cid, streamed = true)
+      stream.expectMsgType[UserFunctionReply]
+
+      stream.testActor ! PoisonPill
+      expectTerminated(stream.testActor)
+
+      val msg = toUserFunction.expectMsgType[CrdtStreamIn]
+      msg.message.streamCancelled.value.id should ===(cid)
+
+      update(_ :+ 2)
+      toUserFunction.expectNoMessage(200.millis)
+      update(_ :+ 6)
+      toUserFunction.expectNoMessage(200.millis)
+
+      fromUserFunction ! CrdtStreamOut(CrdtStreamOut.Message.StreamCancelledResponse(
+        CrdtStreamCancelledResponse(cid, stateAction = None)))
+
+      expectDelta().change should be(8)
+      eventually {
+        get().value.toLong should be(13)
+      }
+
+    }
 
   }
 }

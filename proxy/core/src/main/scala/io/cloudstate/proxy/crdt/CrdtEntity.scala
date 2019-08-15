@@ -41,7 +41,7 @@ object CrdtEntity {
     writeTimeout: FiniteDuration
   )
 
-  private final case class InitiatorReply(commandId: Long, userFunctionReply: UserFunctionReply)
+  private final case class InitiatorReply(commandId: Long, userFunctionReply: UserFunctionReply, endStream: Boolean)
 
   def props(client: Crdt, configuration: CrdtEntity.Configuration, entityDiscovery: EntityDiscovery)(implicit mat: Materializer) =
     Props(new CrdtEntity(client, configuration, entityDiscovery))
@@ -235,20 +235,25 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
 
         case Some(Initiator(_, actorRef, streamed)) =>
 
-          if (streamed) {
+          if (streamed && reply.streamed) {
             if (closingStreams(reply.commandId)) {
               sendToRelay(CrdtStreamIn.Message.StreamCancelled(StreamCancelled(
                 entityId,
                 reply.commandId
               )))
               closingStreams -= reply.commandId
-            } else {
-              streamedCalls += (reply.commandId -> actorRef)
             }
+          } else if (streamed) {
+            if (closingStreams(reply.commandId)) {
+              outstandingMutatingOperations -= 1
+              closingStreams -= reply.commandId
+            }
+          } else if (reply.streamed) {
+            crash(s"Streamed reply to non streamed command ${reply.commandId}")
           }
 
           val stateAction = reply.stateAction.getOrElse(CrdtStateAction.defaultInstance)
-          performAction(reply.commandId, stateAction, userFunctionReply)
+          performAction(reply.commandId, stateAction, userFunctionReply, streamed && !reply.streamed)
 
         case None =>
           crash(s"Received reply for entity id $entityId for unknown command ${reply.commandId}")
@@ -273,12 +278,8 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
       }
 
     case CrdtStreamOut(CrdtStreamOut.Message.StreamCancelledResponse(response)) =>
-          performAction(response.commandId, response.stateAction.getOrElse(CrdtStateAction.defaultInstance),
-            UserFunctionReply(None, response.sideEffects))
-      if (closingStreams(response.commandId)) {
-        closingStreams -= response.commandId
-        operationFinished()
-      }
+      performAction(response.commandId, response.stateAction.getOrElse(CrdtStateAction.defaultInstance),
+        UserFunctionReply(None, response.sideEffects), false)
 
     case StreamEnded(commandId) =>
       streamedCalls.get(commandId) match {
@@ -291,8 +292,8 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
           // Ignore, we will get a stream ended command both when the client cancels, and when we close.
       }
 
-    case UpdateSuccess(_, Some(InitiatorReply(commandId, userFunctionReply))) =>
-      sendReplyToInitiator(commandId, userFunctionReply, false)
+    case UpdateSuccess(_, Some(InitiatorReply(commandId, userFunctionReply, endStream))) =>
+      sendReplyToInitiator(commandId, userFunctionReply, endStream)
 
     case success@GetSuccess(_, _) =>
       outstandingMutatingOperations -= 1
@@ -300,10 +301,10 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
         maybeSendAndUpdateState(success.dataValue)
       }
 
-    case UpdateTimeout(_, Some(InitiatorReply(commandId, _))) =>
+    case UpdateTimeout(_, Some(InitiatorReply(commandId, _, _))) =>
       failCommandAndCrash(commandId, "Failed to update CRDT at requested write consistency", None)
 
-    case ModifyFailure(_, error, cause, Some(InitiatorReply(commandId, _))) =>
+    case ModifyFailure(_, error, cause, Some(InitiatorReply(commandId, _, _))) =>
       failCommandAndCrash(commandId, "Error updating CRDT: " + error, Some(cause))
 
     case CrdtStreamOut(CrdtStreamOut.Message.Failure(failure)) =>
@@ -315,7 +316,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
       // These are received in response to updates or gets for a deleted key. If it was an update, technically
       // it was successful, it's just that the delete overules it.
       request.foreach {
-        case InitiatorReply(commandId, userFunctionReply) =>
+        case InitiatorReply(commandId, userFunctionReply, _) =>
           sendReplyToInitiator(commandId, userFunctionReply, true)
           sendDelete()
       }
@@ -341,7 +342,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
       }
 
     case ReceiveTimeout =>
-      if (streamedCalls.nonEmpty) {
+      if (streamedCalls.isEmpty) {
         context.parent ! CrdtEntityManager.Passivate
       }
   }
@@ -370,6 +371,9 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
       operationFinished()
     } else if (streamedCalls.contains(commandId)) {
       streamedCalls(commandId) ! reply
+    } else if (closingStreams.contains(commandId)) {
+      operationFinished()
+      closingStreams -= commandId
     }
 
     if (terminate) {
@@ -393,7 +397,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
     crash("Failed to update CRDT at requested write consistency")
   }
 
-  private def performAction(commandId: Long, stateAction: CrdtStateAction, userFunctionReply: UserFunctionReply)= {
+  private def performAction(commandId: Long, stateAction: CrdtStateAction, userFunctionReply: UserFunctionReply, endStream: Boolean)= {
     stateAction.action match {
       case CrdtStateAction.Action.Empty =>
         sendReplyToInitiator(commandId, userFunctionReply, false)
@@ -405,11 +409,11 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
           val crdt = WireTransformer.stateToCrdt(create)
           state = Some(WireTransformer.stateToCrdt(create))
           replicator ! Update(key, crdt, toDdataWriteConsistency(stateAction.writeConsistency),
-            Some(InitiatorReply(commandId, userFunctionReply)))(identity)
+            Some(InitiatorReply(commandId, userFunctionReply, endStream)))(identity)
         }
 
       case CrdtStateAction.Action.Delete(_) =>
-        replicator ! Delete(key, toDdataWriteConsistency(stateAction.writeConsistency), Some(InitiatorReply(commandId, userFunctionReply)))
+        replicator ! Delete(key, toDdataWriteConsistency(stateAction.writeConsistency), Some(InitiatorReply(commandId, userFunctionReply, endStream)))
         state = None
         context become deleted
         replicator ! Unsubscribe(key, self)
@@ -423,7 +427,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
           state = Some(modify(state.getOrElse(initial)))
           // And then to the replicator
           replicator ! Update(key, initial, toDdataWriteConsistency(stateAction.writeConsistency),
-            Some(InitiatorReply(commandId, userFunctionReply)))(modify)
+            Some(InitiatorReply(commandId, userFunctionReply, endStream)))(modify)
         } catch {
           case e: Exception =>
             crash(e.getMessage, Some(e))
@@ -520,23 +524,26 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
       }
 
     case CrdtStreamOut(CrdtStreamOut.Message.StreamCancelledResponse(response)) =>
-      performAction(response.commandId, response.stateAction.getOrElse(CrdtStateAction.defaultInstance),
-        UserFunctionReply(None, response.sideEffects))
-      closingStreams -= response.commandId
+      if (!closingStreams.contains(response.commandId)) {
+        crash("Received stream cancelled response for stream that's not closing: " + response.commandId)
+      } else {
+        performAction(response.commandId, response.stateAction.getOrElse(CrdtStateAction.defaultInstance),
+          UserFunctionReply(None, response.sideEffects), false)
+      }
 
     case StreamEnded(commandId) =>
       // Ignore, nothing to do
 
-    case UpdateSuccess(_, Some(InitiatorReply(commandId, userFunctionReply))) =>
+    case UpdateSuccess(_, Some(InitiatorReply(commandId, userFunctionReply, _))) =>
       sendReplyToInitiator(commandId, userFunctionReply, true)
 
     case GetSuccess(_, _) =>
     // Possible if we issued the get before the next operation then deleted. Ignore.
 
-    case UpdateTimeout(_, Some(InitiatorReply(commandId, _))) =>
+    case UpdateTimeout(_, Some(InitiatorReply(commandId, _, _))) =>
       failCommand(commandId, "Failed to update CRDT at requested write consistency")
 
-    case ModifyFailure(_, error, cause, Some(InitiatorReply(commandId, _))) =>
+    case ModifyFailure(_, error, cause, Some(InitiatorReply(commandId, _, _))) =>
       failCommand(commandId, "Error Updating CRDT")
 
     case CrdtStreamOut(CrdtStreamOut.Message.Failure(failure)) =>
@@ -548,15 +555,15 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
       // These are received in response to updates or gets for a deleted key. If it was an update, technically
       // it was successful, it's just that the delete overules it.
       request.foreach {
-        case InitiatorReply(commandId, userFunctionReply) =>
+        case InitiatorReply(commandId, userFunctionReply, _) =>
           sendReplyToInitiator(commandId, userFunctionReply, true)
           sendDelete()
       }
 
-    case DeleteSuccess(_, Some(InitiatorReply(commandId, userFunctionReply))) =>
+    case DeleteSuccess(_, Some(InitiatorReply(commandId, userFunctionReply, _))) =>
       sendReplyToInitiator(commandId, userFunctionReply, true)
 
-    case ReplicationDeleteFailure(_, Some(InitiatorReply(commandId, _))) =>
+    case ReplicationDeleteFailure(_, Some(InitiatorReply(commandId, _, _))) =>
       failCommand(commandId, "Failed to delete CRDT at requested write consistency")
 
     case EntityStreamClosed =>

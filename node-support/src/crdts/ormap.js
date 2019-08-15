@@ -232,7 +232,7 @@ function ORMap() {
   };
 
   this.applyDelta = function(delta, anySupport, createCrdtForState) {
-    if (delta.ormap === undefined) {
+    if (!delta.ormap) {
       throw new Error(util.format("Cannot apply delta %o to ORMap", delta));
     }
     if (delta.ormap.cleared) {
@@ -298,7 +298,7 @@ function ORMap() {
   };
 
   this.applyState = function(state, anySupport, createCrdtForState) {
-    if (state.ormap === undefined) {
+    if (!state.ormap) {
       throw new Error(util.format("Cannot apply state %o to ORMap", state));
     }
     currentValue.clear();

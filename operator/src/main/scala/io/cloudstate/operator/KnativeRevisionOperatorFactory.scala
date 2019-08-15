@@ -32,7 +32,7 @@ import KnativeRevision._
 class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionContext)
   extends OperatorFactory[KnativeRevision.Status, Resource] {
 
-  private val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "gcr.io/stateserv/cloudstate-proxy-cassandra:latest")
+  private val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "clousdstateio/cloudstate-proxy-cassandra:latest")
 
   import OperatorConstants._
 
@@ -220,10 +220,10 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
           Left(errorCondition(JournalConditionType, "JournalNotFound", s"Journal with name ${deployer.journal.name} not found."))
         case Some(journal) =>
           journal.spec.`type` match {
-            case `CassandraJournalType` =>
+            case Some(`CassandraJournalType`) =>
               journal.spec.deployment match {
-                case `UnmanagedJournalDeployment` =>
-                  (journal.spec.config \ "service").asOpt[String] match {
+                case Some(`UnmanagedJournalDeployment`) =>
+                  journal.spec.config.flatMap(c => (c \ "service").asOpt[String]) match {
                     case Some(serviceName) =>
                       deployer.journal.config.flatMap(config => (config \ "keyspace").asOpt[String]) match {
                         case Some(keyspace) =>

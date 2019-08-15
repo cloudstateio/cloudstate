@@ -19,6 +19,7 @@ const debug = require("debug")("cloudstate-crdt");
 const util = require("util");
 const grpc = require("grpc");
 const protoLoader = require("@grpc/proto-loader");
+const protoHelper = require("./protobuf-helper")
 const AnySupport = require("./protobuf-any");
 const crdts = require("./crdts");
 const CommandHelper = require("./command-helper");
@@ -36,9 +37,7 @@ class CrdtServices {
     this.services[entity.serviceName] = new CrdtSupport(entity.root, entity.service, {
       commandHandlers: entity.commandHandlers,
       onStateSet: entity.onStateSet,
-      defaultValue: entity.defaultValue,
-      onStateChange: entity.onStateChange,
-      onStreamCancelled: entity.onStreamCancelled
+      defaultValue: entity.defaultValue
     }, allEntities);
   }
 
@@ -63,6 +62,9 @@ class CrdtServices {
     let service;
 
     call.on("data", crdtStreamIn => {
+      // cycle through the CrdtStreamIn type, this will ensure default values are initialised
+      crdtStreamIn = protoHelper.moduleRoot.cloudstate.crdt.CrdtStreamIn.fromObject(crdtStreamIn);
+
       if (crdtStreamIn.init) {
         if (service != null) {
           service.streamDebug("Terminating entity due to duplicate init message.");
@@ -117,8 +119,6 @@ class CrdtSupport {
     this.onStateSet = handlers.onStateSet;
     this.defaultValue = handlers.defaultValue;
     this.allEntities = allEntities;
-    this.onStateChange = handlers.onStateChange;
-    this.onStreamCancelled = handlers.onStreamCancelled;
   }
 
   create(call, init) {
@@ -152,9 +152,10 @@ class CrdtHandler {
     this.commandHelper = new CommandHelper(this.entityId, support.service, this.streamId, call,
       this.commandHandlerFactory.bind(this), support.allEntities, debug);
 
-    this.streamDebug("Started new stream")
+    this.streamDebug("Started new stream");
 
     this.subscribers = new Map();
+    this.cancelledCallbacks = new Map();
   }
 
   commandHandlerFactory(commandName, grpcMethod) {
@@ -164,20 +165,35 @@ class CrdtHandler {
 
         this.addStateManagementToContext(ctx);
 
-        ctx.subscription = null;
-        ctx.context.subscribe = (subscriptionContext) => {
-          ctx.ensureActive();
-          if (!ctx.streamed) {
-            throw new Error("Cannot subscribe to updates from non streamed command")
+        ctx.subscribed = false;
+        Object.defineProperty(ctx.context, "onStateChange", {
+          set: (handler) => {
+            ctx.ensureActive();
+            if (!ctx.streamed) {
+              throw new Error("Cannot subscribe to updates from non streamed command")
+            }
+            this.subscribers.set(ctx.commandId.toString(), {
+              commandId: ctx.commandId,
+              handler: handler,
+              grpcMethod: grpcMethod
+            });
+            ctx.subscribed = true;
           }
-          if (subscriptionContext === undefined) {
-            ctx.subscription = {};
-          } else {
-            ctx.subscription = subscriptionContext;
+        });
+        Object.defineProperty(ctx.context, "onStreamCancel", {
+          set: (handler) => {
+            ctx.ensureActive();
+            if (!ctx.streamed) {
+              throw new Error("Cannot receive stream cancelled from non streamed command")
+            }
+            this.cancelledCallbacks.set(ctx.commandId.toString(), {
+              commandId: command.id,
+              handler: handler,
+              grpcMethod: grpcMethod
+            });
+            ctx.subscribed = true;
           }
-          return this;
-        };
-
+        });
         Object.defineProperty(ctx.context, "streamed", {
           get: () => ctx.streamed === true
         });
@@ -190,12 +206,8 @@ class CrdtHandler {
 
         this.setStateActionOnReply(ctx);
 
-        if (ctx.subscription !== null) {
-          this.subscribers.set(ctx.commandId.toString(), {
-            commandId: ctx.commandId,
-            grpcMethod: grpcMethod,
-            userContext: ctx.subscription
-          });
+        if (ctx.subscribed) {
+          ctx.reply.streamed = true;
         }
 
         return userReply;
@@ -282,7 +294,7 @@ class CrdtHandler {
   }
 
   handleState(state) {
-    this.streamDebug("Handling state %s", Object.keys(state).concat(["<none>"])[0]);
+    this.streamDebug("Handling state %s", state.state);
     if (this.currentState === null) {
       this.currentState = crdts.createCrdtForState(state);
     }
@@ -306,102 +318,69 @@ class CrdtHandler {
     }
   }
 
-  pushToSubscriber(subscriber, msg, endStream) {
-    const streamedMessage = {
-      commandId: subscriber.commandId
-    };
-    if (msg !== undefined) {
-      const serializedMessage = AnySupport.serialize(subscriber.grpcMethod.resolvedResponseType.create(msg), false, false, false);
-      streamedMessage.clientAction = {
-        reply: {
-          payload: serializedMessage
-        }
-      }
-    }
-    if (endStream) {
-      streamedMessage.endStream = true;
-    }
-    this.call.write({
-      streamedMessage: streamedMessage
-    });
-  }
-
   handleStateChange() {
-    if (this.subscribers.size > 0) {
-      const ctx = {};
-      Object.defineProperty(ctx, "state", {
+    this.subscribers.forEach((subscriber, key) => {
+      const ctx = this.commandHelper.createContext(subscriber.commandId);
+      Object.defineProperty(ctx.context, "state", {
         get: () => {
           return this.currentState;
         }
       });
-      Object.defineProperty(ctx, "subscribers", {
-        get: () => {
-          return this.subscribers.keys();
-        }
-      });
-      ctx.getSubscriber = (id) => {
-        if (this.subscribers.has(id)) {
-          return this.subscribers.get(id).userContext;
-        }
-      };
-      ctx.push = (subscriberId, msg) => {
-        if (msg === undefined) {
-          throw new Error("Cannot push no message");
-        }
-        if (this.subscribers.has(subscriberId)) {
-          this.pushToSubscriber(this.subscribers.get(subscriberId), msg, false);
-        } else {
-          throw new Error("Unknown subscriber: " + subscriberId);
-        }
-      };
-      ctx.pushToAll = (msg) => {
-        this.subscribers.forEach(subscriber => {
-          this.pushToSubscriber(subscriber, msg, false);
-        });
-      };
-      ctx.end = (subscriberId, msg) => {
-        if (this.subscribers.has(subscriberId)) {
-          this.pushToSubscriber(this.subscribers.get(subscriberId), msg, true);
-          this.subscribers.delete(subscriberId);
-        } else {
-          throw new Error("Unknown subscriber: " + subscriberId);
-        }
-      };
-      ctx.endAll = (msg) => {
-        this.subscribers.forEach(subscriber => {
-          this.pushToSubscriber(subscriber, msg, true);
-        });
-        this.subscribers.clear();
+      ctx.context.end = () => {
+        ctx.reply.endStream = true;
+        this.subscribers.delete(key);
+        this.cancelledCallbacks.delete(key);
       };
 
-      this.entity.onStateChange(ctx);
-      if (this.currentState.getAndResetDelta() !== null) {
+      try {
+        this.commandHelper.invokeHandler(() => {
+          const userReply = subscriber.handler(this.currentState, ctx.context);
+          if (this.currentState.getAndResetDelta() !== null) {
+            throw new Error("State change handler attempted to modify state");
+          }
+          return userReply;
+        }, ctx, subscriber.grpcMethod, msg => {
+          if (ctx.effects.length > 0 || ctx.reply.endStream === true || ctx.reply.clientAction !== undefined) {
+            return {
+              streamedMessage: msg
+            };
+          }
+        })
+      } catch (e) {
         this.call.write({
           failure: {
-            commandId: 0,
-            description: "State change handler attempted to modify state"
+            commandId: subscriber.commandId,
+            description: util.format("Error: %o", e)
           }
         });
         this.call.end();
-        throw new Error("State change handler attempted to modify state");
+        // Probably rethrow?
       }
-    }
+    });
   }
 
   handleStreamCancelled(cancelled) {
     const subscriberKey = cancelled.id.toString();
-    if (this.subscribers.has(subscriberKey)) {
-      const subscriber = this.subscribers.get(subscriberKey);
-      this.subscribers.delete(subscriberKey);
+    this.subscribers.delete(subscriberKey);
+
+    if (this.cancelledCallbacks.has(subscriberKey)) {
+      const subscriber = this.cancelledCallbacks.get(subscriberKey);
 
       const ctx = this.commandHelper.createContext(cancelled.id);
-      ctx.context.subscription = subscriber.userContext;
-      ctx.reply = {};
+      ctx.reply = {
+        commandId: cancelled.id
+      };
       this.addStateManagementToContext(ctx);
 
       try {
-        this.entity.onStreamCancelled(ctx.context);
+        subscriber.handler(this.currentState, ctx.context);
         this.setStateActionOnReply(ctx);
+        ctx.commandDebug("Sending streamed cancelled response");
+
+        this.call.write({
+          streamCancelledResponse: ctx.reply
+        });
+
       } catch (e) {
         this.call.write({
           failure: {
@@ -410,12 +389,7 @@ class CrdtHandler {
           }
         });
         this.call.end();
-        throw e;
       }
-
-      this.call.write({
-        streamCancelledResponse: ctx.reply
-      });
     }
   }
 

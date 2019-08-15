@@ -76,9 +76,11 @@ object GraalVMPlugin extends AutoPlugin {
       ) {
         graalVMContainerBuildImage.value match {
           case None =>
+            streams.log.info("Building GraalVM native image locally, this may take some time...")
             buildLocal(targetDirectory, binaryName, className, classpathJars.map(_._1), extraOptions, streams.log)
 
           case Some(image) =>
+            streams.log.info("Building GraalVM native image in a Docker container, this may take some time...")
             val resourceMappings = (graalResources --- graalResourceDirectories) pair (Path.relativeTo(graalResourceDirectories) | Path.flat)
 
             buildInDockerContainer(
@@ -155,6 +157,8 @@ object GraalVMPlugin extends AutoPlugin {
     if (!outputFile.exists() || cacheStore.read("") != calculateDigest(settings, inputFiles, outputFile)) {
       build
       cacheStore.write(calculateDigest(settings, inputFiles, outputFile))
+    } else {
+      streams.log.info("No rebuild necessary for GraalVM native image " + outputFile.getAbsolutePath)
     }
     outputFile
   }

@@ -48,7 +48,7 @@ function Flag() {
   };
 
   this.applyDelta = function (delta) {
-    if (delta.flag === undefined) {
+    if (!delta.flag) {
       throw new Error(util.format("Cannot apply delta %o to Flag", delta));
     }
     currentValue = currentValue || delta.flag.value;
@@ -64,7 +64,7 @@ function Flag() {
   };
 
   this.applyState = function (state) {
-    if (state.flag === undefined) {
+    if (!state.flag) {
       throw new Error(util.format("Cannot apply state %o to Flag", state));
     }
     currentValue = state.flag.value;

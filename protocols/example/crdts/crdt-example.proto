@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "cloudstate/entitykey.proto";
+import "google/protobuf/empty.proto";
 
 package com.example.crdts;
 
@@ -37,6 +38,14 @@ message SetValue {
     repeated SomeValue items = 1;
 }
 
+message User {
+    string name = 1 [(.cloudstate.entity_key) = true];
+}
+
+message OnlineStatus {
+    bool online = 1;
+}
+
 service CrdtExample {
     rpc IncrementGCounter(UpdateCounter) returns (CounterValue);
     rpc GetGCounter(Get) returns (CounterValue);
@@ -49,4 +58,9 @@ service CrdtExample {
 
     rpc MutateORSet(MutateSet) returns (SetSize);
     rpc GetORSet(Get) returns (SetValue);
+
+    // Connect the given user. They will stay connected as long as the stream stays open.
+    rpc Connect(User) returns (stream google.protobuf.Empty);
+    // Monitor the online status of the given user.
+    rpc Monitor(User) returns (stream OnlineStatus);
 }

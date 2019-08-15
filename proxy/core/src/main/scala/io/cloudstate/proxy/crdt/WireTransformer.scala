@@ -355,8 +355,8 @@ object WireTransformer {
             if (newState != oldState) {
               Updated(CrdtDelta(D.Vote(VoteDelta(
                 selfVote = newState.selfVote,
-                votesForDelta = newState.votesFor - oldState.votesFor,
-                totalVotersDelta = newState.totalVoters - oldState.totalVoters
+                votesFor = newState.votesFor,
+                totalVoters = newState.totalVoters
               ))))
             } else {
               NoChange

@@ -96,19 +96,15 @@ def dockerSettings: Seq[Setting[_]] = Seq(
       Seq(single.withTag(Some("latest")))
     }
   },
-  dockerEntrypoint := {
-    val old = dockerEntrypoint.value
-    proxyDockerBuild.value match {
-      case Some((_, configResource)) => old :+ s"-Dconfig.resource=$configResource"
-      case None => old
-    }
-  }
 )
 
-def buildProxyCommand(commandName: String, project: => Project, name: String, configResource: String): Command = 
+def buildProxyHelp(commandName: String, name: String) =
+  Help((s"$commandName <task>", s"Execute the given docker scoped task (eg, publishLocal or publish) for the the $name build of the proxy."))
+
+def buildProxyCommand(commandName: String, project: => Project, name: String, configResource: String): Command =
   Command.single(
     commandName, 
-    Help((s"$commandName <task>", s"Execute the given docker scoped task (eg, publishLocal or publish) for the the $name build of the proxy."))
+    buildProxyHelp(commandName, name)
   ) { (state, command) =>
     List(
       s"project ${project.id}",
@@ -119,10 +115,16 @@ def buildProxyCommand(commandName: String, project: => Project, name: String, co
     ) ::: state
   }
 
+def dockerBuildCassandraCommand = 
+  Command.single("dockerBuildCassandra", buildProxyHelp("dockerBuildCassandra", "cassandra")) { (state, command) =>
+    s"proxy-cassandra/docker:$command" :: state
+  }
+
 commands ++= Seq(
   buildProxyCommand("dockerBuildDevMode", `proxy-core`, "dev-mode", "dev-mode.conf"),
   buildProxyCommand("dockerBuildNoJournal", `proxy-core`, "no-journal", "no-journal.conf"),
-  buildProxyCommand("dockerBuildInMemory", `proxy-core`, "in-memory", "cloudstate-common.conf")
+  buildProxyCommand("dockerBuildInMemory", `proxy-core`, "in-memory", "in-memory.conf"),
+  dockerBuildCassandraCommand
 )
 
 // Shared settings for native image and docker builds
@@ -133,9 +135,17 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   (mappings in Universal) := Seq(
     (packageBin in GraalVMNativeImage).value -> s"bin/${executableScriptName.value}"
   ),
-  dockerBaseImage := "bitnami/minideb",
+  dockerBaseImage := "bitnami/java:11-prod",
   // Need to make sure it has group execute permission
   dockerChmodType := DockerChmodType.Custom("u+x,g+x"),
+  dockerEntrypoint := {
+    val old = dockerEntrypoint.value
+    val withLibraryPath = old :+ "-Djava.library.path=/opt/bitnami/java/lib"
+    proxyDockerBuild.value match {
+      case Some((_, configResource)) => withLibraryPath :+ s"-Dconfig.resource=$configResource"
+      case None => withLibraryPath
+    }
+  }
 )
 
 def sharedNativeImageSettings = Seq(
@@ -262,7 +272,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     inConfig(Test)(
       sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
         PB.protoSources ++= Seq(sourceDirectory.value / "protos"),
-        akkaGrpcGeneratedSources := Seq(AkkaGrpc.Server),
+        akkaGrpcGeneratedSources := Seq(AkkaGrpc.Server, AkkaGrpc.Client),
       )
     ),
 
@@ -359,8 +369,8 @@ lazy val operator = (project in file("operator"))
     compileK8sDescriptors := doCompileK8sDescriptors(
       baseDirectory.value / "deploy",
       baseDirectory.value / "cloudstate.yaml",
-      dockerRepository.value.get,
-      dockerUsername.value.get,
+      dockerRepository.value,
+      dockerUsername.value,
       version.value
     )
   )
@@ -436,17 +446,18 @@ lazy val `tck` = (project in file("tck"))
     executeTests in Test := (executeTests in Test).dependsOn(`proxy-core`/assembly).value
   )
 
-def doCompileK8sDescriptors(dir: File, target: File, registry: String, username: String, version: String): File = {
+def doCompileK8sDescriptors(dir: File, target: File, registry: Option[String], username: Option[String], version: String): File = {
   val files = ((dir / "crds") * "*.yaml").get ++
     (dir * "*.yaml").get.sortBy(_.getName)
 
   val fullDescriptor = files.map(IO.read(_)).mkString("\n---\n")
 
-  val substitutedDescriptor = List("cloudstate", "cloudstate-proxy-cassandra")
-    .foldLeft(fullDescriptor) { (descriptor, image) =>
-      descriptor.replace(s"lightbend-docker-registry.bintray.io/octo/$image:latest",
-        s"$registry/$username/$image:$version")
-    }
+  val user = username.getOrElse("cloudstateio")
+  val registryAndUsername = registry.fold(user)(r => s"$r/$user")
+  val substitutedDescriptor = fullDescriptor.replaceAll(
+    "image: cloudstateio/(.*):latest", 
+    s"image: $registryAndUsername/$$1:$version"
+  )
 
   IO.write(target, substitutedDescriptor)
   target

@@ -74,58 +74,8 @@ module.exports = class CommandHelper {
         if (handler !== null) {
 
           ctx.streamed = command.streamed;
-          const reply = {};
-          ctx.reply = reply;
 
-          let userReply = null;
-
-          try {
-            userReply = handler(deserCommand, ctx);
-          } catch (err) {
-            if (ctx.error === null) {
-              // If the error field isn't null, then that means we were explicitly told
-              // to fail, so we can ignore this thrown error and fail gracefully with a
-              // failure message. Otherwise, we rethrow, and handle by closing the connection
-              // higher up.
-              throw err;
-            }
-          } finally {
-            ctx.active = false;
-          }
-
-          if (ctx.error !== null) {
-            ctx.commandDebug("Command failed with message '%s'", ctx.error.message);
-            this.call.write({
-              failure: {
-                commandId: command.id,
-                description: ctx.error.message
-              }
-            });
-          } else {
-
-            reply.commandId = command.id;
-            reply.sideEffects = ctx.effects;
-
-            if (ctx.forward !== null) {
-              reply.clientAction = {
-                forward: ctx.forward
-              };
-              ctx.commandDebug("Sending forward to %s.%s with %d side effects.", ctx.forward.serviceName, ctx.forward.commandName, ctx.effects.length);
-            } else if (userReply !== undefined) {
-              reply.clientAction = {
-                reply: {
-                  payload: AnySupport.serialize(grpcMethod.resolvedResponseType.create(userReply), false, false)
-                }
-              };
-              ctx.commandDebug("Sending reply with type [%s] with %d side effects.", reply.clientAction.reply.payload.type_url, ctx.effects.length);
-            } else {
-              ctx.commandDebug("Sending no reply with %d side effects.", reply.clientAction.reply.payload.type_url, ctx.effects.length);
-            }
-
-            this.call.write({
-              reply: reply
-            });
-          }
+          this.invokeHandler(() => handler(deserCommand, ctx), ctx, grpcMethod, reply => { return {reply}; }, "Command");
 
         } else {
           const msg = "No handler registered for command '" + command.name + "', we have: " + Object.keys(this.entity.commandHandlers);
@@ -155,11 +105,68 @@ module.exports = class CommandHelper {
 
   }
 
+  invokeHandler(handler, ctx, grpcMethod, createReply, desc) {
+    ctx.reply = {};
+    let userReply = null;
+    try {
+      userReply = handler();
+    } catch (err) {
+      if (ctx.error === null) {
+        // If the error field isn't null, then that means we were explicitly told
+        // to fail, so we can ignore this thrown error and fail gracefully with a
+        // failure message. Otherwise, we rethrow, and handle by closing the connection
+        // higher up.
+        throw err;
+      }
+    } finally {
+      ctx.active = false;
+    }
+
+    if (ctx.error !== null) {
+      ctx.commandDebug("%s failed with message '%s'", desc, ctx.error.message);
+      this.call.write({
+        failure: {
+          commandId: ctx.commandId,
+          description: ctx.error.message
+        }
+      });
+    } else {
+      ctx.reply.commandId = ctx.commandId;
+      ctx.reply.sideEffects = ctx.effects;
+      ctx.reply.sideEffects = ctx.effects;
+
+      if (ctx.forward !== null) {
+        ctx.reply.clientAction = {
+          forward: ctx.forward
+        };
+        ctx.commandDebug("%s forward to %s.%s with %d side effects.", desc, ctx.forward.serviceName, ctx.forward.commandName, ctx.effects.length);
+      } else if (userReply !== undefined) {
+        ctx.reply.clientAction = {
+          reply: {
+            payload: AnySupport.serialize(grpcMethod.resolvedResponseType.create(userReply), false, false)
+          }
+        };
+        ctx.commandDebug("%s reply with type [%s] with %d side effects.", desc, ctx.reply.clientAction.reply.payload.type_url, ctx.effects.length);
+      } else {
+        ctx.commandDebug("%s no reply with %d side effects.", desc, ctx.effects.length);
+      }
+
+      const reply = createReply(ctx.reply);
+      if (reply !== undefined) {
+        this.call.write(reply);
+      }
+    }
+  }
+
+  commandDebug(msg, ...args) {
+    this.debug("%s [%s] (%s) - " + msg, ...[this.streamId, this.entityId].concat(args));
+  }
+
   createContext(commandId) {
     const accessor = {};
 
     accessor.commandDebug = (msg, ...args) => {
-      this.debug("%s [%s] (%s) - " + msg, ...[this.streamId, this.entityId, commandId].concat(args));
+      this.commandDebug(msg, ...[commandId].concat(args));
     };
 
     accessor.commandId = commandId;
@@ -175,6 +182,7 @@ module.exports = class CommandHelper {
 
     accessor.context = {
       entityId: this.entityId,
+      commandId: commandId,
       effect: (method, message, synchronous = false) => {
         accessor.ensureActive();
         accessor.effects.push(this.serializeSideEffect(method, message, synchronous))
@@ -235,4 +243,4 @@ module.exports = class CommandHelper {
     return msg;
   }
 
-}
+};

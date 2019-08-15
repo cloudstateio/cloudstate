@@ -74,6 +74,7 @@ object StatefulService {
   }
 
   case class Autoscaling(
+    enabled: Option[Boolean],
     userFunctionTargetConcurrency: Option[Int],
     requestTargetConcurrency: Option[Int],
     targetConcurrencyWindow: Option[String],
