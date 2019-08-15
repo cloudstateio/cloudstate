@@ -16,10 +16,14 @@
 
 package io.cloudstate.impl
 
+import io.cloudstate.entity._
 import io.cloudstate.eventsourced._
 
-class EventSourcedImpl extends EventSourced {
-  /**
+import akka.actor.ActorSystem
+
+class EntityDiscoveryAndSourcingImpl(system: ActorSystem) extends EntityDiscovery with EventSourced {
+
+    /**
    * The stream. One stream will be established per active entity.
    * Once established, the first message sent will be Init, which contains the entity ID, and,
    * if the entity has previously persisted a snapshot, it will contain that snapshot. It will
@@ -31,6 +35,22 @@ class EventSourcedImpl extends EventSourced {
    * persisted the entity should handle itself, applying them to its own state, as if they had
    * arrived as events when the event stream was being replayed on load.
    */
-  def handle(in: akka.stream.scaladsl.Source[io.cloudstate.eventsourced.EventSourcedStreamIn, akka.NotUsed]): akka.stream.scaladsl.Source[io.cloudstate.eventsourced.EventSourcedStreamOut, akka.NotUsed] = ???
+  override def handle(in: akka.stream.scaladsl.Source[io.cloudstate.eventsourced.EventSourcedStreamIn, akka.NotUsed]): akka.stream.scaladsl.Source[io.cloudstate.eventsourced.EventSourcedStreamOut, akka.NotUsed] =
+    in.map {
+      req => ???
+    }
+  
+  /**
+   * Discover what entities the user function wishes to serve.
+   */
+  override def discover(in: io.cloudstate.entity.ProxyInfo): scala.concurrent.Future[io.cloudstate.entity.EntitySpec] = ???
+  
+  /**
+   * Report an error back to the user function. This will only be invoked to tell the user function
+   * that it has done something wrong, eg, violated the protocol, tried to use an entity type that
+   * isn't supported, or attempted to forward to an entity that doesn't exist, etc. These messages
+   * should be logged clearly for debugging purposes.
+   */
+  override def reportError(in: io.cloudstate.entity.UserFunctionError): scala.concurrent.Future[com.google.protobuf.empty.Empty] = ???
   
 }

@@ -16,7 +16,7 @@
 
 package io.cloudstate
 
-import io.cloudstate.impl.{EntityDiscoveryImpl, EventSourcedImpl}
+import io.cloudstate.impl.EntityDiscoveryAndSourcingImpl
 
 import com.typesafe.config.{Config, ConfigFactory}
 
@@ -40,8 +40,7 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
   implicit final val system = _system
   implicit final val materializer: Materializer = ActorMaterializer()
 
-  private final val eventSourcedImpl = new EventSourcedImpl
-  private final val entityDiscoveryImpl = new EntityDiscoveryImpl
+  private final val impl = new EntityDiscoveryAndSourcingImpl(system)
 
   def this(_service: StatefulService) {
     this(
@@ -53,9 +52,9 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
     )
   }
 
-  private def createRoutes(): PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    EntityDiscoveryHandler.partial(entityDiscoveryImpl) orElse
-    EventSourcedHandler.partial(eventSourcedImpl) orElse
+  private[this] def createRoutes(): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+    EntityDiscoveryHandler.partial(impl) orElse
+    EventSourcedHandler.partial(impl) orElse
     { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }
   }
 
