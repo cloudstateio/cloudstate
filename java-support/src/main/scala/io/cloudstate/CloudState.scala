@@ -35,10 +35,29 @@ import scala.concurrent.Future
 import java.util.concurrent.CompletionStage
 import scala.compat.java8.FutureConverters
 
+object CloudState {
+  final case class Configuration(userFunctionInterface: String, userFunctionPort: Int) {
+    validate()
+    def this(config: Config) = {
+      this(
+        userFunctionInterface      = config.getString("user-function-interface"),
+        userFunctionPort           = config.getInt("user-function-port"),
+      )
+    }
+
+    private def validate(): Unit = {
+      require(userFunctionInterface.length > 0, s"user-function-interface must not be empty")
+      require(userFunctionPort > 0, s"user-function-port must be greater than 0")
+    }
+  }
+}
+
 final class CloudState private[this](_system: ActorSystem, _service: StatefulService) {
   final val service = requireNonNull(_service, "StatefulService must not be null!")
   implicit final val system = _system
   implicit final val materializer: Materializer = ActorMaterializer()
+
+  private final val configuration = new CloudState.Configuration(system.settings.config.getConfig("cloudstate"))
 
   private final val impl = new EntityDiscoveryAndSourcingImpl(system)
 
@@ -59,12 +78,11 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
   }
 
   def run(): CompletionStage[Done] = {
-    val config = system.settings.config
     // FIXME due to some issues with the Java code generation for the protocols, this looks messy. Revisit once Java generation works as intended.
     FutureConverters.toJava(Http.get(system).bindAndHandleAsync(
         createRoutes(),
-        config.getString("cloudstate.host"),
-        config.getInt("cloudstate.port"),
+        configuration.userFunctionInterface,
+        configuration.userFunctionPort,
         HttpConnectionContext(UseHttp2.Always))).thenCompose(_ => FutureConverters.toJava(system.terminate())).thenApply(_ => Done)
   }
 }

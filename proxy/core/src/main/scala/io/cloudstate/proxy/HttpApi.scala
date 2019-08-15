@@ -65,10 +65,13 @@ object HttpApi {
   final val ParseString: String => Option[String] =
     s => Option(s)
 
+  private[this] final val someJTrue = Some(JBoolean.TRUE)
+  private[this] final val someJFalse = Some(JBoolean.FALSE)
+
   final val ParseBoolean: String => Option[JBoolean] =
     _.toLowerCase match {
-      case  "true" => Some(JBoolean.TRUE)  // Cache this?
-      case "false" => Some(JBoolean.FALSE) // Cache this?
+      case  "true" => someJTrue
+      case "false" => someJFalse
       case       _ => None
     }
 
