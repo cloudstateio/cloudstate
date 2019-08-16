@@ -16,27 +16,24 @@ spec:
       annotations:
         sidecar.istio.io/inject: "false"
     spec:
-      serviceAccountName: controller
+      serviceAccountName: cloudstate-operator
       containers:
       - name: operator
         image: cloudstateio/cloudstate-operator:latest
 
         env:
-        - name: NAMESPACES
-          # Update to comma separated list of namespaces to watch
-          value: default
-        - name: CASSANDRA_JOURNAL_IMAGE
-          value: cloudstateio/cloudstate-proxy-cassandra:latest
-        - name: IN_MEMORY_JOURNAL_IMAGE
-          value: cloudstateio/cloudstate-proxy-in-memory:latest
-        - name: NO_JOURNAL_IMAGE
-          value: cloudstateio/cloudstate-proxy-no-journal:latest
         - name: JAVA_OPTS
           value: "-Xms128m -Xmx128m"
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: "metadata.namespace"
+        - name: CONFIG_MAP
+          value: cloudstate-operator-config
 
         resources:
           limits:
             memory: 256Mi
           requests:
-            cpu: 0.25
+            cpu: 0.1
             memory: 256Mi

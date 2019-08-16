@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudstate-operator-config
+data:
+  config: |
+    cloudstate.operator {
+      # Watch configuration
+      watch {
+
+        # This should be a list of namespaces to watch. Either should contain a single "*" to watch all namespaces
+        # (this is configured in more detail below), or should be a list of namespaces.
+        namespaces = ["*"]
+      }
+
+      # Proxy configuration
+      proxy {
+        image {
+          cassandra = "cloudstateio/cloudstate-proxy-cassandra:latest"
+          no-journal = "cloudstateio/cloudstate-proxy-no-journal:latest"
+          in-memory = "cloudstateio/cloudstate-proxy-in-memory:latest"
+        }
+      }
+    }
+

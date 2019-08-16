@@ -25,7 +25,7 @@ import scala.concurrent.Future
 
 trait OperatorFactory[Status, Resource <: CustomResource[_, Status]] {
 
-  def apply(client: KubernetesClient): Operator
+  def apply(client: KubernetesClient, config: OperatorConfig): Operator
 
   /**
     * An operator.

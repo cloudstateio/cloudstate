@@ -1,0 +1,41 @@
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: cloudstate-operator-role
+rules:
+
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "watch"]
+
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "create", "delete", "patch", "update"]
+
+- apiGroups: ["apps"]
+  resources: ["deployments", "deployments/scale"]
+  verbs: ["get", "create", "delete", "patch", "update", "watch"]
+
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["rolebindings", "roles"]
+  verbs: ["get", "create", "delete", "patch", "update"]
+
+- apiGroups: ["cloudstate.io"]
+  resources: ["journals", "statefulservices"]
+  verbs: ["get", "list", "watch"]
+
+- apiGroups: ["cloudstate.io"]
+  resources: ["journals/status", "statefulservices/status"]
+  verbs: ["update", "patch"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: Role
+metadata:
+  name: cloudstate-operator-role
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "watch"]
+  resourceNames: ["cloudstate-operator-config"]

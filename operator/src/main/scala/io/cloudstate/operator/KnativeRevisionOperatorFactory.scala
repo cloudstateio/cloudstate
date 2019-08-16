@@ -32,13 +32,11 @@ import KnativeRevision._
 class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionContext)
   extends OperatorFactory[KnativeRevision.Status, Resource] {
 
-  private val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "clousdstateio/cloudstate-proxy-cassandra:latest")
-
   import OperatorConstants._
 
-  override def apply(client: KubernetesClient): Operator = new KnativeRevisionOperator(client)
+  override def apply(client: KubernetesClient, config: OperatorConfig): Operator = new KnativeRevisionOperator(client, config)
 
-  class KnativeRevisionOperator(client: KubernetesClient) extends Operator {
+  class KnativeRevisionOperator(client: KubernetesClient, config: OperatorConfig) extends Operator {
 
     private val helper = new ResourceHelper(client)
 
@@ -249,7 +247,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
 
     private def createCassandraSideCar(revision: KnativeRevision.Resource, deployer: CloudStateDeployer,
       service: String, keyspace: String) = {
-      createSideCar(revision, deployer, CassandraJournalImage, List(
+      createSideCar(revision, deployer, config.images.cassandra, List(
         EnvVar("CASSANDRA_CONTACT_POINTS", service),
         EnvVar("CASSANDRA_KEYSPACE", keyspace)
       ))

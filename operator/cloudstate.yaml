@@ -32,8 +32,6 @@ spec:
     plural: journals
     singular: journal
     kind: Journal
-    shortNames:
-    - esj
   subresources:
     status: {}
   additionalPrinterColumns:
@@ -48,29 +46,38 @@ spec:
   - name: Age
     type: date
     JSONPath: .metadata.creationTimestamp
-  validation:
-    openAPIV3Schema:
-      properties:
-        spec:
-          type: object
-          properties:
 
-            type:
-              type: string
-              enum:
-              - Cassandra
 
-            deployment:
-              type: string
-              enum:
-              - Unmanaged
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cloudstate-operator
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudstate-operator-config
+data:
+  config: |
+    cloudstate.operator {
+      # Watch configuration
+      watch {
 
-            config:
-              type: object
+        # This should be a list of namespaces to watch. Either should contain a single "*" to watch all namespaces
+        # (this is configured in more detail below), or should be a list of namespaces.
+        namespaces = ["*"]
+      }
 
-          required:
-          - type
-          - deployment
+      # Proxy configuration
+      proxy {
+        image {
+          cassandra = "cloudstateio/cloudstate-proxy-cassandra:latest"
+          no-journal = "cloudstateio/cloudstate-proxy-no-journal:latest"
+          in-memory = "cloudstateio/cloudstate-proxy-in-memory:latest"
+        }
+      }
+    }
 
 
 ---
@@ -79,46 +86,42 @@ kind: ClusterRole
 metadata:
   name: cloudstate-operator-role
 rules:
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
-  - rolebindings
-  verbs:
-  - get
-  - create
-  - delete
-  - patch
-  - update
-- apiGroups:
-  - rbac.authorization.k8s.io
-  resources:
-  - roles
-  verbs:
-  - get
-  - create
-  - delete
-  - patch
-  - update
-- apiGroups:
-  - cloudstate.io
-  resources:
-  - eventsourcedjournals
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - cloudstate.io
-  resources:
-  - eventsourcedjournals/status
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - delete
-  - patch
-  - update
+
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["get", "list", "watch"]
+
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "create", "delete", "patch", "update"]
+
+- apiGroups: ["apps"]
+  resources: ["deployments", "deployments/scale"]
+  verbs: ["get", "create", "delete", "patch", "update", "watch"]
+
+- apiGroups: ["rbac.authorization.k8s.io"]
+  resources: ["rolebindings", "roles"]
+  verbs: ["get", "create", "delete", "patch", "update"]
+
+- apiGroups: ["cloudstate.io"]
+  resources: ["journals", "statefulservices"]
+  verbs: ["get", "list", "watch"]
+
+- apiGroups: ["cloudstate.io"]
+  resources: ["journals/status", "statefulservices/status"]
+  verbs: ["update", "patch"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: Role
+metadata:
+  name: cloudstate-operator-role
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "watch"]
+  resourceNames: ["cloudstate-operator-config"]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -127,11 +130,27 @@ metadata:
   name: cloudstate-operator
 subjects:
 - kind: ServiceAccount
-  name: controller
+  name: cloudstate-operator
+  namespace: cloudstate
 roleRef:
   kind: ClusterRole
   name: cloudstate-operator-role
   apiGroup: rbac.authorization.k8s.io
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: RoleBinding
+metadata:
+  name: cloudstate-operator
+subjects:
+- kind: ServiceAccount
+  name: cloudstate-operator
+roleRef:
+  kind: Role
+  name: cloudstate-operator-role
+  apiGroup: rbac.authorization.k8s.io
+
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -151,27 +170,24 @@ spec:
       annotations:
         sidecar.istio.io/inject: "false"
     spec:
-      serviceAccountName: controller
+      serviceAccountName: cloudstate-operator
       containers:
       - name: operator
         image: cloudstateio/cloudstate-operator:latest
 
         env:
-        - name: NAMESPACES
-          # Update to comma separated list of namespaces to watch
-          value: default
-        - name: CASSANDRA_JOURNAL_IMAGE
-          value: cloudstateio/cloudstate-proxy-cassandra:latest
-        - name: IN_MEMORY_JOURNAL_IMAGE
-          value: cloudstateio/cloudstate-proxy-in-memory:latest
-        - name: NO_JOURNAL_IMAGE
-          value: cloudstateio/cloudstate-proxy-no-journal:latest
         - name: JAVA_OPTS
           value: "-Xms128m -Xmx128m"
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: "metadata.namespace"
+        - name: CONFIG_MAP
+          value: cloudstate-operator-config
 
         resources:
           limits:
             memory: 256Mi
           requests:
-            cpu: 0.25
+            cpu: 0.1
             memory: 256Mi
