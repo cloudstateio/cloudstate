@@ -1,6 +1,6 @@
 # Deployment spec for a journal. A journal is a logical abstraction over a database
 # deployment, and captures how to deploy and connect to that database. Multiple
-# EventSourcedFunction's would use a single journal.
+# StatefulService's would use a single journal.
 apiVersion: cloudstate.io/v1alpha1
 kind: Journal
 metadata:
@@ -8,6 +8,6 @@ metadata:
 spec:
 
   # The type of Journal - valid values would come from an enum of supported databases.
-  # Currently, Cassandra is the only supported database.
+  # This is the InMemory journal, which obviously should not be used in production.
   type: InMemory
 

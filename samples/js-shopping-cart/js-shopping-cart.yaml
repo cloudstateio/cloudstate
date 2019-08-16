@@ -8,8 +8,14 @@ spec:
   # Journal configuration
   journal:
 
-    # Name of a deployed EventSourcedJournal to use.
-    name: inmemory
+    # Name of a deployed Journal to use.
+    name: cassandra
+
+    # Journal specific configuration
+    config:
+
+      # Since the journal is a Cassandra journal, we need to specify the keyspace to use.
+      keyspace: shoppingcart
 
   containers:
     - image: cloudstateio/js-shopping-cart:latest

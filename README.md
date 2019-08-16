@@ -15,11 +15,11 @@ The operator should work on any Kubernetes distribution, we have tested on GKE w
 ### Running on GKE
 
 1. Create a GKE cluster. We recommend at least 6 vCPUs (ie, a node pool of 3 `n1-standard-2` nodes). Also ensure that the current user is a cluster admin. Detailed instructions for creating the GKE cluster can be found in the [Knative documentation](https://github.com/knative/docs/blob/master/docs/install/Knative-with-GKE.md), follow all the steps up to (but not including) installing Knative.
-2. Install Cassandra. This can be done from the Google Marketplace, by visiting the [Cassandra Cluster](https://console.cloud.google.com/marketplace/details/google/cassandra), selecting configure, selecting your GCloud project, and then installing it in the Kubernetes cluster you just created. The defaults should be good enough, in our examples we called the app instance name `cassandra`.
+2. If using an event sourced entity, install Cassandra. This can be done from the Google Marketplace, by visiting the [Cassandra Cluster](https://console.cloud.google.com/marketplace/details/google/cassandra), selecting configure, selecting your GCloud project, and then installing it in the Kubernetes cluster you just created. The defaults should be good enough, in our examples we called the app instance name `cassandra`. Note there is an option to use an in memory journal if you just want to test it out, of course, as soon as your pods shut down (or if they are rebalanced), your journals will be lost.
 3. Install the CloudState operator:
 
     ```
-    kubectl apply -f https://raw.githubusercontent.com/lightbend/stateful-serverless/v0.3/src/operator/stateful-serverless.yaml
+    kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/master/operator/stateful-serverless.yaml
     ```
     
 You are now ready to install an event sourced function. We have a shopping cart example in the `samples/js-shopping-cart` directory of this project. This can be installed by following these instructions:
@@ -27,7 +27,7 @@ You are now ready to install an event sourced function. We have a shopping cart 
 1. Configure a Cassandra journal. If you called your Cassandra deployment `cassandra` and deployed it to the default namespace, this can be installed by running:
 
     ```
-    kubectl apply -f https://raw.githubusercontent.com/lightbend/stateful-serverless/v0.3/src/samples/js-shopping-cart/journal.yaml
+    kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/master/samples/js-shopping-cart/cassandra-journal.yaml
     ```
     
     Otherwise, download the above file and update the `service` parameter to match the first node of your Cassandra stateful set.
@@ -35,16 +35,10 @@ You are now ready to install an event sourced function. We have a shopping cart 
 2. Install the shopping cart, this can be done by running:
 
     ```
-    kubectl apply -f https://raw.githubusercontent.com/lightbend/stateful-serverless/v0.3/src/samples/js-shopping-cart/eventsourced.yaml
+    kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/master/samples/js-shopping-cart/js-shopping-cart.yaml
     ```
     
-3. The operator will install a service that will expose this on an external IP address, watch the service to find out what the IP address is (it may take a minute or so to provision):
-
-    ```
-    kubectl get svc shopping-cart -w
-    ```
-    
-4. To test, instantiate a gRPC client in your favourite language for [this descriptor](https://raw.githubusercontent.com/lightbend/stateful-serverless/v0.3/src/samples/js-shopping-cart/proto/shoppingcart.proto). You may need to also download the [`lightbend/serverless/entitykey.proto`](https://raw.githubusercontent.com/lightbend/stateful-serverless/v0.3/src/backend/core/src/main/proto/lightbend/serverless/entitykey.proto) and [`google/protobuf/empty.proto`](https://raw.githubusercontent.com/lightbend/stateful-serverless/v0.3/src/samples/js-shopping-cart/proto/google/protobuf/empty.proto) descriptors to compile it in your language. The shopping cart descriptor is deployed with debug on, so try getting the logs of the `shopping-cart` container in each of the deployed pods to see what's happening when commands are sent.
+The operator will install a service, you can then create an ingress for that service. To test, instantiate a gRPC client in your favourite language for [this descriptor](https://raw.githubusercontent.com/cloudstateio/cloudstate/master/examples/shoppingcart/shoppingcart.proto). You may need to also download the [`cloudstate/entitykey.proto`](https://raw.githubusercontent.com/cloudstateio/cloudstate/master/protols/frontend/cloudstate/entity.proto) and [`google/protobuf/empty.proto`](https://raw.githubusercontent.com/protocolbuffers/protobuf/master/src/google/protobuf/empty.proto) descriptors to compile it in your language. The shopping cart descriptor is deployed with debug on, so try getting the logs of the `shopping-cart` container in each of the deployed pods to see what's happening when commands are sent.
 
 ### Points of interest
 
