@@ -4,31 +4,27 @@ _"We predict that serverless computing will grow to dominate the future of cloud
 
 —Jonas et al, ['Cloud computing simplified: a Berkeley view on serverless computing'](https://arxiv.org/abs/1902.03383)
 
-# Elevator Pitch
-
-## Scalable Compute needs Scalable State
-
-Bringing _stateful_ microservices, and the power of _reactive_ technologies to the Cloud Native ecosystem breaks down the final impediment standing in the way of a _Serverless platform for general-purpose application development_, true elastic scalability, and global deployment in the Kubernetes ecosystem. The marriage of Knative and Akka Cluster on Kubernetes allows applications to not only scale efficiently, but to manage distributed state reliably at scale while maintaining its global or local level of data consistency, opening up for a whole range of new addressable use-cases.
-
-## TL;DR
+# TL;DR
 
 *   The Serverless Developer Experience, from development to production, is revolutionary and will grow to dominate the future of Cloud Computing
-    *   FaaS is however— with its ephemeral, stateless, and short-lived functions—only the first step/implementation of the Serverless Developer Experience. 
-    *   FaaS is great for processing intensive, parallelizable workloads, moving data from A to B providing enrichment and transformation along the way. But it is quite limited and constrained in what use-cases it addresses well, which makes it very hard/inefficient to implement traditional application development and distributed systems protocols. 
-*   What's needed is a next generation Serverless platform and programming model for  general-purpose application development (e.g. microservices, streaming pipelines, ML, etc.). 
-    *   One that lets us implement use cases such as: shopping carts, user sessions, transactions, ML models training, low-latency prediction serving, job scheduling, and more.  
+    *   FaaS is however— with its ephemeral, stateless, and short-lived functions—only the first step and implementation of the Serverless Developer Experience. 
+    *   FaaS is great for processing intensive, parallelizable workloads, moving data from A to B providing enrichment and transformation along the way. But it is quite limited and constrained in what use-cases it addresses well, which makes it very hard and inefficient to implement traditional application development and distributed systems protocols. 
+*   What's needed is a next generation Serverless platform and programming model for  general-purpose application development (e.g. microservices, streaming pipelines, AI/ML, etc.). 
+    *   One that lets us implement common use-cases such as: shopping carts, user sessions, transactions, ML models training, low-latency prediction serving, job scheduling, and much more.  
     *   What is missing is support for long-lived virtual stateful services, a way to manage distributed state in a scalable and available fashion, and options for choosing the right consistency model for the job. 
-*   This next generation Serverless can be built on Knative/Kubernetes, gRPC, and Akka (Cluster, Persistence, etc.).
+*   We are tackling these problems by attempting to build this next generation Serverless on Knative/Kubernetes, gRPC, and Akka (Cluster, Persistence, etc.), with a rich set of client APIs (JavaScript, Go, Python, Java, Scala, etc.)   
 
 
 # Introduction
 
+Bringing _stateful_ microservices, streaming, and the power of _reactive_ technologies to the Cloud Native ecosystem breaks down the final impediment standing in the way of a _Serverless platform for general-purpose application development_, true elastic scalability, and global deployment in the Kubernetes ecosystem. The marriage of Knative and Akka Cluster on Kubernetes allows applications to not only scale efficiently, but to manage distributed state reliably at scale while maintaining its global or local level of data consistency, opening up for a whole range of new addressable use-cases.
 
-## Definition
+## What does Serverless mean?
 
 Serverless means different things to different people. Many people consider it the same as Function-as-a-Service (FaaS), but we see it as much more than that: a new category of PaaS, where the key point is the Developer Experience, supporting the full life-cycle of the application, not the programming API of its latest incarnation. 
 
-The definition from the paper[ 'Serverless computing: economic and architectural impact'](https://www.doc.ic.ac.uk/~rbc/papers/fse-serverless-17.pdf), by Adzic et al. paints a broader picture: _"'Serverless' refers to a new generation of platform-as-a-service offerings where the infrastructure provider takes responsibility for receiving client requests and responding to them, capacity planning, task scheduling, and operational monitoring. Developers need to worry only about the logic for processing client requests."_
+The definition from the paper[ 'Serverless computing: economic and architectural impact'](https://www.doc.ic.ac.uk/~rbc/papers/fse-serverless-17.pdf), by Adzic et al. paints a broader picture: 
+> _"'Serverless' refers to a new generation of platform-as-a-service offerings where the infrastructure provider takes responsibility for receiving client requests and responding to them, capacity planning, task scheduling, and operational monitoring. Developers need to worry only about the logic for processing client requests."_
 
 
 ## What's wrong with Serverless? 
@@ -49,9 +45,9 @@ Another limitation is that often functions have no direct addressability, which 
 
 ## Stateful serverless computing for an event-driven data-centric world
 
-The serverless movement today is very focused on the automation of the underlying infrastructure, but it has to some extent ignored the equally complicated requirements at the application layer, where the move towards fast data and event-driven stateful architectures creates all sorts of new challenges for operating systems in production.
+The serverless movement today is very focused on the automation of the underlying infrastructure, but it has to some extent ignored the equally complicated requirements at the application layer, where the move towards fast data, streaming, and event-driven stateful architectures creates all sorts of new challenges for operating systems in production.
 
-Functions is a great tool that has its place in the cloud computing toolkit, but for serverless to reach the grand vision that the industry is demanding of a Serverless world while allowing us to build modern data-centric real-time applications, we can't continue to ignore the hardest problem in distributed systems: managing state—your data. 
+Stateless functions is a great tool that has its place in the cloud computing toolkit, but for serverless to reach the grand vision that the industry is demanding of a Serverless world while allowing us to build modern data-centric real-time applications, we can't continue to ignore the hardest problem in distributed systems: managing state—your data. 
 
 If Serverless is conceptually about how to remove humans from the equation and solve developers' hardest problems with reasoning about systems in production, then they need declarative APIs and high-level abstractions with rich and easily understood semantics (beyond low-level primitives like functions) for working with never-ending streams of data, manage complex distributed data workflows, and managing distributed state in a reliable, resilient, scalable, and performant way. 
 
@@ -69,31 +65,31 @@ What we need support for is:
 End-to-end correctness, consistency, and safety mean different things for different services. It's totally dependent on the use-case, and can't be outsourced completely to the infrastructure. The next generation serverless implementations need to provide programming models and a holistic Developer Experience working in concert with the underlying infrastructure maintaining these properties, without continuing to ignore the hardest, and most important problem: how to manage your data in the cloud—reliably at scale.
 
 
-# Enter Stateful Serverless (Serverless 2.0)
+# Enter CloudState (Serverless 2.0)
 
-Managing distributed state is hard, but not impossible as long as you are able to rely on the type and nature of the consistency model that is the best fit for your application. Stateful Serverless aims to extend the promise of Serverless and its Developer Experience to general-purpose application development. 
+[CloudState](https://cloudstate.io) is a standards effort defining a specification, protocol, and reference implementation, aiming to extend the promise of Serverless and its Developer Experience to general-purpose application development. 
 
-It builds on and extends the traditional stateless FaaS model, by adding support for long-lived addressable stateful services and a way of accessing mapped well-formed data via [gRPC](https://grpc.io/), while allowing for a range of different consistency model—from strong to eventual consistency—based on the nature of the data and how it should be processed, managed, and stored. 
+CloudState builds on and extends the traditional stateless FaaS model, by adding support for long-lived addressable stateful services and a way of accessing mapped well-formed data via [gRPC](https://grpc.io/), while allowing for a range of different consistency model—from strong to eventual consistency—based on the nature of the data and how it should be processed, managed, and stored. 
 
-Define your data model, choose its consistency mode and resolution method, and access both your data, data-centric operations, streaming pipelines, and events via a well-formed protocol of gRPC command and read channels.
+You define your data model, choose its consistency mode and resolution method, and access both your data, data-centric operations, streaming pipelines, and events via a well-formed protocol of gRPC command and read channels.
 
 
 ## High-level design
 
-Stateful Serverless is built on top of Knative and Akka. Each stateful service is backed by an Akka Cluster of durable Akka Actors (event-sourced using Akka Persistence and a distributed database of choice). The user, however, is shielded from these complexities through a set of sidecars bridging the user code to the backend state and cluster management. 
+The CloudState reference implementation is built on top of Kubernetes, [Knative](https://cloud.google.com/knative), [Graal VM](https://www.graalvm.org), [gRPC](https://grpc.io), and [Akka](https://akka.io), with a growing set of client API libraries for different languages. Inbound and outbound communication is always going through the sidecars over gRPC channel[^6] using a constrained and well-defined protocol, in which the user defines commands in, events in, command replies out, and events out. Communicating over a gRPC allows the user code to be implemented in different languages (JavaScript, Java, Go, Scala, Python, etc.).
 
-Inbound and outbound communication is always going through the sidecars over gRPC channel[^6] using a constrained and well-defined protocol, in which the user defines commands in, events in, command replies out, and events out. Events are published to Knative Events for others to subscribe to and consume. 
+![Serving of stateful functions](images/serving_stateful_functions.png)
 
-Communicating over a gRPC allows the user code to be implemented in different languages (Scala, Java, Go, JavaScript, etc.).
+Each stateful service is backed by an Akka cluster of durable Akka actors (supporting several data models, storage techniques and, a databases). The user, however, is shielded from these complexities through a set of sidecars bridging the user code to the backend state and cluster management. 
 
-![Visualization of architecture](images/architecture-visualization.png)
+![Powered by gRPC and Akka sidecars](images/powered_by_akka_sidecars.png)
 
-Managing distributed state isn't just about pushing data from A to B in a reliable fashion. It's about selecting a model that reflects the real world use of the data, and its convergence on usable consistency, not artificially enforced consistency. Being able to have data span clusters, data centers, availability zones, and continents, and maintain a useful coherent state is the gift that Akka gives to Stateful Serverless. Additionally, repetitive work that is better executed in the stateful cluster, or needs to maintain long-running state can be embedded via command channels. 
+Managing distributed state isn't just about pushing data from A to B in a reliable fashion. It's about selecting a model that reflects the real world use of the data, and its convergence on usable consistency, not artificially enforced consistency. Being able to have data span clusters, data centers, availability zones, and continents, and maintain a useful coherent state is something that the combination of Kubernetes and Akka excel at. Additionally, repetitive work that is better executed in the stateful cluster, or needs to maintain long-running state can be embedded via command channels. 
 
 
 ## Event Sourcing and CRDTs instead of CRUD
 
-Stateful Serverless is incompatible with CRUD. A Serverless infrastructure needs to handle all the nitty-gritty details of storing state before passing it to the user code, something that does not work well with user-defined CRUD operations, which are not constrained enough. For example, it would need to send the entire dataset: _in_ to implement _queries_, and _out_ to implement _updates_. 
+Stateful functions are incompatible with CRUD. A Serverless infrastructure needs to handle all the nitty-gritty details of storing state before passing it to the user code, something that does not work well with user-defined CRUD operations, which are not constrained enough. For example, it would need to send the entire dataset: _in_ to implement _queries_, and _out_ to implement _updates_. 
 
 What we need are data storage patterns that have constrained input/output protocols. 
 
@@ -117,96 +113,29 @@ Examples of use-cases of this are[^8]:
 
 As Adzic et al. write in their paper ['Serverless computing: economic and architectural impact'](http://www.doc.ic.ac.uk/~rbc/papers/fse-serverless-17.pdf): 
 
-_"… serverless platforms today are useful for important (but not five-nines mission critical) tasks, where high-throughput is key, rather than very low latency, and where individual requests can be completed in a relatively short time window. The economics of hosting such tasks in a serverless environment make it a compelling way to reduce hosting costs significantly, and to speed up time to market for delivery of new features."_
+> _"… serverless platforms today are useful for important (but not five-nines mission critical) tasks, where high-throughput is key, rather than very low latency, and where individual requests can be completed in a relatively short time window. The economics of hosting such tasks in a serverless environment make it a compelling way to reduce hosting costs significantly, and to speed up time to market for delivery of new features."_
 
-
-## New use-cases that Stateful Serverless can address
+## New use-cases that CloudState can address
 
 However, implementing traditional application development, microservices, stateful data pipelines, and general-purpose distributed system problems using stateless functions (FaaS) is very hard to do in a low-latency, performant, reliable way. 
 
-Stateful Serverless is designed to extend the model and making it straightforward to implement use-cases such as: 
+CloudState is designed to extend the model and making it straightforward to implement use-cases such as: 
 
 *   **Training and Serving of Machine Learning Models**
-    *   Any use-case that needs to build up, and provide low latency serving of, dynamic models
-    *   An Akka Streams pipeline can invoke model serving using the ability to embed async Actor invocations. Those actors can encapsulate both durable, distributed state (e.g., the models themselves, running stats, etc.) and they can manage the invocations of scoring or even training, to remote services or embedded libraries. 
-*   **Real-time Resilient Distributed Stream Processing**
-*   *   **Low-latency Real-time Prediction/Recommendation Serving**
-    *   *   By using gRPC streams as the interface we can deliver boundary crossing at low latency without the penalty of REST or other higher level protocols. Since models are invoked using async actors, response time is not a factor, and blocking is avoided.
-    *   **Low-latency Real-time Fraud Detection**
-    *   **Low-latency Real-time Anomaly Detection**
-*   **User Session, Shopping Cart (and other distributed hash-table-centric use-cases)**
-    *   Managing in-memory (but potentially durable) session state across the lifecycle of individual requests.
-    *   This is a very common use-case, e.g. retail, online gaming, real-time betting, etc.
-    *   Akka Distributed Data's CRDTs is an ideal way to do this—balancing consistency and availability—as has been shown many times.
-*   **Transaction Management**, **Saga Pattern**
-    *   Supports transactional distributed workflow management, such as the Saga Pattern.
-    *   Manages each step in the workflow including rollback/compensating actions in the case of failure. 
-    *   Offer options in terms of consistency guarantees.
-*   **Shared Collaborative Workspaces, e.g. Collaborative Document Editing and Chat Rooms**.
-    *   Requires real-time push events to connected users/devices
-    *   This covers a range of use cases from chat rooms, to collaborative document editing, to user notifications, etc.
-    *   This is difficult to achieve with traditional pub-sub brokers, since they don't tend to scale well on the subscriber axis when each end user has one to many active subscriptions, but can be easily implemented when point to point addressable messaging is available.
+    *   Any use-case that needs to build up, and provide low latency serving of, dynamic models 
+*   **Low-latency Real-time Prediction/Recommendation Serving**
+*   **Low-latency Real-time Fraud Detection**
+*   **Low-latency Real-time Anomaly Detection**
+*   **User Session, Shopping Cart, and similar**
+    *   Managing in-memory (but potentially durable) session state across the lifecycle of individual requests. A very common use-case, e.g. retail, online gaming, real-time betting, etc.
+*   **Transaction and Workflow Management**
+    *   Transactional distributed workflow management, such as the Saga Pattern. Manage each step in the workflow including rollback/compensating actions in the case of failure, while offering options in terms of consistency guarantees.
+*   **Shared Collaborative Workspaces**
+    * E.g. Collaborative Document Editing and Chat Rooms.
 *   **Leader Election, and other distributed systems protocols for coordination**
-    *   It is trivial to implement with Akka Cluster/Distributed Data (what it is designed to excel at), while always coordinating over a distributed storage (such as DynamoDB in the case of Lambda) is too costly, slow, and can become a single point of failure.  
+    *   Trivial to implement with Akka Cluster/Distributed Data, while always coordinating over a distributed storage (such as DynamoDB in the case of Lambda) is too costly, slow, and can become a single point of failure.
 
-
-# Challenges, Risks, and Opportunities 
-
-*   **Security and Authorization**: There might be room to innovate in the area of security and authorization. Perhaps move beyond the current model of distributed request-level authorization—a request to a function is equally untrusted whether it comes from a client application directly or from another function—to richer and more programmer-friendly models like sessions etc., perhaps using edge gatekeepers. This could also lead to better performance. That said, the request-level authorization model might be considered compelling since it allows applications to directly access resources traditionally considered 'back-end' without going through an additional layer of security—think [dynamic ALTS configuration](https://cloud.google.com/security/encryption-in-transit/resources/encryption-in-transit-whitepaper.pdf).
-*   **Selectable Consistency**: Exposing a catalog of entities in a graphical console would allow for the selection and downstream configuration of the transactional model, consistency bounds, and distribution (think taints and tolerances for data). Enforcing these on a cluster-wide basis, regardless of the upstream implementation.  Instrumenting and tracking consistency rates per entity would be interesting too.
-*   **Data Dependencies**: FaaS platforms have no knowledge of the data dependencies between the functions, let alone the amount of data these functions might exchange. This ignorance can lead to suboptimal placement that could result in inefficient communication patterns. There is an opportunity to improve on this through higher-level abstractions such as the DAG of a streaming data pipeline (perhaps using Lightbend Pipelines or Akka Streams) that can optimize for locality of reference through co-location of code and data, and throughput of data between services sharing large volumes of data. 
-*   **Cost Efficiency**: One of the main drivers for Serverless/FaaS is cost efficiency—don't pay for more than you actually use, trading performance and latency for dollars. It can be challenging to maintain a low operational cost for long-lived components (that we don't kill and rehydrate as frequent as f.e. Lambda's every 15 min). The user needs ways to dial in the trade-off between low cost and low latency/performance (and perhaps also availability) by setting thresholds defining the SLOs.
-*   **SLO Trade-offs**: Expose the right set of knobs for tuning in the SLOs. Scaling while maintaining SLOs for stateless functions is a lot easier than stateful components. Ideally, these hard decisions should be taken by the platform but allow the user to optionally "opt-in" by setting thresholds and ratios for tradeoffs. (See "Selectable Consistency" above).
-
-
-# Comparison with other technologies
-
-
-## Amazon Lambda, OpenWhisk, Fargate
-
-*   Classic FaaS, see limitations and use-cases discussed above. 
-
-
-## Azure Durable Functions
-
-*   These durable functions are stateful and are pointing in the right direction. 
-*   They are durable through event sourcing, can be replayed on failure, and can be composed in a "transactional" manner using Saga-style techniques. 
-*   However, they are (based on limited understanding from reading the docs) not clustered, can't communicate point-to-point, and still has a limited life-span (need to be rehydrated from storage often, which incurs high latency when waking it up).
-
-
-## Kafka
-
-*   Kafka is a foundational piece in most cloud-native and serverless architectures. It is the state of the art data backbone for getting data from A to B with high throughput in a reliable fashion. We will probably use Kafka (through Knative Events). 
-*   But it is not a complete solution for application development/microservices: 
-    *   It is suboptimal for event sourcing since you quickly run into the limitations of the number of topics (event logs) supported—each service/entity needs to have its own event log which means that the number of services is bound by the number of Kafka topics.
-    *   It is not a database which means that: 1) it is not meant for long-term storage of events (even though you can set the retention policy high), and 2) it does not have a good query model (for doing joins across topics/services etc.).
-    *   The only communication pattern supported is pubsub over a durable event log, which incurs high latency (compared to point-to-point). 
-    *   It does not have tools for modeling eventual and causal consistency, but only strong (through event logging).
-
-
-## Classic 3-tier: stateless services with a distributed DB 
-
-*   Examples of 3-tier app dev frameworks/tools include: JEE, Spring, Node.js, and Golang.
-*   Examples of distributed databases include: Spanner, Cassandra, Couchbase, or DynamoDB.
-*   3-tier implies one very important factor, all state must be stored in a single cluster or instance of a data store, and ultimately, all calls lead to the database: 
-    *   A shared database in a system continues to increase traffic to the database layer as more stateless compute workers are added, so the database, or database cluster must continue to scale to meet the demands of the upstream workers: ![Image of 3 tier architecture with cache](images/3-tier.png)
-    *   This can be in some cases, mitigated with caching, but the traffic flow, and distribution are still largely the responsibility of the data layer itself: ![Image of 3 tier architecture](images/3-tier-w-cache.png)
-    *   As opposed to a Reactive system architecture that only emits fact, and final state to the database, and maintains active state across an even horizontally scalable cluster: ![Image of reactive architecture](images/reactive.png) 
-
-## In-Memory Data Grid
-In-Memory Data Grids provides limited functionality to help obtain some of the goals in the document:
-- A partitioned, easily scalable data store, where data = objects
-- Ability to push processing to data by a set of keys or by query clause.
-- Processing looks like Java lambdas
-- Ability to trigger downstream processing based on events (both cluster events and changes to object state).  By layering this, you can build SEDA-like applications.
-- Streaming capabilities along the lines of Java Streams
-- Streaming or batch aggregation based on above capabilities
-
-The downsides of the IMDG approach include the lack of an approach to distinguish services - everything kinda works, but without a good software discipline for application lifecycle management.
-
-Examples of IMDG include proprietary products like Oracle Coherence, and Open Source equivalents such as Hazelcast, JBoss Data Grid, and Apache Ignite. GigaSpaces takes a different architectural approach but with similar net result.
-
-## Notes
+## Footnotes
 
 [^1]:
      For example, Amazon Lambda caps their lifespan to 15 minutes.
