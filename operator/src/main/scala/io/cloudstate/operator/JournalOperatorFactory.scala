@@ -36,7 +36,7 @@ class JournalOperatorFactory(implicit mat: Materializer, ec: ExecutionContext) e
   import OperatorConstants._
   import Journal.Resource
 
-  override def apply(client: KubernetesClient): Operator = new JournalOperator(client)
+  override def apply(client: KubernetesClient, config: OperatorConfig): Operator = new JournalOperator(client)
 
   class JournalOperator(client: KubernetesClient) extends Operator {
 

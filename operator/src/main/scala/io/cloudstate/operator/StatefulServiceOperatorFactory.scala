@@ -32,15 +32,11 @@ import StatefulService.Resource
 class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionContext)
   extends OperatorFactory[StatefulService.Status, Resource] {
 
-  private val CassandraJournalImage = sys.env.getOrElse("CASSANDRA_JOURNAL_IMAGE", "cloudstateio/cloudstate-proxy-cassandra:latest")
-  private val InMemoryJournalImage = sys.env.getOrElse("IN_MEMORY_JOURNAL_IMAGE", "cloudstateio/cloudstate-proxy-in-memory:latest")
-  private val NoJournalImage = sys.env.getOrElse("NO_JOURNAL_IMAGE", "cloudstateio/cloudstate-proxy-no-journal:latest")
-
   import OperatorConstants._
 
-  override def apply(client: KubernetesClient): Operator = new StatefulServiceOperator(client)
+  override def apply(client: KubernetesClient, config: OperatorConfig): Operator = new StatefulServiceOperator(client, config)
 
-  class StatefulServiceOperator(client: KubernetesClient) extends Operator {
+  class StatefulServiceOperator(client: KubernetesClient, config: OperatorConfig) extends Operator {
 
     private val helper = new ResourceHelper(client)
 
@@ -48,7 +44,7 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       deployment.metadata.ownerReferences
         .find(_.controller.contains(true))
         .exists(ref => ref.apiVersion.startsWith(CloudStateGroup + "/")
-          && ref.kind == StatefulService)
+          && ref.kind == StatefulServiceKind)
     }
 
     override def handleChanged(resource: Resource): Future[StatusUpdate] = {
@@ -241,18 +237,18 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
     }
 
     private def createCassandraSideCar(serviceResource: Resource, serviceName: String, keyspace: String) = {
-      createSideCar(serviceResource, CassandraJournalImage, List(
+      createSideCar(serviceResource, config.images.cassandra, List(
         EnvVar("CASSANDRA_CONTACT_POINTS", serviceName),
         EnvVar("CASSANDRA_KEYSPACE", keyspace)
       ))
     }
 
     private def createInMemorySidecar(serviceResource: Resource) = {
-      createSideCar(serviceResource, InMemoryJournalImage, Nil)
+      createSideCar(serviceResource, config.images.inMemory, Nil)
     }
 
     private def createNoJournalSidecar(serviceResource: Resource) = {
-      createSideCar(serviceResource, NoJournalImage, Nil)
+      createSideCar(serviceResource, config.images.noJournal, Nil)
     }
 
     private def createSideCar(service: Resource, image: String, env: List[EnvVar]) = {

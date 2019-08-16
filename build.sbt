@@ -72,6 +72,8 @@ lazy val root = (project in file("."))
 
 lazy val proxyDockerBuild = settingKey[Option[(String, String)]]("Docker artifact name and configuration file which gets overridden by the buildProxy command")
 
+val dockerTagVersion = !sys.props.get("docker.tag.version").forall(_ == "false")
+
 def dockerSettings: Seq[Setting[_]] = Seq(
   proxyDockerBuild := None,
   
@@ -90,7 +92,7 @@ def dockerSettings: Seq[Setting[_]] = Seq(
     val single = dockerAlias.value
     // So basically, by default we *just* publish latest, but if -Ddocker.tag.version is passed,
     // we publish both latest and a tag for the version.
-    if (!sys.props.get("docker.tag.version").forall(_ == "false")) {
+    if (dockerTagVersion) {
       old
     } else {
       Seq(single.withTag(Some("latest")))
@@ -369,10 +371,11 @@ lazy val operator = (project in file("operator"))
     dockerExposedPorts := Nil,
     compileK8sDescriptors := doCompileK8sDescriptors(
       baseDirectory.value / "deploy",
-      baseDirectory.value / "cloudstate.yaml",
+      baseDirectory.value,
       dockerRepository.value,
       dockerUsername.value,
-      version.value
+      version.value,
+      streams.value
     )
   )
 
@@ -501,7 +504,11 @@ lazy val `tck` = (project in file("tck"))
     executeTests in Test := (executeTests in Test).dependsOn(`proxy-core`/assembly).value
   )
 
-def doCompileK8sDescriptors(dir: File, target: File, registry: Option[String], username: Option[String], version: String): File = {
+def doCompileK8sDescriptors(dir: File, targetDir: File, registry: Option[String], username: Option[String], version: String, streams: TaskStreams): File = {
+
+  val targetFileName = if (dockerTagVersion) s"cloudstate-$version.yaml" else "cloudstate.yaml"
+  val target = targetDir / targetFileName
+
   val files = ((dir / "crds") * "*.yaml").get ++
     (dir * "*.yaml").get.sortBy(_.getName)
 
@@ -509,11 +516,13 @@ def doCompileK8sDescriptors(dir: File, target: File, registry: Option[String], u
 
   val user = username.getOrElse("cloudstateio")
   val registryAndUsername = registry.fold(user)(r => s"$r/$user")
+  val tag = if (dockerTagVersion) version else "latest"
   val substitutedDescriptor = fullDescriptor.replaceAll(
-    "image: cloudstateio/(.*):latest", 
-    s"image: $registryAndUsername/$$1:$version"
+    "cloudstateio/(cloudstate-.*):latest", 
+    s"$registryAndUsername/$$1:$tag"
   )
 
   IO.write(target, substitutedDescriptor)
+  streams.log.info("Generated YAML descriptor in " + target)
   target
 }
