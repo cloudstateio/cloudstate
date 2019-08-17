@@ -14,7 +14,6 @@ _"We predict that serverless computing will grow to dominate the future of cloud
     *   What is missing is support for long-lived virtual stateful services, a way to manage distributed state in a scalable and available fashion, and options for choosing the right consistency model for the job. 
 *   We are tackling these problems by attempting to build this next generation Serverless on Knative/Kubernetes, gRPC, and Akka (Cluster, Persistence, etc.), with a rich set of client APIs (JavaScript, Go, Python, Java, Scala, etc.)   
 
-
 # Introduction
 
 Bringing _stateful_ microservices, streaming, and the power of _reactive_ technologies to the Cloud Native ecosystem breaks down the final impediment standing in the way of a _Serverless platform for general-purpose application development_, true elastic scalability, and global deployment in the Kubernetes ecosystem. The marriage of Knative and Akka Cluster on Kubernetes allows applications to not only scale efficiently, but to manage distributed state reliably at scale while maintaining its global or local level of data consistency, opening up for a whole range of new addressable use-cases.
@@ -26,7 +25,6 @@ Serverless means different things to different people. Many people consider it t
 The definition from the paper[ 'Serverless computing: economic and architectural impact'](https://www.doc.ic.ac.uk/~rbc/papers/fse-serverless-17.pdf), by Adzic et al. paints a broader picture: 
 > _"'Serverless' refers to a new generation of platform-as-a-service offerings where the infrastructure provider takes responsibility for receiving client requests and responding to them, capacity planning, task scheduling, and operational monitoring. Developers need to worry only about the logic for processing client requests."_
 
-
 ## What's wrong with Serverless? 
 
 Serverless today is a great platform for stateless services, focusing on scaling from 1-10000 requests and down to zero, and does an amazing job doing this—at scale in a very cost-efficient manner (no events == no cost). It simplifies the delivery of scale and simplicity in operations. 
@@ -35,13 +33,11 @@ The current incarnation of Serverless, the so-called Function-as-as Service (Faa
 
 We, however, believe that Serverless is more than FaaS (which is only the first step on the journey). It's not about a specific implementation but all about the Developer Experience—a new way of building and running applications, and it's about time that we expand on its scope and supported use-cases. 
 
-
 ## The limitations of FaaS
 
 One limitation of FaaS is that its functions are ephemeral, stateless, and short-lived[^1]. This makes it problematic to build general-purpose data-centric cloud-native applications since it is simply too costly — in terms of performance, latency, and throughput — to lose the computational context (locality of reference) and being forced to load and store the state from the backend storage over and over again. 
 
 Another limitation is that often functions have no direct addressability, which means that they can't communicate directly with each other using point-to-point communication but always need to resort to publish-subscribe, passing all data over some slow and expensive storage medium. A model that can work well for event-driven use-cases but yields too high latency for addressing general-purpose distributed computing problems[^2].
-
 
 ## Stateful serverless computing for an event-driven data-centric world
 
@@ -64,7 +60,6 @@ What we need support for is:
 
 End-to-end correctness, consistency, and safety mean different things for different services. It's totally dependent on the use-case, and can't be outsourced completely to the infrastructure. The next generation serverless implementations need to provide programming models and a holistic Developer Experience working in concert with the underlying infrastructure maintaining these properties, without continuing to ignore the hardest, and most important problem: how to manage your data in the cloud—reliably at scale.
 
-
 # Enter CloudState (Serverless 2.0)
 
 [CloudState](https://cloudstate.io) is a standards effort defining a specification, protocol, and reference implementation, aiming to extend the promise of Serverless and its Developer Experience to general-purpose application development. 
@@ -73,14 +68,13 @@ CloudState builds on and extends the traditional stateless FaaS model, by adding
 
 You define your data model, choose its consistency mode and resolution method, and access both your data, data-centric operations, streaming pipelines, and events via a well-formed protocol of gRPC command and read channels.
 
-
 ## High-level design
 
 The CloudState reference implementation is built on top of Kubernetes, [Knative](https://cloud.google.com/knative), [Graal VM](https://www.graalvm.org), [gRPC](https://grpc.io), and [Akka](https://akka.io), with a growing set of client API libraries for different languages. Inbound and outbound communication is always going through the sidecars over gRPC channel[^6] using a constrained and well-defined protocol, in which the user defines commands in, events in, command replies out, and events out. Communicating over a gRPC allows the user code to be implemented in different languages (JavaScript, Java, Go, Scala, Python, etc.).
 
-![Serving of stateful functions](images/serving_stateful_functions.png)
+![Serving of polyglot stateful functions](images/serving_stateful_functions.png)
 
-Each stateful service is backed by an Akka cluster of durable Akka actors (supporting several data models, storage techniques and, a databases). The user, however, is shielded from these complexities through a set of sidecars bridging the user code to the backend state and cluster management. 
+Each stateful service is backed by an Akka cluster of durable Akka actors (supporting several data models, storage techniques, and databases). The user, however, is shielded from these complexities through a set of sidecars bridging the user code to the backend state and cluster management. 
 
 ![Powered by gRPC and Akka sidecars](images/powered_by_akka_sidecars.png)
 
@@ -88,13 +82,13 @@ Managing distributed state isn't just about pushing data from A to B in a reliab
 
 You can read more about the design [here](TODO).
 
-## We need to rethink the use of CRUD in the Cloud
+## Stateful functions are incompatible with CRUD
 
-Stateful functions are incompatible with CRUD. CRUD, in the general sense, means unconstrained database access and is too broad and open-ended to be used effectively in Serverless environments (or any general Cloud development for that matter). 
+We need to rethink the use of CRUD in Serverless. CRUD, in the general sense, means unconstrained database access, and is too broad and open-ended to be used effectively in Serverless environments (or any general Cloud development for that matter). 
 
 ![FaaS using CRUD](images/faas_with_crud.png)
 
-Unconstrained database access means that the user function itself needs to manage the nitty-gritty details about data access and storage, and your are thereby moving all the operational concerns from the Serverless framework into the user function. Now it's hard for the framework to know the intention of each access: 
+Unconstrained database access means that the user function itself needs to manage the nitty-gritty details about data access and storage, and your are thereby moving all the operational concerns from the Serverless framework into the user function. Now it's hard for the framework to know the intention of each access. For example: 
 
 * Is the operation a read, or a write?
 * Can it be cached?
@@ -109,27 +103,27 @@ Instead, if we understand these properties then we can make better decisions aut
 
 We all know that constraints can be liberating and this holds true for Serverless as much as anything else. As a fact, one of the reasons for the success of Serverless is that it has such a constrained developer experience, which allows you as a developer to focus on the essence: the business logic for the function. For example, Serverless has a great model for abstracting over communication where all communication is translated to receiving and emitting events. 
 
-The question we asked ourselves was: can we abstract over state in the same way? Provide a clean and uniform abstraction of _state in_ and _state out_ for the function. This would allow the framework to manage durable state on behalf of the function, to monitor and manage it holistically across the whole system, and take more intelligent decisions.  
+The question we asked ourselves was: can we abstract over state in the same way? Provide a clean and uniform abstraction of _state in_ and _state out_ for the function. 
 
 ![Abstracting over state](images/abstract_over_state.png)
 
+This would allow the framework to manage durable state on behalf of the function, to monitor and manage it holistically across the whole system, and take more intelligent decisions.  
+
 Unconstrained CRUD does not work in in this model since we can't pass the entire data set in and out of the function. What we need are data storage patterns that have constrained input/output protocols. Patterns that fall into this category are Key-Value, Event Sourcing, and CRDTs. 
 
-In [Event Sourcing](https://martinfowler.com/eaaDev/EventSourcing.html) _state in_ is the event log while _state out_ is any newly persisted events as a result of handling a command. 
+In [Event Sourcing](https://martinfowler.com/eaaDev/EventSourcing.html), _state in_ is the event log while _state out_ is any newly persisted events as a result of handling a command. 
 
 ![Event Sourcing as data model](images/data_model_event_sourcing.png)
 
-In [CRDTs](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) _state in_ is a stream of deltas and/or state updates, and _state out_ is a stream of deltas and/or state updates.  
+In [CRDTs](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type), _state in_ is a stream of deltas and/or state updates, and _state out_ is a stream of deltas and/or state updates.  
 
 ![CRDTs as data model](images/data_model_crdts.png)
 
-In Key-Value the _state out_ is the key and _state in_ the value.
+In Key-Value, the _state out_ is the key and _state in_ the value.
 
 While most developers have worked with Key-Value stores, Event Sourcing and CRDTs might be a bit unfamiliar. What's interesting is that they fit an event-driven model vely well and while being on the opposite sides of the state consistency spectrum, with the former gives strong (ACID) consistency (through event logging) while the latter eventual/causal consistency. Together they give us a wide range of options for managing distributed state in a consistent fashion by allowing you to choose the optimal model for the specific use-case and data set[^7]. 
 
-
 # Expanding on the use-cases for Serverless
-
 
 ## Use-cases FaaS addresses well
 
@@ -162,8 +156,11 @@ CloudState is designed to extend the model and making it straightforward to impl
     *   Transactional distributed workflow management, such as the Saga Pattern. Manage each step in the workflow including rollback/compensating actions in the case of failure, while offering options in terms of consistency guarantees.
 *   **Shared Collaborative Workspaces**
     * E.g. Collaborative Document Editing and Chat Rooms.
+*   **Distributed counting, voting, etc.**
 *   **Leader Election, and other distributed systems protocols for coordination**
     *   Trivial to implement with Akka Cluster/Distributed Data, while always coordinating over a distributed storage (such as DynamoDB in the case of Lambda) is too costly, slow, and can become a single point of failure.
+
+The goal of CloudState is giving a way to implement these use-cases in a scalable and available way, working in concert with the application itself, while providing end-to-end correctness, consistency, and safety.
 
 ## Footnotes
 
