@@ -86,16 +86,46 @@ Each stateful service is backed by an Akka cluster of durable Akka actors (suppo
 
 Managing distributed state isn't just about pushing data from A to B in a reliable fashion. It's about selecting a model that reflects the real world use of the data, and its convergence on usable consistency, not artificially enforced consistency. Being able to have data span clusters, data centers, availability zones, and continents, and maintain a useful coherent state is something that the combination of Kubernetes and Akka excel at. Additionally, repetitive work that is better executed in the stateful cluster, or needs to maintain long-running state can be embedded via command channels. 
 
+You can read more about the design [here](TODO).
 
-## Event Sourcing and CRDTs instead of CRUD
+## We need to rethink the use of CRUD in the Cloud
 
-Stateful functions are incompatible with CRUD. A Serverless infrastructure needs to handle all the nitty-gritty details of storing state before passing it to the user code, something that does not work well with user-defined CRUD operations, which are not constrained enough. For example, it would need to send the entire dataset: _in_ to implement _queries_, and _out_ to implement _updates_. 
+Stateful functions are incompatible with CRUD. CRUD, in the general sense, means unconstrained database access and is too broad and open-ended to be used effectively in Serverless environments (or any general Cloud development for that matter). 
 
-What we need are data storage patterns that have constrained input/output protocols. 
+![FaaS using CRUD](images/faas_with_crud.png)
 
-Here [event sourcing](https://martinfowler.com/eaaDev/EventSourcing.html) is a great fit where '_state in'_ is an event log, while '_state out'_ is any newly persisted events as a result of handling a command. Another great more constrained technique for state management is [CRDTs](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type), where '_state in'_ is a stream of deltas and/or state updates, and '_state out'_ is a stream of deltas and/or state updates. 
+Unconstrained database access means that the user function itself needs to manage the nitty-gritty details about data access and storage, and your are thereby moving all the operational concerns from the Serverless framework into the user function. Now it's hard for the framework to know the intention of each access: 
 
-Event sourcing and CRDTs are on the opposite sides of the state consistency spectrum, the former gives strong (ACID) consistency (through event logging) while the latter eventual/causal consistency. Together they give us a wide range of options for managing distributed state in a consistent fashion by allowing you to choose the optimal model for the specific use-case and data set[^7]. 
+* Is the operation a read, or a write?
+* Can it be cached?
+* Can consistency be relaxed, or is strong consistency needed?
+* Can operations proceed during partial failure? 
+
+Instead, if we understand these properties then we can make better decisions automatically. For example: 
+
+* Write ops are fast and read ops are slow: add more memory to DB
+* Reading immutable values: add caching
+* Writes must be serializable: add sharding, single writers per entity.
+
+We all know that constraints can be liberating and this holds true for Serverless as much as anything else. As a fact, one of the reasons for the success of Serverless is that it has such a constrained developer experience, which allows you as a developer to focus on the essence: the business logic for the function. For example, Serverless has a great model for abstracting over communication where all communication is translated to receiving and emitting events. 
+
+The question we asked ourselves was: can we abstract over state in the same way? Provide a clean and uniform abstraction of _state in_ and _state out_ for the function. This would allow the framework to manage durable state on behalf of the function, to monitor and manage it holistically across the whole system, and take more intelligent decisions.  
+
+![Abstracting over state](images/abstract_over_state.png)
+
+Unconstrained CRUD does not work in in this model since we can't pass the entire data set in and out of the function. What we need are data storage patterns that have constrained input/output protocols. Patterns that fall into this category are Key-Value, Event Sourcing, and CRDTs. 
+
+In [Event Sourcing](https://martinfowler.com/eaaDev/EventSourcing.html) _state in_ is the event log while _state out_ is any newly persisted events as a result of handling a command. 
+
+![Event Sourcing as data model](images/data_model_event_sourcing.png)
+
+In [CRDTs](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type) _state in_ is a stream of deltas and/or state updates, and _state out_ is a stream of deltas and/or state updates.  
+
+![CRDTs as data model](images/data_model_crdts.png)
+
+In Key-Value the _state out_ is the key and _state in_ the value.
+
+While most developers have worked with Key-Value stores, Event Sourcing and CRDTs might be a bit unfamiliar. What's interesting is that they fit an event-driven model vely well and while being on the opposite sides of the state consistency spectrum, with the former gives strong (ACID) consistency (through event logging) while the latter eventual/causal consistency. Together they give us a wide range of options for managing distributed state in a consistent fashion by allowing you to choose the optimal model for the specific use-case and data set[^7]. 
 
 
 # Expanding on the use-cases for Serverless
@@ -115,7 +145,7 @@ As Adzic et al. write in their paper ['Serverless computing: economic and archit
 
 > _"… serverless platforms today are useful for important (but not five-nines mission critical) tasks, where high-throughput is key, rather than very low latency, and where individual requests can be completed in a relatively short time window. The economics of hosting such tasks in a serverless environment make it a compelling way to reduce hosting costs significantly, and to speed up time to market for delivery of new features."_
 
-## New use-cases that CloudState can address
+## New use-cases that CloudState opens up for
 
 However, implementing traditional application development, microservices, stateful data pipelines, and general-purpose distributed system problems using stateless functions (FaaS) is very hard to do in a low-latency, performant, reliable way. 
 
