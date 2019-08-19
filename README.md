@@ -2,7 +2,12 @@
 
 Bringing _stateful_ services, fast data/streaming, and the power of reactive technologies to the Cloud Native ecosystem breaks down the final impediment standing in the way of a _Serverless platform for general-purpose application development_ — with true elastic scalability, high resilience, and global deployment, in the Kubernetes ecosystem. 
 
-The [CloudState](https://cloudstate.io) project takes on this challenge and paves the way for Serverless 2.0. CloudState's marriage of [Knative](https://cloud.google.com/knative/), [gRPC](https://grpc.io/), [Akka Cluster](https://doc.akka.io/docs/akka/current/index-cluster.html), and [GraalVM](https://www.graalvm.org/) on [Kubernetes](https://kubernetes.io/) allows applications to not only scale efficiently, but to manage distributed state reliably at scale while maintaining its global or local level of data consistency, opening up for a whole range of new addressable use-cases.
+The [CloudState](https://cloudstate.io) project takes on this challenge and paves the way for Serverless 2.0. CloudState is two things: 
+
+1. A standards effort: defining a specification, protocol between the user functions and the backend, and a TCK.
+2. A reference implementation: implementing the backend and a set of client API libraries in different languages.
+
+CloudState's reference implementation is leveraging [Knative](https://cloud.google.com/knative/), [gRPC](https://grpc.io/), [Akka Cluster](https://doc.akka.io/docs/akka/current/index-cluster.html), and [GraalVM](https://www.graalvm.org/) on [Kubernetes](https://kubernetes.io/), allowing applications to not only scale efficiently, but to manage distributed state reliably at scale while maintaining its global or local level of data consistency, opening up for a whole range of new addressable use-cases.
 
 Join us in making this vision a reality!
 
