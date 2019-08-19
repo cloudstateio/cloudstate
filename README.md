@@ -23,6 +23,7 @@ Join us in making this vision a reality!
     + [Kubernetes Operator](#kubernetes-operator)
     + [Support for Autoscaling](#support-for-autoscaling)
     + [Support for HTTP and JSON](#support-for-http-and-json)
+    + [Supported databases](#supported-databases)
 - [Client API](#client-api)
     + [JavaScript API](#javascript-api)
     + [Java API](#java-api)
@@ -311,7 +312,7 @@ At time of writing, the autoscaler only works in standalone mode, which uses one
 
 The Akka sidecar supports serving the gRPC user functions services both as gRPC, as well as using HTTP/JSON, using the [gRPC HTTP extensions](https://cloud.google.com/service-infrastructure/docs/service-management/reference/rpc/google.api##http).
 
-### Database support 
+### Database support
 
 CloudState is using [Akka Persistence](https://doc.akka.io/docs/akka/current/persistence.html) for the durable storage, which has support for a [wide range](https://index.scala-lang.org/search?topics=akka-persistence) of NoSQL and SQL databases. However, CloudState has the additional requirement of a Graal native image for the database. So far we have support for the  Cassandra distributed database, with more databases (for example Postgres) in the works.   
 
