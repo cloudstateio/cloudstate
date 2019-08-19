@@ -22,7 +22,7 @@ Join us in making this vision a reality!
     + [Common Intermediate Representation](#common-intermediate-representation)
     + [Kubernetes Operator](#kubernetes-operator)
     + [Support for Autoscaling](#support-for-autoscaling)
-    + [Support for HTTP/JSON](#support-for-http-json)
+    + [Support for HTTP and JSON](#support-for-http-and-json)
 - [Run CloudState](#run-cloudstate)
 - [Knative Integration](#knative-integration)
 - [GraalVM Integration](#graal-integration)
@@ -302,7 +302,7 @@ When an upgrade is detected, request rate based scaling decisions are also made,
 
 At time of writing, the autoscaler only works in standalone mode, which uses one deployment per user function. Support for Knatives one deployment per revision of a user function has not yet been implemented, nor has support in Knative to disable the Knative autoscaler when a custom deployer is used.
 
-### Support for HTTP/JSON
+### Support for HTTP and JSON
 
 The Akka sidecar supports serving the gRPC user functions services both as gRPC, as well as using HTTP/JSON, using the [gRPC HTTP extensions](https://cloud.google.com/service-infrastructure/docs/service-management/reference/rpc/google.api##http).
 
