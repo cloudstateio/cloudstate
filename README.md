@@ -1,6 +1,6 @@
 # CloudState - Next Generation Serverless
 
-_"We predict that serverless computing will grow to dominate the future of cloud computing."_
+> _"We predict that serverless computing will grow to dominate the future of cloud computing."_
 —Jonas et al, ['Cloud computing simplified: a Berkeley view on serverless computing'](https://arxiv.org/abs/1902.03383)
 
 Bringing _stateful_ services, fast data/streaming, and the power of reactive technologies to the Cloud Native ecosystem breaks down the final impediment standing in the way of a _Serverless platform for general-purpose application development_ — with true elastic scalability, high resilience, and global deployment, in the Kubernetes ecosystem. 
