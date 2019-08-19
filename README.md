@@ -319,7 +319,7 @@ The Akka sidecar supports serving the gRPC user functions services both as gRPC,
 
 ### Database support
 
-CloudState is using [Akka Persistence](https://doc.akka.io/docs/akka/current/persistence.html) for the durable storage, which has support for a [wide range](https://index.scala-lang.org/search?topics=akka-persistence) of NoSQL and SQL databases. However, CloudState has the additional requirement of a Graal native image for the database. So far we have support for the  Cassandra distributed database, with more databases (for example Postgres) in the works.   
+The CloudState Proxy Reference Implementation is using [Akka Persistence](https://doc.akka.io/docs/akka/current/persistence.html) for the durable storage, which has support for a [wide range](https://index.scala-lang.org/search?topics=akka-persistence) of NoSQL and SQL databases. That said, since it is compiled into a GraalVM native image, the database connection drivers need to be adapted. So far we have support for the Cassandra distributed database, with more databases (for example Postgres) in the works.   
 
 ---
 ## Client API
