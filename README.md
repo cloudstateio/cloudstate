@@ -4,8 +4,8 @@ Bringing _stateful_ services, fast data/streaming, and the power of reactive tec
 
 The [CloudState](https://cloudstate.io) project takes on this challenge and paves the way for Serverless 2.0 and consists of two things: 
 
-1. A standards effort: defining a specification, protocol between the user functions and the backend, and a TCK.
-2. A reference implementation: implementing the backend and a set of client API libraries in different languages.
+1. A standards effort — defining a specification, protocol between the user functions and the backend, and a TCK.
+2. A reference implementation — implementing the backend and a set of client API libraries in different languages.
 
 CloudState's reference implementation is leveraging [Knative](https://cloud.google.com/knative/), [gRPC](https://grpc.io/), [Akka Cluster](https://doc.akka.io/docs/akka/current/index-cluster.html), and [GraalVM](https://www.graalvm.org/) on [Kubernetes](https://kubernetes.io/), allowing applications to not only scale efficiently, but to manage distributed state reliably at scale while maintaining its global or local level of data consistency, opening up for a whole range of new addressable use-cases.
 
@@ -681,7 +681,14 @@ The operator should work on any Kubernetes distribution, we have tested on GKE w
 ---
 ## Get involved
 
-TODO: Google Groups, Twitter, etc.
+Are you interested in helping out making this vision a reality? We would love to have you! 
+All contributions are welcome: ideas, criticism, praise, code, bug fixes, docs, buzz, etc. 
+
+Our [mailing list](https://groups.google.com/forum/#!forum/cloudstate) is a good place to start with open ended discussions about CloudState. 
+
+The [GitHub issue tracker](https://github.com/cloudstateio/cloudstate/issues) is a good place to raise issues, including bug reports and feature requests.
+
+You can also [follow us on Twitter](https://twitter.com/CloudstateIO).
 
 ---
 ## Footnotes
