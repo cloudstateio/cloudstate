@@ -670,13 +670,7 @@ Implementation details:
 ---
 ## Current project status
 
-TODO: UPDATE
-
-We are actively working on a Proof of Concept for CloudState event sourcing. This document describes the PoC, how to run, test and develop it. This document will likely change frequently as the PoC progresses.
-
-Currently, we have the Akka CloudState event sourcing proxy component implemented and a JavaScript user function. We also have a Kubernetes operator that facilitates the deployment of these functions, with the Akka backend injected, using Cassandra as a persistent store for the journal.
-
-The operator should work on any Kubernetes distribution, we have tested on GKE with Kubernetes 1.11 and 1.12.
+TODO: Write an update or remove section
 
 ---
 ## Get involved
