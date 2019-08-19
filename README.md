@@ -23,6 +23,9 @@ Join us in making this vision a reality!
     + [Kubernetes Operator](#kubernetes-operator)
     + [Support for Autoscaling](#support-for-autoscaling)
     + [Support for HTTP and JSON](#support-for-http-and-json)
+- [Client API](#client-api)
+    + [JavaScript API](#javascript-api)
+    + [Java API](#java-api)
 - [Run CloudState](#run-cloudstate)
 - [Knative Integration](#knative-integration)
 - [GraalVM Integration](#graal-integration)
@@ -305,6 +308,21 @@ At time of writing, the autoscaler only works in standalone mode, which uses one
 ### Support for HTTP and JSON
 
 The Akka sidecar supports serving the gRPC user functions services both as gRPC, as well as using HTTP/JSON, using the [gRPC HTTP extensions](https://cloud.google.com/service-infrastructure/docs/service-management/reference/rpc/google.api##http).
+
+---
+## Client API
+
+TODO: introduction to client APIs, discuss gRPC protocol, polyglot, common features, etc.
+
+### JavaScript API
+
+TODO: add link to sample
+TODO: add general docs
+
+### Java API
+
+TODO: add link to sample
+TODO: add general docs
 
 ---
 ## Run CloudState
