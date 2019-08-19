@@ -2,7 +2,7 @@
 
 Bringing _stateful_ services, fast data/streaming, and the power of reactive technologies to the Cloud Native ecosystem breaks down the final impediment standing in the way of a _Serverless platform for general-purpose application development_ — with true elastic scalability, high resilience, and global deployment, in the Kubernetes ecosystem. 
 
-The [CloudState](https://cloudstate.io) project takes on this challenge and paves the way for Serverless 2.0. CloudState is two things: 
+The [CloudState](https://cloudstate.io) project takes on this challenge and paves the way for Serverless 2.0 and consists of two things: 
 
 1. A standards effort: defining a specification, protocol between the user functions and the backend, and a TCK.
 2. A reference implementation: implementing the backend and a set of client API libraries in different languages.
