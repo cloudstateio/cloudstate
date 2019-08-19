@@ -37,19 +37,19 @@ private[impl] object ReflectionHelper {
     } else member.getName
   }
 
-  case class InvocationContext[C <: Context](mainArgument: AnyRef, context: C)
+  final case class InvocationContext[C <: Context](mainArgument: AnyRef, context: C)
   trait ParameterHandler[C <: Context] extends (InvocationContext[C] => AnyRef)
   case object ContextParameterHandler extends ParameterHandler[Context] {
     override def apply(ctx: InvocationContext[Context]): AnyRef = ctx.context.asInstanceOf[AnyRef]
   }
-  case class MainArgumentParameterHandler[C <: Context](argumentType: Class[_]) extends ParameterHandler[C] {
+  final case class MainArgumentParameterHandler[C <: Context](argumentType: Class[_]) extends ParameterHandler[C] {
     override def apply(ctx: InvocationContext[C]): AnyRef = ctx.mainArgument
   }
-  case object EntityIdParameterHandler extends ParameterHandler[EntityContext] {
+  final case object EntityIdParameterHandler extends ParameterHandler[EntityContext] {
     override def apply(ctx: InvocationContext[EntityContext]): AnyRef = ctx.context.entityId()
   }
 
-  case class MethodParameter(method: Executable, param: Int) {
+  final case class MethodParameter(method: Executable, param: Int) {
     def parameterType: Class[_] = method.getParameterTypes()(param)
     def annotation[A <: Annotation: ClassTag] = method.getParameterAnnotations()(param)
       .find(a => implicitly[ClassTag[A]].runtimeClass.isInstance(a))
@@ -69,6 +69,4 @@ private[impl] object ReflectionHelper {
     }
     handlers.asInstanceOf[Array[ParameterHandler[C]]]
   }
-
-
 }

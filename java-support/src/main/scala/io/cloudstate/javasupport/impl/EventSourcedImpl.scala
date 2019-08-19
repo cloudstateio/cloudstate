@@ -56,7 +56,7 @@ class EventSourcedImpl(system: ActorSystem, service: StatefulService) extends Ev
             //c.id
             //c.name
             //Deserialize the c.payload
-            //Return the response as a stream if c.streamed is true, a rpely if not
+            //Return the response as a stream if c.streamed is true, a reply if not
             ???
           case InEmpty => Source.empty // FIXME Ignore?
         }
