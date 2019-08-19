@@ -26,6 +26,7 @@ Join us in making this vision a reality!
 - [Client API](#client-api)
     + [JavaScript API](#javascript-api)
     + [Java API](#java-api)
+- [Samples](#samples)
 - [Run CloudState](#run-cloudstate)
 - [Knative Integration](#knative-integration)
 - [GraalVM Integration](#graal-integration)
@@ -316,13 +317,17 @@ TODO: introduction to client APIs, discuss gRPC protocol, polyglot, common featu
 
 ### JavaScript API
 
-TODO: add link to sample
 TODO: add general docs
 
 ### Java API
 
-TODO: add link to sample
 TODO: add general docs
+
+
+---
+## Samples
+
+TODO: add links to samples
 
 ---
 ## Run CloudState
