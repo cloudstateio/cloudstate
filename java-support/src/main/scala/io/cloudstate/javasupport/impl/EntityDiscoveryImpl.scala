@@ -31,10 +31,10 @@ class EntityDiscoveryImpl(system: ActorSystem, service: StatefulService) extends
     system.log.info(s"Received discovery call from sidecar [${in.proxyName} ${in.proxyVersion}] supporting CloudState ${in.protocolMajorVersion}.${in.protocolMinorVersion}")
     system.log.debug(s"Supported sidecar entity types: ${in.supportedEntityTypes.mkString("[",",","]")}")
 
-    if ( false )/* TODO verify compatibility with in.protocolMajorVersion & in.protocolMinorVersion */
+    if ( false ) // TODO verify compatibility with in.protocolMajorVersion & in.protocolMinorVersion
       Future.failed(new Exception("Proxy version not compatible with library protocol support version")) // TODO how to handle if we have entity types not supported by the proxy?
     else {
-       Future.successful(EntitySpec(service.descriptors.toByteString, service.entities))
+      Future.successful(EntitySpec(service.descriptors.toByteString, service.entities))
     }
   }
   

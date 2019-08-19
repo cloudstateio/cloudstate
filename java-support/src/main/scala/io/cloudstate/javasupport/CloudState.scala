@@ -19,16 +19,21 @@ package io.cloudstate.javasupport
 import java.util.Objects.requireNonNull
 import java.util.concurrent.CompletionStage
 
+import com.typesafe.config.{Config, ConfigFactory}
+
 import akka.Done
 import akka.actor.ActorSystem
 import akka.http.scaladsl._
 import akka.http.scaladsl.model._
+import akka.http.scaladsl.settings.ServerSettings
 import akka.stream.{ActorMaterializer, Materializer}
-import com.typesafe.config.{Config, ConfigFactory}
-import io.cloudstate.crdt.CrdtHandler
+
+import io.cloudstate.javasupport.impl.{CrdtImpl, EntityDiscoveryImpl, EventSourcedImpl, StatelessFunctionImpl}
+
 import io.cloudstate.entity.EntityDiscoveryHandler
 import io.cloudstate.eventsourced.EventSourcedHandler
-import io.cloudstate.javasupport.impl.{CrdtImpl, EntityDiscoveryImpl, EventSourcedImpl}
+import io.cloudstate.crdt.CrdtHandler
+import io.cloudstate.function.StatelessFunctionHandler
 
 import scala.compat.java8.FutureConverters
 import scala.concurrent.Future
@@ -68,6 +73,7 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
   private[this] final val eventSourceImpl = new EventSourcedImpl(system, service)
   private[this] final val entityDiscoveryImpl = new EntityDiscoveryImpl(system, service)
   private[this] final val crdtImpl = new CrdtImpl(system, service)
+  private[this] final val statelessFunctionImpl = new StatelessFunctionImpl(system, service)
 
   def this(_service: StatefulService) {
     this(
@@ -83,6 +89,7 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
   private[this] def createRoutes(): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     CrdtHandler.partial(crdtImpl) orElse
     EventSourcedHandler.partial(eventSourceImpl) orElse
+    StatelessFunctionHandler.partial(statelessFunctionImpl) orElse
     EntityDiscoveryHandler.partial(entityDiscoveryImpl) orElse
     { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }
   }

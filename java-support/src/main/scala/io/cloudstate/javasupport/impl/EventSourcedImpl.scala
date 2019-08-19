@@ -17,6 +17,10 @@
 package io.cloudstate.javasupport.impl
 
 import io.cloudstate.eventsourced._
+import io.cloudstate.eventsourced.EventSourcedStreamIn.Message.{Empty => InEmpty, Init => InInit, Event => InEvent, Command => InCommand}
+import io.cloudstate.eventsourced.EventSourcedStreamOut.Message.{Empty => OutEmpty, Reply => OutReply, Failure => OutFailure}
+
+import akka.stream.scaladsl.Source
 import akka.actor.ActorSystem
 import io.cloudstate.javasupport.StatefulService
 
@@ -34,7 +38,27 @@ class EventSourcedImpl(system: ActorSystem, service: StatefulService) extends Ev
    * arrived as events when the event stream was being replayed on load.
    */
   override def handle(in: akka.stream.scaladsl.Source[io.cloudstate.eventsourced.EventSourcedStreamIn, akka.NotUsed]): akka.stream.scaladsl.Source[io.cloudstate.eventsourced.EventSourcedStreamOut, akka.NotUsed] =
-    in.map {
-      req => ???
+    in.flatMapConcat {
+      _.message match {
+          case InInit(i) =>
+            //Look up service by i.serviceName
+            //Provide the i.entityId
+            //Deserialize the i.snapshot
+            //Pass the snapshot to the user's service
+            ???
+          case InEvent(e) =>
+            //Sanity-check the e.sequence number against the previous
+            //Deserialize the e.payload event
+            //Pass the payload event to the user's service
+            ???
+          case InCommand(c) =>
+            //Lookup c.entityId
+            //c.id
+            //c.name
+            //Deserialize the c.payload
+            //Return the response as a stream if c.streamed is true, a rpely if not
+            ???
+          case InEmpty => Source.empty // FIXME Ignore?
+        }
     }
 }
