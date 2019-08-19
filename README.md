@@ -2,7 +2,7 @@
 
 Bringing _stateful_ services, fast data/streaming, and the power of reactive technologies to the Cloud Native ecosystem breaks down the final impediment standing in the way of a _Serverless platform for general-purpose application development_ — with true elastic scalability, high resilience, and global deployment, in the Kubernetes ecosystem. 
 
-The [CloudState](https://cloudstate.io) project takes on this challenge and paves the way for Serverless 2.0. CloudState's marriage of Knative, gRPC, Akka Cluster, and GraalVM on Kubernetes allows applications to not only scale efficiently, but to manage distributed state reliably at scale while maintaining its global or local level of data consistency, opening up for a whole range of new addressable use-cases.
+The [CloudState](https://cloudstate.io) project takes on this challenge and paves the way for Serverless 2.0. CloudState's marriage of [Knative](https://cloud.google.com/knative/), [gRPC](https://grpc.io/), [Akka Cluster](https://doc.akka.io/docs/akka/current/index-cluster.html), and [GraalVM](https://www.graalvm.org/) on [Kubernetes](https://kubernetes.io/) allows applications to not only scale efficiently, but to manage distributed state reliably at scale while maintaining its global or local level of data consistency, opening up for a whole range of new addressable use-cases.
 
 Join us in making this vision a reality!
 
@@ -32,6 +32,7 @@ Join us in making this vision a reality!
 - [GraalVM Integration](#graal-integration)
 - [Testing Strategy](#testing-strategy)
 - [Current project status](#current-project-status)
+- [Get involved](#get-involved)
 
 ---
 ## Why CloudState?
@@ -51,7 +52,7 @@ Join us in making this vision a reality!
 _"We predict that serverless computing will grow to dominate the future of cloud computing."_
 —Jonas et al, ['Cloud computing simplified: a Berkeley view on serverless computing'](https://arxiv.org/abs/1902.03383)
 
-Bringing _stateful_ microservices, streaming, and the power of _reactive_ technologies to the Cloud Native ecosystem breaks down the final impediment standing in the way of a _Serverless platform for general-purpose application development_, true elastic scalability, and global deployment in the Kubernetes ecosystem. The marriage of Knative and Akka Cluster on Kubernetes allows applications to not only scale efficiently, but to manage distributed state reliably at scale while maintaining its global or local level of data consistency, opening up for a whole range of new addressable use-cases.
+Bringing _stateful_ microservices, streaming, and the power of _reactive_ technologies to the Cloud Native ecosystem breaks down the final impediment standing in the way of a _Serverless platform for general-purpose application development_, true elastic scalability, and global deployment in the Kubernetes ecosystem. The marriage of [Knative](https://cloud.google.com/knative/), [gRPC](https://grpc.io/), [Akka Cluster](https://doc.akka.io/docs/akka/current/index-cluster.html), and [GraalVM](https://www.graalvm.org/) on [Kubernetes](https://kubernetes.io/) allows applications to not only scale efficiently, but to manage distributed state reliably at scale while maintaining its global or local level of data consistency, opening up for a whole range of new addressable use-cases.
 
 #### What does Serverless mean?
 
@@ -310,6 +311,10 @@ At time of writing, the autoscaler only works in standalone mode, which uses one
 
 The Akka sidecar supports serving the gRPC user functions services both as gRPC, as well as using HTTP/JSON, using the [gRPC HTTP extensions](https://cloud.google.com/service-infrastructure/docs/service-management/reference/rpc/google.api##http).
 
+### Database support 
+
+CloudState is using [Akka Persistence](https://doc.akka.io/docs/akka/current/persistence.html) for the durable storage, which has support for a [wide range](https://index.scala-lang.org/search?topics=akka-persistence) of NoSQL and SQL databases. However, CloudState has the additional requirement of a Graal native image for the database. So far we have support for the  Cassandra distributed database, with more databases (for example Postgres) in the works.   
+
 ---
 ## Client API
 
@@ -322,7 +327,6 @@ TODO: add general docs
 ### Java API
 
 TODO: add general docs
-
 
 ---
 ## Samples
@@ -667,6 +671,11 @@ We are actively working on a Proof of Concept for CloudState event sourcing. Thi
 Currently, we have the Akka CloudState event sourcing proxy component implemented and a JavaScript user function. We also have a Kubernetes operator that facilitates the deployment of these functions, with the Akka backend injected, using Cassandra as a persistent store for the journal.
 
 The operator should work on any Kubernetes distribution, we have tested on GKE with Kubernetes 1.11 and 1.12.
+
+---
+## Get involved
+
+TODO: Google Groups, Twitter, etc.
 
 ---
 ## Footnotes
