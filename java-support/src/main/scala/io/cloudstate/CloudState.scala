@@ -105,5 +105,9 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
 
 // This class will describe the stateless service and is created and passed by the user into a CloudState instance.
 abstract class StatefulService {
+  import com.google.protobuf.DescriptorProtos.FileDescriptorSet
+  import io.cloudstate.entity.Entity
   // FIXME add all User Function configuration to this class
+  def descriptors: FileDescriptorSet = FileDescriptorSet.getDefaultInstance // FIXME have this provided
+  def entities: Seq[Entity] = Nil // FIXME have this provided
 }
