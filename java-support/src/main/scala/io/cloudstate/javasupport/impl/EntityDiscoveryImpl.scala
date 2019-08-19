@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package io.cloudstate.impl
+package io.cloudstate.javasupport.impl
 
-import io.cloudstate.StatefulService
 import io.cloudstate.entity._
 
 import scala.concurrent.Future
 
 import akka.actor.ActorSystem
+import io.cloudstate.javasupport.StatefulService
 
 class EntityDiscoveryImpl(system: ActorSystem, service: StatefulService) extends EntityDiscovery {
   /**

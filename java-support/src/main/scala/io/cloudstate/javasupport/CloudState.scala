@@ -14,27 +14,24 @@
  * limitations under the License.
  */
 
-package io.cloudstate
+package io.cloudstate.javasupport
 
-import io.cloudstate.impl.{EventSourcedImpl, EntityDiscoveryImpl, CrdtImpl}
-
-import com.typesafe.config.{Config, ConfigFactory}
+import java.util.Objects.requireNonNull
+import java.util.concurrent.CompletionStage
 
 import akka.Done
 import akka.actor.ActorSystem
-import akka.stream.{ActorMaterializer, Materializer}
 import akka.http.scaladsl._
 import akka.http.scaladsl.model._
-import akka.http.scaladsl.settings.ServerSettings
-import java.util.Objects.requireNonNull
+import akka.stream.{ActorMaterializer, Materializer}
+import com.typesafe.config.{Config, ConfigFactory}
+import io.cloudstate.crdt.CrdtHandler
+import io.cloudstate.entity.EntityDiscoveryHandler
+import io.cloudstate.eventsourced.EventSourcedHandler
+import io.cloudstate.javasupport.impl.{CrdtImpl, EntityDiscoveryImpl, EventSourcedImpl}
 
-import io.cloudstate.entity.{EntityDiscoveryHandler, EntityDiscovery}
-import io.cloudstate.eventsourced.{EventSourcedHandler, EventSourced}
-import io.cloudstate.crdt.{CrdtHandler, Crdt}
-
-import scala.concurrent.Future
-import java.util.concurrent.CompletionStage
 import scala.compat.java8.FutureConverters
+import scala.concurrent.Future
 
 object CloudState {
   final case class Configuration(userFunctionInterface: String, userFunctionPort: Int) {
