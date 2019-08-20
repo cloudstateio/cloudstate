@@ -49,6 +49,8 @@ def common: Seq[Setting[_]] = Seq(
   // back to just our source directory.
   PB.protoSources in Compile := Seq(),
   PB.protoSources in Test := Seq(),
+  // Akka gRPC overrides the default ScalaPB setting including the file base name, let's override it right back.
+  akkaGrpcCodeGeneratorSettings := Seq(),
 
   excludeFilter in headerResources := HiddenFileFilter || GlobFilter("reflection.proto")
 )
@@ -268,13 +270,14 @@ lazy val `proxy-core` = (project in file("proxy/core"))
 
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "proxy", baseDir / "frontend", (sourceDirectory in Compile).value / "protos")
+      Seq(baseDir / "proxy", baseDir / "frontend", baseDir / "protocol", (sourceDirectory in Compile).value / "protos")
     },
 
     // This adds the test/protos dir and enables the ProtocPlugin to generate protos in the Test scope
     inConfig(Test)(
       sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
         PB.protoSources ++= Seq(sourceDirectory.value / "protos"),
+        akkaGrpcCodeGeneratorSettings := Seq(),
         akkaGrpcGeneratedSources := Seq(AkkaGrpc.Server, AkkaGrpc.Client),
       )
     ),
@@ -383,7 +386,8 @@ lazy val `java-support` = (project in file("java-support"))
   .enablePlugins(AkkaGrpcPlugin)
   .settings(
     name := "java-support",
-
+    common,
+    
     libraryDependencies ++= Seq(
       // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
       "io.grpc"                       % "grpc-core"                          % GrpcJavaVersion,
@@ -413,7 +417,7 @@ lazy val `java-support` = (project in file("java-support"))
 
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "frontend")
+      Seq(baseDir / "protocol")
     },
   )
 
@@ -494,7 +498,7 @@ lazy val `tck` = (project in file("tck"))
 
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "proxy")
+      Seq(baseDir / "proxy", baseDir / "protocol")
     },
 
     fork in test := false,

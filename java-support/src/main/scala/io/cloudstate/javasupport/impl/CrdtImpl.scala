@@ -16,7 +16,7 @@
 
 package io.cloudstate.javasupport.impl
 
-import io.cloudstate.crdt._
+import io.cloudstate.protocol.crdt._
 import akka.actor.ActorSystem
 import io.cloudstate.javasupport.StatefulService
 
@@ -29,5 +29,5 @@ class CrdtImpl(system: ActorSystem, service: StatefulService) extends Crdt {
    *  The user function must respond with one reply per command in. They do not necessarily have to be sent in the same
    * order that the commands were sent, the command ID is used to correlate commands to replies.
    */
-  def handle(in: akka.stream.scaladsl.Source[io.cloudstate.crdt.CrdtStreamIn, akka.NotUsed]): akka.stream.scaladsl.Source[io.cloudstate.crdt.CrdtStreamOut, akka.NotUsed] = ???
+  def handle(in: akka.stream.scaladsl.Source[CrdtStreamIn, akka.NotUsed]): akka.stream.scaladsl.Source[CrdtStreamOut, akka.NotUsed] = ???
 }

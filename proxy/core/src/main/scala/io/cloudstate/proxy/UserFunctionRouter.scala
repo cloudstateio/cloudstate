@@ -3,7 +3,7 @@ package io.cloudstate.proxy
 import akka.NotUsed
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Sink, Source}
-import io.cloudstate.entity.{ClientAction, EntityDiscovery, Forward, SideEffect, UserFunctionError}
+import io.cloudstate.protocol.entity.{ClientAction, EntityDiscovery, Forward, SideEffect, UserFunctionError}
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
 

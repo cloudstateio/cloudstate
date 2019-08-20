@@ -23,10 +23,8 @@ package cloudstate;
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/descriptor.proto";
-// This is needed to ensure that the FieldOptions are extended when this file is loaded.
-import "cloudstate/entitykey.proto";
 
-option java_package = "io.cloudstate.entity";
+option java_package = "io.cloudstate.protocol";
 
 // A reply to the sender.
 message Reply {

@@ -13,8 +13,8 @@ import com.google.protobuf.ByteString
 import com.google.protobuf.any.{Any => ProtoAny}
 import com.google.protobuf.empty.Empty
 import com.typesafe.config.{Config, ConfigFactory}
-import io.cloudstate.crdt._
-import io.cloudstate.entity._
+import io.cloudstate.protocol.crdt._
+import io.cloudstate.protocol.entity._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import org.scalatest.concurrent.Eventually
 import org.scalatest.time.{Millis, Seconds, Span}

@@ -5,7 +5,7 @@
 # Delete and recreate the proto directory
 rm -rf ./proto
 mkdir -p ./proto
-cp -r ../protocols/frontend/* ./proto/
+cp -r ../protocols/frontend/* ../protocols/protocol/* ./proto/
 
 # Generate the protobuf bundle and typescript definitions
 pbjs -t static-module -w commonjs -o ./proto/protobuf-bundle.js -p ./proto -p ./protoc/include ./proto/cloudstate/*.proto

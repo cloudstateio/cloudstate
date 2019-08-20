@@ -20,9 +20,9 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props, SupervisorStrategy, Ter
 import com.google.protobuf.ByteString
 import io.cloudstate.proxy.eventsourced.EventSourcedEntity.{Configuration, Stop}
 import Warmup.Ready
-import io.cloudstate.entity.{ClientAction, Reply}
-import io.cloudstate.eventsourced.{EventSourcedReply, EventSourcedStreamIn, EventSourcedStreamOut}
-import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionCommand, UserFunctionReply}
+import io.cloudstate.protocol.entity.{ClientAction, Reply}
+import io.cloudstate.protocol.event_sourced.{EventSourcedReply, EventSourcedStreamIn, EventSourcedStreamOut}
+import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.eventsourced.EventSourcedEntity
 
 import scala.concurrent.duration._

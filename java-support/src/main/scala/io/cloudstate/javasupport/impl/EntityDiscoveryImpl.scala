@@ -16,7 +16,7 @@
 
 package io.cloudstate.javasupport.impl
 
-import io.cloudstate.entity._
+import io.cloudstate.protocol.entity._
 
 import scala.concurrent.Future
 
@@ -27,7 +27,7 @@ class EntityDiscoveryImpl(system: ActorSystem, service: StatefulService) extends
   /**
    * Discover what entities the user function wishes to serve.
    */
-  override def discover(in: io.cloudstate.entity.ProxyInfo): scala.concurrent.Future[io.cloudstate.entity.EntitySpec] = {
+  override def discover(in: ProxyInfo): scala.concurrent.Future[EntitySpec] = {
     system.log.info(s"Received discovery call from sidecar [${in.proxyName} ${in.proxyVersion}] supporting CloudState ${in.protocolMajorVersion}.${in.protocolMinorVersion}")
     system.log.debug(s"Supported sidecar entity types: ${in.supportedEntityTypes.mkString("[",",","]")}")
 
@@ -44,7 +44,7 @@ class EntityDiscoveryImpl(system: ActorSystem, service: StatefulService) extends
    * isn't supported, or attempted to forward to an entity that doesn't exist, etc. These messages
    * should be logged clearly for debugging purposes.
    */
-  override def reportError(in: io.cloudstate.entity.UserFunctionError): scala.concurrent.Future[com.google.protobuf.empty.Empty] = {
+  override def reportError(in: UserFunctionError): scala.concurrent.Future[com.google.protobuf.empty.Empty] = {
     system.log.error(s"Error reported from sidecar: ${in.message}")
     Future.successful(com.google.protobuf.empty.Empty()) // TODO Cache instance
   }

@@ -27,8 +27,8 @@ import akka.stream.scaladsl._
 import akka.stream.{Materializer, OverflowStrategy}
 import akka.util.Timeout
 import com.google.protobuf.any.{Any => pbAny}
-import io.cloudstate.entity._
-import io.cloudstate.eventsourced._
+import io.cloudstate.protocol.entity._
+import io.cloudstate.protocol.event_sourced._
 import io.cloudstate.proxy.ConcurrencyEnforcer.{Action, ActionCompleted}
 import io.cloudstate.proxy.StatsCollector
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}

@@ -20,20 +20,17 @@ import java.util.Objects.requireNonNull
 import java.util.concurrent.CompletionStage
 
 import com.typesafe.config.{Config, ConfigFactory}
-
 import akka.Done
 import akka.actor.ActorSystem
 import akka.http.scaladsl._
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.settings.ServerSettings
 import akka.stream.{ActorMaterializer, Materializer}
-
-import io.cloudstate.javasupport.impl.{CrdtImpl, EntityDiscoveryImpl, EventSourcedImpl, StatelessFunctionImpl}
-
-import io.cloudstate.entity.EntityDiscoveryHandler
-import io.cloudstate.eventsourced.EventSourcedHandler
-import io.cloudstate.crdt.CrdtHandler
-import io.cloudstate.function.StatelessFunctionHandler
+import io.cloudstate.javasupport.impl.{CrdtImpl, EntityDiscoveryImpl, EventSourcedImpl}
+import io.cloudstate.protocol.entity.{Entity, EntityDiscoveryHandler}
+import io.cloudstate.protocol.event_sourced.EventSourcedHandler
+import io.cloudstate.protocol.crdt.CrdtHandler
+import io.cloudstate.protocol.function.StatelessFunctionHandler
 
 import scala.compat.java8.FutureConverters
 import scala.concurrent.Future
@@ -73,7 +70,6 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
   private[this] final val eventSourceImpl = new EventSourcedImpl(system, service)
   private[this] final val entityDiscoveryImpl = new EntityDiscoveryImpl(system, service)
   private[this] final val crdtImpl = new CrdtImpl(system, service)
-  private[this] final val statelessFunctionImpl = new StatelessFunctionImpl(system, service)
 
   def this(_service: StatefulService) {
     this(
@@ -89,7 +85,6 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
   private[this] def createRoutes(): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     CrdtHandler.partial(crdtImpl) orElse
     EventSourcedHandler.partial(eventSourceImpl) orElse
-    StatelessFunctionHandler.partial(statelessFunctionImpl) orElse
     EntityDiscoveryHandler.partial(entityDiscoveryImpl) orElse
     { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }
   }
@@ -110,7 +105,6 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
 // This class will describe the stateless service and is created and passed by the user into a CloudState instance.
 abstract class StatefulService {
   import com.google.protobuf.DescriptorProtos.FileDescriptorSet
-  import io.cloudstate.entity.Entity
   // FIXME add all User Function configuration to this class
   def descriptors: FileDescriptorSet = FileDescriptorSet.getDefaultInstance // FIXME have this provided
   def entities: Seq[Entity] = Nil // FIXME have this provided

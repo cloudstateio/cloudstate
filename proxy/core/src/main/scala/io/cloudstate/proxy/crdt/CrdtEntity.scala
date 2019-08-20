@@ -11,8 +11,8 @@ import akka.cluster.ddata._
 import akka.stream.{Materializer, OverflowStrategy}
 import akka.stream.scaladsl.{Keep, Sink, Source}
 import akka.util.Timeout
-import io.cloudstate.crdt._
-import io.cloudstate.entity.{ClientAction, Command, EntityDiscovery, Failure, StreamCancelled, UserFunctionError}
+import io.cloudstate.protocol.crdt._
+import io.cloudstate.protocol.entity.{ClientAction, Command, EntityDiscovery, Failure, StreamCancelled, UserFunctionError}
 import io.cloudstate.proxy.crdt.WireTransformer.CrdtChange
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 

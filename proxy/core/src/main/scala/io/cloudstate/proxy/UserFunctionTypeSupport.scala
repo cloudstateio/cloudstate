@@ -4,8 +4,8 @@ import akka.NotUsed
 import akka.stream.scaladsl.Flow
 import com.google.protobuf.Descriptors.{FieldDescriptor, MethodDescriptor, ServiceDescriptor}
 import com.google.protobuf.{ByteString, DynamicMessage, descriptor => ScalaPBDescriptorProtos}
-import io.cloudstate.entity.Entity
-import io.cloudstate.entitykey.EntitykeyProto
+import io.cloudstate.protocol.entity.Entity
+import io.cloudstate.entity_key.EntityKeyProto
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionCommand, UserFunctionReply}
 
 import scala.collection.JavaConverters._
@@ -63,7 +63,7 @@ final class EntityMethodDescriptor(val method: MethodDescriptor) {
   }
 
   private val fields = method.getInputType.getFields.iterator.asScala.
-    filter(field => EntitykeyProto.entityKey.get(convertFieldOptions(field))).
+    filter(field => EntityKeyProto.entityKey.get(convertFieldOptions(field))).
     toArray.sortBy(_.getIndex)
 
   if (fields.isEmpty) {

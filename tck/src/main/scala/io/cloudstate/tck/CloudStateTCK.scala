@@ -38,11 +38,11 @@ import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpMethods, HttpProtocols, HttpRequest, HttpResponse, StatusCodes}
 import akka.http.scaladsl.unmarshalling._
-import io.cloudstate.entity._
-import com.example.shoppingcart._
+import io.cloudstate.protocol.entity._
+import com.example.shoppingcart.shoppingcart._
 import akka.testkit.TestProbe
 import com.google.protobuf.empty.Empty
-import io.cloudstate.eventsourced.{EventSourced, EventSourcedClient, EventSourcedHandler, EventSourcedInit, EventSourcedReply, EventSourcedStreamIn, EventSourcedStreamOut}
+import io.cloudstate.protocol.event_sourced.{EventSourced, EventSourcedClient, EventSourcedHandler, EventSourcedInit, EventSourcedReply, EventSourcedStreamIn, EventSourcedStreamOut}
 
 object CloudStateTCK {
   private[this] final val PROXY   = "proxy"
@@ -397,7 +397,7 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     }
 
     "verify that the backend supports the ServerReflection API" in {
-      import grpc.reflection.v1alpha._
+      import grpc.reflection.v1alpha.reflection._
       import ServerReflectionRequest.{ MessageRequest => In}
       import ServerReflectionResponse.{ MessageResponse => Out}
 

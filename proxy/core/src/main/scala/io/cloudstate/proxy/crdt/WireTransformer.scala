@@ -4,7 +4,7 @@ import akka.cluster.ClusterEvent.CurrentClusterState
 import akka.cluster.MemberStatus
 import akka.cluster.ddata.LWWRegister.Clock
 import akka.cluster.ddata._
-import io.cloudstate.crdt._
+import io.cloudstate.protocol.crdt._
 import com.google.protobuf.any.{Any => ProtoAny}
 
 /**

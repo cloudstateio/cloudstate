@@ -241,7 +241,7 @@ module.exports = class EventSourcedServices {
       path.join(__dirname, "..", "proto"),
       path.join(__dirname, "..", "protoc", "include")
     ];
-    const packageDefinition = protoLoader.loadSync(path.join("cloudstate", "eventsourced.proto"), {
+    const packageDefinition = protoLoader.loadSync(path.join("cloudstate", "event_sourced.proto"), {
       includeDirs: includeDirs
     });
     const grpcDescriptor = grpc.loadPackageDefinition(packageDefinition);

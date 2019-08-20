@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-import "cloudstate/entitykey.proto";
+import "cloudstate/entity_key.proto";
 import "google/protobuf/empty.proto";
 
 package com.example.crdts;

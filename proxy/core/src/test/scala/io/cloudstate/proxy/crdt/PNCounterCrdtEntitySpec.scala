@@ -1,7 +1,7 @@
 package io.cloudstate.proxy.crdt
 
 import akka.cluster.ddata.{PNCounter, PNCounterKey}
-import io.cloudstate.crdt._
+import io.cloudstate.protocol.crdt._
 
 import scala.concurrent.duration._
 

@@ -18,12 +18,21 @@
 
 syntax = "proto3";
 
-import "google/protobuf/descriptor.proto";
+package cloudstate.proxy;
 
-package cloudstate;
+import "scalapb/scalapb.proto";
 
-option java_package = "io.cloudstate.entitykey";
+option java_package = "io.cloudstate.proxy.crdt.protobufs";
+option (scalapb.options) = {
+    flat_package: true
+};
 
-extend google.protobuf.FieldOptions {
-    bool entity_key = 50002;
+message CrdtVote {
+    repeated CrdtVoteEntry entries = 1;
+}
+
+message CrdtVoteEntry {
+    string address = 1;
+    sint64 uid = 2;
+    bytes value = 3;
 }

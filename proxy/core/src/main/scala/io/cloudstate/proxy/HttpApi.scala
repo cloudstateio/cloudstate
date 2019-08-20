@@ -28,7 +28,8 @@ import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.stream.Materializer
 import akka.parboiled2.util.Base64
-import com.google.api.{AnnotationsProto, HttpRule}
+import com.google.api.annotations.AnnotationsProto
+import com.google.api.http.HttpRule
 import com.google.protobuf.{DynamicMessage, MessageOrBuilder, ByteString => ProtobufByteString}
 import com.google.protobuf.Descriptors.{Descriptor, EnumValueDescriptor, FieldDescriptor, MethodDescriptor}
 import com.google.protobuf.{descriptor => ScalaPBDescriptorProtos}
@@ -38,7 +39,7 @@ import com.google.protobuf.Descriptors.FieldDescriptor.JavaType
 import java.lang.{Boolean => JBoolean, Double => JDouble, Float => JFloat, Integer => JInteger, Long => JLong, Short => JShort}
 
 import com.google.protobuf.{ListValue, Struct, Value}
-import io.cloudstate.entity.{ClientAction, EntityDiscovery, Failure, Reply, UserFunctionError}
+import io.cloudstate.protocol.entity.{ClientAction, EntityDiscovery, Failure, Reply, UserFunctionError}
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
 

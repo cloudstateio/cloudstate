@@ -10,8 +10,8 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
-import io.cloudstate.entity.Entity
-import io.cloudstate.eventsourced.EventSourcedClient
+import io.cloudstate.protocol.entity.Entity
+import io.cloudstate.protocol.event_sourced.EventSourcedClient
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 

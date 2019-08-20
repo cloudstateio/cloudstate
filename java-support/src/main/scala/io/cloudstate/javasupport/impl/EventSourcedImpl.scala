@@ -16,9 +16,9 @@
 
 package io.cloudstate.javasupport.impl
 
-import io.cloudstate.eventsourced._
-import io.cloudstate.eventsourced.EventSourcedStreamIn.Message.{Empty => InEmpty, Init => InInit, Event => InEvent, Command => InCommand}
-import io.cloudstate.eventsourced.EventSourcedStreamOut.Message.{Empty => OutEmpty, Reply => OutReply, Failure => OutFailure}
+import io.cloudstate.protocol.event_sourced._
+import io.cloudstate.protocol.event_sourced.EventSourcedStreamIn.Message.{Empty => InEmpty, Init => InInit, Event => InEvent, Command => InCommand}
+import io.cloudstate.protocol.event_sourced.EventSourcedStreamOut.Message.{Empty => OutEmpty, Reply => OutReply, Failure => OutFailure}
 
 import akka.stream.scaladsl.Source
 import akka.actor.ActorSystem
@@ -37,7 +37,7 @@ class EventSourcedImpl(system: ActorSystem, service: StatefulService) extends Ev
    * persisted the entity should handle itself, applying them to its own state, as if they had
    * arrived as events when the event stream was being replayed on load.
    */
-  override def handle(in: akka.stream.scaladsl.Source[io.cloudstate.eventsourced.EventSourcedStreamIn, akka.NotUsed]): akka.stream.scaladsl.Source[io.cloudstate.eventsourced.EventSourcedStreamOut, akka.NotUsed] =
+  override def handle(in: akka.stream.scaladsl.Source[EventSourcedStreamIn, akka.NotUsed]): akka.stream.scaladsl.Source[EventSourcedStreamOut, akka.NotUsed] =
     in.flatMapConcat {
       _.message match {
           case InInit(i) =>

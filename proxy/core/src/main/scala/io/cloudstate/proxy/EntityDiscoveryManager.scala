@@ -29,10 +29,9 @@ import akka.grpc.GrpcClientSettings
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.typesafe.config.Config
-import io.cloudstate.entity._
-import io.cloudstate.crdt.Crdt
-import io.cloudstate.eventsourced.EventSourced
-import io.cloudstate.function.StatelessFunction
+import io.cloudstate.protocol.entity._
+import io.cloudstate.protocol.crdt.Crdt
+import io.cloudstate.protocol.event_sourced.EventSourced
 import io.cloudstate.proxy.StatsCollector.StatsCollectorSettings
 import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
 import io.cloudstate.proxy.ConcurrencyEnforcer.ConcurrencyEnforcerSettings
