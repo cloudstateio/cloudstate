@@ -26,7 +26,7 @@ import akka.http.scaladsl._
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.settings.ServerSettings
 import akka.stream.{ActorMaterializer, Materializer}
-import io.cloudstate.javasupport.impl.{CrdtImpl, EntityDiscoveryImpl, EventSourcedImpl}
+import io.cloudstate.javasupport.impl.{CrdtImpl, EntityDiscoveryImpl, EventSourcedImpl, AnySupport}
 import io.cloudstate.protocol.entity.{Entity, EntityDiscoveryHandler}
 import io.cloudstate.protocol.event_sourced.EventSourcedHandler
 import io.cloudstate.protocol.crdt.CrdtHandler
@@ -67,10 +67,6 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
 
   private[this] final val configuration = new CloudState.Configuration(system.settings.config.getConfig("cloudstate"))
 
-  private[this] final val eventSourceImpl = new EventSourcedImpl(system, service)
-  private[this] final val entityDiscoveryImpl = new EntityDiscoveryImpl(system, service)
-  private[this] final val crdtImpl = new CrdtImpl(system, service)
-
   def this(_service: StatefulService) {
     this(
       {
@@ -83,6 +79,10 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
   }
 
   private[this] def createRoutes(): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+    val eventSourceImpl     = new EventSourcedImpl(system, service)
+    val entityDiscoveryImpl = new EntityDiscoveryImpl(system, service)
+    val crdtImpl            = new CrdtImpl(system, service)
+
     CrdtHandler.partial(crdtImpl) orElse
     EventSourcedHandler.partial(eventSourceImpl) orElse
     EntityDiscoveryHandler.partial(entityDiscoveryImpl) orElse
@@ -108,4 +108,5 @@ abstract class StatefulService {
   // FIXME add all User Function configuration to this class
   def descriptors: FileDescriptorSet = FileDescriptorSet.getDefaultInstance // FIXME have this provided
   def entities: Seq[Entity] = Nil // FIXME have this provided
+  final val anySupport = new AnySupport(Nil, getClass.getClassLoader) // FIXME implement. use the ActorSystem's DynamicAccess.classLoader?
 }

@@ -211,4 +211,4 @@ class AnySupport(descriptors: Seq[Descriptors.FileDescriptor], classLoader: Clas
 
 }
 
-case class SerializationException(msg: String, cause: Throwable = null) extends RuntimeException(msg, cause)
+final case class SerializationException(msg: String, cause: Throwable = null) extends RuntimeException(msg, cause)
