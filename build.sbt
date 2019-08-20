@@ -419,6 +419,15 @@ lazy val `java-support` = (project in file("java-support"))
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "protocol")
     },
+    inConfig(Test)(sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
+      PB.protoSources ++= {
+        val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+        Seq(baseDir / "frontend", baseDir / "example")
+      },
+      PB.targets := Seq(
+        PB.gens.java -> sourceManaged.value,
+      )
+    ))
   )
 
 lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
