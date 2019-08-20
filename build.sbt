@@ -407,7 +407,8 @@ lazy val `java-support` = (project in file("java-support"))
       "com.typesafe.akka"             %% "akka-stream-testkit"               % AkkaVersion % Test,
       "com.typesafe.akka"             %% "akka-http-testkit"                 % AkkaHttpVersion % Test,
       "com.thesamet.scalapb"          %% "scalapb-runtime"                   % scalapb.compiler.Version.scalapbVersion % "protobuf",
-      "org.slf4j"                      % "slf4j-simple"                      % "1.7.26"
+      "org.slf4j"                      % "slf4j-simple"                      % "1.7.26",
+      "com.fasterxml.jackson.core"     % "jackson-databind"                  % "2.9.9.3"
     ),
 
     javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
