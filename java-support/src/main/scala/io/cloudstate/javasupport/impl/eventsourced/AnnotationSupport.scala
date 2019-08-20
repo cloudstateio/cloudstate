@@ -1,6 +1,6 @@
 package io.cloudstate.javasupport.impl.eventsourced
 
-import java.lang.reflect.{Constructor, Method}
+import java.lang.reflect.{Constructor, InvocationTargetException, Method}
 import java.util.Optional
 
 import io.cloudstate.javasupport.eventsourced._
@@ -65,7 +65,7 @@ private[impl] class AnnotationSupport(entityClass: Class[_], serviceMethods: Seq
       }
     }
 
-    override def handleEvent(event: AnyRef, context: EventContext): Unit = {
+    override def handleEvent(event: AnyRef, context: EventContext): Unit = unwrap {
       if (!currentBehaviors.exists { behavior =>
         getCachedBehaviorReflection(behavior).getCachedEventHandlerForClass(event.getClass) match {
           case Some(handler) =>
@@ -88,7 +88,7 @@ private[impl] class AnnotationSupport(entityClass: Class[_], serviceMethods: Seq
       }
     }
 
-    override def handleCommand(command: AnyRef, context: CommandContext): AnyRef = {
+    override def handleCommand(command: AnyRef, context: CommandContext): AnyRef = unwrap {
       val maybeResult = currentBehaviors.collectFirst(Function.unlift { behavior =>
         getCachedBehaviorReflection(behavior).commandHandlers.get(context.commandName()).map { handler =>
           handler.invoke(behavior, command, context)
@@ -100,7 +100,7 @@ private[impl] class AnnotationSupport(entityClass: Class[_], serviceMethods: Seq
       }
     }
 
-    override def handleSnapshot(snapshot: AnyRef, context: SnapshotContext): Unit = {
+    override def handleSnapshot(snapshot: AnyRef, context: SnapshotContext): Unit = unwrap {
       if (!currentBehaviors.exists { behavior =>
         getCachedBehaviorReflection(behavior).getCachedSnapshotHandlerForClass(snapshot.getClass) match {
           case Some(handler) =>
@@ -124,7 +124,7 @@ private[impl] class AnnotationSupport(entityClass: Class[_], serviceMethods: Seq
       }
     }
 
-    override def snapshot(context: SnapshotContext): Optional[AnyRef] = {
+    override def snapshot(context: SnapshotContext): Optional[AnyRef] = unwrap {
       currentBehaviors.collectFirst(Function.unlift { behavior =>
         getCachedBehaviorReflection(behavior).snapshotInvoker.map { invoker =>
           invoker.invoke(behavior, context)
@@ -134,6 +134,13 @@ private[impl] class AnnotationSupport(entityClass: Class[_], serviceMethods: Seq
           Optional.ofNullable(invoker)
         case None => Optional.empty()
       }
+    }
+
+    private def unwrap[T](block: => T): T = try {
+      block
+    } catch {
+      case ite: InvocationTargetException if ite.getCause != null =>
+        throw ite.getCause
     }
 
     private def behaviorsString = currentBehaviors.map(_.getClass).mkString(", ")

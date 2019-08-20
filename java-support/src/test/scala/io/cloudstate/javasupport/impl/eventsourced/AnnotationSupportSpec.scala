@@ -1,5 +1,7 @@
 package io.cloudstate.javasupport.impl.eventsourced
 
+import java.util.Optional
+
 import io.cloudstate.javasupport.EntityId
 import io.cloudstate.javasupport.eventsourced._
 import io.cloudstate.javasupport.impl.ResolvedServiceMethod
@@ -20,6 +22,18 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
     override def fail(errorMessage: String): Unit = ???
     override def forward(): Unit = ???
     override def effect(): Unit = ???
+  }
+
+  val eventCtx = new EventContext {
+    override def sequenceNumber(): Long = 10
+    override def entityId(): String = "foo"
+  }
+
+  case class Wrapped(value: String)
+  val method = ResolvedServiceMethod("Wrap", classOf[String], classOf[Wrapped])
+
+  def create(behavior: AnyRef, methods: ResolvedServiceMethod*) = {
+    new AnnotationSupport(behavior.getClass, methods, Some(_ => behavior)).create(MockContext)
   }
 
   "Event sourced annotation support" should {
@@ -48,15 +62,6 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
     }
 
     "support event handlers" when {
-      val eventCtx = new EventContext {
-        override def sequenceNumber(): Long = 10
-        override def entityId(): String = "foo"
-      }
-
-      def create(behavior: AnyRef) = {
-        new AnnotationSupport(behavior.getClass, Nil, Some(_ => behavior)).create(MockContext)
-      }
-
       "no arg event handler" in {
         var invoked = false
         val handler = create(new {
@@ -158,16 +163,26 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
         })
       }
 
+      "fail if there are two event handlers for the same type" in {
+        a[RuntimeException] should be thrownBy create(new {
+          @EventHandler
+          def handle1(event: String) = ()
+
+          @EventHandler
+          def handle2(event: String) = ()
+        })
+      }
+
+      "fail if an EntityId annotated parameter is not a string" in {
+        a[RuntimeException] should be thrownBy create(new {
+          @EventHandler
+          def handle(event: String, @EntityId entityId: Int) = ()
+        })
+      }
+
     }
 
     "support command handlers" when {
-
-      case class Wrapped(value: String)
-      val method = ResolvedServiceMethod("Wrap", classOf[String], classOf[Wrapped])
-
-      def create(behavior: AnyRef, methods: ResolvedServiceMethod*) = {
-        new AnnotationSupport(behavior.getClass, methods, Some(_ => behavior)).create(MockContext)
-      }
 
       "no arg command handler" in {
         val handler = create(new {
@@ -209,6 +224,170 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
         val ctx = new MockCommandContext
         handler.handleCommand("blah", ctx) should ===(Wrapped("blah"))
         ctx.emited should ===(Seq("blah event"))
+      }
+
+      "fail if there's a bad context type" in {
+        a[RuntimeException] should be thrownBy create(new {
+          @CommandHandler
+          def wrap(msg: String, ctx: EventContext) = {
+            Wrapped(msg)
+          }
+        }, method)
+      }
+
+      "fail if there's two command handlers for the same command" in {
+        a[RuntimeException] should be thrownBy create(new {
+          @CommandHandler
+          def wrap(msg: String, ctx: CommandContext) = {
+            Wrapped(msg)
+          }
+          @CommandHandler
+          def wrap(msg: String) = {
+            Wrapped(msg)
+          }
+        }, method)
+      }
+
+      "fail if there's no command with that name" in {
+        a[RuntimeException] should be thrownBy create(new {
+          @CommandHandler
+          def doWrap(msg: String) = {
+            Wrapped(msg)
+          }
+        }, method)
+      }
+
+      "unwrap exceptions" in {
+        val handler = create(new {
+          @CommandHandler
+          def wrap(): Wrapped = throw new RuntimeException("foo")
+        }, method)
+        val ex = the [RuntimeException] thrownBy handler.handleCommand("nothing", new MockCommandContext)
+        ex.getMessage should ===("foo")
+      }
+
+    }
+
+    "support snapshots" when {
+      val ctx = new SnapshotContext {
+        override def sequenceNumber(): Long = 10
+        override def entityId(): String = "foo"
+      }
+
+      "no arg parameter" in {
+        val handler = create(new {
+          @Snapshot
+          def createSnapshot: String = "snap!"
+        })
+        handler.snapshot(ctx) should ===(Optional.of("snap!"))
+      }
+
+      "context parameter" in {
+        val handler = create(new {
+          @Snapshot
+          def createSnapshot(ctx: SnapshotContext): String = {
+            ctx.entityId() should ===("foo")
+            "snap!"
+          }
+        })
+        handler.snapshot(ctx) should ===(Optional.of("snap!"))
+      }
+
+      "fail if there's two snapshot methods" in {
+        a[RuntimeException] should be thrownBy create(new {
+          @Snapshot
+          def createSnapshot1: String = "snap!"
+          @Snapshot
+          def createSnapshot2: String = "snap!"
+        })
+      }
+
+      "fail if there's a bad context" in {
+        a[RuntimeException] should be thrownBy create(new {
+          @Snapshot
+          def createSnapshot(context: EventContext): String = "snap!"
+        })
+      }
+
+    }
+
+    "support snapshot handlers" when {
+      val ctx = new SnapshotContext {
+        override def sequenceNumber(): Long = 10
+        override def entityId(): String = "foo"
+      }
+
+      "single parameter" in {
+        var invoked = false
+        val handler = create(new {
+          @SnapshotHandler
+          def handleSnapshot(snapshot: String) = {
+            snapshot should ===("snap!")
+            invoked = true
+          }
+        })
+        handler.handleSnapshot("snap!", ctx)
+        invoked shouldBe true
+      }
+
+      "context parameter" in {
+        var invoked = false
+        val handler = create(new {
+          @SnapshotHandler
+          def handleSnapshot(snapshot: String, context: SnapshotBehaviorContext) = {
+            snapshot should ===("snap!")
+            context.sequenceNumber() should ===(10)
+            invoked = true
+          }
+        })
+        handler.handleSnapshot("snap!", ctx)
+        invoked shouldBe true
+      }
+
+      "changing behavior" in {
+        var invoked = false
+        var invoked2 = false
+        val handler = create(new {
+          @SnapshotHandler
+          def handleSnapshot(snapshot: String, context: SnapshotBehaviorContext) = {
+            snapshot should ===("snap!")
+            context.sequenceNumber() should ===(10)
+            context.become(new {
+              @EventHandler
+              def handleEvent(event: String) = {
+                event should ===("my-event")
+                invoked2 = true
+              }
+            })
+            invoked = true
+          }
+        })
+        handler.handleSnapshot("snap!", ctx)
+        invoked shouldBe true
+        handler.handleEvent("my-event", eventCtx)
+        invoked2 shouldBe true
+      }
+
+      "fail if there's a bad context" in {
+        a[RuntimeException] should be thrownBy create(new {
+          @SnapshotHandler
+          def handleSnapshot(snapshot: String, context: EventContext) = ()
+        })
+      }
+
+      "fail if there's no snapshot parameter" in {
+        a[RuntimeException] should be thrownBy create(new {
+          @SnapshotHandler
+          def handleSnapshot(context: SnapshotContext) = ()
+        })
+      }
+
+      "fail if there's no snapshot handler for the given type" in {
+        val handler = create(new {
+          @SnapshotHandler
+          def handleSnapshot(snapshot: Int) = ()
+        })
+        a[RuntimeException] should be thrownBy handler.handleSnapshot(10, ctx)
       }
 
     }

@@ -62,9 +62,12 @@ private[impl] object ReflectionHelper {
       // First match things that we can be specific about
       handlers(i) = if (isWithinBounds(parameter.parameterType, classOf[Context], implicitly[ClassTag[C]].runtimeClass))
         ContextParameterHandler
-      else if (parameter.annotation[EntityId].isDefined)
+      else if (parameter.annotation[EntityId].isDefined) {
+        if (parameter.parameterType != classOf[String]) {
+          throw new RuntimeException(s"@EntityId annotated parameter on method ${method.getName} has type ${parameter.parameterType}, must be String.")
+        }
         EntityIdParameterHandler
-      else
+      } else
         extras.applyOrElse(parameter, (p: MethodParameter) => MainArgumentParameterHandler(p.parameterType))
     }
     handlers.asInstanceOf[Array[ParameterHandler[C]]]

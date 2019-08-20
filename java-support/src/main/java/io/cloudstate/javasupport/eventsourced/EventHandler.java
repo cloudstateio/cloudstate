@@ -7,8 +7,13 @@ import java.lang.annotation.Target;
 
 /**
  * Marks a method as an event handler.
- *
- * Methods annotated with this may take an {{@link EventBehaviorContext}},
+ * <p/>
+ * This method will be invoked whenever an event matching this event handlers event class is either replayed on entity
+ * recovery, by a command handler.
+ * <p/>
+ * The method may take the event object as a parameter.
+ * <p/>
+ * Methods annotated with this may take an {@link EventBehaviorContext}.
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
