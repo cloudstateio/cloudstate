@@ -2,10 +2,13 @@ package io.cloudstate.javasupport.impl.eventsourced
 
 import java.util.Optional
 
+import com.example.shoppingcart.Shoppingcart
+import com.google.protobuf.{ByteString, Any => JavaPbAny}
 import io.cloudstate.javasupport.EntityId
 import io.cloudstate.javasupport.eventsourced._
-import io.cloudstate.javasupport.impl.ResolvedServiceMethod
+import io.cloudstate.javasupport.impl.{AnySupport, ResolvedServiceMethod, ResolvedType}
 import org.scalatest.{Matchers, WordSpec}
+import com.google.protobuf.any.{Any => ScalaPbAny}
 
 class AnnotationSupportSpec extends WordSpec with Matchers {
   object MockContext extends EventSourcedContext {
@@ -29,34 +32,64 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
     override def entityId(): String = "foo"
   }
 
+  object WrappedResolvedType extends ResolvedType[Wrapped] {
+    override def typeClass: Class[Wrapped] = classOf[Wrapped]
+    override def typeUrl: String = AnySupport.DefaultTypeUrlPrefix + "/wrapped"
+    override def parseFrom(bytes: ByteString): Wrapped = Wrapped(bytes.toStringUtf8)
+    override def toByteString(value: Wrapped): ByteString = ByteString.copyFromUtf8(value.value)
+  }
+
+  object StringResolvedType extends ResolvedType[String] {
+    override def typeClass: Class[String] = classOf[String]
+    override def typeUrl: String = AnySupport.DefaultTypeUrlPrefix + "/string"
+    override def parseFrom(bytes: ByteString): String = bytes.toStringUtf8
+    override def toByteString(value: String): ByteString = ByteString.copyFromUtf8(value)
+  }
+
   case class Wrapped(value: String)
-  val method = ResolvedServiceMethod("Wrap", classOf[String], classOf[Wrapped])
+  val anySupport = new AnySupport(Array(Shoppingcart.getDescriptor), this.getClass.getClassLoader)
+  val method = ResolvedServiceMethod("Wrap", StringResolvedType, WrappedResolvedType)
 
   def create(behavior: AnyRef, methods: ResolvedServiceMethod*) = {
-    new AnnotationSupport(behavior.getClass, methods, Some(_ => behavior)).create(MockContext)
+    new AnnotationSupport(behavior.getClass, anySupport, methods, Some(_ => behavior)).create(MockContext)
   }
+
+  def create(clazz: Class[_]) = {
+    new AnnotationSupport(clazz, anySupport, Nil, None).create(MockContext)
+  }
+
+  def command(str: String) = {
+    ScalaPbAny.toJavaProto(ScalaPbAny(StringResolvedType.typeUrl, StringResolvedType.toByteString(str)))
+  }
+
+  def decodeWrapped(any: JavaPbAny) = {
+    any.getTypeUrl should ===(WrappedResolvedType.typeUrl)
+    WrappedResolvedType.parseFrom(any.getValue)
+  }
+
+  def event(any: Any) = anySupport.encodeJava(any)
 
   "Event sourced annotation support" should {
     "support entity construction" when {
 
       "there is a noarg constructor" in {
-        new AnnotationSupport(classOf[NoArgConstructorTest], Nil).create(MockContext)
+        create(classOf[NoArgConstructorTest])
       }
 
       "there is a constructor with an EntityId annotated parameter" in {
-        new AnnotationSupport(classOf[EntityIdArgConstructorTest], Nil).create(MockContext)
+        create(classOf[EntityIdArgConstructorTest])
       }
 
       "there is a constructor with a EventSourcedEntityCreationContext parameter" in {
-        new AnnotationSupport(classOf[CreationContextArgConstructorTest], Nil).create(MockContext)
+        create(classOf[CreationContextArgConstructorTest])
       }
 
       "there is a constructor with multiple parameters" in {
-        new AnnotationSupport(classOf[MultiArgConstructorTest], Nil).create(MockContext)
+        create(classOf[MultiArgConstructorTest])
       }
 
       "fail if the constructor contains an unsupported parameter" in {
-        a[RuntimeException] should be thrownBy new AnnotationSupport(classOf[UnsupportedConstructorParameter], Nil)
+        a[RuntimeException] should be thrownBy create(classOf[UnsupportedConstructorParameter])
       }
 
     }
@@ -68,7 +101,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
           @EventHandler(eventClass = classOf[String])
           def handle() = invoked = true
         })
-        handler.handleEvent("my-event", eventCtx)
+        handler.handleEvent(event("my-event"), eventCtx)
         invoked shouldBe true
       }
 
@@ -81,7 +114,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
             invoked = true
           }
         })
-        handler.handleEvent("my-event", eventCtx)
+        handler.handleEvent(event("my-event"), eventCtx)
         invoked shouldBe true
       }
 
@@ -96,7 +129,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
             invoked = true
           }
         })
-        handler.handleEvent("my-event", eventCtx)
+        handler.handleEvent(event("my-event"), eventCtx)
         invoked shouldBe true
       }
 
@@ -109,7 +142,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
             invoked = true
           }
         })
-        handler.handleEvent("my-event", eventCtx)
+        handler.handleEvent(event("my-event"), eventCtx)
         invoked shouldBe true
       }
 
@@ -122,7 +155,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
             invoked = true
           }
         })
-        handler.handleEvent("my-event", eventCtx)
+        handler.handleEvent(event("my-event"), eventCtx)
         invoked shouldBe true
       }
 
@@ -143,10 +176,10 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
             invoked1 = true
           }
         })
-        handler.handleEvent("event-one", eventCtx)
+        handler.handleEvent(event("event-one"), eventCtx)
         invoked1 shouldBe true
-        handler.handleEvent("event-two", eventCtx)
-        invoked1 shouldBe true
+        handler.handleEvent(event("event-two"), eventCtx)
+        invoked2 shouldBe true
       }
 
       "fail if there's a bad context type" in {
@@ -189,7 +222,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
           @CommandHandler
           def wrap() = Wrapped("blah")
         }, method)
-        handler.handleCommand("nothing", new MockCommandContext) should ===(Wrapped("blah"))
+        decodeWrapped(handler.handleCommand(command("nothing"), new MockCommandContext)) should ===(Wrapped("blah"))
       }
 
       "single arg command handler" in {
@@ -197,7 +230,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
           @CommandHandler
           def wrap(msg: String) = Wrapped(msg)
         }, method)
-        handler.handleCommand("blah", new MockCommandContext) should ===(Wrapped("blah"))
+        decodeWrapped(handler.handleCommand(command("blah"), new MockCommandContext)) should ===(Wrapped("blah"))
       }
 
       "multi arg command handler" in {
@@ -209,7 +242,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
             Wrapped(msg)
           }
         }, method)
-        handler.handleCommand("blah", new MockCommandContext) should ===(Wrapped("blah"))
+        decodeWrapped(handler.handleCommand(command("blah"), new MockCommandContext)) should ===(Wrapped("blah"))
       }
 
       "allow emiting events" in {
@@ -222,7 +255,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
           }
         }, method)
         val ctx = new MockCommandContext
-        handler.handleCommand("blah", ctx) should ===(Wrapped("blah"))
+        decodeWrapped(handler.handleCommand(command("blah"), ctx)) should ===(Wrapped("blah"))
         ctx.emited should ===(Seq("blah event"))
       }
 
@@ -262,7 +295,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
           @CommandHandler
           def wrap(): Wrapped = throw new RuntimeException("foo")
         }, method)
-        val ex = the [RuntimeException] thrownBy handler.handleCommand("nothing", new MockCommandContext)
+        val ex = the [RuntimeException] thrownBy handler.handleCommand(command("nothing"), new MockCommandContext)
         ex.getMessage should ===("foo")
       }
 
@@ -279,7 +312,9 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
           @Snapshot
           def createSnapshot: String = "snap!"
         })
-        handler.snapshot(ctx) should ===(Optional.of("snap!"))
+        val snapshot = handler.snapshot(ctx)
+        snapshot.isPresent shouldBe true
+        anySupport.decode(snapshot.get) should ===("snap!")
       }
 
       "context parameter" in {
@@ -290,7 +325,9 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
             "snap!"
           }
         })
-        handler.snapshot(ctx) should ===(Optional.of("snap!"))
+        val snapshot = handler.snapshot(ctx)
+        snapshot.isPresent shouldBe true
+        anySupport.decode(snapshot.get) should ===("snap!")
       }
 
       "fail if there's two snapshot methods" in {
@@ -326,7 +363,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
             invoked = true
           }
         })
-        handler.handleSnapshot("snap!", ctx)
+        handler.handleSnapshot(event("snap!"), ctx)
         invoked shouldBe true
       }
 
@@ -340,7 +377,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
             invoked = true
           }
         })
-        handler.handleSnapshot("snap!", ctx)
+        handler.handleSnapshot(event("snap!"), ctx)
         invoked shouldBe true
       }
 
@@ -362,9 +399,9 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
             invoked = true
           }
         })
-        handler.handleSnapshot("snap!", ctx)
+        handler.handleSnapshot(event("snap!"), ctx)
         invoked shouldBe true
-        handler.handleEvent("my-event", eventCtx)
+        handler.handleEvent(event("my-event"), eventCtx)
         invoked2 shouldBe true
       }
 
@@ -387,7 +424,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
           @SnapshotHandler
           def handleSnapshot(snapshot: Int) = ()
         })
-        a[RuntimeException] should be thrownBy handler.handleSnapshot(10, ctx)
+        a[RuntimeException] should be thrownBy handler.handleSnapshot(event(10), ctx)
       }
 
     }

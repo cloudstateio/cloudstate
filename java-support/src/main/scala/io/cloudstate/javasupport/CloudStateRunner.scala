@@ -16,7 +16,6 @@
 
 package io.cloudstate.javasupport
 
-import java.util.Objects.requireNonNull
 import java.util.concurrent.CompletionStage
 
 import com.typesafe.config.{Config, ConfigFactory}
@@ -24,18 +23,18 @@ import akka.Done
 import akka.actor.ActorSystem
 import akka.http.scaladsl._
 import akka.http.scaladsl.model._
-import akka.http.scaladsl.settings.ServerSettings
 import akka.stream.{ActorMaterializer, Materializer}
-import io.cloudstate.javasupport.impl.{CrdtImpl, EntityDiscoveryImpl, EventSourcedImpl, AnySupport}
-import io.cloudstate.protocol.entity.{Entity, EntityDiscoveryHandler}
+import com.google.protobuf.Descriptors
+import io.cloudstate.javasupport.impl.eventsourced.{EventSourcedImpl, EventSourcedStatefulService}
+import io.cloudstate.javasupport.impl.EntityDiscoveryImpl
+import io.cloudstate.protocol.entity.EntityDiscoveryHandler
 import io.cloudstate.protocol.event_sourced.EventSourcedHandler
-import io.cloudstate.protocol.crdt.CrdtHandler
-import io.cloudstate.protocol.function.StatelessFunctionHandler
 
 import scala.compat.java8.FutureConverters
 import scala.concurrent.Future
+import scala.collection.JavaConverters._
 
-object CloudState {
+object CloudStateRunner {
   final case class Configuration(userFunctionInterface: String, userFunctionPort: Int) {
     validate()
     def this(config: Config) = {
@@ -60,33 +59,41 @@ object CloudState {
  *   }
  * }
  **/
-final class CloudState private[this](_system: ActorSystem, _service: StatefulService) {
-  final val service = requireNonNull(_service, "StatefulService must not be null!")
+final class CloudStateRunner private[this](_system: ActorSystem, services: Map[String, StatefulService]) {
   private[this] implicit final val system = _system
   private[this] implicit final val materializer: Materializer = ActorMaterializer()
 
-  private[this] final val configuration = new CloudState.Configuration(system.settings.config.getConfig("cloudstate"))
+  private[this] final val configuration = new CloudStateRunner.Configuration(system.settings.config.getConfig("cloudstate"))
 
-  def this(_service: StatefulService) {
+  def this(services: java.util.Map[String, StatefulService]) {
     this(
       {
         val conf = ConfigFactory.load()
         // We do this to apply the cloud-state specific akka configuration to the ActorSystem we create for hosting the user function
         ActorSystem("StatefulService", conf.getConfig("cloudstate.system").withFallback(conf))
-      }, 
-      _service
+      },
+      services.asScala.toMap
     )
   }
 
   private[this] def createRoutes(): PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    val eventSourceImpl     = new EventSourcedImpl(system, service)
-    val entityDiscoveryImpl = new EntityDiscoveryImpl(system, service)
-    val crdtImpl            = new CrdtImpl(system, service)
 
-    CrdtHandler.partial(crdtImpl) orElse
-    EventSourcedHandler.partial(eventSourceImpl) orElse
-    EntityDiscoveryHandler.partial(entityDiscoveryImpl) orElse
-    { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }
+    val serviceRoutes = services.groupBy(_._2.getClass).foldLeft(PartialFunction.empty[HttpRequest, Future[HttpResponse]]) {
+
+      case (route, (serviceClass, eventSourcedServices: Map[String, EventSourcedStatefulService]))
+        if serviceClass == classOf[EventSourcedStatefulService] =>
+          val eventSourcedImpl = new EventSourcedImpl(system, eventSourcedServices)
+          route orElse EventSourcedHandler.partial(eventSourcedImpl)
+
+      case (_, (serviceClass, _)) =>
+        sys.error("Unknown StatefulService? " + serviceClass)
+    }
+
+    val entityDiscovery = EntityDiscoveryHandler.partial(new EntityDiscoveryImpl(system, services))
+
+    serviceRoutes orElse
+      entityDiscovery orElse
+      { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }
   }
 
   def run(): CompletionStage[Done] = {
@@ -103,10 +110,9 @@ final class CloudState private[this](_system: ActorSystem, _service: StatefulSer
 }
 
 // This class will describe the stateless service and is created and passed by the user into a CloudState instance.
-abstract class StatefulService {
-  import com.google.protobuf.DescriptorProtos.FileDescriptorSet
-  // FIXME add all User Function configuration to this class
-  def descriptors: FileDescriptorSet = FileDescriptorSet.getDefaultInstance // FIXME have this provided
-  def entities: Seq[Entity] = Nil // FIXME have this provided
-  final val anySupport = new AnySupport(Nil, getClass.getClassLoader) // FIXME implement. use the ActorSystem's DynamicAccess.classLoader?
+trait StatefulService {
+  def descriptor: Descriptors.ServiceDescriptor
+  def entityType: String
+  def persistenceId: String = ""
 }
+

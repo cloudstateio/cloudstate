@@ -16,12 +16,11 @@
 
 package io.cloudstate.javasupport.impl
 
-import io.cloudstate.javasupport.StatefulService
 import io.cloudstate.protocol.function._
-
 import akka.actor.ActorSystem
+import io.cloudstate.javasupport.CloudState
 
-class StatelessFunctionImpl(system: ActorSystem, service: StatefulService) extends StatelessFunction {
+class StatelessFunctionImpl(system: ActorSystem) extends StatelessFunction {
   override def handleUnary(in: io.cloudstate.protocol.function.FunctionCommand): scala.concurrent.Future[io.cloudstate.protocol.function.FunctionReply] = ???
   override def handleStreamedIn(in: akka.stream.scaladsl.Source[io.cloudstate.protocol.function.FunctionCommand, akka.NotUsed]): scala.concurrent.Future[io.cloudstate.protocol.function.FunctionReply] = ???
   override def handleStreamedOut(in: io.cloudstate.protocol.function.FunctionCommand): akka.stream.scaladsl.Source[io.cloudstate.protocol.function.FunctionReply, akka.NotUsed] = ???

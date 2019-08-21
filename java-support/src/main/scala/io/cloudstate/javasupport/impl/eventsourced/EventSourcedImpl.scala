@@ -14,29 +14,30 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.impl
+package io.cloudstate.javasupport.impl.eventsourced
 
 import akka.NotUsed
-import io.cloudstate.protocol.event_sourced._
-import io.cloudstate.protocol.event_sourced.EventSourcedStreamIn.Message.{Command => InCommand, Empty => InEmpty, Event => InEvent, Init => InInit}
-import io.cloudstate.protocol.event_sourced.EventSourcedStreamOut.Message.{Empty => OutEmpty, Failure => OutFailure, Reply => OutReply}
-import akka.stream.scaladsl.{Flow, Source}
 import akka.actor.ActorSystem
-import io.cloudstate.javasupport.StatefulService
-import io.cloudstate.protocol.entity.{ClientAction, Reply => ClientActionReply}
-import io.cloudstate.javasupport.eventsourced._
+import akka.stream.scaladsl.Flow
+import com.google.protobuf.Descriptors
 import com.google.protobuf.any.{Any => ScalaPbAny}
+import io.cloudstate.javasupport.{CloudState, StatefulService}
+import io.cloudstate.javasupport.eventsourced._
+import io.cloudstate.javasupport.impl.AnySupport
+import io.cloudstate.protocol.entity.{ClientAction, Reply => ClientActionReply}
+import io.cloudstate.protocol.event_sourced.EventSourcedStreamIn.Message.{Command => InCommand, Empty => InEmpty, Event => InEvent, Init => InInit}
+import io.cloudstate.protocol.event_sourced.EventSourcedStreamOut.Message.{Reply => OutReply}
+import io.cloudstate.protocol.event_sourced._
 
-class EventSourcedImpl(system: ActorSystem, service: StatefulService) extends EventSourced {
+final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
+                                  override val descriptor: Descriptors.ServiceDescriptor,
+                                  val anySupport: AnySupport,
+                                  override val persistenceId: String) extends StatefulService {
 
-  val handlerFactories: Map[String, EventSourcedEntityFactory] =
-    service
-      .entities
-      .iterator
-      .filter(_.entityType == "cloudstate.eventsourced.EventSourced")
-      .map(e => (e.serviceName, new EventSourcedEntityFactory {
-        override def create(context: EventSourcedContext): EventSourcedEntityHandler = ??? // FIXME How to implement/obtain this?
-      })).toMap
+  override final val entityType = EventSourced.name
+}
+
+final class EventSourcedImpl(system: ActorSystem, services: Map[String, EventSourcedStatefulService]) extends EventSourced {
 
   /**
    * The stream. One stream will be established per active entity.
@@ -66,13 +67,8 @@ class EventSourcedImpl(system: ActorSystem, service: StatefulService) extends Ev
   }
 
   private def runEntity(init: EventSourcedInit): Flow[EventSourcedStreamIn, EventSourcedStreamOut, NotUsed] = {
-    val handler = handlerFactories.get(init.serviceName) match {
-      case Some(e) =>
-        e.create(new EventSourcedContextImpl(init.entityId)) // FIXME handle failure
-      case None =>
-      // FIXME Service does not exist, or is not an event sourced service
-        throw new RuntimeException("not found")
-    }
+    val service = services.getOrElse(init.serviceName, throw new RuntimeException("not found"))
+    val handler = service.factory.create(new EventSourcedContextImpl(init.entityId)) // FIXME handle failure
 
     val entityId = init.entityId
 
@@ -84,8 +80,7 @@ class EventSourcedImpl(system: ActorSystem, service: StatefulService) extends Ev
         override def entityId: String = entityId // TODO do not close over `i`
         override def sequenceNumber: Long = snapshot.snapshotSequence // TODO do not close over `snapshot`
       }
-      val snapshotObject = service.anySupport.decode(any)
-      handler.handleSnapshot(snapshotObject, context)
+      handler.handleSnapshot(ScalaPbAny.toJavaProto(any), context)
       snapshot.snapshotSequence
     }).getOrElse(0l)
 
@@ -93,7 +88,7 @@ class EventSourcedImpl(system: ActorSystem, service: StatefulService) extends Ev
     Flow[EventSourcedStreamIn].map(_.message).scan[(Long, Option[EventSourcedStreamOut.Message])]((startingSequenceNumber, None)) {
       case (_, InEvent(event)) =>
         val context = new EventContextImpl(entityId, event.sequence)
-        val ev = service.anySupport.decode(event.payload.get) // FIXME empty?
+        val ev = ScalaPbAny.toJavaProto(event.payload.get) // FIXME empty?
         // todo deserialize the event first
         handler.handleEvent(ev, context)
         (event.sequence, None)
@@ -135,16 +130,16 @@ class EventSourcedImpl(system: ActorSystem, service: StatefulService) extends Ev
             // FIXME Is this really a good idea, how to handle backpressure?
             // No need to. events are sent with the command reply (since, you need to persist the events successfully
             // before the reply is sent to the user. Backpressure is implicit )
-            val encoded = service.anySupport.encode(event)
+            val encoded = service.anySupport.encodeScala(event)
             events :+= encoded
             currentSequence += 1
-            handler.handleEvent(event, new EventContextImpl(entityId, currentSequence))
+            handler.handleEvent(ScalaPbAny.toJavaProto(encoded), new EventContextImpl(entityId, currentSequence))
           }
         }
-        val cmd = service.anySupport.decode(command.payload.get) // FIXME isEmpty? Also, validate that the class matches the service descriptor.
+        val cmd = ScalaPbAny.toJavaProto(command.payload.get) // FIXME isEmpty?
         val reply = handler.handleCommand(cmd, context) // FIXME is this allowed to throw?
 
-        val replyPayload = service.anySupport.encode(reply) // FIXME handle failures. Also, validate that the class matches what's in the service descriptor for this command.
+        val replyPayload = ScalaPbAny.fromJavaProto(reply)
 
         // FIXME implement snapshot-every-n?
         val out = OutReply(

@@ -18,9 +18,9 @@ package io.cloudstate.javasupport.impl
 
 import io.cloudstate.protocol.crdt._
 import akka.actor.ActorSystem
-import io.cloudstate.javasupport.StatefulService
+import io.cloudstate.javasupport.{CloudState, StatefulService}
 
-class CrdtImpl(system: ActorSystem, service: StatefulService) extends Crdt {
+class CrdtImpl(system: ActorSystem) extends Crdt {
   /**
    * After invoking handle, the first message sent will always be a CrdtInit message, containing the entity ID, and,
    * if it exists or is available, the current state of the entity. After that, one or more commands may be sent,

@@ -19,11 +19,12 @@ package io.cloudstate.javasupport.impl
 import io.cloudstate.protocol.entity._
 
 import scala.concurrent.Future
-
 import akka.actor.ActorSystem
+import com.google.protobuf.DescriptorProtos
 import io.cloudstate.javasupport.StatefulService
 
-class EntityDiscoveryImpl(system: ActorSystem, service: StatefulService) extends EntityDiscovery {
+class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, StatefulService]) extends EntityDiscovery {
+
   /**
    * Discover what entities the user function wishes to serve.
    */
@@ -31,10 +32,30 @@ class EntityDiscoveryImpl(system: ActorSystem, service: StatefulService) extends
     system.log.info(s"Received discovery call from sidecar [${in.proxyName} ${in.proxyVersion}] supporting CloudState ${in.protocolMajorVersion}.${in.protocolMinorVersion}")
     system.log.debug(s"Supported sidecar entity types: ${in.supportedEntityTypes.mkString("[",",","]")}")
 
+    val unsupportedServices = services.values.filterNot { service =>
+      in.supportedEntityTypes.contains(service.entityType)
+    }
+
+    if (unsupportedServices.nonEmpty) {
+      system.log.error("Proxy doesn't support the entity types for the following services: " + unsupportedServices.map(s => s.descriptor.getFullName + ": " + s.entityType).mkString(", "))
+      // Don't fail though. The proxy may give us more information as to why it doesn't support them if we send back unsupported services.
+      // eg, the proxy doesn't have a configured journal, and so can't support event sourcing.
+    }
+
     if ( false ) // TODO verify compatibility with in.protocolMajorVersion & in.protocolMinorVersion
-      Future.failed(new Exception("Proxy version not compatible with library protocol support version")) // TODO how to handle if we have entity types not supported by the proxy?
+      Future.failed(new Exception("Proxy version not compatible with library protocol support version"))
     else {
-      Future.successful(EntitySpec(service.descriptors.toByteString, service.entities))
+      val allDescriptors = AnySupport.flattenDescriptors(services.values.map(_.descriptor.getFile).toSeq)
+      val builder = DescriptorProtos.FileDescriptorSet.newBuilder()
+      allDescriptors.values.foreach(fd => builder.addFile(fd.toProto))
+      val fileDescriptorSet = builder.build().toByteString
+
+      val entities = services.map {
+        case (name, service) =>
+          Entity(service.entityType, name, service.persistenceId)
+      }.toSeq
+
+      Future.successful(EntitySpec(fileDescriptorSet, entities))
     }
   }
   
@@ -46,6 +67,6 @@ class EntityDiscoveryImpl(system: ActorSystem, service: StatefulService) extends
    */
   override def reportError(in: UserFunctionError): scala.concurrent.Future[com.google.protobuf.empty.Empty] = {
     system.log.error(s"Error reported from sidecar: ${in.message}")
-    Future.successful(com.google.protobuf.empty.Empty()) // TODO Cache instance
+    Future.successful(com.google.protobuf.empty.Empty.defaultInstance)
   }
 }

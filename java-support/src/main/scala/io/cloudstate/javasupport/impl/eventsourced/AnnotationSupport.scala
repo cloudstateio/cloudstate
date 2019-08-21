@@ -5,18 +5,21 @@ import java.util.Optional
 
 import io.cloudstate.javasupport.eventsourced._
 import io.cloudstate.javasupport.impl.ReflectionHelper.{InvocationContext, MainArgumentParameterHandler}
-import io.cloudstate.javasupport.impl.{ReflectionHelper, ResolvedServiceMethod}
+import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedServiceMethod, ResolvedType}
 
 import scala.collection.concurrent.TrieMap
+import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 
 /**
   * Annotation based implementation of the [[EventSourcedEntityFactory]].
-  *
-  * @param entityClass The entity class
-  * @param serviceMethods The service methods
   */
-private[impl] class AnnotationSupport(entityClass: Class[_], serviceMethods: Seq[ResolvedServiceMethod],
+private[impl] class AnnotationSupport(entityClass: Class[_], anySupport: AnySupport,
+                                      serviceMethods: Seq[ResolvedServiceMethod],
                                       factory: Option[EventSourcedEntityCreationContext => AnyRef] = None) extends EventSourcedEntityFactory {
+
+  def this(entityClass: Class[_], anySupport: AnySupport,
+    serviceDescriptor: Descriptors.ServiceDescriptor) =
+    this(entityClass, anySupport, anySupport.resolveServiceDescriptor(serviceDescriptor))
 
   private val behaviorReflectionCache = TrieMap.empty[Class[_], EventBehaviorReflection]
   // Eagerly reflect over/validate the entity class
@@ -65,7 +68,9 @@ private[impl] class AnnotationSupport(entityClass: Class[_], serviceMethods: Seq
       }
     }
 
-    override def handleEvent(event: AnyRef, context: EventContext): Unit = unwrap {
+    override def handleEvent(anyEvent: JavaPbAny, context: EventContext): Unit = unwrap {
+      val event = anySupport.decode(anyEvent).asInstanceOf[AnyRef]
+
       if (!currentBehaviors.exists { behavior =>
         getCachedBehaviorReflection(behavior).getCachedEventHandlerForClass(event.getClass) match {
           case Some(handler) =>
@@ -88,7 +93,7 @@ private[impl] class AnnotationSupport(entityClass: Class[_], serviceMethods: Seq
       }
     }
 
-    override def handleCommand(command: AnyRef, context: CommandContext): AnyRef = unwrap {
+    override def handleCommand(command: JavaPbAny, context: CommandContext): JavaPbAny = unwrap {
       val maybeResult = currentBehaviors.collectFirst(Function.unlift { behavior =>
         getCachedBehaviorReflection(behavior).commandHandlers.get(context.commandName()).map { handler =>
           handler.invoke(behavior, command, context)
@@ -100,7 +105,8 @@ private[impl] class AnnotationSupport(entityClass: Class[_], serviceMethods: Seq
       }
     }
 
-    override def handleSnapshot(snapshot: AnyRef, context: SnapshotContext): Unit = unwrap {
+    override def handleSnapshot(anySnapshot: JavaPbAny, context: SnapshotContext): Unit = unwrap {
+      val snapshot = anySupport.decode(anySnapshot).asInstanceOf[AnyRef]
       if (!currentBehaviors.exists { behavior =>
         getCachedBehaviorReflection(behavior).getCachedSnapshotHandlerForClass(snapshot.getClass) match {
           case Some(handler) =>
@@ -124,14 +130,14 @@ private[impl] class AnnotationSupport(entityClass: Class[_], serviceMethods: Seq
       }
     }
 
-    override def snapshot(context: SnapshotContext): Optional[AnyRef] = unwrap {
+    override def snapshot(context: SnapshotContext): Optional[JavaPbAny] = unwrap {
       currentBehaviors.collectFirst(Function.unlift { behavior =>
         getCachedBehaviorReflection(behavior).snapshotInvoker.map { invoker =>
           invoker.invoke(behavior, context)
         }
       }) match {
         case Some(invoker) =>
-          Optional.ofNullable(invoker)
+          Optional.ofNullable(anySupport.encodeJava(invoker))
         case None => Optional.empty()
       }
     }
@@ -239,7 +245,7 @@ private object EventBehaviorReflection {
         case Seq(single) =>
           Some(single)
         case _ =>
-          throw new RuntimeException(s"Multiple snapshoting methods found on behavior ${behaviorClass}")
+          throw new RuntimeException(s"Multiple snapshoting methods found on behavior $behaviorClass")
       }
 
     new EventBehaviorReflection(eventHandlers, commandHandlers, snapshotHandlers, snapshotInvoker)
@@ -301,15 +307,22 @@ private class CommandHandlerInvoker(val method: Method, val serviceMethod: Resol
   if (parameters.count(_.isInstanceOf[MainArgumentParameterHandler[_]]) > 1) {
     throw new RuntimeException(s"CommandHandler method $method must defined at most one non context parameter to handle commands, the parameters defined were: ${parameters.collect { case MainArgumentParameterHandler(clazz) => clazz.getName }.mkString(",")}")
   }
-  {
-    val commandParameters = parameters.collect {
-      case MainArgumentParameterHandler(inClass) =>
-    }
+  parameters.foreach {
+    case MainArgumentParameterHandler(inClass) if !inClass.isAssignableFrom(serviceMethod.inputType.typeClass) =>
+      throw new RuntimeException(s"Incompatible command class $inClass for command ${serviceMethod.name}, expected ${serviceMethod.inputType.typeClass}")
+    case _ =>
+  }
+  if (!serviceMethod.outputType.typeClass.isAssignableFrom(method.getReturnType)) {
+    throw new RuntimeException(s"Incompatible return class ${method.getReturnType} for command ${serviceMethod.name}, expected ${serviceMethod.outputType.typeClass}")
   }
 
-  def invoke(obj: AnyRef, command: AnyRef, context: CommandContext): AnyRef = {
-    val ctx = InvocationContext(command, context)
-    method.invoke(obj, parameters.map(_.apply(ctx)): _*)
+  def invoke(obj: AnyRef, command: JavaPbAny, context: CommandContext): JavaPbAny = {
+    val decodedCommand = serviceMethod.inputType.parseFrom(command.getValue).asInstanceOf[AnyRef]
+    val ctx = InvocationContext(decodedCommand, context)
+    val result = method.invoke(obj, parameters.map(_.apply(ctx)): _*)
+    JavaPbAny.newBuilder().setTypeUrl(serviceMethod.outputType.typeUrl)
+      .setValue(serviceMethod.outputType.asInstanceOf[ResolvedType[Any]].toByteString(result))
+      .build()
   }
 }
 

@@ -1,5 +1,7 @@
 package io.cloudstate.javasupport.eventsourced;
 
+import com.google.protobuf.Any;
+
 import java.util.Optional;
 
 /**
@@ -16,7 +18,7 @@ public interface EventSourcedEntityHandler {
      * @param event The event to handle.
      * @param context The event context.
      */
-    void handleEvent(Object event, EventContext context);
+    void handleEvent(Any event, EventContext context);
 
     /**
      * Handle the given command.
@@ -25,7 +27,7 @@ public interface EventSourcedEntityHandler {
      * @param context The command context.
      * @return The reply to the command.
      */
-    Object handleCommand(Object command, CommandContext context);
+    Any handleCommand(Any command, CommandContext context);
 
     /**
      * Handle the given snapshot.
@@ -33,12 +35,12 @@ public interface EventSourcedEntityHandler {
      * @param snapshot The snapshot to handle.
      * @param context The snapshot context.
      */
-    void handleSnapshot(Object snapshot, SnapshotContext context);
+    void handleSnapshot(Any snapshot, SnapshotContext context);
 
     /**
      * Snapshot the object.
      *
      * @return The current snapshot, if this object supports snapshoting, otherwise empty.
      */
-    Optional<Object> snapshot(SnapshotContext context);
+    Optional<Any> snapshot(SnapshotContext context);
 }
