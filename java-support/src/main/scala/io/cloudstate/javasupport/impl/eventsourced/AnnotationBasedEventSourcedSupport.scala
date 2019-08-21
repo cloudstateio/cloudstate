@@ -13,7 +13,7 @@ import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 /**
   * Annotation based implementation of the [[EventSourcedEntityFactory]].
   */
-private[impl] class AnnotationSupport(entityClass: Class[_], anySupport: AnySupport,
+private[impl] class AnnotationBasedEventSourcedSupport(entityClass: Class[_], anySupport: AnySupport,
                                       serviceMethods: Seq[ResolvedServiceMethod],
                                       factory: Option[EventSourcedEntityCreationContext => AnyRef] = None) extends EventSourcedEntityFactory {
 

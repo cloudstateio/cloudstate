@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.impl
+package io.cloudstate.javasupport.impl.crdt
 
-import io.cloudstate.protocol.crdt._
 import akka.actor.ActorSystem
-import io.cloudstate.javasupport.{CloudState, StatefulService}
+import io.cloudstate.protocol.crdt._
 
 class CrdtImpl(system: ActorSystem) extends Crdt {
   /**
