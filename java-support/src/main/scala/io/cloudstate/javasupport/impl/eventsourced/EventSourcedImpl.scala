@@ -34,7 +34,8 @@ import scala.util.control.{NonFatal, NoStackTrace}
 final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
                                   override val descriptor: Descriptors.ServiceDescriptor,
                                   val anySupport: AnySupport,
-                                  override val persistenceId: String) extends StatefulService {
+                                  override val persistenceId: String,
+                                  val snapshotEvery: Int) extends StatefulService {
 
   override final val entityType = EventSourced.name
 }
@@ -97,36 +98,59 @@ final class EventSourcedImpl(system: ActorSystem, services: Map[String, EventSou
       case ((sequence, _), InCommand(command)) =>
         if (entityId != command.entityId) throw new IllegalStateException("Receiving entity is not the intended recipient of command")
         val cmd = ScalaPbAny.toJavaProto(command.payload.get) // FIXME isEmpty?
-        val context = new CommandContextImpl(entityId, sequence, command.name, command.id, service.anySupport, handler)
-        val result = 
-          try {            
-            val reply = handler.handleCommand(cmd, context) // FIXME is this allowed to throw 
-            context.error.foreach(_ => throw new FailInvoked) // Only happens if the user swallows the FailInvoked exception
-            val replyPayload = ScalaPbAny.fromJavaProto(reply)
-            ClientAction(ClientAction.Action.Reply(ClientActionReply(Some(replyPayload))))
-          } catch {
-            case NonFatal(t) =>
-              val message = t match {
-                case _: FailInvoked => context.error.getOrElse(throw new IllegalStateException("Unexpected error"))
-                case t => "Internal error"// FIXME should we reply with t.getMessage?
-              }
-              ClientAction(ClientAction.Action.Failure(ClientActionFailure(command.id, message)))
-          } finally {
-            context.deactivate() // Very important!
-          }
+        val context = new CommandContextImpl(entityId, sequence, command.name, command.id, service.anySupport, handler, service.snapshotEvery)
 
-        // FIXME implement snapshot-every-n?
-        val out = OutReply(
-          EventSourcedReply(
-            command.id,
-            Some(result),
-            Nil, // FIXME implement sideEffects
-            context.events,
-            None // FIXME get snapshot from handler
+        try {
+          val reply = handler.handleCommand(cmd, context) // FIXME is this allowed to throw 
+          context.error.foreach(_ => throw new FailInvoked) // Only happens if the user swallows the FailInvoked exception
+          val replyPayload = ScalaPbAny.fromJavaProto(reply)
+          val response = ClientAction(ClientAction.Action.Reply(ClientActionReply(Some(replyPayload))))
+
+          val endSequenceNumber = sequence + context.events.size
+
+          val snapshot =
+            if (context.performSnapshot) {
+              val s = handler.snapshot(new SnapshotContext {
+                override def entityId: String     = entityId
+                override def sequenceNumber: Long = endSequenceNumber
+              })
+              if (s.isPresent) Option(ScalaPbAny.fromJavaProto(s.get)) else None
+            } else None
+
+          val out = OutReply(
+            EventSourcedReply(
+              command.id,
+              Some(response),
+              Nil, // FIXME implement sideEffects
+              context.events,
+              snapshot
+            )
           )
-        )
 
-        (sequence + context.events.size, Some(out))
+          (endSequenceNumber, Some(out))
+        } catch {
+          case NonFatal(t) =>
+            val message = t match {
+              case _: FailInvoked => context.error.getOrElse(throw new IllegalStateException("Unexpected error"))
+              case t => "Internal error"// FIXME should we reply with t.getMessage?
+            }
+
+            val response = ClientAction(ClientAction.Action.Failure(ClientActionFailure(command.id, message)))
+
+            val out = OutReply(
+              EventSourcedReply(
+                command.id,
+                Some(response),
+                Nil,
+                Nil,
+                None
+              )
+            )
+
+          (sequence, Some(out)) // No progress was made
+        } finally {
+          context.active = false // Very important!
+        }
       case (_, InInit(i)) =>
         throw new IllegalStateException("Entity already inited")
       case (_, InEmpty) =>
@@ -142,17 +166,13 @@ final class EventSourcedImpl(system: ActorSystem, services: Map[String, EventSou
     override val commandName: String,
     override val commandId: Long,
     val anySupport: AnySupport,
-    val handler: EventSourcedEntityHandler) extends CommandContext {
+    val handler: EventSourcedEntityHandler,
+    val snapshotEvery: Int) extends CommandContext {
     
     final var active: Boolean = true
     final var events: Vector[ScalaPbAny] = Vector.empty
     final var error: Option[String] = None
-
-    def deactivate(): Unit = {
-      active = false
-      events = Vector.empty
-      error  = None
-    }
+    final var performSnapshot: Boolean = false
 
     override def effect(): Unit = ???
     override def forward(): Unit = ???
@@ -173,7 +193,9 @@ final class EventSourcedImpl(system: ActorSystem, services: Map[String, EventSou
       else {
         val encoded = anySupport.encodeScala(event)
         events :+= encoded // FIXME if the next line fails, we still retain the event, how to handle?
-        handler.handleEvent(ScalaPbAny.toJavaProto(encoded), new EventContextImpl(entityId, sequenceNumber + events.size))
+        val nextSequenceNumber = sequenceNumber + events.size
+        handler.handleEvent(ScalaPbAny.toJavaProto(encoded), new EventContextImpl(entityId, nextSequenceNumber))
+        performSnapshot = performSnapshot || (nextSequenceNumber % snapshotEvery == 0)
       }
     }
   }

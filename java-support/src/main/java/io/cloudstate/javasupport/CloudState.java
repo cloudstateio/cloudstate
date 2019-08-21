@@ -28,12 +28,12 @@ public final class CloudState {
     }
 
     public CloudState preferJavaProtobufs() {
-        this.prefer= AnySupport.PREFER_JAVA();
+        this.prefer = AnySupport.PREFER_JAVA();
         return this;
     }
 
     public CloudState preferScalaProtobufs() {
-        this.prefer= AnySupport.PREFER_SCALA();
+        this.prefer = AnySupport.PREFER_SCALA();
         return this;
     }
 
@@ -61,11 +61,13 @@ public final class CloudState {
             persistenceId = entity.persistenceId();
         }
 
+        int snapshotEvery = 20; // FIXME Should we get this off of the EventSourcedEntity annotation, or from config file, or otherwise?
+
         AnySupport anySupport = newAnySupport(additionalDescriptors);
 
         services.put(descriptor.getFullName(), new EventSourcedStatefulService(
                 new AnnotationSupport(entityClass, anySupport, descriptor), descriptor,
-                anySupport, persistenceId
+                anySupport, persistenceId, snapshotEvery
         ));
 
         return this;
@@ -84,8 +86,10 @@ public final class CloudState {
      */
     public CloudState registerEventSourcedEntity(EventSourcedEntityFactory factory, Descriptors.ServiceDescriptor descriptor,
                                           String persistenceId, Descriptors.FileDescriptor... additionalDescriptors) {
+
+        int snapshotEvery = 20; // FIXME Should we get this as a parameter, or from config file, or otherwise?
         services.put(descriptor.getFullName(), new EventSourcedStatefulService(factory, descriptor,
-                newAnySupport(additionalDescriptors), persistenceId));
+                newAnySupport(additionalDescriptors), persistenceId, snapshotEvery));
 
         return this;
 
