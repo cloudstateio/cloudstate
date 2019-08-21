@@ -21,12 +21,12 @@ import scala.collection.JavaConverters._
 object AnySupport {
 
   private final val CloudStatePrimitiveFieldNumber = 1
-  private final val CloudStatePrimitive = "p.cloudstate.io/"
-  private final val CloudStateJson = "json.cloudstate.io/"
+  final val CloudStatePrimitive = "p.cloudstate.io/"
+  final val CloudStateJson = "json.cloudstate.io/"
   final val DefaultTypeUrlPrefix = "type.googleapis.com"
 
   private sealed abstract class Primitive[T: ClassTag] {
-    val name = fieldType.getJavaType.name().toLowerCase(Locale.ROOT)
+    val name = fieldType.name().toLowerCase(Locale.ROOT)
     val fullName = CloudStatePrimitive + name
     final val clazz = implicitly[ClassTag[T]].runtimeClass
     def write(stream: CodedOutputStream, t: T): Unit
@@ -135,7 +135,7 @@ object AnySupport {
   private def flattenDescriptors(seenSoFar: Map[String, Descriptors.FileDescriptor], descriptors: Seq[Descriptors.FileDescriptor]): Map[String, Descriptors.FileDescriptor] = {
     descriptors.foldLeft(seenSoFar) {
       case (results, descriptor) =>
-        val descriptorName = descriptor.getPackage + "/" + descriptor.getName
+        val descriptorName = descriptor.getName
         if (results.contains(descriptorName)) results
         else {
           val withDesc = results.updated(descriptorName, descriptor)
@@ -159,6 +159,10 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
 
   private val reflectionCache = TrieMap.empty[String, Try[ResolvedType[Any]]]
 
+  private def strippedFileName(fileName: String) = {
+    fileName.split(Array('/', '\\')).last.stripSuffix(".proto")
+  }
+
   private def tryResolveJavaPbType(typeDescriptor: Descriptors.Descriptor) = {
     val fileDescriptor = typeDescriptor.getFile
     val options = fileDescriptor.getOptions
@@ -171,7 +175,7 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
     val outerClassName =
       if (options.hasJavaMultipleFiles && options.getJavaMultipleFiles) ""
       else if (options.hasJavaOuterClassname) options.getJavaOuterClassname + "$"
-      else if (fileDescriptor.getName.nonEmpty) CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, fileDescriptor.getName.stripSuffix(".proto")) + "$"
+      else if (fileDescriptor.getName.nonEmpty) CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, strippedFileName(fileDescriptor.getName)) + "$"
       else ""
 
     val className = packageName + outerClassName + typeDescriptor.getName
@@ -216,7 +220,7 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
       if (scalaOptions.hasFlatPackage) {
         if (scalaOptions.getFlatPackage) Seq("")
         else Seq(fileDescriptor.getName.stripSuffix(".proto") + ".")
-      } else if (fileDescriptor.getName.nonEmpty) Seq("", fileDescriptor.getName.stripSuffix(".proto") + ".")
+      } else if (fileDescriptor.getName.nonEmpty) Seq("", strippedFileName(fileDescriptor.getName) + ".")
       else Seq("")
 
     possibleBaseNames.collectFirst(Function.unlift { baseName =>
@@ -228,8 +232,9 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
         val companion = classLoader.loadClass(companionName)
         if (classOf[GeneratedMessageCompanion[_]].isAssignableFrom(companion) &&
           classOf[scalapb.GeneratedMessage].isAssignableFrom(clazz)) {
+          val companionObject = companion.getField("MODULE$").get(null).asInstanceOf[GeneratedMessageCompanion[_]]
           Some(new ScalaPbResolvedType(clazz.asInstanceOf[Class[scalapb.GeneratedMessage]], typeUrlPrefix + "/" + typeDescriptor.getFullName,
-            companion.asInstanceOf[GeneratedMessageCompanion[_]]))
+            companionObject))
         } else {
           None
         }
@@ -313,9 +318,12 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
         val primitive = ClassToPrimitives(value.getClass)
         ScalaPbAny(primitive.fullName, primitiveToBytes(primitive, value))
 
+      case byteString: ByteString =>
+        ScalaPbAny(BytesPrimitive.fullName, primitiveToBytes(BytesPrimitive, byteString))
+
       case _: AnyRef if value.getClass.getAnnotation(classOf[Jsonable]) != null =>
         val json = UnsafeByteOperations.unsafeWrap(objectMapper.writeValueAsBytes(value))
-        ScalaPbAny(CloudStateJson + value.getClass, primitiveToBytes(BytesPrimitive, json))
+        ScalaPbAny(CloudStateJson + value.getClass.getName, primitiveToBytes(BytesPrimitive, json))
 
       case other =>
         throw SerializationException(s"Don't know how to serialize object of type ${other.getClass}. Try passing a protobuf, using a primitive type, or using a type annotated with @Jsonable.")
