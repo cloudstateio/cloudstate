@@ -54,16 +54,18 @@ public final class CloudState {
         if (entity == null) {
              throw new IllegalArgumentException(entityClass + " does not declare an " + EventSourcedEntity.class + " annotation!");
         }
-        String persistenceId;
+
+        final String persistenceId;
+        final int snapshotEvery;
         if (entity.persistenceId().isEmpty()) {
             persistenceId = entityClass.getSimpleName();
+            snapshotEvery = 0; // Default
         } else {
             persistenceId = entity.persistenceId();
+            snapshotEvery = entity.snapshotEvery();
         }
 
-        int snapshotEvery = 20; // FIXME Should we get this off of the EventSourcedEntity annotation, or from config file, or otherwise?
-
-        AnySupport anySupport = newAnySupport(additionalDescriptors);
+        final AnySupport anySupport = newAnySupport(additionalDescriptors);
 
         services.put(descriptor.getFullName(), new EventSourcedStatefulService(
                 new AnnotationSupport(entityClass, anySupport, descriptor), descriptor,
@@ -81,13 +83,12 @@ public final class CloudState {
      * @param factory The event sourced factory.
      * @param descriptor The descriptor for the service that this entity implements.
      * @param persistenceId The persistence id for this entity.
+     * @param snapshotEvery Specifies how snapshots of the entity state should be made: Zero means use default from configuration file. (Default) Any negative value means never snapshot. Any positive value means snapshot at-or-after that number of events.
      * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf types when needed.
      * @return This stateful service builder.
      */
     public CloudState registerEventSourcedEntity(EventSourcedEntityFactory factory, Descriptors.ServiceDescriptor descriptor,
-                                          String persistenceId, Descriptors.FileDescriptor... additionalDescriptors) {
-
-        int snapshotEvery = 20; // FIXME Should we get this as a parameter, or from config file, or otherwise?
+                                          String persistenceId, int snapshotEvery, Descriptors.FileDescriptor... additionalDescriptors) {
         services.put(descriptor.getFullName(), new EventSourcedStatefulService(factory, descriptor,
                 newAnySupport(additionalDescriptors), persistenceId, snapshotEvery));
 

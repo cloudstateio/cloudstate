@@ -38,9 +38,21 @@ final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
                                   val snapshotEvery: Int) extends StatefulService {
 
   override final val entityType = EventSourced.name
+  final def withSnapshotEvery(snapshotEvery: Int): EventSourcedStatefulService = {
+    if (snapshotEvery != this.snapshotEvery)
+      new EventSourcedStatefulService(this.factory, this.descriptor, this.anySupport, this.persistenceId, snapshotEvery)
+    else
+      this
+  }
 }
 
-final class EventSourcedImpl(system: ActorSystem, services: Map[String, EventSourcedStatefulService]) extends EventSourced {
+final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventSourcedStatefulService]) extends EventSourced {
+  private final val system = _system
+  private final val services = _services.iterator.map({
+    case (name, esss) =>
+      // FIXME overlay configuration provided by _system
+      (name, if (esss.snapshotEvery == 0) esss.withSnapshotEvery(esss.snapshotEvery) else esss)
+  }).toMap
 
   /**
    * The stream. One stream will be established per active entity.
@@ -70,8 +82,8 @@ final class EventSourcedImpl(system: ActorSystem, services: Map[String, EventSou
   }
 
   private def runEntity(init: EventSourcedInit): Flow[EventSourcedStreamIn, EventSourcedStreamOut, NotUsed] = {
-    val service = services.getOrElse(init.serviceName, throw new RuntimeException("Service not found"))
-    val handler = service.factory.create(new EventSourcedContextImpl(init.entityId)) // FIXME handle failure
+    val service = services.getOrElse(init.serviceName, throw new RuntimeException(s"Service not found: ${init.serviceName}"))
+    val handler = service.factory.create(new EventSourcedContextImpl(init.entityId))
     val entityId = init.entityId
 
     val startingSequenceNumber = (for {
@@ -97,7 +109,7 @@ final class EventSourcedImpl(system: ActorSystem, services: Map[String, EventSou
         (event.sequence, None)
       case ((sequence, _), InCommand(command)) =>
         if (entityId != command.entityId) throw new IllegalStateException("Receiving entity is not the intended recipient of command")
-        val cmd = ScalaPbAny.toJavaProto(command.payload.get) // FIXME isEmpty?
+        val cmd = ScalaPbAny.toJavaProto(command.payload.get)
         val context = new CommandContextImpl(entityId, sequence, command.name, command.id, service.anySupport, handler, service.snapshotEvery)
 
         try {
@@ -129,14 +141,9 @@ final class EventSourcedImpl(system: ActorSystem, services: Map[String, EventSou
 
           (endSequenceNumber, Some(out))
         } catch {
-          case NonFatal(t) =>
-            val message = t match {
-              case _: FailInvoked => context.error.getOrElse(throw new IllegalStateException("Unexpected error"))
-              case t => "Internal error"// FIXME should we reply with t.getMessage?
-            }
-
+          case _: FailInvoked =>
+            val message = context.error.getOrElse(throw new IllegalStateException("Unexpected error"))
             val response = ClientAction(ClientAction.Action.Failure(ClientActionFailure(command.id, message)))
-
             val out = OutReply(
               EventSourcedReply(
                 command.id,
@@ -178,31 +185,24 @@ final class EventSourcedImpl(system: ActorSystem, services: Map[String, EventSou
     override def forward(): Unit = ???
     override def fail(errorMessage: String): Unit = {
       if (!active) throw new IllegalStateException("Context no longer active!")
-      else {
-        error match {
-          case None =>
-            error = Some(errorMessage)
-            throw new FailInvoked
-          case _ =>
-            throw new IllegalStateException("fail(…) already previously invoked!")
-        }
-      }
+      else if (error.isEmpty) {
+        error = Some(errorMessage)
+        throw new FailInvoked
+      } else throw new IllegalStateException("fail(…) already previously invoked!")
     }
     override def emit(event: AnyRef): Unit = {
       if (!active) throw new IllegalStateException("Context no longer active!")
       else {
         val encoded = anySupport.encodeScala(event)
-        events :+= encoded // FIXME if the next line fails, we still retain the event, how to handle?
-        val nextSequenceNumber = sequenceNumber + events.size
+        val nextSequenceNumber = sequenceNumber + events.size + 1
         handler.handleEvent(ScalaPbAny.toJavaProto(encoded), new EventContextImpl(entityId, nextSequenceNumber))
-        performSnapshot = performSnapshot || (nextSequenceNumber % snapshotEvery == 0)
+        events :+= encoded
+        performSnapshot = (snapshotEvery > 0) && (performSnapshot || (nextSequenceNumber % snapshotEvery == 0))
       }
     }
   }
 
-  class FailInvoked extends Throwable with NoStackTrace {
-    override def toString: String = "CommandContext.fail(…) invoked"
-  }
+  class FailInvoked extends Throwable with NoStackTrace { override def toString: String = "CommandContext.fail(…) invoked" }
   class EventSourcedContextImpl(override final val entityId: String) extends EventSourcedContext
   class EventContextImpl(entityId: String, override final val sequenceNumber: Long) extends EventSourcedContextImpl(entityId) with EventContext
 }

@@ -86,14 +86,14 @@ final class CloudStateRunner private[this](_system: ActorSystem, services: Map[S
           route orElse EventSourcedHandler.partial(eventSourcedImpl)
 
       case (_, (serviceClass, _)) =>
-        sys.error("Unknown StatefulService? " + serviceClass)
+        sys.error(s"Unknown StatefulService: $serviceClass")
     }
 
     val entityDiscovery = EntityDiscoveryHandler.partial(new EntityDiscoveryImpl(system, services))
 
     serviceRoutes orElse
-      entityDiscovery orElse
-      { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }
+    entityDiscovery orElse
+    { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }
   }
 
   def run(): CompletionStage[Done] = {
