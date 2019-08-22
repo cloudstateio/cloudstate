@@ -126,7 +126,8 @@ final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventS
         } finally {
           context.deactivate() // Very important!
         }
-          val clientAction = context.createClientAction(reply, false)
+        
+        val clientAction = context.createClientAction(reply, false)
 
         if (!context.hasError) {
           val endSequenceNumber = sequence + context.events.size

@@ -9,7 +9,8 @@ public final class Main {
     new CloudState().
       registerEventSourcedEntity(
         ShoppingCartEntity.class,
-        Shoppingcart.getDescriptor().findServiceByName("ShoppingCart")
+        Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
+        com.example.shoppingcart.persistence.Domain.getDescriptor()
       ).start().toCompletableFuture().get();
   }
 }
