@@ -5,7 +5,7 @@ import java.util.Optional
 
 import io.cloudstate.javasupport.eventsourced._
 import io.cloudstate.javasupport.impl.ReflectionHelper.{InvocationContext, MainArgumentParameterHandler}
-import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedServiceMethod, ResolvedType}
+import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedServiceMethod}
 
 import scala.collection.concurrent.TrieMap
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
@@ -93,7 +93,7 @@ private[impl] class AnnotationBasedEventSourcedSupport(entityClass: Class[_], an
       }
     }
 
-    override def handleCommand(command: JavaPbAny, context: CommandContext): JavaPbAny = unwrap {
+    override def handleCommand(command: JavaPbAny, context: CommandContext): Optional[JavaPbAny] = unwrap {
       val maybeResult = currentBehaviors.collectFirst(Function.unlift { behavior =>
         getCachedBehaviorReflection(behavior).commandHandlers.get(context.commandName()).map { handler =>
           handler.invoke(behavior, command, context)
@@ -159,7 +159,7 @@ private[impl] class AnnotationBasedEventSourcedSupport(entityClass: Class[_], an
 }
 
 private class EventBehaviorReflection(eventHandlers: Map[Class[_], EventHandlerInvoker],
-                                      val commandHandlers: Map[String, CommandHandlerInvoker],
+                                      val commandHandlers: Map[String, ReflectionHelper.CommandHandlerInvoker[CommandContext]],
                                       snapshotHandlers: Map[Class[_], SnapshotHandlerInvoker],
                                       val snapshotInvoker: Option[SnapshotInvoker]) {
 
@@ -219,7 +219,7 @@ private object EventBehaviorReflection {
           throw new RuntimeException(s"Command handler method ${method.getName} for command $name found, but the service has no command by that name.")
         }
 
-        new CommandHandlerInvoker(ReflectionHelper.ensureAccessible(method), serviceMethod)
+        new ReflectionHelper.CommandHandlerInvoker[CommandContext](ReflectionHelper.ensureAccessible(method), serviceMethod)
       }.groupBy(_.serviceMethod.name)
       .map {
         case (commandName, Seq(invoker)) => commandName -> invoker
@@ -247,6 +247,8 @@ private object EventBehaviorReflection {
         case _ =>
           throw new RuntimeException(s"Multiple snapshoting methods found on behavior $behaviorClass")
       }
+
+    ReflectionHelper.validateNoBadMethods(allMethods, classOf[EventSourcedEntity], Set(classOf[EventHandler], classOf[CommandHandler], classOf[SnapshotHandler], classOf[Snapshot]))
 
     new EventBehaviorReflection(eventHandlers, commandHandlers, snapshotHandlers, snapshotInvoker)
   }
@@ -296,33 +298,6 @@ private class EventHandlerInvoker(val method: Method) {
   def invoke(obj: AnyRef, event: AnyRef, context: EventBehaviorContext): Unit = {
     val ctx = InvocationContext(event, context)
     method.invoke(obj, parameters.map(_.apply(ctx)): _*)
-  }
-}
-
-private class CommandHandlerInvoker(val method: Method, val serviceMethod: ResolvedServiceMethod) {
-  private val annotation = method.getAnnotation(classOf[CommandHandler])
-
-  private val parameters = ReflectionHelper.getParameterHandlers[CommandContext](method)()
-
-  if (parameters.count(_.isInstanceOf[MainArgumentParameterHandler[_]]) > 1) {
-    throw new RuntimeException(s"CommandHandler method $method must defined at most one non context parameter to handle commands, the parameters defined were: ${parameters.collect { case MainArgumentParameterHandler(clazz) => clazz.getName }.mkString(",")}")
-  }
-  parameters.foreach {
-    case MainArgumentParameterHandler(inClass) if !inClass.isAssignableFrom(serviceMethod.inputType.typeClass) =>
-      throw new RuntimeException(s"Incompatible command class $inClass for command ${serviceMethod.name}, expected ${serviceMethod.inputType.typeClass}")
-    case _ =>
-  }
-  if (!serviceMethod.outputType.typeClass.isAssignableFrom(method.getReturnType)) {
-    throw new RuntimeException(s"Incompatible return class ${method.getReturnType} for command ${serviceMethod.name}, expected ${serviceMethod.outputType.typeClass}")
-  }
-
-  def invoke(obj: AnyRef, command: JavaPbAny, context: CommandContext): JavaPbAny = {
-    val decodedCommand = serviceMethod.inputType.parseFrom(command.getValue).asInstanceOf[AnyRef]
-    val ctx = InvocationContext(decodedCommand, context)
-    val result = method.invoke(obj, parameters.map(_.apply(ctx)): _*)
-    JavaPbAny.newBuilder().setTypeUrl(serviceMethod.outputType.typeUrl)
-      .setValue(serviceMethod.outputType.asInstanceOf[ResolvedType[Any]].toByteString(result))
-      .build()
   }
 }
 

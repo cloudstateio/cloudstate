@@ -6,7 +6,7 @@ import com.google.protobuf.{ByteString, Parser, UnsafeByteOperations, Message =>
 /**
   * A resolved service method.
   */
-final case class ResolvedServiceMethod(name: String, inputType: ResolvedType[_], outputType: ResolvedType[_]) {
+final case class ResolvedServiceMethod(name: String, inputType: ResolvedType[_], outputType: ResolvedType[_], outputStreamed: Boolean) {
 }
 
 /**

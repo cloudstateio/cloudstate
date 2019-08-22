@@ -7,7 +7,7 @@ import io.cloudstate.javasupport.impl.AnySupport
 import io.cloudstate.protocol.crdt.{CrdtClock, CrdtDelta, CrdtState, LWWRegisterDelta, LWWRegisterState}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 
-final class LWWRegisterImpl[T](anySupport: AnySupport) extends InternalCrdt with LWWRegister[T] {
+private[crdt] final class LWWRegisterImpl[T](anySupport: AnySupport) extends InternalCrdt with LWWRegister[T] {
   override final val name = "LWWRegister"
   private var value: T = _
   private var deltaValue: Option[ScalaPbAny] = None

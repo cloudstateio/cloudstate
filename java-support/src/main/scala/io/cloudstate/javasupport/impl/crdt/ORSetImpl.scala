@@ -9,7 +9,7 @@ import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtState, ORSetDelta, ORSetState
 
 import scala.collection.JavaConverters._
 
-class ORSetImpl[T](anySupport: AnySupport) extends util.AbstractSet[T] with InternalCrdt with ORSet[T] {
+private[crdt] class ORSetImpl[T](anySupport: AnySupport) extends util.AbstractSet[T] with InternalCrdt with ORSet[T] {
   override final val name = "ORSet"
   private val value = new util.HashSet[T]()
   private val added = new util.HashSet[ScalaPbAny]()
@@ -101,14 +101,14 @@ class ORSetImpl[T](anySupport: AnySupport) extends util.AbstractSet[T] with Inte
       if (cleared) {
         value.clear()
       }
-      value.removeAll(removed.map(anySupport.decode).asJava)
-      value.addAll(added.map(anySupport.decode).asJava)
+      value.removeAll(removed.map(e => anySupport.decode(e).asInstanceOf[T]).asJava)
+      value.addAll(added.map(e => anySupport.decode(e).asInstanceOf[T]).asJava)
   }
 
   override val applyState = {
     case CrdtState.State.Orset(ORSetState(value)) =>
       this.value.clear()
-      this.value.addAll(value.map(anySupport.decode).asJava)
+      this.value.addAll(value.map(e => anySupport.decode(e).asInstanceOf[T]).asJava)
   }
 
   override def toString = s"ORSet(${value.asScala.mkString(",")})"

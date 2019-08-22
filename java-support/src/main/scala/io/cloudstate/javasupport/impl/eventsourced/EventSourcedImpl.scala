@@ -16,20 +16,20 @@
 
 package io.cloudstate.javasupport.impl.eventsourced
 
+import java.util.Optional
+
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.Flow
-import com.google.protobuf.Descriptors
+import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 import com.google.protobuf.any.{Any => ScalaPbAny}
-import io.cloudstate.javasupport.{CloudState, StatefulService}
+import io.cloudstate.javasupport.StatefulService
 import io.cloudstate.javasupport.eventsourced._
-import io.cloudstate.javasupport.impl.AnySupport
-import io.cloudstate.protocol.entity.{ClientAction, Reply => ClientActionReply, Failure => ClientActionFailure}
+import io.cloudstate.javasupport.impl.{AbstractClientActionContext, AbstractEffectContext, ActivatableContext, AnySupport, FailInvoked}
+import io.cloudstate.protocol.entity.{ClientAction, Failure => ClientActionFailure, Reply => ClientActionReply}
 import io.cloudstate.protocol.event_sourced.EventSourcedStreamIn.Message.{Command => InCommand, Empty => InEmpty, Event => InEvent, Init => InInit}
 import io.cloudstate.protocol.event_sourced.EventSourcedStreamOut.Message.{Reply => OutReply}
 import io.cloudstate.protocol.event_sourced._
-
-import scala.util.control.{NonFatal, NoStackTrace}
 
 final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
                                   override val descriptor: Descriptors.ServiceDescriptor,
@@ -112,51 +112,45 @@ final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventS
         val cmd = ScalaPbAny.toJavaProto(command.payload.get)
         val context = new CommandContextImpl(entityId, sequence, command.name, command.id, service.anySupport, handler, service.snapshotEvery)
 
-        try {
-          val reply = handler.handleCommand(cmd, context) // FIXME is this allowed to throw 
-          context.error.foreach(_ => throw new FailInvoked) // Only happens if the user swallows the FailInvoked exception
-          val replyPayload = ScalaPbAny.fromJavaProto(reply)
-          val response = ClientAction(ClientAction.Action.Reply(ClientActionReply(Some(replyPayload))))
+        val reply = try {
+          handler.handleCommand(cmd, context) // FIXME is this allowed to throw
+        } catch {
+          case FailInvoked =>
+            Optional.empty[JavaPbAny]()
+            // Ignore, error already captured
+        } finally {
+          context.deactivate() // Very important!
+        }
+          val clientAction = context.createClientAction(reply, false)
 
+        if (!context.hasError) {
           val endSequenceNumber = sequence + context.events.size
 
           val snapshot =
             if (context.performSnapshot) {
               val s = handler.snapshot(new SnapshotContext {
-                override def entityId: String     = entityId
+                override def entityId: String = entityId
                 override def sequenceNumber: Long = endSequenceNumber
               })
               if (s.isPresent) Option(ScalaPbAny.fromJavaProto(s.get)) else None
             } else None
 
-          val out = OutReply(
+          (endSequenceNumber, Some(OutReply(
             EventSourcedReply(
               command.id,
-              Some(response),
+              clientAction,
               Nil, // FIXME implement sideEffects
               context.events,
               snapshot
             )
-          )
-
-          (endSequenceNumber, Some(out))
-        } catch {
-          case _: FailInvoked =>
-            val message = context.error.getOrElse(throw new IllegalStateException("Unexpected error"))
-            val response = ClientAction(ClientAction.Action.Failure(ClientActionFailure(command.id, message)))
-            val out = OutReply(
-              EventSourcedReply(
-                command.id,
-                Some(response),
-                Nil,
-                Nil,
-                None
-              )
+          )))
+        } else {
+          (sequence, Some(OutReply(
+            EventSourcedReply(
+              commandId = command.id,
+              clientAction = clientAction
             )
-
-          (sequence, Some(out)) // No progress was made
-        } finally {
-          context.active = false // Very important!
+          )))
         }
       case (_, InInit(i)) =>
         throw new IllegalStateException("Entity already inited")
@@ -174,35 +168,22 @@ final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventS
     override val commandId: Long,
     val anySupport: AnySupport,
     val handler: EventSourcedEntityHandler,
-    val snapshotEvery: Int) extends CommandContext {
+    val snapshotEvery: Int) extends CommandContext with AbstractClientActionContext
+    with AbstractEffectContext with ActivatableContext {
     
-    final var active: Boolean = true
     final var events: Vector[ScalaPbAny] = Vector.empty
-    final var error: Option[String] = None
     final var performSnapshot: Boolean = false
 
-    override def effect(): Unit = ???
-    override def forward(): Unit = ???
-    override def fail(errorMessage: String): Unit = {
-      if (!active) throw new IllegalStateException("Context no longer active!")
-      else if (error.isEmpty) {
-        error = Some(errorMessage)
-        throw new FailInvoked
-      } else throw new IllegalStateException("fail(…) already previously invoked!")
-    }
     override def emit(event: AnyRef): Unit = {
-      if (!active) throw new IllegalStateException("Context no longer active!")
-      else {
-        val encoded = anySupport.encodeScala(event)
-        val nextSequenceNumber = sequenceNumber + events.size + 1
-        handler.handleEvent(ScalaPbAny.toJavaProto(encoded), new EventContextImpl(entityId, nextSequenceNumber))
-        events :+= encoded
-        performSnapshot = (snapshotEvery > 0) && (performSnapshot || (nextSequenceNumber % snapshotEvery == 0))
-      }
+      checkActive()
+      val encoded = anySupport.encodeScala(event)
+      val nextSequenceNumber = sequenceNumber + events.size + 1
+      handler.handleEvent(ScalaPbAny.toJavaProto(encoded), new EventContextImpl(entityId, nextSequenceNumber))
+      events :+= encoded
+      performSnapshot = (snapshotEvery > 0) && (performSnapshot || (nextSequenceNumber % snapshotEvery == 0))
     }
   }
 
-  class FailInvoked extends Throwable with NoStackTrace { override def toString: String = "CommandContext.fail(…) invoked" }
   class EventSourcedContextImpl(override final val entityId: String) extends EventSourcedContext
   class EventContextImpl(entityId: String, override final val sequenceNumber: Long) extends EventSourcedContextImpl(entityId) with EventContext
 }

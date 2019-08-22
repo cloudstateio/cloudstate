@@ -1,5 +1,7 @@
 package io.cloudstate.javasupport.eventsourced;
 
+import io.cloudstate.javasupport.impl.CloudStateAnnotation;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -17,6 +19,7 @@ import java.lang.annotation.Target;
  * The method may also take a {@link CommandContext}, and/or a {@link io.cloudstate.javasupport.EntityId} annotated
  * {@link String} parameter.
  */
+@CloudStateAnnotation
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface CommandHandler {

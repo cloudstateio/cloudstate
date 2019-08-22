@@ -10,7 +10,7 @@ import io.cloudstate.javasupport.impl.{AnySupport, ResolvedServiceMethod, Resolv
 import org.scalatest.{Matchers, WordSpec}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 
-class AnnotationSupportSpec extends WordSpec with Matchers {
+class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
   object MockContext extends EventSourcedContext {
     override def entityId(): String = "foo"
   }
@@ -48,14 +48,14 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
 
   case class Wrapped(value: String)
   val anySupport = new AnySupport(Array(Shoppingcart.getDescriptor), this.getClass.getClassLoader)
-  val method = ResolvedServiceMethod("Wrap", StringResolvedType, WrappedResolvedType)
+  val method = ResolvedServiceMethod("Wrap", StringResolvedType, WrappedResolvedType, false)
 
   def create(behavior: AnyRef, methods: ResolvedServiceMethod*) = {
-    new AnnotationSupport(behavior.getClass, anySupport, methods, Some(_ => behavior)).create(MockContext)
+    new AnnotationBasedEventSourcedSupport(behavior.getClass, anySupport, methods, Some(_ => behavior)).create(MockContext)
   }
 
   def create(clazz: Class[_]) = {
-    new AnnotationSupport(clazz, anySupport, Nil, None).create(MockContext)
+    new AnnotationBasedEventSourcedSupport(clazz, anySupport, Nil, None).create(MockContext)
   }
 
   def command(str: String) = {
@@ -222,7 +222,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
           @CommandHandler
           def wrap() = Wrapped("blah")
         }, method)
-        decodeWrapped(handler.handleCommand(command("nothing"), new MockCommandContext)) should ===(Wrapped("blah"))
+        decodeWrapped(handler.handleCommand(command("nothing"), new MockCommandContext).get) should ===(Wrapped("blah"))
       }
 
       "single arg command handler" in {
@@ -230,7 +230,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
           @CommandHandler
           def wrap(msg: String) = Wrapped(msg)
         }, method)
-        decodeWrapped(handler.handleCommand(command("blah"), new MockCommandContext)) should ===(Wrapped("blah"))
+        decodeWrapped(handler.handleCommand(command("blah"), new MockCommandContext).get) should ===(Wrapped("blah"))
       }
 
       "multi arg command handler" in {
@@ -242,7 +242,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
             Wrapped(msg)
           }
         }, method)
-        decodeWrapped(handler.handleCommand(command("blah"), new MockCommandContext)) should ===(Wrapped("blah"))
+        decodeWrapped(handler.handleCommand(command("blah"), new MockCommandContext).get) should ===(Wrapped("blah"))
       }
 
       "allow emiting events" in {
@@ -255,7 +255,7 @@ class AnnotationSupportSpec extends WordSpec with Matchers {
           }
         }, method)
         val ctx = new MockCommandContext
-        decodeWrapped(handler.handleCommand(command("blah"), ctx)) should ===(Wrapped("blah"))
+        decodeWrapped(handler.handleCommand(command("blah"), ctx).get) should ===(Wrapped("blah"))
         ctx.emited should ===(Seq("blah event"))
       }
 

@@ -3,7 +3,7 @@ package io.cloudstate.javasupport.impl.crdt
 import io.cloudstate.javasupport.crdt.Vote
 import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtState, VoteDelta, VoteState}
 
-final class VoteImpl extends InternalCrdt with Vote {
+private[crdt] final class VoteImpl extends InternalCrdt with Vote {
   override final val name = "Vote"
   private var selfVote = false
   private var voters = 1

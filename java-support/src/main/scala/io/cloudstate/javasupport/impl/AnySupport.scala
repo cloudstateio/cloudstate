@@ -266,7 +266,7 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
 
   def resolveServiceDescriptor(serviceDescriptor: Descriptors.ServiceDescriptor): Seq[ResolvedServiceMethod] = {
     serviceDescriptor.getMethods.asScala.map { method =>
-      ResolvedServiceMethod(method.getName, resolveTypeDescriptor(method.getInputType), resolveTypeDescriptor(method.getOutputType))
+      ResolvedServiceMethod(method.getName, resolveTypeDescriptor(method.getInputType), resolveTypeDescriptor(method.getOutputType), method.isServerStreaming)
     }
   }
 

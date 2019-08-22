@@ -3,7 +3,7 @@ package io.cloudstate.javasupport.impl.crdt
 import io.cloudstate.javasupport.crdt.GCounter
 import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtState, GCounterDelta, GCounterState}
 
-final class GCounterImpl extends InternalCrdt with GCounter {
+private[crdt] final class GCounterImpl extends InternalCrdt with GCounter {
   override final val name = "GCounter"
   private var value: Long = 0
   private var deltaValue: Long = 0

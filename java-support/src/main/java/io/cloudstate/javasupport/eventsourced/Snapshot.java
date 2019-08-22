@@ -1,5 +1,7 @@
 package io.cloudstate.javasupport.eventsourced;
 
+import io.cloudstate.javasupport.impl.CloudStateAnnotation;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -16,6 +18,7 @@ import java.lang.annotation.Target;
  * </p>
  * The method may accept a {@link SnapshotContext} parameter.
  */
+@CloudStateAnnotation
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Snapshot {

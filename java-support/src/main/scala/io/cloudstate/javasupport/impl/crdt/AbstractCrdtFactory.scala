@@ -5,7 +5,7 @@ import io.cloudstate.javasupport.impl.AnySupport
 
 trait AbstractCrdtFactory extends CrdtFactory {
   protected def anySupport: AnySupport
-  protected def newCrdt[C <: Crdt](crdt: C): C
+  protected def newCrdt[C <: InternalCrdt](crdt: C): C
 
   override def newGCounter(): GCounter = newCrdt(new GCounterImpl)
 
@@ -23,7 +23,8 @@ trait AbstractCrdtFactory extends CrdtFactory {
     register
   }
 
-  override def newORMap[K, V <: Crdt](): ORMap[K, V] = ???
+  override def newORMap[K, V <: Crdt](): ORMap[K, V] =
+    newCrdt(new ORMapImpl[K, InternalCrdt](anySupport)).asInstanceOf[ORMap[K, V]]
 
   override def newVote(): Vote = newCrdt(new VoteImpl)
 }

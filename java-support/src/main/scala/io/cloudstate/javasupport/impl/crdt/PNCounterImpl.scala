@@ -3,7 +3,7 @@ package io.cloudstate.javasupport.impl.crdt
 import io.cloudstate.javasupport.crdt.PNCounter
 import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtState, PNCounterDelta, PNCounterState}
 
-class PNCounterImpl extends InternalCrdt with PNCounter {
+private[crdt] final class PNCounterImpl extends InternalCrdt with PNCounter {
   override final val name = "PNCounter"
   private var value: Long = 0
   private var deltaValue: Long = 0

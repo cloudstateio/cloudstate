@@ -3,7 +3,7 @@ package io.cloudstate.javasupport.impl.crdt
 import io.cloudstate.javasupport.crdt.Flag
 import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtState, FlagDelta, FlagState}
 
-final class FlagImpl extends InternalCrdt with Flag {
+private[crdt] final class FlagImpl extends InternalCrdt with Flag {
   override final val name = "Flag"
   private var value: Boolean = false
   private var deltaValue: Boolean = false

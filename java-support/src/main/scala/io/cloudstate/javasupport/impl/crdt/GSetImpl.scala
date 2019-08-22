@@ -10,7 +10,7 @@ import com.google.protobuf.any.{Any => ScalaPbAny}
 
 import scala.collection.JavaConverters._
 
-class GSetImpl[T](anySupport: AnySupport) extends util.AbstractSet[T] with InternalCrdt with GSet[T] {
+private[crdt] final class GSetImpl[T](anySupport: AnySupport) extends util.AbstractSet[T] with InternalCrdt with GSet[T] {
   override final val name = "GSet"
   private val value = new util.HashSet[T]()
   private val added = new util.HashSet[ScalaPbAny]()
@@ -44,13 +44,13 @@ class GSetImpl[T](anySupport: AnySupport) extends util.AbstractSet[T] with Inter
 
   override val applyDelta = {
     case CrdtDelta.Delta.Gset(GSetDelta(added)) =>
-      value.addAll(added.map(anySupport.decode).asJava)
+      value.addAll(added.map(e => anySupport.decode(e).asInstanceOf[T]).asJava)
   }
 
   override val applyState = {
     case CrdtState.State.Gset(GSetState(value)) =>
       this.value.clear()
-      this.value.addAll(value.map(anySupport.decode).asJava)
+      this.value.addAll(value.map(e => anySupport.decode(e).asInstanceOf[T]).asJava)
   }
 
   override def toString = s"GSet(${value.asScala.mkString(",")})"

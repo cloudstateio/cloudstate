@@ -25,9 +25,9 @@ public interface EventSourcedEntityHandler {
      *
      * @param command The command to handle.
      * @param context The command context.
-     * @return The reply to the command.
+     * @return The reply to the command, if the command isn't being forwarded elsewhere.
      */
-    Any handleCommand(Any command, CommandContext context);
+    Optional<Any> handleCommand(Any command, CommandContext context);
 
     /**
      * Handle the given snapshot.
