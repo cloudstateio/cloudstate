@@ -286,6 +286,10 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     reply.message must be('reply)
     reply.message.reply must be(defined)
     val r = reply.message.reply.get
+    r.clientAction must be(defined)
+    val clientAction = r.clientAction.get
+    clientAction.action must be('reply)
+    clientAction.action.reply must be('defined)
     r.events.size must be (events)
     r
   }
