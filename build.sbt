@@ -439,10 +439,13 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
 
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
 
-    /*PB.protoSources in Compile ++= {
+    PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "example", (sourceDirectory in Compile).value / "protos")
-    },*/
+      Seq(baseDir / "frontend", baseDir / "example")
+    },
+    PB.targets in Compile := Seq(
+      PB.gens.java -> (sourceManaged in Compile).value,
+    ),
 
     javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
   )

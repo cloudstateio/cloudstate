@@ -4,8 +4,7 @@ import java.lang.annotation.Annotation
 import java.lang.reflect.{AccessibleObject, Executable, Member, Method, ParameterizedType, Type, WildcardType}
 import java.util.Optional
 
-import io.cloudstate.javasupport.Context
-import io.cloudstate.javasupport.{EntityContext, EntityId}
+import io.cloudstate.javasupport.{Context, EntityContext, EntityId, ServiceCallFactory}
 import com.google.protobuf.{Any => JavaPbAny}
 
 import scala.reflect.ClassTag
@@ -50,6 +49,9 @@ private[impl] object ReflectionHelper {
   final case object EntityIdParameterHandler extends ParameterHandler[EntityContext] {
     override def apply(ctx: InvocationContext[EntityContext]): AnyRef = ctx.context.entityId()
   }
+  final case object ServiceCallFactoryParameterHandler extends ParameterHandler[Context] {
+    override def apply(ctx: InvocationContext[Context]): AnyRef = ctx.context.serviceCallFactory()
+  }
 
   final case class MethodParameter(method: Executable, param: Int) {
     def parameterType: Class[_] = method.getParameterTypes()(param)
@@ -68,6 +70,8 @@ private[impl] object ReflectionHelper {
       else if (classOf[Context].isAssignableFrom(parameter.parameterType))
         // It's a context parameter who is not within the lower bound of the contexts supported by this method
         throw new RuntimeException(s"Unsupported context parameter on ${method.getName}, ${parameter.parameterType} must be the same or a super type of $contextClass")
+      else if (parameter.parameterType == classOf[ServiceCallFactory])
+        ServiceCallFactoryParameterHandler
       else if (parameter.annotation[EntityId].isDefined) {
         if (parameter.parameterType != classOf[String]) {
           throw new RuntimeException(s"@EntityId annotated parameter on method ${method.getName} has type ${parameter.parameterType}, must be String.")

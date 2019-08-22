@@ -1,4 +1,4 @@
-package io.cloudstate.javasupport.test;
+package io.cloudstate.samples.shoppingcart;
 
 import com.example.shoppingcart.Shoppingcart;
 import com.example.shoppingcart.persistence.Domain;
