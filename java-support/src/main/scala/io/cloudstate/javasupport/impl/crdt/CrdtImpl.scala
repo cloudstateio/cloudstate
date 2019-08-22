@@ -23,9 +23,9 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Flow, Source}
 import com.google.protobuf.Descriptors
-import io.cloudstate.javasupport.{StatefulService, crdt}
+import io.cloudstate.javasupport.{Context, ServiceCallFactory, StatefulService}
 import io.cloudstate.javasupport.crdt.{CommandContext, CrdtContext, CrdtCreationContext, CrdtEntityFactory, StreamCancelledContext, StreamedCommandContext, SubscriptionContext}
-import io.cloudstate.javasupport.impl.{AbstractClientActionContext, AbstractEffectContext, ActivatableContext, AnySupport, FailInvoked}
+import io.cloudstate.javasupport.impl.{AbstractClientActionContext, AbstractEffectContext, ActivatableContext, AnySupport, FailInvoked, ResolvedEntityFactory, ResolvedServiceMethod}
 import io.cloudstate.protocol.crdt._
 import io.cloudstate.protocol.crdt.CrdtStreamIn.{Message => In}
 import io.cloudstate.protocol.entity.{Command, Failure, StreamCancelled}
@@ -41,11 +41,18 @@ final class CrdtStatefulService(val factory: CrdtEntityFactory,
 ) extends StatefulService {
   override final val entityType = Crdt.name
 
+  override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] = {
+    factory match {
+      case resolved: ResolvedEntityFactory => Some(resolved.resolvedMethods)
+      case _ => None
+    }
+  }
+
   private val streamed = descriptor.getMethods.asScala.filter(_.toProto.getServerStreaming).map(_.getName).toSet
   def isStreamed(command: String) = streamed(command)
 }
 
-class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService]) extends Crdt {
+class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], rootContext: Context) extends Crdt {
   /**
     * After invoking handle, the first message sent will always be a CrdtInit message, containing the entity ID, and,
     * if it exists or is available, the current state of the entity. After that, one or more commands may be sent,
@@ -192,7 +199,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService]) 
           commandId = command.id,
           clientAction = clientAction,
           stateAction = crdtAction,
-          // todo effects
+          sideEffects = ctx.sideEffects,
           streamed = streamAccepted
         ))) :: streamedMessages.map(m => CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(m)))
       }
@@ -215,12 +222,12 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService]) 
             CrdtStreamOut(CrdtStreamOut.Message.StreamCancelledResponse(CrdtStreamCancelledResponse(
               commandId = cancelled.id,
               stateAction = crdtAction,
-              // todo effects
+              sideEffects = ctx.sideEffects,
             ))) :: notifySubscribers().map(m => CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(m)))
           } else {
             CrdtStreamOut(CrdtStreamOut.Message.StreamCancelledResponse(CrdtStreamCancelledResponse(
               commandId = cancelled.id,
-              // todo effects
+              sideEffects = ctx.sideEffects,
             ))) :: Nil
           }
 
@@ -252,7 +259,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService]) 
               commandId = id,
               clientAction = clientAction
             ))
-          } else if (clientAction.isDefined || context.isEnded() /* || effects */) {
+          } else if (clientAction.isDefined || context.isEnded() || context.sideEffects.nonEmpty) {
             if (context.isEnded()) {
               subscribers -= id
               cancelListeners -= id
@@ -260,7 +267,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService]) 
             Some(CrdtStreamedMessage(
               commandId = id,
               clientAction = clientAction,
-              // todo effects
+              sideEffects = context.sideEffects,
               endStream = context.isEnded()
             ))
           } else {
@@ -337,10 +344,12 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService]) 
     }
 
     trait AbstractCrdtContext extends CrdtContext {
-      override final def state(): Optional[io.cloudstate.javasupport.crdt.Crdt] =
+      override final def state(): Optional[_ <: io.cloudstate.javasupport.crdt.Crdt] =
         (crdt: Option[io.cloudstate.javasupport.crdt.Crdt]).asJava
 
       override final def entityId(): String = entityId
+
+      override def serviceCallFactory(): ServiceCallFactory = rootContext.serviceCallFactory()
     }
 
     trait CapturingCrdtFactory extends AbstractCrdtFactory with AbstractCrdtContext {

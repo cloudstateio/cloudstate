@@ -38,7 +38,7 @@ class AnySupportSpec extends WordSpec with Matchers with OptionValues {
       val methods = anySupport.resolveServiceDescriptor(
         Shoppingcart.getDescriptor.findServiceByName("ShoppingCart"))
       methods should have size 3
-      val method = methods.find(_.name == "AddItem").value
+      val method = methods("AddItem")
 
       // Input type
       method.inputType.typeUrl should ===("com.example/" + Shoppingcart.AddLineItem.getDescriptor.getFullName)

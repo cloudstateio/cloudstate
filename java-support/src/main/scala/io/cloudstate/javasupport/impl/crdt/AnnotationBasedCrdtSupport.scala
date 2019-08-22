@@ -5,10 +5,10 @@ import java.util.{Optional, function}
 import java.util.function.Consumer
 
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
-import io.cloudstate.javasupport.Context
+import io.cloudstate.javasupport.{Context, ServiceCall, ServiceCallFactory}
 import io.cloudstate.javasupport.crdt.{CommandContext, CommandHandler, Crdt, CrdtCreationContext, CrdtEntity, CrdtEntityFactory, CrdtEntityHandler, Flag, GCounter, GSet, LWWRegister, LWWRegisterMap, ORMap, ORSet, PNCounter, PNCounterMap, StreamCancelledContext, StreamedCommandContext, SubscriptionContext, Vote}
 import io.cloudstate.javasupport.impl.ReflectionHelper.{CommandHandlerInvoker, InvocationContext, MainArgumentParameterHandler}
-import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedServiceMethod, ResolvedType}
+import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEntityFactory, ResolvedServiceMethod, ResolvedType}
 
 import scala.reflect.ClassTag
 
@@ -17,8 +17,8 @@ import scala.reflect.ClassTag
   * Annotation based implementation of the [[io.cloudstate.javasupport.crdt.CrdtEntityFactory]].
   */
 private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_], anySupport: AnySupport,
-  serviceMethods: Seq[ResolvedServiceMethod],
-  factory: Option[CrdtCreationContext => AnyRef] = None) extends CrdtEntityFactory {
+  override val resolvedMethods: Map[String, ResolvedServiceMethod[_, _]],
+  factory: Option[CrdtCreationContext => AnyRef] = None) extends CrdtEntityFactory with ResolvedEntityFactory {
 
   def this(entityClass: Class[_], anySupport: AnySupport,
     serviceDescriptor: Descriptors.ServiceDescriptor) =
@@ -46,9 +46,9 @@ private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_], anySupport
           ReflectionHelper.getCapitalizedName(method)
         } else annotation.name()
 
-        val serviceMethod = serviceMethods.find(_.name == name).getOrElse {
+        val serviceMethod = resolvedMethods.getOrElse(name, {
           throw new RuntimeException(s"Command handler method ${method.getName} for command $name found, but the service has no command by that name.")
-        }
+        })
         (ReflectionHelper.ensureAccessible(method), serviceMethod)
       }
 
@@ -124,13 +124,16 @@ private final class AdaptedStreamedCommandContext(val delegate: StreamedCommandC
 
   override def onCancel(effect: Consumer[StreamCancelledContext]): Unit = delegate.onCancel(effect)
 
+  override def serviceCallFactory(): ServiceCallFactory = delegate.serviceCallFactory()
+  override def entityId(): String = delegate.entityId()
   override def commandId(): Long = delegate.commandId()
   override def commandName(): String = delegate.commandName()
+  override def state(): Optional[_ <: Crdt] = delegate.state()
   override def delete(): Unit = delegate.delete()
 
-  override def effect(): Unit = delegate.effect()
+  override def forward(to: ServiceCall): Unit = delegate.forward(to)
   override def fail(errorMessage: String): Unit = delegate.fail(errorMessage)
-  override def forward(): Unit = delegate.forward()
+  override def effect(effect: ServiceCall, synchronous: Boolean): Unit = delegate.effect(effect, synchronous)
 
   override def newGCounter(): GCounter = delegate.newGCounter()
   override def newPNCounter(): PNCounter = delegate.newPNCounter()

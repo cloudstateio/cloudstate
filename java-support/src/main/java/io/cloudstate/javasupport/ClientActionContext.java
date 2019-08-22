@@ -18,6 +18,8 @@ public interface ClientActionContext extends Context {
      * <p/>
      * The command will be forwarded after successful completion of handling this command, including any persistence
      * that this command does.
+     *
+     * @param to The service call to forward command processing to.
      */
-    void forward(/* todo parameters */);
+    void forward(ServiceCall to);
 }

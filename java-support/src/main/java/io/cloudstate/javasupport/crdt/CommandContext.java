@@ -5,7 +5,7 @@ import io.cloudstate.javasupport.EffectContext;
 
 import java.util.Optional;
 
-public interface CommandContext extends CrdtFactory, EffectContext, ClientActionContext {
+public interface CommandContext extends CrdtContext, CrdtFactory, EffectContext, ClientActionContext {
     long commandId();
 
     String commandName();

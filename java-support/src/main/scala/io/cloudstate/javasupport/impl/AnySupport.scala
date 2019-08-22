@@ -264,10 +264,11 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
     }).get
   }
 
-  def resolveServiceDescriptor(serviceDescriptor: Descriptors.ServiceDescriptor): Seq[ResolvedServiceMethod] = {
+  def resolveServiceDescriptor(serviceDescriptor: Descriptors.ServiceDescriptor): Map[String, ResolvedServiceMethod[_, _]] = {
     serviceDescriptor.getMethods.asScala.map { method =>
-      ResolvedServiceMethod(method.getName, resolveTypeDescriptor(method.getInputType), resolveTypeDescriptor(method.getOutputType), method.isServerStreaming)
-    }
+      method.getName -> ResolvedServiceMethod(method, resolveTypeDescriptor(method.getInputType),
+        resolveTypeDescriptor(method.getOutputType))
+    }.toMap
   }
 
   private def resolveTypeUrl(typeName: String): Option[ResolvedType[_]] = {

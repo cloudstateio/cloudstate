@@ -79,7 +79,8 @@ private[impl] object ReflectionHelper {
     handlers.asInstanceOf[Array[ParameterHandler[C]]]
   }
 
-  final class CommandHandlerInvoker[CommandContext <: Context : ClassTag](val method: Method, val serviceMethod: ResolvedServiceMethod) {
+  final class CommandHandlerInvoker[CommandContext <: Context : ClassTag](val method: Method, val serviceMethod: ResolvedServiceMethod[_, _]) {
+    private val name = serviceMethod.descriptor.getFullName
     private val parameters = ReflectionHelper.getParameterHandlers[CommandContext](method)()
 
     if (parameters.count(_.isInstanceOf[MainArgumentParameterHandler[_]]) > 1) {
@@ -87,7 +88,7 @@ private[impl] object ReflectionHelper {
     }
     parameters.foreach {
       case MainArgumentParameterHandler(inClass) if !inClass.isAssignableFrom(serviceMethod.inputType.typeClass) =>
-        throw new RuntimeException(s"Incompatible command class $inClass for command ${serviceMethod.name}, expected ${serviceMethod.inputType.typeClass}")
+        throw new RuntimeException(s"Incompatible command class $inClass for command $name, expected ${serviceMethod.inputType.typeClass}")
       case _ =>
     }
 
@@ -101,12 +102,12 @@ private[impl] object ReflectionHelper {
       case clazz: Class[_] => clazz
       case pt: ParameterizedType => getRawType(pt.getRawType)
       case wct: WildcardType => getRawType(wct.getUpperBounds.headOption.getOrElse(classOf[Object]))
-      case _ => throw new RuntimeException(s"Cannot resolve return type ${method.getGenericReturnType} for command ${serviceMethod.name}")
+      case _ => throw new RuntimeException(s"Cannot resolve return type ${method.getGenericReturnType} for command $name")
     }
 
     private def verifyOutputType(t: Type): Unit = {
       if (!serviceMethod.outputType.typeClass.isAssignableFrom(getRawType(t))) {
-        throw new RuntimeException(s"Incompatible return class $t for command ${serviceMethod.name}, expected ${serviceMethod.outputType.typeClass}")
+        throw new RuntimeException(s"Incompatible return class $t for command $name, expected ${serviceMethod.outputType.typeClass}")
       }
     }
 
@@ -117,7 +118,7 @@ private[impl] object ReflectionHelper {
         case pt: ParameterizedType =>
           verifyOutputType(pt.getActualTypeArguments()(0))
         case _ =>
-          throw new RuntimeException(s"Cannot resolve return type ${method.getGenericReturnType} for command ${serviceMethod.name}")
+          throw new RuntimeException(s"Cannot resolve return type ${method.getGenericReturnType} for command $name")
       }
 
       { result =>

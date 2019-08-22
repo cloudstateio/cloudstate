@@ -23,19 +23,25 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.Flow
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 import com.google.protobuf.any.{Any => ScalaPbAny}
-import io.cloudstate.javasupport.StatefulService
+import io.cloudstate.javasupport.{Context, ServiceCallFactory, StatefulService}
 import io.cloudstate.javasupport.eventsourced._
-import io.cloudstate.javasupport.impl.{AbstractClientActionContext, AbstractEffectContext, ActivatableContext, AnySupport, FailInvoked}
-import io.cloudstate.protocol.entity.{ClientAction, Failure => ClientActionFailure, Reply => ClientActionReply}
+import io.cloudstate.javasupport.impl.{AbstractClientActionContext, AbstractEffectContext, ActivatableContext, AnySupport, FailInvoked, ResolvedEntityFactory, ResolvedServiceMethod}
 import io.cloudstate.protocol.event_sourced.EventSourcedStreamIn.Message.{Command => InCommand, Empty => InEmpty, Event => InEvent, Init => InInit}
 import io.cloudstate.protocol.event_sourced.EventSourcedStreamOut.Message.{Reply => OutReply}
 import io.cloudstate.protocol.event_sourced._
 
 final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
-                                  override val descriptor: Descriptors.ServiceDescriptor,
-                                  val anySupport: AnySupport,
-                                  override val persistenceId: String,
-                                  val snapshotEvery: Int) extends StatefulService {
+  override val descriptor: Descriptors.ServiceDescriptor,
+  val anySupport: AnySupport,
+  override val persistenceId: String,
+  val snapshotEvery: Int) extends StatefulService {
+
+  override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] = {
+    factory match {
+      case resolved: ResolvedEntityFactory => Some(resolved.resolvedMethods)
+      case _ => None
+    }
+  }
 
   override final val entityType = EventSourced.name
   final def withSnapshotEvery(snapshotEvery: Int): EventSourcedStatefulService = {
@@ -46,7 +52,7 @@ final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
   }
 }
 
-final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventSourcedStatefulService]) extends EventSourced {
+final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventSourcedStatefulService], rootContext: Context) extends EventSourced {
   private final val system = _system
   private final val services = _services.iterator.map({
     case (name, esss) =>
@@ -91,7 +97,7 @@ final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventS
       any <- snapshot.snapshot
     } yield {
       val snapshotSequence = snapshot.snapshotSequence
-      val context = new SnapshotContext {
+      val context = new SnapshotContext with AbstractContext {
         override def entityId: String = entityId
         override def sequenceNumber: Long = snapshotSequence
       }
@@ -104,7 +110,6 @@ final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventS
       case (_, InEvent(event)) =>
         val context = new EventContextImpl(entityId, event.sequence)
         val ev = ScalaPbAny.toJavaProto(event.payload.get) // FIXME empty?
-        // todo deserialize the event first
         handler.handleEvent(ev, context)
         (event.sequence, None)
       case ((sequence, _), InCommand(command)) =>
@@ -128,7 +133,7 @@ final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventS
 
           val snapshot =
             if (context.performSnapshot) {
-              val s = handler.snapshot(new SnapshotContext {
+              val s = handler.snapshot(new SnapshotContext with AbstractContext {
                 override def entityId: String = entityId
                 override def sequenceNumber: Long = endSequenceNumber
               })
@@ -139,7 +144,7 @@ final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventS
             EventSourcedReply(
               command.id,
               clientAction,
-              Nil, // FIXME implement sideEffects
+              context.sideEffects,
               context.events,
               snapshot
             )
@@ -161,6 +166,10 @@ final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventS
     }
   }
 
+  trait AbstractContext extends EventSourcedContext {
+    override def serviceCallFactory(): ServiceCallFactory = rootContext.serviceCallFactory()
+  }
+
   class CommandContextImpl(
     override val entityId: String,
     override val sequenceNumber: Long,
@@ -168,7 +177,7 @@ final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventS
     override val commandId: Long,
     val anySupport: AnySupport,
     val handler: EventSourcedEntityHandler,
-    val snapshotEvery: Int) extends CommandContext with AbstractClientActionContext
+    val snapshotEvery: Int) extends CommandContext with AbstractContext with AbstractClientActionContext
     with AbstractEffectContext with ActivatableContext {
     
     final var events: Vector[ScalaPbAny] = Vector.empty
@@ -184,6 +193,6 @@ final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventS
     }
   }
 
-  class EventSourcedContextImpl(override final val entityId: String) extends EventSourcedContext
+  class EventSourcedContextImpl(override final val entityId: String) extends EventSourcedContext with AbstractContext
   class EventContextImpl(entityId: String, override final val sequenceNumber: Long) extends EventSourcedContextImpl(entityId) with EventContext
 }

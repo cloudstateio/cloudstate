@@ -26,7 +26,7 @@ import akka.http.scaladsl.model._
 import akka.stream.{ActorMaterializer, Materializer}
 import com.google.protobuf.Descriptors
 import io.cloudstate.javasupport.impl.eventsourced.{EventSourcedImpl, EventSourcedStatefulService}
-import io.cloudstate.javasupport.impl.EntityDiscoveryImpl
+import io.cloudstate.javasupport.impl.{EntityDiscoveryImpl, ResolvedServiceCallFactory, ResolvedServiceMethod}
 import io.cloudstate.javasupport.impl.crdt.{CrdtImpl, CrdtStatefulService}
 import io.cloudstate.protocol.crdt.CrdtHandler
 import io.cloudstate.protocol.entity.EntityDiscoveryHandler
@@ -78,18 +78,22 @@ final class CloudStateRunner private[this](_system: ActorSystem, services: Map[S
     )
   }
 
+  private val rootContext = new Context {
+    override val serviceCallFactory: ServiceCallFactory = new ResolvedServiceCallFactory(services)
+  }
+
   private[this] def createRoutes(): PartialFunction[HttpRequest, Future[HttpResponse]] = {
 
     val serviceRoutes = services.groupBy(_._2.getClass).foldLeft(PartialFunction.empty[HttpRequest, Future[HttpResponse]]) {
 
       case (route, (serviceClass, eventSourcedServices: Map[String, EventSourcedStatefulService]))
         if serviceClass == classOf[EventSourcedStatefulService] =>
-          val eventSourcedImpl = new EventSourcedImpl(system, eventSourcedServices)
+          val eventSourcedImpl = new EventSourcedImpl(system, eventSourcedServices, rootContext)
           route orElse EventSourcedHandler.partial(eventSourcedImpl)
 
       case (route, (serviceClass, crdtServices: Map[String, CrdtStatefulService]))
         if serviceClass == classOf[CrdtStatefulService] =>
-        val crdtImpl = new CrdtImpl(system, crdtServices)
+        val crdtImpl = new CrdtImpl(system, crdtServices, rootContext)
         route orElse CrdtHandler.partial(crdtImpl)
 
       case (_, (serviceClass, _)) =>
@@ -121,5 +125,7 @@ trait StatefulService {
   def descriptor: Descriptors.ServiceDescriptor
   def entityType: String
   def persistenceId: String = descriptor.getName
+
+  def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]]
 }
 

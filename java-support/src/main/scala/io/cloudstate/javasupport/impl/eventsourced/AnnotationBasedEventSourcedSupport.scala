@@ -5,17 +5,19 @@ import java.util.Optional
 
 import io.cloudstate.javasupport.eventsourced._
 import io.cloudstate.javasupport.impl.ReflectionHelper.{InvocationContext, MainArgumentParameterHandler}
-import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedServiceMethod}
+import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEntityFactory, ResolvedServiceMethod}
 
 import scala.collection.concurrent.TrieMap
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
+import io.cloudstate.javasupport.ServiceCallFactory
 
 /**
   * Annotation based implementation of the [[EventSourcedEntityFactory]].
   */
 private[impl] class AnnotationBasedEventSourcedSupport(entityClass: Class[_], anySupport: AnySupport,
-                                      serviceMethods: Seq[ResolvedServiceMethod],
-                                      factory: Option[EventSourcedEntityCreationContext => AnyRef] = None) extends EventSourcedEntityFactory {
+  override val resolvedMethods: Map[String, ResolvedServiceMethod[_, _]],
+  factory: Option[EventSourcedEntityCreationContext => AnyRef] = None)
+  extends EventSourcedEntityFactory with ResolvedEntityFactory {
 
   def this(entityClass: Class[_], anySupport: AnySupport,
     serviceDescriptor: Descriptors.ServiceDescriptor) =
@@ -23,7 +25,7 @@ private[impl] class AnnotationBasedEventSourcedSupport(entityClass: Class[_], an
 
   private val behaviorReflectionCache = TrieMap.empty[Class[_], EventBehaviorReflection]
   // Eagerly reflect over/validate the entity class
-  behaviorReflectionCache.put(entityClass, EventBehaviorReflection(entityClass, serviceMethods))
+  behaviorReflectionCache.put(entityClass, EventBehaviorReflection(entityClass, resolvedMethods))
 
   override def create(context: EventSourcedContext): EventSourcedEntityHandler = {
     new EntityHandler(context)
@@ -39,7 +41,7 @@ private[impl] class AnnotationBasedEventSourcedSupport(entityClass: Class[_], an
   }
 
   private def getCachedBehaviorReflection(behavior: AnyRef) = {
-    behaviorReflectionCache.getOrElseUpdate(behavior.getClass, EventBehaviorReflection(behavior.getClass, serviceMethods))
+    behaviorReflectionCache.getOrElseUpdate(behavior.getClass, EventBehaviorReflection(behavior.getClass, resolvedMethods))
   }
 
   private def validateBehaviors(behaviors: Seq[AnyRef]): Seq[AnyRef] = {
@@ -155,6 +157,7 @@ private[impl] class AnnotationBasedEventSourcedSupport(entityClass: Class[_], an
 
   private abstract class DelegatingEventSourcedContext(delegate: EventSourcedContext) extends EventSourcedContext {
     override def entityId(): String = delegate.entityId()
+    override def serviceCallFactory(): ServiceCallFactory = delegate.serviceCallFactory()
   }
 }
 
@@ -193,7 +196,7 @@ private class EventBehaviorReflection(eventHandlers: Map[Class[_], EventHandlerI
 }
 
 private object EventBehaviorReflection {
-  def apply(behaviorClass: Class[_], serviceMethods: Seq[ResolvedServiceMethod]): EventBehaviorReflection = {
+  def apply(behaviorClass: Class[_], serviceMethods: Map[String, ResolvedServiceMethod[_, _]]): EventBehaviorReflection = {
 
     val allMethods = ReflectionHelper.getAllDeclaredMethods(behaviorClass)
     val eventHandlers = allMethods
@@ -215,9 +218,9 @@ private object EventBehaviorReflection {
           ReflectionHelper.getCapitalizedName(method)
         } else annotation.name()
 
-        val serviceMethod = serviceMethods.find(_.name == name).getOrElse {
+        val serviceMethod = serviceMethods.getOrElse(name, {
           throw new RuntimeException(s"Command handler method ${method.getName} for command $name found, but the service has no command by that name.")
-        }
+        })
 
         new ReflectionHelper.CommandHandlerInvoker[CommandContext](ReflectionHelper.ensureAccessible(method), serviceMethod)
       }.groupBy(_.serviceMethod.name)

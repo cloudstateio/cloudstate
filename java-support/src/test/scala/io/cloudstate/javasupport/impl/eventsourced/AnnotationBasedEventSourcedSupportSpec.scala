@@ -3,31 +3,38 @@ package io.cloudstate.javasupport.impl.eventsourced
 import java.util.Optional
 
 import com.example.shoppingcart.Shoppingcart
-import com.google.protobuf.{ByteString, Any => JavaPbAny}
-import io.cloudstate.javasupport.EntityId
+import com.google.protobuf.{ByteString, Descriptors, Any => JavaPbAny}
+import io.cloudstate.javasupport.{Context, EntityId, ServiceCall, ServiceCallFactory, ServiceCallRef}
 import io.cloudstate.javasupport.eventsourced._
 import io.cloudstate.javasupport.impl.{AnySupport, ResolvedServiceMethod, ResolvedType}
 import org.scalatest.{Matchers, WordSpec}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 
 class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
-  object MockContext extends EventSourcedContext {
+
+  trait BaseContext extends Context {
+    override def serviceCallFactory(): ServiceCallFactory = new ServiceCallFactory {
+      override def lookup[T](serviceName: String, methodName: String): ServiceCallRef[T] = throw new NoSuchElementException
+    }
+  }
+
+  object MockContext extends EventSourcedContext with BaseContext {
     override def entityId(): String = "foo"
   }
 
-  class MockCommandContext extends CommandContext {
+  class MockCommandContext extends CommandContext with BaseContext {
     var emited = Seq.empty[AnyRef]
     override def sequenceNumber(): Long = 10
-    override def commandName(): String = "Wrap"
+    override def commandName(): String = "AddItem"
     override def commandId(): Long = 20
     override def emit(event: AnyRef): Unit = emited :+= event
     override def entityId(): String = "foo"
     override def fail(errorMessage: String): Unit = ???
-    override def forward(): Unit = ???
-    override def effect(): Unit = ???
+    override def forward(to: ServiceCall): Unit = ???
+    override def effect(effect: ServiceCall, synchronous: Boolean): Unit = ???
   }
 
-  val eventCtx = new EventContext {
+  val eventCtx = new EventContext with BaseContext {
     override def sequenceNumber(): Long = 10
     override def entityId(): String = "foo"
   }
@@ -48,14 +55,17 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
 
   case class Wrapped(value: String)
   val anySupport = new AnySupport(Array(Shoppingcart.getDescriptor), this.getClass.getClassLoader)
-  val method = ResolvedServiceMethod("Wrap", StringResolvedType, WrappedResolvedType, false)
+  val descriptor = Shoppingcart.getDescriptor.findServiceByName("ShoppingCart")
+    .findMethodByName("AddItem")
+  val method = ResolvedServiceMethod(descriptor, StringResolvedType, WrappedResolvedType)
 
-  def create(behavior: AnyRef, methods: ResolvedServiceMethod*) = {
-    new AnnotationBasedEventSourcedSupport(behavior.getClass, anySupport, methods, Some(_ => behavior)).create(MockContext)
+  def create(behavior: AnyRef, methods: ResolvedServiceMethod[_, _]*) = {
+    new AnnotationBasedEventSourcedSupport(behavior.getClass, anySupport, methods.map(m => m.descriptor.getName -> m).toMap,
+      Some(_ => behavior)).create(MockContext)
   }
 
   def create(clazz: Class[_]) = {
-    new AnnotationBasedEventSourcedSupport(clazz, anySupport, Nil, None).create(MockContext)
+    new AnnotationBasedEventSourcedSupport(clazz, anySupport, Map.empty, None).create(MockContext)
   }
 
   def command(str: String) = {
@@ -220,7 +230,7 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
       "no arg command handler" in {
         val handler = create(new {
           @CommandHandler
-          def wrap() = Wrapped("blah")
+          def addItem() = Wrapped("blah")
         }, method)
         decodeWrapped(handler.handleCommand(command("nothing"), new MockCommandContext).get) should ===(Wrapped("blah"))
       }
@@ -228,7 +238,7 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
       "single arg command handler" in {
         val handler = create(new {
           @CommandHandler
-          def wrap(msg: String) = Wrapped(msg)
+          def addItem(msg: String) = Wrapped(msg)
         }, method)
         decodeWrapped(handler.handleCommand(command("blah"), new MockCommandContext).get) should ===(Wrapped("blah"))
       }
@@ -236,9 +246,9 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
       "multi arg command handler" in {
         val handler = create(new {
           @CommandHandler
-          def wrap(msg: String, @EntityId eid: String, ctx: CommandContext) = {
+          def addItem(msg: String, @EntityId eid: String, ctx: CommandContext) = {
             eid should ===("foo")
-            ctx.commandName() should ===("Wrap")
+            ctx.commandName() should ===("AddItem")
             Wrapped(msg)
           }
         }, method)
@@ -248,9 +258,9 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
       "allow emiting events" in {
         val handler = create(new {
           @CommandHandler
-          def wrap(msg: String, ctx: CommandContext) = {
+          def addItem(msg: String, ctx: CommandContext) = {
             ctx.emit(msg + " event")
-            ctx.commandName() should ===("Wrap")
+            ctx.commandName() should ===("AddItem")
             Wrapped(msg)
           }
         }, method)
@@ -262,7 +272,7 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
       "fail if there's a bad context type" in {
         a[RuntimeException] should be thrownBy create(new {
           @CommandHandler
-          def wrap(msg: String, ctx: EventContext) = {
+          def addItem(msg: String, ctx: EventContext) = {
             Wrapped(msg)
           }
         }, method)
@@ -271,11 +281,11 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
       "fail if there's two command handlers for the same command" in {
         a[RuntimeException] should be thrownBy create(new {
           @CommandHandler
-          def wrap(msg: String, ctx: CommandContext) = {
+          def addItem(msg: String, ctx: CommandContext) = {
             Wrapped(msg)
           }
           @CommandHandler
-          def wrap(msg: String) = {
+          def addItem(msg: String) = {
             Wrapped(msg)
           }
         }, method)
@@ -284,16 +294,27 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
       "fail if there's no command with that name" in {
         a[RuntimeException] should be thrownBy create(new {
           @CommandHandler
-          def doWrap(msg: String) = {
+          def wrongName(msg: String) = {
             Wrapped(msg)
           }
         }, method)
       }
 
+      "fail if there's a CRDT command handler" in {
+        val ex = the[RuntimeException] thrownBy create(new {
+          @io.cloudstate.javasupport.crdt.CommandHandler
+          def addItem(msg: String) = {
+            Wrapped(msg)
+          }
+        }, method)
+        ex.getMessage should include("Did you mean")
+        ex.getMessage should include(classOf[CommandHandler].getName)
+      }
+
       "unwrap exceptions" in {
         val handler = create(new {
           @CommandHandler
-          def wrap(): Wrapped = throw new RuntimeException("foo")
+          def addItem(): Wrapped = throw new RuntimeException("foo")
         }, method)
         val ex = the [RuntimeException] thrownBy handler.handleCommand(command("nothing"), new MockCommandContext)
         ex.getMessage should ===("foo")
@@ -302,7 +323,7 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
     }
 
     "support snapshots" when {
-      val ctx = new SnapshotContext {
+      val ctx = new SnapshotContext with BaseContext {
         override def sequenceNumber(): Long = 10
         override def entityId(): String = "foo"
       }
@@ -349,7 +370,7 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
     }
 
     "support snapshot handlers" when {
-      val ctx = new SnapshotContext {
+      val ctx = new SnapshotContext with BaseContext {
         override def sequenceNumber(): Long = 10
         override def entityId(): String = "foo"
       }

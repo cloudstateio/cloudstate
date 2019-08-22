@@ -6,7 +6,23 @@ package io.cloudstate.javasupport;
 public interface EffectContext extends Context {
 
     /**
-     * Perform the given side effect.
+     * Invoke the referenced service call as an effect once this action is completed.
+     * <p/>
+     * The effect will be performed asynchronously, ie, the proxy won't wait for the effect to finish before sending
+     * the reply.
+     *
+     * @param effect The service call to make as an effect effect.
      */
-    void effect(/* todo parameters */);
+    default void effect(ServiceCall effect) {
+        this.effect(effect, false);
+    }
+
+    /**
+     * Invoke the referenced service call as an effect once this action is completed.
+     *
+     * @param effect The service call to make as an effect effect.
+     * @param synchronous Whether the effect should be performed synchronously (ie, wait till it has finished before
+     *                    sending a reply) or asynchronously.
+     */
+    void effect(ServiceCall effect, boolean synchronous);
 }
