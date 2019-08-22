@@ -1,0 +1,15 @@
+package io.cloudstate.samples.shoppingcart;
+
+import io.cloudstate.javasupport.*;
+import com.example.shoppingcart.Shoppingcart;
+import static java.util.Collections.singletonMap;
+
+public final class Main {
+  public final static void main(String[] args) throws Exception {
+    new CloudState().
+      registerEventSourcedEntity(
+        ShoppingCartEntity.class,
+        Shoppingcart.getDescriptor().findServiceByName("ShoppingCart")
+      ).start().toCompletableFuture().get();
+  }
+}

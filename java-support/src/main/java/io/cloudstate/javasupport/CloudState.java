@@ -11,12 +11,14 @@ import io.cloudstate.javasupport.impl.crdt.CrdtStatefulService;
 import io.cloudstate.javasupport.impl.eventsourced.AnnotationBasedEventSourcedSupport;
 import io.cloudstate.javasupport.impl.eventsourced.EventSourcedStatefulService;
 
+import akka.Done;
+import java.util.concurrent.CompletionStage;
 import java.util.HashMap;
 import java.util.Map;
 
 public final class CloudState {
     private final Map<String, StatefulService> services = new HashMap<>();
-    private ClassLoader classLoader;
+    private ClassLoader classLoader = getClass().getClassLoader();
     private String typeUrlPrefix = AnySupport.DefaultTypeUrlPrefix();
     private AnySupport.Prefer prefer = AnySupport.PREFER_JAVA();
 
@@ -145,8 +147,8 @@ public final class CloudState {
 
     }
 
-    public void start() {
-        new CloudStateRunner(services).run();
+    public CompletionStage<Done> start() {
+        return new CloudStateRunner(services).run();
     }
 
     private AnySupport newAnySupport(Descriptors.FileDescriptor[] descriptors) {

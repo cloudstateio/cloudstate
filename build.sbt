@@ -433,9 +433,11 @@ lazy val `java-support` = (project in file("java-support"))
 
 lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
   .dependsOn(`java-support`)
-  .enablePlugins(AkkaGrpcPlugin)
+  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin)
   .settings(
     name := "java-shopping-cart",
+
+    mainClass in Compile := Some("io.cloudstate.samples.shoppingcart.Main"),
 
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
 
@@ -448,6 +450,18 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
     ),
 
     javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
+
+    mainClass in assembly := (mainClass in Compile).value,
+    assemblyJarName in assembly := "java-shopping-cart.jar",
+    test in assembly := {},
+    // logLevel in assembly := Level.Debug,
+    assemblyMergeStrategy in assembly := {
+      /*ADD CUSTOMIZATIONS HERE*/
+      //case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    },
   )
 
 lazy val `akka-client` = (project in file("samples/akka-client"))
@@ -518,7 +532,7 @@ lazy val `tck` = (project in file("tck"))
 
     parallelExecution in Test := false,
 
-    executeTests in Test := (executeTests in Test).dependsOn(`proxy-core`/assembly).value
+    executeTests in Test := (executeTests in Test).dependsOn(`proxy-core`/assembly).dependsOn(`java-shopping-cart`/assembly).value
   )
 
 def doCompileK8sDescriptors(dir: File, targetDir: File, registry: Option[String], username: Option[String], version: String, streams: TaskStreams): File = {

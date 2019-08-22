@@ -113,7 +113,7 @@ final class CloudStateRunner private[this](_system: ActorSystem, services: Map[S
         configuration.userFunctionInterface,
         configuration.userFunctionPort,
         HttpConnectionContext(UseHttp2.Always))
-    FutureConverters.toJava(serverBindingFuture).thenCompose(_ => terminate())
+    FutureConverters.toJava(serverBindingFuture).thenCompose(_ => system.getWhenTerminated).thenApply(_ => Done)
   }
 
   def terminate(): CompletionStage[Done] =
