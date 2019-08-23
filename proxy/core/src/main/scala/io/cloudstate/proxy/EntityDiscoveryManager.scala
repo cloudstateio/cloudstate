@@ -96,9 +96,8 @@ object EntityDiscoveryManager {
   final def proxyInfo(supportedEntityTypes: Seq[String]) = ProxyInfo(
     protocolMajorVersion = 0,
     protocolMinorVersion = 1,
-    proxyName = "Akka",
-    // todo make the build inject this
-    proxyVersion = "0.1",
+    proxyName = BuildInfo.name,
+    proxyVersion = BuildInfo.version,
     supportedEntityTypes = supportedEntityTypes
   )
 
@@ -149,7 +148,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
 
   override def receive: Receive = {
     case spec: EntitySpec =>
-      log.debug("Received EntitySpec from user function")
+      log.info("Received EntitySpec from user function with info: {}", spec.getServiceInfo)
 
       try {
         val descriptorSet = DescriptorProtos.FileDescriptorSet.parseFrom(spec.proto)

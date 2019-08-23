@@ -23,14 +23,37 @@ const debug = require("debug")("cloudstate");
 // Bind to stdout
 debug.log = console.log.bind(console);
 
+const packageInfo = require(path.join(__dirname, "..", "package.json"));
+const serviceInfo = {
+  serviceName: "",
+  serviceVersion: ""
+};
+try {
+  const thisPackageInfo = require(path.join(process.cwd(), "package.json"));
+  if (thisPackageInfo.name) {
+    serviceInfo.serviceName = thisPackageInfo.name;
+  }
+  if (thisPackageInfo.version) {
+    serviceInfo.serviceVersion = thisPackageInfo.version;
+  }
+} catch {
+  // ignore, if we can't find it, no big deal
+}
+
 module.exports = class CloudState {
-  constructor() {
+  constructor(options) {
     try {
       this.proto = fs.readFileSync("user-function.desc");
     } catch (e) {
       console.error("Unable to load user-function.desc protobuf descriptor!");
       throw e;
     }
+
+    // we could auto discover this info using https://github.com/indexzero/node-pkginfo/blob/master/lib/pkginfo.js
+    this.options = {
+      ...serviceInfo,
+      ...options
+    };
 
     this.entities = [];
   }
@@ -100,7 +123,14 @@ module.exports = class CloudState {
     });
     callback(null, {
       proto: fs.readFileSync("user-function.desc"), // Why not serve "this.proto"? We already load it in the constructor…
-      entities: entities
+      entities: entities,
+      serviceInfo: {
+        serviceName: this.options.serviceName,
+        serviceVersion: this.options.serviceVersion,
+        serviceRuntime: process.title + " " + process.version,
+        supportLibraryName: packageInfo.name,
+        supportLibraryVersion: packageInfo.version
+      }
     });
   }
 

@@ -21,9 +21,15 @@ import io.cloudstate.protocol.entity._
 import scala.concurrent.Future
 import akka.actor.ActorSystem
 import com.google.protobuf.DescriptorProtos
-import io.cloudstate.javasupport.StatefulService
+import io.cloudstate.javasupport.{BuildInfo, StatefulService}
 
 class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, StatefulService]) extends EntityDiscovery {
+
+  private val serviceInfo = ServiceInfo(
+    serviceRuntime = sys.props.getOrElse("java.runtime.name", "") + " " + sys.props.getOrElse("java.runtime.version", ""),
+    supportLibraryName = BuildInfo.name,
+    supportLibraryVersion = BuildInfo.version
+  )
 
   /**
    * Discover what entities the user function wishes to serve.
@@ -55,7 +61,7 @@ class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, StatefulSer
           Entity(service.entityType, name, service.persistenceId)
       }.toSeq
 
-      Future.successful(EntitySpec(fileDescriptorSet, entities))
+      Future.successful(EntitySpec(fileDescriptorSet, entities, Some(serviceInfo)))
     }
   }
   

@@ -38,8 +38,8 @@ private[impl] object ReflectionHelper {
     } else member.getName
   }
 
-  final case class InvocationContext[C <: Context](mainArgument: AnyRef, context: C)
-  trait ParameterHandler[C <: Context] extends (InvocationContext[C] => AnyRef)
+  final case class InvocationContext[+C <: Context](mainArgument: AnyRef, context: C)
+  trait ParameterHandler[-C <: Context] extends (InvocationContext[C] => AnyRef)
   case object ContextParameterHandler extends ParameterHandler[Context] {
     override def apply(ctx: InvocationContext[Context]): AnyRef = ctx.context.asInstanceOf[AnyRef]
   }
@@ -55,6 +55,7 @@ private[impl] object ReflectionHelper {
 
   final case class MethodParameter(method: Executable, param: Int) {
     def parameterType: Class[_] = method.getParameterTypes()(param)
+    def genericParameterType: Type = method.getGenericParameterTypes()(param)
     def annotation[A <: Annotation: ClassTag] = method.getParameterAnnotations()(param)
       .find(a => implicitly[ClassTag[A]].runtimeClass.isInstance(a))
   }
@@ -83,9 +84,12 @@ private[impl] object ReflectionHelper {
     handlers.asInstanceOf[Array[ParameterHandler[C]]]
   }
 
-  final class CommandHandlerInvoker[CommandContext <: Context : ClassTag](val method: Method, val serviceMethod: ResolvedServiceMethod[_, _]) {
+  final class CommandHandlerInvoker[CommandContext <: Context : ClassTag](val method: Method,
+    val serviceMethod: ResolvedServiceMethod[_, _],
+    extraParameters:  PartialFunction[MethodParameter, ParameterHandler[CommandContext]] = PartialFunction.empty) {
+
     private val name = serviceMethod.descriptor.getFullName
-    private val parameters = ReflectionHelper.getParameterHandlers[CommandContext](method)()
+    private val parameters = ReflectionHelper.getParameterHandlers[CommandContext](method)(extraParameters)
 
     if (parameters.count(_.isInstanceOf[MainArgumentParameterHandler[_]]) > 1) {
       throw new RuntimeException(s"CommandHandler method $method must defined at most one non context parameter to handle commands, the parameters defined were: ${parameters.collect { case MainArgumentParameterHandler(clazz) => clazz.getName }.mkString(",")}")
@@ -102,13 +106,6 @@ private[impl] object ReflectionHelper {
         .build()
     }
 
-    private def getRawType(t: Type): Class[_] = t match {
-      case clazz: Class[_] => clazz
-      case pt: ParameterizedType => getRawType(pt.getRawType)
-      case wct: WildcardType => getRawType(wct.getUpperBounds.headOption.getOrElse(classOf[Object]))
-      case _ => throw new RuntimeException(s"Cannot resolve return type ${method.getGenericReturnType} for command $name")
-    }
-
     private def verifyOutputType(t: Type): Unit = {
       if (!serviceMethod.outputType.typeClass.isAssignableFrom(getRawType(t))) {
         throw new RuntimeException(s"Incompatible return class $t for command $name, expected ${serviceMethod.outputType.typeClass}")
@@ -118,12 +115,7 @@ private[impl] object ReflectionHelper {
     private val handleResult: AnyRef => Optional[JavaPbAny] = if (method.getReturnType == classOf[Void]) {
       _ => Optional.empty()
     } else if (method.getReturnType == classOf[Optional[_]]) {
-      method.getGenericReturnType match {
-        case pt: ParameterizedType =>
-          verifyOutputType(pt.getActualTypeArguments()(0))
-        case _ =>
-          throw new RuntimeException(s"Cannot resolve return type ${method.getGenericReturnType} for command $name")
-      }
+      verifyOutputType(getFirstParameter(method.getGenericReturnType))
 
       { result =>
         val asOptional = result.asInstanceOf[Optional[AnyRef]]
@@ -143,6 +135,23 @@ private[impl] object ReflectionHelper {
       val ctx = InvocationContext(decodedCommand, context)
       val result = method.invoke(obj, parameters.map(_.apply(ctx)): _*)
       handleResult(result)
+    }
+  }
+
+  private def getRawType(t: Type): Class[_] = t match {
+    case clazz: Class[_] => clazz
+    case pt: ParameterizedType => getRawType(pt.getRawType)
+    case wct: WildcardType => getRawType(wct.getUpperBounds.headOption.getOrElse(classOf[Object]))
+    case _ => classOf[Object]
+  }
+
+
+  def getFirstParameter(t: Type): Class[_] = {
+    t match {
+      case pt: ParameterizedType =>
+        getRawType(pt.getActualTypeArguments()(0))
+      case _ =>
+        classOf[AnyRef]
     }
   }
 

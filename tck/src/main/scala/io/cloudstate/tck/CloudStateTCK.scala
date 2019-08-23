@@ -219,6 +219,10 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
 
     tckProxy = tp
 
+    // Wait for the backend to come up before starting the frontend, otherwise the discovery call from the backend,
+    // if it happens before the frontend starts, will cause the proxy probes to have failures in them
+    Await.ready(attempt(entityDiscoveryClient.discover(proxyInfo), 4.seconds, 10)(system.dispatcher, system.scheduler), 1.minute)
+
     val bp = process(config.proxy).
               start()
 

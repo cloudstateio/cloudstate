@@ -209,10 +209,14 @@ def sharedNativeImageSettings = Seq(
       )
 
 lazy val `proxy-core` = (project in file("proxy/core"))
-  .enablePlugins(DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin, GraalVMPlugin)
+  .enablePlugins(DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin, GraalVMPlugin, BuildInfoPlugin)
   .settings(
     common,
     name := "cloudstate-proxy-core",
+
+    buildInfoKeys := Seq[BuildInfoKey](name, version),
+    buildInfoPackage := "io.cloudstate.proxy",
+
     libraryDependencies ++= Seq(
       // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
       "io.grpc"                       % "grpc-core"                          % GrpcJavaVersion,
@@ -383,10 +387,14 @@ lazy val operator = (project in file("operator"))
   )
 
 lazy val `java-support` = (project in file("java-support"))
-  .enablePlugins(AkkaGrpcPlugin)
+  .enablePlugins(AkkaGrpcPlugin, BuildInfoPlugin)
   .settings(
     name := "java-support",
     common,
+    crossPaths := false,
+
+    buildInfoKeys := Seq[BuildInfoKey](name, version),
+    buildInfoPackage := "io.cloudstate.javasupport",
     
     libraryDependencies ++= Seq(
       // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
@@ -528,7 +536,7 @@ lazy val `tck` = (project in file("tck"))
       Seq(baseDir / "proxy", baseDir / "protocol")
     },
 
-    fork in test := false,
+    fork in test := true,
 
     parallelExecution in Test := false,
 

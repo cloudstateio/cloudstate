@@ -1,13 +1,13 @@
 package io.cloudstate.javasupport.impl.crdt
 
-import java.lang.reflect.{Constructor, InvocationTargetException}
+import java.lang.reflect.{Constructor, Executable, InvocationTargetException}
 import java.util.{Optional, function}
 import java.util.function.Consumer
 
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 import io.cloudstate.javasupport.{Context, ServiceCall, ServiceCallFactory}
-import io.cloudstate.javasupport.crdt.{CommandContext, CommandHandler, Crdt, CrdtCreationContext, CrdtEntity, CrdtEntityFactory, CrdtEntityHandler, Flag, GCounter, GSet, LWWRegister, LWWRegisterMap, ORMap, ORSet, PNCounter, PNCounterMap, StreamCancelledContext, StreamedCommandContext, SubscriptionContext, Vote}
-import io.cloudstate.javasupport.impl.ReflectionHelper.{CommandHandlerInvoker, InvocationContext, MainArgumentParameterHandler}
+import io.cloudstate.javasupport.crdt.{CommandContext, CommandHandler, Crdt, CrdtContext, CrdtCreationContext, CrdtEntity, CrdtEntityFactory, CrdtEntityHandler, Flag, GCounter, GSet, LWWRegister, LWWRegisterMap, ORMap, ORSet, PNCounter, PNCounterMap, StreamCancelledContext, StreamedCommandContext, SubscriptionContext, Vote}
+import io.cloudstate.javasupport.impl.ReflectionHelper.{CommandHandlerInvoker, InvocationContext, MainArgumentParameterHandler, MethodParameter, ParameterHandler}
 import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEntityFactory, ResolvedServiceMethod, ResolvedType}
 
 import scala.reflect.ClassTag
@@ -52,10 +52,10 @@ private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_], anySupport
         (ReflectionHelper.ensureAccessible(method), serviceMethod)
       }
 
-    def getHandlers[C <: Context : ClassTag](streamed: Boolean) =
+    def getHandlers[C <: CrdtContext : ClassTag](streamed: Boolean) =
       handlers.filter(_._2.outputStreamed == streamed)
       .map {
-        case (method, serviceMethod) => new CommandHandlerInvoker[C](method, serviceMethod)
+        case (method, serviceMethod) => new CommandHandlerInvoker[C](method, serviceMethod, CrdtAnnotationHelper.crdtParameterHandlers)
       }
       .groupBy(_.serviceMethod.name)
       .map {
@@ -99,6 +99,43 @@ private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_], anySupport
     } catch {
       case ite: InvocationTargetException if ite.getCause != null =>
         throw ite.getCause
+    }
+  }
+
+}
+
+private object CrdtAnnotationHelper {
+  val crdtParameterHandlers: PartialFunction[MethodParameter, ParameterHandler[CrdtContext]] = {
+    case crdt if classOf[Crdt].isAssignableFrom(crdt.parameterType) =>
+      new CrdtParameterHandler(crdt.parameterType, crdt.method)
+    case crdt if crdt.parameterType == classOf[Optional[_]] &&
+      classOf[Crdt].isAssignableFrom(ReflectionHelper.getFirstParameter(crdt.genericParameterType)) =>
+      new OptionalCrdtParameterHandler(ReflectionHelper.getFirstParameter(crdt.genericParameterType), crdt.method)
+  }
+
+  private class CrdtParameterHandler(crdtClass: Class[_], method: Executable) extends ParameterHandler[CrdtContext] {
+    override def apply(ctx: InvocationContext[CrdtContext]): AnyRef = {
+      if (ctx.context.state().isPresent) {
+        val crdt = ctx.context.state().get()
+        if (crdtClass.isInstance(crdt)) crdt
+        else throw new IllegalStateException(s"${method.getDeclaringClass.getName}.${method.getName} requires a CRDT " +
+          s"of type ${crdtClass.getName}, but the CRDT for this entity is a ${crdt.getClass.getName}")
+      } else {
+        throw new IllegalStateException(s"${method.getDeclaringClass.getName}.${method.getName} requires a CRDT " +
+          s"of type ${crdtClass.getName}, but this entity has no CRDT created for it yet.")
+      }
+    }
+  }
+
+  private class OptionalCrdtParameterHandler(crdtClass: Class[_], method: Executable) extends ParameterHandler[CrdtContext] {
+    override def apply(ctx: InvocationContext[CrdtContext]): AnyRef = {
+      if (ctx.context.state().isPresent) {
+        val crdt = ctx.context.state().get()
+        if (!crdtClass.isInstance(crdt))
+          throw new IllegalStateException(s"${method.getDeclaringClass.getName}.${method.getName} requires a CRDT " +
+            s"of type ${crdtClass.getName}, but the CRDT for this entity is a ${crdt.getClass.getName}")
+      }
+      ctx.context.state()
     }
   }
 
@@ -148,7 +185,7 @@ private final class AdaptedStreamedCommandContext(val delegate: StreamedCommandC
 }
 
 private final class EntityConstructorInvoker(constructor: Constructor[_]) extends (CrdtCreationContext => AnyRef) {
-  private val parameters = ReflectionHelper.getParameterHandlers[CrdtCreationContext](constructor)()
+  private val parameters = ReflectionHelper.getParameterHandlers[CrdtCreationContext](constructor)(CrdtAnnotationHelper.crdtParameterHandlers)
   parameters.foreach {
     case MainArgumentParameterHandler(clazz) =>
       throw new RuntimeException(s"Don't know how to handle argument of type $clazz in constructor")
