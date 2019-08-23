@@ -38,14 +38,14 @@ import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, HttpMethods, HttpProtocols, HttpRequest, HttpResponse, StatusCodes}
 import akka.http.scaladsl.unmarshalling._
-import io.cloudstate.entity._
-import com.example.shoppingcart._
+import io.cloudstate.protocol.entity._
+import com.example.shoppingcart.shoppingcart._
 import akka.testkit.TestProbe
 import com.google.protobuf.empty.Empty
-import io.cloudstate.eventsourced.{EventSourced, EventSourcedClient, EventSourcedHandler, EventSourcedInit, EventSourcedReply, EventSourcedStreamIn, EventSourcedStreamOut}
+import io.cloudstate.protocol.event_sourced.{EventSourced, EventSourcedClient, EventSourcedHandler, EventSourcedInit, EventSourcedReply, EventSourcedStreamIn, EventSourcedStreamOut}
 
 object CloudStateTCK {
-  private[this] final val PROXY   = "proxy"
+  private[this] final val PROXY     = "proxy"
   private[this] final val FRONTEND  = "frontend"
   private[this] final val TCK       = "tck"
   private[this] final val HOSTNAME  = "hostname"
@@ -219,6 +219,10 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
 
     tckProxy = tp
 
+    // Wait for the backend to come up before starting the frontend, otherwise the discovery call from the backend,
+    // if it happens before the frontend starts, will cause the proxy probes to have failures in them
+    Await.ready(attempt(entityDiscoveryClient.discover(proxyInfo), 4.seconds, 10)(system.dispatcher, system.scheduler), 1.minute)
+
     val bp = process(config.proxy).
               start()
 
@@ -286,22 +290,28 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     reply.message must be('reply)
     reply.message.reply must be(defined)
     val r = reply.message.reply.get
+    r.clientAction must be(defined)
+    val clientAction = r.clientAction.get
+    clientAction.action must be('reply)
+    clientAction.action.reply must be('defined)
     r.events.size must be (events)
     r
   }
 
   final def fromFrontend_expectFailure(within: FiniteDuration): Failure = {
-    val failure = eventSourcedFromFrontend.expectMsgType[EventSourcedStreamOut](noWait)
+    val failure = eventSourcedFromFrontend.expectMsgType[EventSourcedStreamOut](noWait) // FIXME Expects entity.Failure, but gets lientAction.Action.Failure(Failure(commandId, msg)))
     failure must not be(null)
-    failure.message must be('failure)
-    failure.message.failure must be(defined)
-    failure.message.failure.get
+    failure.message must be('reply)
+    failure.message.reply must be(defined)
+    failure.message.reply.get.clientAction must be(defined)
+    val clientAction = failure.message.reply.get.clientAction.get
+    clientAction.action must be('failure)
+    clientAction.action.failure must be('defined)
+    clientAction.action.failure.get
   }
 
-  final def correlate(cmd: Command, reply: EventSourcedReply)     = cmd.id must be(reply.commandId)
-  final def correlate(cmd: Command, failure: Failure) = cmd.id must be(failure.commandId)
-  final def unrelated(cmd: Command, reply: EventSourcedReply)     = cmd.id must not be reply.commandId
-  final def unrelated(cmd: Command, failure: Failure) = cmd.id must not be failure.commandId
+  final def correlate(cmd: Command, commandId: Long)     = cmd.id must be(commandId)
+  final def unrelated(cmd: Command, commandId: Long)    = cmd.id must not be commandId
 
   ("The TCK for" + config.name) must {
     implicit val scheduler = system.scheduler
@@ -329,7 +339,7 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
 
           fromBackend_expectInit(noWait)
 
-          correlate(fromBackend_expectCommand(noWait), fromFrontend_expectReply(events = 0, noWait))
+          correlate(fromBackend_expectCommand(noWait), fromFrontend_expectReply(events = 0, noWait).commandId)
 
           eventSourcedFromBackend.expectNoMsg(noWait)
           eventSourcedFromFrontend.expectNoMsg(noWait)
@@ -373,9 +383,9 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
         foldLeft(Set.empty[Long]){ case (set, (isReply, eventCount)) =>
           val cmd = fromBackend_expectCommand(noWait)
           if (isReply)
-            correlate(cmd, fromFrontend_expectReply(events = eventCount, noWait)) // Verify correlation
+            correlate(cmd, fromFrontend_expectReply(events = eventCount, noWait).commandId) // Verify correlation
           else
-            correlate(cmd, fromFrontend_expectFailure(noWait)) // Verify correlation
+            correlate(cmd, fromFrontend_expectFailure(noWait).commandId) // Verify correlation
           init.entityId must be(cmd.entityId)
           set must not contain(cmd.id)
           set + cmd.id
@@ -397,7 +407,7 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     }
 
     "verify that the backend supports the ServerReflection API" in {
-      import grpc.reflection.v1alpha._
+      import grpc.reflection.v1alpha.reflection._
       import ServerReflectionRequest.{ MessageRequest => In}
       import ServerReflectionResponse.{ MessageResponse => Out}
 

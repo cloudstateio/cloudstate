@@ -22,8 +22,12 @@ package cloudstate.proxy;
 
 import "google/protobuf/any.proto";
 import "cloudstate/entity.proto";
+import "scalapb/scalapb.proto";
 
 option java_package = "io.cloudstate.proxy.entity";
+option (scalapb.options) = {
+    flat_package: true
+};
 
 message UserFunctionCommand {
     string name = 1;

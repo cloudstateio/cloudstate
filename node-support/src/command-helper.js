@@ -125,9 +125,14 @@ module.exports = class CommandHelper {
     if (ctx.error !== null) {
       ctx.commandDebug("%s failed with message '%s'", desc, ctx.error.message);
       this.call.write({
-        failure: {
+        reply: {
           commandId: ctx.commandId,
-          description: ctx.error.message
+          clientAction: {
+            failure: {
+              commandId: ctx.commandId,
+              description: ctx.error.message
+            }
+          }
         }
       });
     } else {

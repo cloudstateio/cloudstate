@@ -29,10 +29,9 @@ import akka.grpc.GrpcClientSettings
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.typesafe.config.Config
-import io.cloudstate.entity._
-import io.cloudstate.crdt.Crdt
-import io.cloudstate.eventsourced.EventSourced
-import io.cloudstate.function.StatelessFunction
+import io.cloudstate.protocol.entity._
+import io.cloudstate.protocol.crdt.Crdt
+import io.cloudstate.protocol.event_sourced.EventSourced
 import io.cloudstate.proxy.StatsCollector.StatsCollectorSettings
 import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
 import io.cloudstate.proxy.ConcurrencyEnforcer.ConcurrencyEnforcerSettings
@@ -97,9 +96,8 @@ object EntityDiscoveryManager {
   final def proxyInfo(supportedEntityTypes: Seq[String]) = ProxyInfo(
     protocolMajorVersion = 0,
     protocolMinorVersion = 1,
-    proxyName = "Akka",
-    // todo make the build inject this
-    proxyVersion = "0.1",
+    proxyName = BuildInfo.name,
+    proxyVersion = BuildInfo.version,
     supportedEntityTypes = supportedEntityTypes
   )
 
@@ -150,7 +148,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
 
   override def receive: Receive = {
     case spec: EntitySpec =>
-      log.debug("Received EntitySpec from user function")
+      log.info("Received EntitySpec from user function with info: {}", spec.getServiceInfo)
 
       try {
         val descriptorSet = DescriptorProtos.FileDescriptorSet.parseFrom(spec.proto)

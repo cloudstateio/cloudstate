@@ -23,10 +23,8 @@ package cloudstate;
 import "google/protobuf/any.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/descriptor.proto";
-// This is needed to ensure that the FieldOptions are extended when this file is loaded.
-import "cloudstate/entitykey.proto";
 
-option java_package = "io.cloudstate.entity";
+option java_package = "io.cloudstate.protocol";
 
 // A reply to the sender.
 message Reply {
@@ -125,6 +123,31 @@ message EntitySpec {
 
     // The entities being served.
     repeated Entity entities = 2;
+
+    // Optional information about the service.
+    ServiceInfo service_info = 3;
+}
+
+// Information about the service that proxy is proxying to.
+// All of the information in here is optional. It may be useful for debug purposes.
+message ServiceInfo {
+
+    // The name of the service, eg, "shopping-cart".
+    string service_name = 1;
+
+    // The version of the service.
+    string service_version = 2;
+
+    // A description of the runtime for the service. Can be anything, but examples might be:
+    // - node v10.15.2
+    // - OpenJDK Runtime Environment 1.8.0_192-b12
+    string service_runtime = 3;
+
+    // If using a support library, the name of that library, eg "cloudstate"
+    string support_library_name = 4;
+
+    // The version of the support library being used.
+    string support_library_version = 5;
 }
 
 message Entity {

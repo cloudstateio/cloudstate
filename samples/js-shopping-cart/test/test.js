@@ -29,7 +29,7 @@ const allIncludeDirs = protobufHelper.moduleIncludeDirs.concat([
 const packageDefinition = protoLoader.loadSync(
   [
     path.join("cloudstate", "entity.proto"),
-    path.join("cloudstate", "eventsourced.proto")
+    path.join("cloudstate", "event_sourced.proto")
   ],
   {
     includeDirs: allIncludeDirs

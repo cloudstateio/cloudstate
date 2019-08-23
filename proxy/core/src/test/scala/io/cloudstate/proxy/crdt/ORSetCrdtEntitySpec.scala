@@ -1,7 +1,7 @@
 package io.cloudstate.proxy.crdt
 
 import akka.cluster.ddata.{ORSet, ORSetKey}
-import io.cloudstate.crdt.{CrdtDelta, CrdtReply, CrdtState, CrdtStateAction, ORSetDelta, ORSetState}
+import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtReply, CrdtState, CrdtStateAction, ORSetDelta, ORSetState}
 import com.google.protobuf.any.{Any => ProtoAny}
 
 import scala.concurrent.duration._

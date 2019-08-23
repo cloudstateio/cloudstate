@@ -1,8 +1,8 @@
 package io.cloudstate.proxy.crdt
 
 import akka.cluster.ddata.{Flag, FlagKey, GCounter, GCounterKey}
-import io.cloudstate.crdt._
-import io.cloudstate.entity.UserFunctionError
+import io.cloudstate.protocol.crdt._
+import io.cloudstate.protocol.entity.UserFunctionError
 
 import scala.concurrent.duration._
 

@@ -2,7 +2,7 @@
 syntax = "proto3";
 
 import "google/protobuf/empty.proto";
-import "cloudstate/entitykey.proto";
+import "cloudstate/entity_key.proto";
 import "google/api/annotations.proto";
 import "google/api/http.proto";
 

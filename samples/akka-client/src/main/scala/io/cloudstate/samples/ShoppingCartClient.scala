@@ -3,7 +3,7 @@ package io.cloudstate.samples
 import akka.actor.ActorSystem
 import akka.grpc.GrpcClientSettings
 import akka.stream.ActorMaterializer
-import com.example.shoppingcart._
+import com.example.shoppingcart.shoppingcart._
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
@@ -51,7 +51,7 @@ class ShoppingCartClient(hostname: String, port: Int, hostnameOverride: Option[S
     hostnameOverride.fold(s)(host => s.withChannelBuilderOverrides(_.overrideAuthority(host)))
   }
   println(s"Connecting to $hostname:$port")
-  val service = com.example.shoppingcart.ShoppingCartClient(settings)
+  val service = com.example.shoppingcart.shoppingcart.ShoppingCartClient(settings)
 
   def shutdown(): Unit = {
     await(service.close())

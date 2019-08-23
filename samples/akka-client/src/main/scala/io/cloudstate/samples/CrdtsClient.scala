@@ -4,7 +4,7 @@ import akka.actor.ActorSystem
 import akka.grpc.GrpcClientSettings
 import akka.stream.scaladsl.{Keep, Sink}
 import akka.stream.{ActorMaterializer, KillSwitches}
-import com.example.crdts._
+import com.example.crdts.crdt_example._
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}

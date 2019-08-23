@@ -27,8 +27,8 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.Flow
 import com.google.protobuf.Descriptors.FileDescriptor
 import akka.NotUsed
-import _root_.grpc.reflection.v1alpha._
-import com.google.api.AnnotationsProto
+import _root_.grpc.reflection.v1alpha.reflection._
+import com.google.api.annotations.AnnotationsProto
 
 object Reflection {
   private final val ReflectionPath = Path / ServerReflection.name / "ServerReflectionInfo"

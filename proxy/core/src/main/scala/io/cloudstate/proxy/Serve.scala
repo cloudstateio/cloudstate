@@ -30,7 +30,7 @@ import akka.stream.Materializer
 import com.google.protobuf.{ByteString => ProtobufByteString}
 import com.google.protobuf.any.{Any => ProtobufAny}
 import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor}
-import io.cloudstate.entity._
+import io.cloudstate.protocol.entity._
 import akka.stream.scaladsl.{Flow, Source}
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}

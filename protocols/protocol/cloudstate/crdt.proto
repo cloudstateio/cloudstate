@@ -23,7 +23,7 @@ package cloudstate.crdt;
 import "google/protobuf/any.proto";
 import "cloudstate/entity.proto";
 
-option java_package = "io.cloudstate.crdt";
+option java_package = "io.cloudstate.protocol";
 
 
 // CRDT Protocol

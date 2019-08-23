@@ -12,8 +12,8 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
-import io.cloudstate.crdt.CrdtClient
-import io.cloudstate.entity.{Entity, EntityDiscovery}
+import io.cloudstate.protocol.crdt.CrdtClient
+import io.cloudstate.protocol.entity.{Entity, EntityDiscovery}
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 

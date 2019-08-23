@@ -28,8 +28,8 @@ const Any = protobufHelper.moduleRoot.google.protobuf.Any;
 // 15.
 const CloudStatePrimitive = "p.cloudstate.io/";
 // Chosen because it reduces the likelihood of clashing with something else.
-const CloudStatePrimitiveFieldNumber = 15;
-const CloudStatePrimitiveFieldNumberEncoded = CloudStatePrimitiveFieldNumber << 3; // 120
+const CloudStatePrimitiveFieldNumber = 1;
+const CloudStatePrimitiveFieldNumberEncoded = CloudStatePrimitiveFieldNumber << 3; // 8
 const CloudStateSupportedPrimitiveTypes = new Set();
 ["string", "bytes", "int64", "bool", "double"].forEach(CloudStateSupportedPrimitiveTypes.add.bind(CloudStateSupportedPrimitiveTypes));
 
@@ -208,7 +208,7 @@ module.exports = class AnySupport {
       const key = reader.uint32();
       pType = key & 7;
       fieldNumber = key >>> 3;
-      if (fieldNumber !== 15) {
+      if (fieldNumber !== CloudStatePrimitiveFieldNumber) {
         reader.skipType(pType);
       } else {
         if (pType !== protobuf.types.basic[type]) {
