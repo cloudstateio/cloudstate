@@ -19,7 +19,7 @@ import scala.reflect.ClassTag
 private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_], anySupport: AnySupport,
   override val resolvedMethods: Map[String, ResolvedServiceMethod[_, _]],
   factory: Option[CrdtCreationContext => AnyRef] = None) extends CrdtEntityFactory with ResolvedEntityFactory {
-
+  // TODO JavaDoc
   def this(entityClass: Class[_], anySupport: AnySupport,
     serviceDescriptor: Descriptors.ServiceDescriptor) =
     this(entityClass, anySupport, anySupport.resolveServiceDescriptor(serviceDescriptor))
@@ -65,7 +65,8 @@ private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_], anySupport
 
     (getHandlers[CommandContext](false), getHandlers[StreamedCommandContext[AnyRef]](true))
   }
-
+  
+  // TODO JavaDoc
   override def create(context: CrdtCreationContext): CrdtEntityHandler = {
     val entity = constructor(context)
     new EntityHandler(entity)

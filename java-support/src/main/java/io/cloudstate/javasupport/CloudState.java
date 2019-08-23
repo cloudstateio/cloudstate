@@ -16,27 +16,38 @@ import java.util.concurrent.CompletionStage;
 import java.util.HashMap;
 import java.util.Map;
 
+// TODO JavaDoc
 public final class CloudState {
     private final Map<String, StatefulService> services = new HashMap<>();
     private ClassLoader classLoader = getClass().getClassLoader();
     private String typeUrlPrefix = AnySupport.DefaultTypeUrlPrefix();
     private AnySupport.Prefer prefer = AnySupport.PREFER_JAVA();
 
+    /**
+     * Sets the ClassLoader to be used for reflective access,
+     * the default value is the ClassLoader of the CloudState class.
+     *
+     * @param classLoader A non-null ClassLoader to be used for reflective access.
+     * @return This CloudState instance.
+     */
     public CloudState withClassLoader(ClassLoader classLoader) {
         this.classLoader = classLoader;
         return this;
     }
 
+    // TODO JavaDoc
     public CloudState withTypeUrlPrefix(String prefix) {
         this.typeUrlPrefix = prefix;
         return this;
     }
 
+    // TODO JavaDoc
     public CloudState preferJavaProtobufs() {
         this.prefer = AnySupport.PREFER_JAVA();
         return this;
     }
 
+    // TODO JavaDoc
     public CloudState preferScalaProtobufs() {
         this.prefer = AnySupport.PREFER_SCALA();
         return this;
@@ -147,6 +158,11 @@ public final class CloudState {
 
     }
 
+    /**
+     * Starts a server with the configured entities.
+     *
+     * @return a CompletionStage which will be completed when the server has shut down.
+     */
     public CompletionStage<Done> start() {
         return new CloudStateRunner(services).run();
     }

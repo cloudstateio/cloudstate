@@ -53,20 +53,14 @@ object CloudStateRunner {
   }
 }
 
-/**
- * Current Java API:
- * public static class UserFunction {
- *   public static void main(String[] args) {
- *      new CloudState(new StatefulService(…)).run();
- *   }
- * }
- **/
+// TODO JavaDoc
 final class CloudStateRunner private[this](_system: ActorSystem, services: Map[String, StatefulService]) {
   private[this] implicit final val system = _system
   private[this] implicit final val materializer: Materializer = ActorMaterializer()
 
   private[this] final val configuration = new CloudStateRunner.Configuration(system.settings.config.getConfig("cloudstate"))
 
+  // TODO JavaDoc
   def this(services: java.util.Map[String, StatefulService]) {
     this(
       {
@@ -107,6 +101,11 @@ final class CloudStateRunner private[this](_system: ActorSystem, services: Map[S
     { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }
   }
 
+  /**
+   * Starts a server with the configured entities.
+   *
+   * @return a CompletionStage which will be completed when the server has shut down.
+   */
   def run(): CompletionStage[Done] = {
     val serverBindingFuture = Http.get(system).bindAndHandleAsync(
         createRoutes(),
@@ -121,16 +120,25 @@ final class CloudStateRunner private[this](_system: ActorSystem, services: Map[S
       ).thenApply(_ => Done)
   }
 
+  /**
+   * Terminates the server.
+   *
+   * @return a CompletionStage which will be completed when the server has shut down.
+   */
   def terminate(): CompletionStage[Done] =
     FutureConverters.toJava(system.terminate()).thenApply(_ => Done)
 }
 
+// TODO JavaDoc
 // This class will describe the stateless service and is created and passed by the user into a CloudState instance.
 trait StatefulService {
+  // TODO JavaDoc
   def descriptor: Descriptors.ServiceDescriptor
+  // TODO JavaDoc
   def entityType: String
+  // TODO JavaDoc
   def persistenceId: String = descriptor.getName
-
+  // TODO JavaDoc
   def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]]
 }
 
