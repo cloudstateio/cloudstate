@@ -36,7 +36,7 @@ try {
   if (thisPackageInfo.version) {
     serviceInfo.serviceVersion = thisPackageInfo.version;
   }
-} catch {
+} catch (e) {
   // ignore, if we can't find it, no big deal
 }
 

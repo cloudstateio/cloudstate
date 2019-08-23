@@ -11,3 +11,7 @@ addSbtPlugin("de.heikoseeberger" % "sbt-header" % "5.2.0")
 
 addSbtPlugin("com.github.gseitz" % "sbt-protobuf" % "0.6.5")
 addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.9.0")
+
+addSbtPlugin("org.xerial.sbt" % "sbt-sonatype" % "2.5")
+addSbtPlugin("com.jsuereth" % "sbt-pgp" % "1.1.0")
+

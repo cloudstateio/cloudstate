@@ -1,6 +1,8 @@
 import java.util.Date
 
 import com.typesafe.sbt.packager.docker.DockerChmodType
+import sbt.Keys.{developers, scmInfo}
+import sbt.url
 
 inThisBuild(Seq(
   organization := "io.cloudstate",
@@ -13,8 +15,20 @@ inThisBuild(Seq(
   resolvers += Resolver.bintrayRepo("jroper", "maven"), // TODO: Remove once skuber has the required functionality
 
   organizationName := "Lightbend Inc.",
+  organizationHomepage := Some(url("https://lightbend.com")),
   startYear := Some(2019),
-  licenses += ("Apache-2.0", new URL("https://www.apache.org/licenses/LICENSE-2.0.txt"))
+  licenses += ("Apache-2.0", new URL("https://www.apache.org/licenses/LICENSE-2.0.txt")),
+
+  homepage := Some(url("https://cloudstate.io")),
+  scmInfo := Some(ScmInfo(
+    url("https://github.com/cloudstateio/cloudstate"),
+    "scm:git@github.com:cloudstateio/cloudstate.git"
+  )),
+  developers := List(
+    Developer(id="jroper", name="James Roper", email="james@jazzy.id.au", url=url("https://jazzy.id.au"))
+  ),
+  
+  sonatypeProfileName := "io.cloudstate",
 ))
 
 // Make sure the version doesn't change each time it gets built, this ensures we don't rebuild the native image
@@ -392,7 +406,10 @@ lazy val `java-support` = (project in file("java-support"))
     name := "cloudstate-java-support",
     common,
     crossPaths := false,
-
+    
+    publishMavenStyle := true,
+    publishTo := sonatypePublishTo.value,
+    
     buildInfoKeys := Seq[BuildInfoKey](name, version),
     buildInfoPackage := "io.cloudstate.javasupport",
     
