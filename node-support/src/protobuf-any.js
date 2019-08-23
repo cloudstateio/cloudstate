@@ -208,7 +208,7 @@ module.exports = class AnySupport {
       const key = reader.uint32();
       pType = key & 7;
       fieldNumber = key >>> 3;
-      if (fieldNumber !== 15) {
+      if (fieldNumber !== CloudStatePrimitiveFieldNumber) {
         reader.skipType(pType);
       } else {
         if (pType !== protobuf.types.basic[type]) {

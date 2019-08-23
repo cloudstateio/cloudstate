@@ -101,9 +101,9 @@ describe("AnySupport", () => {
       value: PrimitiveLike.encode({
         field1: "one",
         field2: "two",
-        field15: "three"
+        field3: "three"
       }).finish()
-    }).should.equal("three");
+    }).should.equal("one");
   });
 
   it("should support serialization json when allowed", () => {
