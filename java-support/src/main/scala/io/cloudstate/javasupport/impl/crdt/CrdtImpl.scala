@@ -49,7 +49,7 @@ final class CrdtStatefulService(val factory: CrdtEntityFactory,
   }
 
   private val streamed = descriptor.getMethods.asScala.filter(_.toProto.getServerStreaming).map(_.getName).toSet
-  def isStreamed(command: String) = streamed(command)
+  def isStreamed(command: String): Boolean = streamed(command)
 }
 
 class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], rootContext: Context) extends Crdt {
@@ -108,6 +108,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
       }
     }.recover {
       case err =>
+        system.log.error(err, "Unexpected error, terminating CRDT.")
         CrdtStreamOut(CrdtStreamOut.Message.Failure(Failure(description = err.getMessage)))
     }
   }
@@ -132,6 +133,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
       crdt match {
         case Some(changed) if changed.hasDelta && !crdtIsNew =>
           throw new RuntimeException(s"CRDT was changed during $scope, this is not allowed.")
+        case _ =>
       }
     }
 
@@ -145,7 +147,9 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
 
     def handleDelta(delta: CrdtDelta): List[CrdtStreamedMessage] = {
       crdt match {
-        case Some(existing) => existing.applyDelta(delta.delta)
+        case Some(existing) => existing.applyDelta.applyOrElse(delta.delta, { noMatch: CrdtDelta.Delta =>
+          throw new IllegalStateException(s"Received delta ${noMatch.value.getClass}, but it doesn't match the CRDT that this entity has: ${existing.name}")
+        })
         case None => throw new IllegalStateException("Received delta for CRDT before it was created.")
       }
       notifySubscribers()
@@ -154,9 +158,9 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
     def handleCommand(command: Command): List[CrdtStreamOut] = {
       val grpcMethodIsStreamed = service.isStreamed(command.name)
       val ctx = if (grpcMethodIsStreamed) {
-        new CrdtCommandContext(command)
-      } else {
         new CrdtStreamedCommandContext(command)
+      } else {
+        new CrdtCommandContext(command)
       }
 
       val reply = try {
@@ -174,7 +178,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
         ctx.deactivate()
       }
 
-      val clientAction = ctx.createClientAction(reply, true)
+      val clientAction = ctx.createClientAction(reply, allowNoReply = true)
 
       if (ctx.hasError) {
         verifyNoDelta("failed command handling")
@@ -250,7 +254,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
             context.deactivate()
           }
 
-          val clientAction = context.createClientAction(reply, true)
+          val clientAction = context.createClientAction(reply, allowNoReply = true)
 
           if (context.hasError) {
             subscribers -= id
@@ -259,8 +263,8 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
               commandId = id,
               clientAction = clientAction
             ))
-          } else if (clientAction.isDefined || context.isEnded() || context.sideEffects.nonEmpty) {
-            if (context.isEnded()) {
+          } else if (clientAction.isDefined || context.isEnded || context.sideEffects.nonEmpty) {
+            if (context.isEnded) {
               subscribers -= id
               cancelListeners -= id
             }
@@ -268,7 +272,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
               commandId = id,
               clientAction = clientAction,
               sideEffects = context.sideEffects,
-              endStream = context.isEnded()
+              endStream = context.isEnded
             ))
           } else {
             None
@@ -311,7 +315,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
       with DeletableContext
       with ActivatableContext {
 
-      override final def commandId(): Long = command.id
+      override final def commandId: Long = command.id
 
       override final def commandName(): String = command.name
     }
@@ -335,7 +339,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
         ended = true
       }
 
-      final def isEnded(): Boolean = ended
+      final def isEnded: Boolean = ended
     }
 
     trait DeletableContext {
@@ -347,7 +351,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
       override final def state(): Optional[_ <: io.cloudstate.javasupport.crdt.Crdt] =
         (crdt: Option[io.cloudstate.javasupport.crdt.Crdt]).asJava
 
-      override final def entityId(): String = entityId
+      override final def entityId(): String = EntityRunner.this.entityId
 
       override def serviceCallFactory(): ServiceCallFactory = rootContext.serviceCallFactory()
     }
@@ -377,9 +381,9 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
         deleted = true
       }
 
-      final def isDeleted() = deleted
+      final def isDeleted: Boolean = deleted
 
-      final def createCrdtAction() = crdt match {
+      final def createCrdtAction(): Option[CrdtStateAction] = crdt match {
         case Some(c) =>
           if (crdtIsNew) {
             crdtIsNew = false

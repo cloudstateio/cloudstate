@@ -1,6 +1,6 @@
 package io.cloudstate.javasupport.crdt;
 
-public interface Vote {
+public interface Vote extends Crdt {
     boolean getSelfVote();
     int getVoters();
     int getVotesFor();

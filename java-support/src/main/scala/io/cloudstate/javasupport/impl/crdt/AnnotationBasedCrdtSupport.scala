@@ -84,7 +84,7 @@ private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_], anySupport
     }
 
     override def handleStreamedCommand(command: JavaPbAny, context: StreamedCommandContext[JavaPbAny]): Optional[JavaPbAny] = unwrap {
-      val maybeResult = commandHandlers.get(context.commandName()).map { handler =>
+      val maybeResult = streamedCommandHandlers.get(context.commandName()).map { handler =>
         val adaptedContext = new AdaptedStreamedCommandContext(context, handler.serviceMethod.outputType.asInstanceOf[ResolvedType[AnyRef]])
         handler.invoke(entity, command, adaptedContext)
       }

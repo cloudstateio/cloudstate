@@ -293,7 +293,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     fork in run := true,
 
     // In memory journal by default
-    javaOptions in run ++= Seq("-Dcloudstate.proxy.dev-mode-enabled=true"),
+    javaOptions in run ++= Seq("-Dconfig.resource=dev-mode.conf"),
 
     mainClass in assembly := Some("io.cloudstate.proxy.CloudStateProxyMain"),
     assemblyJarName in assembly := "akka-proxy.jar",
@@ -389,7 +389,7 @@ lazy val operator = (project in file("operator"))
 lazy val `java-support` = (project in file("java-support"))
   .enablePlugins(AkkaGrpcPlugin, BuildInfoPlugin)
   .settings(
-    name := "java-support",
+    name := "cloudstate-java-support",
     common,
     crossPaths := false,
 
@@ -426,12 +426,14 @@ lazy val `java-support` = (project in file("java-support"))
 
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "protocol")
+      Seq(baseDir / "protocol", baseDir / "frontend")
     },
+    (PB.targets in Compile) += PB.gens.java -> (sourceManaged in Compile).value,
+    
     inConfig(Test)(sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
       PB.protoSources ++= {
         val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-        Seq(baseDir / "frontend", baseDir / "example")
+        Seq(baseDir / "example")
       },
       PB.targets := Seq(
         PB.gens.java -> sourceManaged.value,

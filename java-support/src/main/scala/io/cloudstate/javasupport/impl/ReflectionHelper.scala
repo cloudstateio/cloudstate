@@ -112,7 +112,7 @@ private[impl] object ReflectionHelper {
       }
     }
 
-    private val handleResult: AnyRef => Optional[JavaPbAny] = if (method.getReturnType == classOf[Void]) {
+    private val handleResult: AnyRef => Optional[JavaPbAny] = if (method.getReturnType == Void.TYPE) {
       _ => Optional.empty()
     } else if (method.getReturnType == classOf[Optional[_]]) {
       verifyOutputType(getFirstParameter(method.getGenericReturnType))
