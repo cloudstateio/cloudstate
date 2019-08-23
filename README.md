@@ -33,15 +33,14 @@ Join us in making this vision a reality!
     + [Support for Autoscaling](#support-for-autoscaling)
     + [Support for HTTP and JSON](#support-for-http-and-json)
     + [Supported databases](#supported-databases)
+- [Samples](#samples)
 - [Client API](#client-api)
     + [JavaScript API](#javascript-api)
     + [Java API](#java-api)
-- [Samples](#samples)
 - [Run CloudState](#run-cloudstate)
 - [Knative Integration](#knative-integration)
 - [GraalVM Integration](#graal-integration)
 - [Testing Strategy](#testing-strategy)
-- [Current project status](#current-project-status)
 - [Get involved](#get-involved)
 
 ---
@@ -317,6 +316,22 @@ The Akka sidecar supports serving the gRPC user functions services both as gRPC,
 The CloudState Proxy Reference Implementation is using [Akka Persistence](https://doc.akka.io/docs/akka/current/persistence.html) for the durable storage, which has support for a [wide range](https://index.scala-lang.org/search?topics=akka-persistence) of NoSQL and SQL databases. That said, since it is compiled into a GraalVM native image, the database connection drivers need to be adapted. So far we have support for the Cassandra distributed database, with more databases (for example Postgres) in the works.   
 
 ---
+## Samples
+
+We have created a sample application in each supported client languages. They are all speaking the same protocol, and use the same datatypes, and can therefore be used in concert in a polyglot fashion. 
+
+The sample application implemenents a simple chat application, and currently there's only one feature: user presence. But in future we will add chat room support, push notifications for chat messages, etc.
+
+The application has two components, a presence stateful function, which uses a vote CRDT to store whether a user is currently online or not, and a gateway, which is an express/ws application, that serves a UI.
+
+The UI is designed to allow connecting as multiple users in one browser window, this is for demonstration purposes, to make it straight forward to see real time interactions, serverside pushes etc, without needing to open many browser tabs.
+
+Check out the samples project here, with instructions how to run them on Kubernetes: 
+- [JavaScript sample](https://github.com/cloudstateio/samples-js-chat)
+- [Java sample](https://github.com/cloudstateio/samples-java-chat)
+
+
+---
 ## Client API
 
 TODO: introduction to client APIs, discuss gRPC protocol, polyglot, common features, etc.
@@ -328,11 +343,6 @@ TODO: add general docs
 ### Java API
 
 TODO: add general docs
-
----
-## Samples
-
-TODO: add links to samples
 
 ---
 ## Run CloudState
@@ -661,11 +671,6 @@ Implementation details:
 
   * Will depend on each frontend implementation
   * API should be idiomatic for each specific platform
-
----
-## Current project status
-
-TODO: Write an update or remove section
 
 ---
 ## Get involved
