@@ -286,6 +286,14 @@ lazy val `proxy-core` = (project in file("proxy/core"))
       //"ch.qos.logback"                 % "logback-classic"                   % "1.2.3", // Doesn't work well with SubstrateVM: https://github.com/vmencik/akka-graal-native/blob/master/README.md#logging
     ),
 
+    // Work around for https://github.com/akka/akka-grpc/pull/673
+    (PB.targets in Compile) := {
+      val old = (PB.targets in Compile).value
+      val ct = crossTarget.value
+
+      old.map(_.copy(outputPath = ct / "akka-grpc" / "main"))
+    },
+
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "proxy", baseDir / "frontend", baseDir / "protocol", (sourceDirectory in Compile).value / "protos")
@@ -441,11 +449,21 @@ lazy val `java-support` = (project in file("java-support"))
     akkaGrpcGeneratedSources in Compile := Seq(AkkaGrpc.Server),
     akkaGrpcGeneratedLanguages in Compile := Seq(AkkaGrpc.Scala), // FIXME should be Java, but here be dragons
 
+    // Work around for https://github.com/akka/akka-grpc/pull/673
+    (PB.targets in Compile) := {
+      val old = (PB.targets in Compile).value
+      val ct = crossTarget.value
+
+      old.map(_.copy(outputPath = ct / "akka-grpc" / "main"))
+    },
+
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "protocol", baseDir / "frontend")
     },
-    (PB.targets in Compile) += PB.gens.java -> (sourceManaged in Compile).value,
+    // We need to generate the java files for things like entity_key.proto so that downstream libraries can use them
+    // without needing to generate them themselves
+    PB.targets in Compile += PB.gens.java -> crossTarget.value / "akka-grpc" / "main",
     
     inConfig(Test)(sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
       PB.protoSources ++= {
@@ -453,7 +471,7 @@ lazy val `java-support` = (project in file("java-support"))
         Seq(baseDir / "example")
       },
       PB.targets := Seq(
-        PB.gens.java -> sourceManaged.value,
+        PB.gens.java -> crossTarget.value / "akka-grpc" / "test",
       )
     ))
   )
