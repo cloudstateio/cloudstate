@@ -6,6 +6,10 @@ _"We predict that serverless computing will grow to dominate the future of cloud
 
 Bringing _stateful_ services, fast data/streaming, and the power of reactive technologies to the Cloud Native ecosystem breaks down the final impediment standing in the way of a **Serverless platform for general-purpose application development** — with true elastic scalability, high resilience, and global deployment, in the Kubernetes ecosystem. 
 
+The Serverless movement today is very focused on the automation of the underlying infrastructure, but it has to some extent ignored the equally complicated requirements at the application layer, where the move towards Fast Data, streaming, and event-driven stateful architectures creates all sorts of new challenges for operating systems in production.
+
+Stateless functions is a great tool that has its place in the cloud computing toolkit, but for Serverless to reach the grand vision that the industry is demanding of a Serverless world while allowing us to build modern data-centric real-time applications, we can't continue to ignore the hardest problem in distributed systems: managing state—your data. 
+
 The [CloudState](https://cloudstate.io) project takes on this challenge and paves the way for Serverless 2.0. It consists of two things: 
 
 1. **A standards effort** — defining a specification, protocol between the user functions and the backend, and a TCK.
@@ -74,10 +78,6 @@ One limitation of FaaS is that its functions are ephemeral, stateless, and short
 Another limitation is that often functions have no direct addressability, which means that they can't communicate directly with each other using point-to-point communication but always need to resort to publish-subscribe, passing all data over some slow and expensive storage medium. A model that can work well for event-driven use-cases but yields too high latency for addressing general-purpose distributed computing problems[^2].
 
 ### The need for Stateful Serverless Computing
-
-The serverless movement today is very focused on the automation of the underlying infrastructure, but it has to some extent ignored the equally complicated requirements at the application layer, where the move towards fast data, streaming, and event-driven stateful architectures creates all sorts of new challenges for operating systems in production.
-
-Stateless functions is a great tool that has its place in the cloud computing toolkit, but for serverless to reach the grand vision that the industry is demanding of a Serverless world while allowing us to build modern data-centric real-time applications, we can't continue to ignore the hardest problem in distributed systems: managing state—your data. 
 
 If Serverless is conceptually about how to remove humans from the equation and solve developers' hardest problems with reasoning about systems in production, then they need declarative APIs and high-level abstractions with rich and easily understood semantics (beyond low-level primitives like functions) for working with never-ending streams of data, manage complex distributed data workflows, and managing distributed state in a reliable, resilient, scalable, and performant way. 
 
