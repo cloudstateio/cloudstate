@@ -53,7 +53,13 @@ object CloudStateRunner {
   }
 }
 
-// TODO JavaDoc
+/**
+ * The CloudStateRunner is responsible for handle the bootstrap of entities,
+ * and is used by [[io.cloudstate.javasupport.CloudState.start()]] to set up the local
+ * server with the given configuration.
+ *
+ * CloudStateRunner can be seen as a low-level API for cases where [[io.cloudstate.javasupport.CloudState.start()]] isn't enough.
+ */
 final class CloudStateRunner private[this](_system: ActorSystem, services: Map[String, StatefulService]) {
   private[this] implicit final val system = _system
   private[this] implicit final val materializer: Materializer = ActorMaterializer()
@@ -129,15 +135,27 @@ final class CloudStateRunner private[this](_system: ActorSystem, services: Map[S
     FutureConverters.toJava(system.terminate()).thenApply(_ => Done)
 }
 
-// TODO JavaDoc
-// This class will describe the stateless service and is created and passed by the user into a CloudState instance.
+/**
+ * StatefulService describes an entitiy type in a way which makes it possible
+ * to deploy.
+ */
 trait StatefulService {
-  // TODO JavaDoc
+  /**
+   * @return a Protobuf ServiceDescriptor of its externally accessible gRPC API
+   */
   def descriptor: Descriptors.ServiceDescriptor
-  // TODO JavaDoc
+
+  /**
+   * Possible values are: "", "", "".
+   * @return the type of entity represented by this StatefulService
+   */
   def entityType: String
-  // TODO JavaDoc
+
+  /**
+   * @return the persistence identifier used for the the entities represented by this service
+   */
   def persistenceId: String = descriptor.getName
+
   // TODO JavaDoc
   def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]]
 }
