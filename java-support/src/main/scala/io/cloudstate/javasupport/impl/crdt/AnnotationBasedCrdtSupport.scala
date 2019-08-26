@@ -116,11 +116,9 @@ private object CrdtAnnotationHelper {
 
   private class CrdtParameterHandler(crdtClass: Class[_], method: Executable) extends ParameterHandler[CrdtContext] {
     override def apply(ctx: InvocationContext[CrdtContext]): AnyRef = {
-      if (ctx.context.state().isPresent) {
-        val crdt = ctx.context.state().get()
-        if (crdtClass.isInstance(crdt)) crdt
-        else throw new IllegalStateException(s"${method.getDeclaringClass.getName}.${method.getName} requires a CRDT " +
-          s"of type ${crdtClass.getName}, but the CRDT for this entity is a ${crdt.getClass.getName}")
+      val state = ctx.context.state(crdtClass)
+      if (state.isPresent) {
+        state.get()
       } else {
         throw new IllegalStateException(s"${method.getDeclaringClass.getName}.${method.getName} requires a CRDT " +
           s"of type ${crdtClass.getName}, but this entity has no CRDT created for it yet.")
@@ -130,13 +128,7 @@ private object CrdtAnnotationHelper {
 
   private class OptionalCrdtParameterHandler(crdtClass: Class[_], method: Executable) extends ParameterHandler[CrdtContext] {
     override def apply(ctx: InvocationContext[CrdtContext]): AnyRef = {
-      if (ctx.context.state().isPresent) {
-        val crdt = ctx.context.state().get()
-        if (!crdtClass.isInstance(crdt))
-          throw new IllegalStateException(s"${method.getDeclaringClass.getName}.${method.getName} requires a CRDT " +
-            s"of type ${crdtClass.getName}, but the CRDT for this entity is a ${crdt.getClass.getName}")
-      }
-      ctx.context.state()
+      ctx.context.state(crdtClass)
     }
   }
 
@@ -166,7 +158,8 @@ private final class AdaptedStreamedCommandContext(val delegate: StreamedCommandC
   override def entityId(): String = delegate.entityId()
   override def commandId(): Long = delegate.commandId()
   override def commandName(): String = delegate.commandName()
-  override def state(): Optional[_ <: Crdt] = delegate.state()
+
+  override def state[T <: Crdt](crdtClass: Class[T]): Optional[T] = delegate.state(crdtClass)
   override def delete(): Unit = delegate.delete()
 
   override def forward(to: ServiceCall): Unit = delegate.forward(to)
@@ -181,8 +174,6 @@ private final class AdaptedStreamedCommandContext(val delegate: StreamedCommandC
   override def newLWWRegister[T](value: T): LWWRegister[T] = delegate.newLWWRegister(value)
   override def newORMap[K, V <: Crdt](): ORMap[K, V] = delegate.newORMap()
   override def newVote(): Vote = delegate.newVote()
-  override def newLWWRegisterMap[K, V](): LWWRegisterMap[K, V] = delegate.newLWWRegisterMap()
-  override def newPNCounterMap[K](): PNCounterMap[K] = delegate.newPNCounterMap()
 }
 
 private final class EntityConstructorInvoker(constructor: Constructor[_]) extends (CrdtCreationContext => AnyRef) {

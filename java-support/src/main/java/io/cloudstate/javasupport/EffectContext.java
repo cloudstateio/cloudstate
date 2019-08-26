@@ -10,6 +10,9 @@ public interface EffectContext extends Context {
      * <p/>
      * The effect will be performed asynchronously, ie, the proxy won't wait for the effect to finish before sending
      * the reply.
+     * <p/>
+     * {@link ServiceCall} instances can be created using the {@link ServiceCallFactory} obtained from any (including
+     * this) contexts {@link Context#serviceCallFactory()} method.
      *
      * @param effect The service call to make as an effect effect.
      */
@@ -19,6 +22,9 @@ public interface EffectContext extends Context {
 
     /**
      * Invoke the referenced service call as an effect once this action is completed.
+     * <p/>
+     * {@link ServiceCall} instances can be created using the {@link ServiceCallFactory} obtained from any (including
+     * this) contexts {@link Context#serviceCallFactory()} method.
      *
      * @param effect The service call to make as an effect effect.
      * @param synchronous Whether the effect should be performed synchronously (ie, wait till it has finished before

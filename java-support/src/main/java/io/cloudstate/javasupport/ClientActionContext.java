@@ -18,6 +18,9 @@ public interface ClientActionContext extends Context {
      * <p/>
      * The command will be forwarded after successful completion of handling this command, including any persistence
      * that this command does.
+     * <p/>
+     * {@link ServiceCall} instances can be created using the {@link ServiceCallFactory} obtained from any (including
+     * this) contexts {@link Context#serviceCallFactory()} method.
      *
      * @param to The service call to forward command processing to.
      */

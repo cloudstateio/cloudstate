@@ -4,7 +4,7 @@ import java.util
 import java.util.{Map, function}
 
 import com.google.protobuf.any.{Any => ScalaPbAny}
-import io.cloudstate.javasupport.crdt.{CrdtFactory, ORMap}
+import io.cloudstate.javasupport.crdt.{Crdt, CrdtFactory, ORMap}
 import io.cloudstate.javasupport.impl.AnySupport
 import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtState, ORMapDelta, ORMapEntry, ORMapEntryDelta, ORMapState}
 import org.slf4j.LoggerFactory

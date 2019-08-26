@@ -2,12 +2,28 @@ package io.cloudstate.javasupport.crdt;
 
 import java.util.*;
 
+/**
+ * Convenience wrapper class for {@link ORMap} that uses {@link PNCounter}'s for values.
+ * <p/>
+ * This offers a few extra methods for interacting with the map.
+ *
+ * @param <K> The type for keys.
+ */
 public final class PNCounterMap<K> extends AbstractORMapWrapper<K, Long, PNCounter> implements Map<K, Long> {
 
-    PNCounterMap(ORMap<K, PNCounter> ormap) {
+    public PNCounterMap(ORMap<K, PNCounter> ormap) {
         super(ormap);
     }
 
+    /**
+     * Get the value for the given key.
+     * <p/>
+     * This differs from {@link Map#get(Object)} in that it returns a primitive <code>long</code>, and thus avoids an
+     * allocation.
+     *
+     * @param key The key to get the value for.
+     * @return The current value of the counter at that key, or zero if no counter exists for that key.
+     */
     public long getValue(Object key) {
         PNCounter counter = ormap.get(key);
         if (counter != null) {
@@ -17,12 +33,38 @@ public final class PNCounterMap<K> extends AbstractORMapWrapper<K, Long, PNCount
         }
     }
 
+    /**
+     * Increment the counter at the given key by the given amount.
+     * <p/>
+     * The counter will be created if it is not already in the map.
+     *
+     * @param key The key of the counter.
+     * @param by The amount to increment by.
+     * @return The new value of the counter.
+     */
     public long increment(Object key, long by) {
         return getOrUpdate(key).increment(by);
     }
 
+    /**
+     * Decrement the counter at the given key by the given amount.
+     * <p/>
+     * The counter will be created if it is not already in the map.
+     *
+     * @param key The key of the counter.
+     * @param by The amount to decrement by.
+     * @return The new value of the counter.
+     */
     public long decrement(Object key, long by) {
         return getOrUpdate(key).decrement(by);
+    }
+
+    /**
+     * Not supported on PNCounter, use increment/decrement instead.
+     */
+    @Override
+    public Long put(K key, Long value) {
+        throw new UnsupportedOperationException("Put is not supported on PNCounterMap, use increment or decrement instead");
     }
 
     @Override
@@ -32,8 +74,7 @@ public final class PNCounterMap<K> extends AbstractORMapWrapper<K, Long, PNCount
 
     @Override
     void setCrdtValue(PNCounter pnCounter, Long value) {
-        long old = pnCounter.getValue();
-        pnCounter.increment(value - old);
+        throw new UnsupportedOperationException("Using value mutating methods on PNCounterMap is not supported, use increment or decrement instead");
     }
 
     @Override

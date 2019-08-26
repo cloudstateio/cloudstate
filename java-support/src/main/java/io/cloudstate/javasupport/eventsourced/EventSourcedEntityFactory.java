@@ -2,7 +2,7 @@ package io.cloudstate.javasupport.eventsourced;
 
 /**
  * Low level interface for handling events and commands on an entity.
- *
+ * <p/>
  * Generally, this should not be needed, instead, a class annotated with the {@link EventHandler},
  * {@link CommandHandler} and similar annotations should be used.
  */

@@ -2,6 +2,9 @@ package io.cloudstate.javasupport.crdt;
 
 import java.util.*;
 
+/**
+ * Utility class for helping implement {@link ORMap} based CRDTs.
+ */
 abstract class AbstractORMapWrapper<K, V, C extends Crdt> extends AbstractMap<K, V> implements Map<K, V> {
 
     final ORMap<K, C> ormap;
