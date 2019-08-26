@@ -17,7 +17,7 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
 
   trait BaseContext extends Context {
     override def serviceCallFactory(): ServiceCallFactory = new ServiceCallFactory {
-      override def lookup[T](serviceName: String, methodName: String): ServiceCallRef[T] = throw new NoSuchElementException
+      override def lookup[T](serviceName: String, methodName: String, messageType: Class[T]): ServiceCallRef[T] = throw new NoSuchElementException
     }
   }
 
@@ -31,7 +31,12 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
   object MockCreationContext extends MockCreationContext(None)
   class MockCreationContext(crdt: Option[Crdt] = None) extends CrdtCreationContext with BaseContext with CrdtFactoryContext {
     override def entityId(): String = "foo"
-    override def state(): Optional[_ <: Crdt] = crdt.asJava
+    override def state[T <: Crdt](crdtType: Class[T]): Optional[T] = crdt match {
+      case Some(crdt) if crdtType.isInstance(crdt) => Optional.of(crdtType.cast(crdt))
+      case None => Optional.empty()
+      case Some(wrongType) =>
+        throw new IllegalStateException(s"The current ${wrongType} CRDT state doesn't match requested type of ${crdtType.getSimpleName}")
+    }
   }
 
   object WrappedResolvedType extends ResolvedType[Wrapped] {

@@ -14,7 +14,7 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
 
   trait BaseContext extends Context {
     override def serviceCallFactory(): ServiceCallFactory = new ServiceCallFactory {
-      override def lookup[T](serviceName: String, methodName: String): ServiceCallRef[T] = throw new NoSuchElementException
+      override def lookup[T](serviceName: String, methodName: String, messageType: Class[T]): ServiceCallRef[T] = throw new NoSuchElementException
     }
   }
 

@@ -350,8 +350,8 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
     trait AbstractCrdtContext extends CrdtContext {
       override final def state[T <: io.cloudstate.javasupport.crdt.Crdt](crdtType: Class[T]): Optional[T] =
         crdt match {
-          case Some(crdt: T) if crdtType.isInstance(crdt) =>
-            Optional.of(crdt)
+          case Some(crdt) if crdtType.isInstance(crdt) =>
+            Optional.of(crdtType.cast(crdt))
           case None => Optional.empty()
           case Some(wrongType) =>
             throw new IllegalStateException(s"The current ${wrongType.name} CRDT state doesn't match requested type of ${crdtType.getSimpleName}")

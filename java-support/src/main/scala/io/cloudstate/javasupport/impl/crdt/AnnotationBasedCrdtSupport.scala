@@ -108,13 +108,13 @@ private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_], anySupport
 private object CrdtAnnotationHelper {
   val crdtParameterHandlers: PartialFunction[MethodParameter, ParameterHandler[CrdtContext]] = {
     case crdt if classOf[Crdt].isAssignableFrom(crdt.parameterType) =>
-      new CrdtParameterHandler(crdt.parameterType, crdt.method)
+      new CrdtParameterHandler(crdt.parameterType.asInstanceOf[Class[_ <: Crdt]], crdt.method)
     case crdt if crdt.parameterType == classOf[Optional[_]] &&
       classOf[Crdt].isAssignableFrom(ReflectionHelper.getFirstParameter(crdt.genericParameterType)) =>
-      new OptionalCrdtParameterHandler(ReflectionHelper.getFirstParameter(crdt.genericParameterType), crdt.method)
+      new OptionalCrdtParameterHandler(ReflectionHelper.getFirstParameter(crdt.genericParameterType).asInstanceOf[Class[_ <: Crdt]], crdt.method)
   }
 
-  private class CrdtParameterHandler(crdtClass: Class[_], method: Executable) extends ParameterHandler[CrdtContext] {
+  private class CrdtParameterHandler(crdtClass: Class[_ <: Crdt], method: Executable) extends ParameterHandler[CrdtContext] {
     override def apply(ctx: InvocationContext[CrdtContext]): AnyRef = {
       val state = ctx.context.state(crdtClass)
       if (state.isPresent) {
@@ -126,7 +126,7 @@ private object CrdtAnnotationHelper {
     }
   }
 
-  private class OptionalCrdtParameterHandler(crdtClass: Class[_], method: Executable) extends ParameterHandler[CrdtContext] {
+  private class OptionalCrdtParameterHandler(crdtClass: Class[_ <: Crdt], method: Executable) extends ParameterHandler[CrdtContext] {
     override def apply(ctx: InvocationContext[CrdtContext]): AnyRef = {
       ctx.context.state(crdtClass)
     }
