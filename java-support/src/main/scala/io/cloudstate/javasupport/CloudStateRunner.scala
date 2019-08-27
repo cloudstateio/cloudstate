@@ -80,12 +80,12 @@ final class CloudStateRunner private[this](_system: ActorSystem, services: Map[S
 
     val serviceRoutes = services.groupBy(_._2.getClass).foldLeft(PartialFunction.empty[HttpRequest, Future[HttpResponse]]) {
 
-      case (route, (serviceClass, eventSourcedServices: Map[String, EventSourcedStatefulService]))
+      case (route, (serviceClass, eventSourcedServices: Map[String, EventSourcedStatefulService] @unchecked))
         if serviceClass == classOf[EventSourcedStatefulService] =>
           val eventSourcedImpl = new EventSourcedImpl(system, eventSourcedServices, rootContext)
           route orElse EventSourcedHandler.partial(eventSourcedImpl)
 
-      case (route, (serviceClass, crdtServices: Map[String, CrdtStatefulService]))
+      case (route, (serviceClass, crdtServices: Map[String, CrdtStatefulService] @unchecked))
         if serviceClass == classOf[CrdtStatefulService] =>
         val crdtImpl = new CrdtImpl(system, crdtServices, rootContext)
         route orElse CrdtHandler.partial(crdtImpl)
