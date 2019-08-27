@@ -153,7 +153,12 @@ commands ++= Seq(
   buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), true),
   buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), false),
   buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, true),
-  buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, false)
+  buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, false),
+  Command.single("dockerBuildAll", buildProxyHelp("dockerBuildAll", "all")) { (state, command) =>
+    List("DevMode", "NoJournal", "InMemory", "Cassandra")
+      .flatMap(c => List(c, s"Native$c"))
+      .map(c => s"dockerBuild$c $command") ::: state
+  }
 )
 
 // Shared settings for native image and docker builds
