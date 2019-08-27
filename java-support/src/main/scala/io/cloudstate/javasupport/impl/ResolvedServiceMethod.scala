@@ -80,5 +80,6 @@ private final class JacksonResolvedType[T](
 }
 
 trait ResolvedEntityFactory {
+  // TODO JavaDoc
   def resolvedMethods: Map[String, ResolvedServiceMethod[_, _]]
 }

@@ -16,7 +16,11 @@ import java.util.concurrent.CompletionStage;
 import java.util.HashMap;
 import java.util.Map;
 
-// TODO JavaDoc
+/**
+ * The CloudState class is the main interface to configuring entities to deploy,
+ * and subsequently starting a local server which will expose these entities to
+ * the CloudState Proxy Sidecar.
+ */
 public final class CloudState {
     private final Map<String, StatefulService> services = new HashMap<>();
     private ClassLoader classLoader = getClass().getClassLoader();
@@ -35,19 +39,35 @@ public final class CloudState {
         return this;
     }
 
-    // TODO JavaDoc
+    /**
+     * Sets the type URL prefix to be used when serializing and deserializing
+     * types from and to Protobyf Any values. Defaults to "type.googleapis.com".
+     *
+     * @param prefix the type URL prefix to be used.
+     * @return This CloudState instance.
+     */
     public CloudState withTypeUrlPrefix(String prefix) {
         this.typeUrlPrefix = prefix;
         return this;
     }
 
-    // TODO JavaDoc
+    /**
+     * When locating protobufs, if both a Java and a ScalaPB generated class is found on the classpath,
+     * this specifies that Java should be preferred.
+     *
+     * @return This CloudState instance.
+     */
     public CloudState preferJavaProtobufs() {
         this.prefer = AnySupport.PREFER_JAVA();
         return this;
     }
 
-    // TODO JavaDoc
+    /**
+     * When locating protobufs, if both a Java and a ScalaPB generated class is found on the classpath,
+     * this specifies that Scala should be preferred.
+     *
+     * @return This CloudState instance.
+     */
     public CloudState preferScalaProtobufs() {
         this.prefer = AnySupport.PREFER_SCALA();
         return this;
