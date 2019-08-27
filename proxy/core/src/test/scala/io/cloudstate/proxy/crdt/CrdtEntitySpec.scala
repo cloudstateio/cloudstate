@@ -55,7 +55,7 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
       expectDelta().change shouldBe 9
     }
 
-    "send missed updates once a command has been handled with more than local consitency" in {
+    "send missed updates once a command has been handled with more than local consistency" in {
       update(_ :+ 5)
       createAndExpectInit()
       val cid = sendAndExpectCommand("cmd", command)
@@ -65,6 +65,14 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
       toUserFunction.expectNoMessage(200.millis)
       sendAndExpectReply(cid, updateCounter(2), CrdtWriteConsistency.ALL)
       expectDelta().change shouldBe 9
+    }
+
+    "send updates when the entity still doesn't exist after a command has been handled" in {
+      createAndExpectInit()
+      val cid = sendAndExpectCommand("cmd", command)
+      sendAndExpectReply(cid, CrdtStateAction.Action.Empty, CrdtWriteConsistency.LOCAL)
+      update(_ :+ 3)
+      expectState().value == 3
     }
 
     "not send missed updates if there is still another command being handled" in {

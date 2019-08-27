@@ -395,6 +395,7 @@ class CrdtHandler {
 
   handleCrdtStreamIn(crdtStreamIn) {
     if (crdtStreamIn.state) {
+      this.streamDebug("Received state for CRDT type %s", crdtStreamIn.changed.delta);
       this.handleState(crdtStreamIn.state);
       this.handleStateChange();
     } else if (crdtStreamIn.changed) {
@@ -402,7 +403,7 @@ class CrdtHandler {
       this.currentState.applyDelta(crdtStreamIn.changed, this.entity.anySupport, crdts.createCrdtForState);
       this.handleStateChange();
     } else if (crdtStreamIn.deleted) {
-      this.streamDebug("CRDT deleted");
+      this.streamDebug("Received CRDT deleted");
       this.currentState = null;
       this.handleStateChange();
     } else if (crdtStreamIn.command) {

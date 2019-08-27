@@ -1,3 +1,4 @@
+import java.io.File
 import java.util.Date
 
 import com.typesafe.sbt.packager.docker.DockerChmodType
@@ -86,7 +87,8 @@ lazy val root = (project in file("."))
   .aggregate(`proxy-core`, `proxy-cassandra`, `java-support`, `java-shopping-cart`,`akka-client`, operator, `tck`)
   .settings(common)
 
-lazy val proxyDockerBuild = settingKey[Option[(String, String)]]("Docker artifact name and configuration file which gets overridden by the buildProxy command")
+lazy val proxyDockerBuild = settingKey[Option[(String, Option[String])]]("Docker artifact name and configuration file which gets overridden by the buildProxy command")
+lazy val nativeImageDockerBuild = settingKey[Boolean]("Whether the docker image should be based on the native image or not.")
 
 val dockerTagVersion = !sys.props.get("docker.tag.version").forall(_ == "false")
 
@@ -119,50 +121,92 @@ def dockerSettings: Seq[Setting[_]] = Seq(
 def buildProxyHelp(commandName: String, name: String) =
   Help((s"$commandName <task>", s"Execute the given docker scoped task (eg, publishLocal or publish) for the the $name build of the proxy."))
 
-def buildProxyCommand(commandName: String, project: => Project, name: String, configResource: String): Command =
+def buildProxyCommand(commandName: String, project: => Project, name: String, configResource: Option[String], native: Boolean): Command = {
+  val cn = if (native) s"dockerBuildNative$commandName"
+  else s"dockerBuild$commandName"
+  val imageName = if (native) s"native-$name"
+  else name
+  val configResourceSetting = configResource match {
+    case Some(resource) => "Some(\"" + resource + "\")"
+    case None => "None"
+  }
   Command.single(
-    commandName, 
-    buildProxyHelp(commandName, name)
+    cn,
+    buildProxyHelp(cn, name)
   ) { (state, command) =>
     List(
       s"project ${project.id}",
-      s"""set proxyDockerBuild := Some(("cloudstate-proxy-$name", "$configResource"))""",
+      s"""set proxyDockerBuild := Some(("cloudstate-proxy-$imageName", $configResourceSetting))""",
+      s"""set nativeImageDockerBuild := $native""",
       s"docker:$command",
       "set proxyDockerBuild := None",
       "project root"
     ) ::: state
   }
-
-def dockerBuildCassandraCommand = 
-  Command.single("dockerBuildCassandra", buildProxyHelp("dockerBuildCassandra", "cassandra")) { (state, command) =>
-    s"proxy-cassandra/docker:$command" :: state
-  }
+}
 
 commands ++= Seq(
-  buildProxyCommand("dockerBuildDevMode", `proxy-core`, "dev-mode", "dev-mode.conf"),
-  buildProxyCommand("dockerBuildNoJournal", `proxy-core`, "no-journal", "no-journal.conf"),
-  buildProxyCommand("dockerBuildInMemory", `proxy-core`, "in-memory", "in-memory.conf"),
-  dockerBuildCassandraCommand
+  buildProxyCommand("DevMode", `proxy-core`, "dev-mode", Some("dev-mode.conf"), true),
+  buildProxyCommand("DevMode", `proxy-core`, "dev-mode", Some("dev-mode.conf"), false),
+  buildProxyCommand("NoJournal", `proxy-core`, "no-journal", Some("no-journal.conf"), true),
+  buildProxyCommand("NoJournal", `proxy-core`, "no-journal", Some("no-journal.conf"), false),
+  buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), true),
+  buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), false),
+  buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, true),
+  buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, false),
+  Command.single("dockerBuildAll", buildProxyHelp("dockerBuildAll", "all")) { (state, command) =>
+    List("DevMode", "NoJournal", "InMemory", "Cassandra")
+      .flatMap(c => List(c, s"Native$c"))
+      .map(c => s"dockerBuild$c $command") ::: state
+  }
 )
 
 // Shared settings for native image and docker builds
 def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
+  nativeImageDockerBuild := false,
   graalVMVersion := Some("19.1.1"),
   graalVMNativeImageOptions ++= sharedNativeImageSettings,
 
-  (mappings in Universal) := Seq(
-    (packageBin in GraalVMNativeImage).value -> s"bin/${executableScriptName.value}"
-  ),
+  (mappings in Docker) := Def.taskDyn {
+    if (nativeImageDockerBuild.value) {
+      Def.task {
+        Seq(
+          (packageBin in GraalVMNativeImage).value -> s"${(defaultLinuxInstallLocation in Docker).value}/bin/${executableScriptName.value}"
+        )
+      }
+    } else {
+      Def.task {
+        // This is copied from the native packager DockerPlugin, because I don't think a dynamic task can reuse the
+        // old value of itself in the dynamic part.
+        def renameDests(from: Seq[(File, String)], dest: String) =
+          for {
+            (f, path) <- from
+            newPath = "%s/%s" format (dest, path)
+          } yield (f, newPath)
+
+        renameDests((mappings in Universal).value, (defaultLinuxInstallLocation in Docker).value)
+      }
+    }
+  }.value,
   dockerBaseImage := "bitnami/java:11-prod",
   // Need to make sure it has group execute permission
   // Note I think this is leading to quite large docker images :(
-  dockerChmodType := DockerChmodType.Custom("u+x,g+x"),
+  dockerChmodType := {
+    val old = dockerChmodType.value
+    if (nativeImageDockerBuild.value) {
+      DockerChmodType.Custom("u+x,g+x")
+    } else {
+      old
+    }
+  },
   dockerEntrypoint := {
     val old = dockerEntrypoint.value
-    val withLibraryPath = old :+ "-Djava.library.path=/opt/bitnami/java/lib"
+    val withLibraryPath = if (nativeImageDockerBuild.value) {
+      old :+ "-Djava.library.path=/opt/bitnami/java/lib"
+    } else old
     proxyDockerBuild.value match {
-      case Some((_, configResource)) => withLibraryPath :+ s"-Dconfig.resource=$configResource"
-      case None => withLibraryPath
+      case Some((_, Some(configResource))) => withLibraryPath :+ s"-Dconfig.resource=$configResource"
+      case _ => withLibraryPath
     }
   }
 )

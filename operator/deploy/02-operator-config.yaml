@@ -16,9 +16,9 @@ data:
       # Proxy configuration
       proxy {
         image {
-          cassandra = "cloudstateio/cloudstate-proxy-cassandra:latest"
-          no-journal = "cloudstateio/cloudstate-proxy-no-journal:latest"
-          in-memory = "cloudstateio/cloudstate-proxy-in-memory:latest"
+          cassandra = "cloudstateio/cloudstate-proxy-native-cassandra:latest"
+          no-journal = "cloudstateio/cloudstate-proxy-native-no-journal:latest"
+          in-memory = "cloudstateio/cloudstate-proxy-native-in-memory:latest"
         }
       }
     }

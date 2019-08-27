@@ -132,7 +132,7 @@
 {
   "name":"akka.cluster.ClusterHeartbeatReceiver",
   "allDeclaredFields":true,
-  "methods":[{"name":"<init>","parameterTypes":[] }]
+  "methods":[{"name":"<init>","parameterTypes":["scala.Function0"] }]
 },
 {
   "name":"akka.cluster.ClusterHeartbeatSender",
@@ -630,6 +630,10 @@
   "name":"akka.routing.TailChoppingPool"
 },
 {
+  "name":"akka.serialization.BooleanSerializer",
+  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
+},
+{
   "name":"akka.serialization.ByteArraySerializer",
   "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
 },
@@ -959,6 +963,14 @@
 },
 {
   "name":"io.cloudstate.proxy.autoscaler.NoScaler",
+  "allDeclaredFields":true
+},
+{
+  "name":"io.cloudstate.proxy.crdt.CrdtEntity",
+  "fields" : [
+    { "name" : "context", "allowWrite" : true },
+    { "name" : "self", "allowWrite" : true }
+  ],
   "allDeclaredFields":true
 },
 {
