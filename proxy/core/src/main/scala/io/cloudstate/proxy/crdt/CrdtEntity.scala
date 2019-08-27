@@ -61,6 +61,37 @@ object CrdtEntity {
   * the rest, and whenever update or mergeDelta is called, keep track of the changes in a shared delta tracking
   * object. That object should get set by this actor, and once present, all calls to merge/mergeDelta/update etc
   * will add changes to the delta tracking object.
+  *
+  * So here's the general principle of how this actor works.
+  *
+  * - The actor first establishes a stream to the user function as well as fetches the current state of the entity.
+  *   Until both of those are returned, it stashes commands, and once it has both, it unstashes.
+  * - When a command is received, if the command is streamed, we need to respond with a Source that materializes to
+  *   an actor ref that we can send replies to, so that gets done first, otherwise we go straight to command handling
+  *   logic.
+  * - The actor seeks to keep its state in sync with the user functions state. The user functions state is not a CRDT,
+  *   so at any one time, only one of them may be allowed to update their state, otherwise concurrent updates won't be
+  *   able to be reconciled. There are two times that the user function is allowed to update its state, one is while
+  *   it's handling a command, the other is while it's handling a stream cancelled. If it is not currently handling a
+  *   command or a stream cancelled, then the actor is free to update the state, and push deltas to the user function
+  *   to keep it in sync. The outstandingMutatingRequests variable is used to track which mode we are in, if greater
+  *   than zero, we are not allowed to update our state except on direction by the user function.
+  * - We use a replicator subscription to receive state updates. If outstandingMutatingRequests is not zero, we ignore
+  *   any change events from that subscription, otherwise, we convert them to deltas and forward them to the user
+  *   function.
+  * - When we receive a command, we do the following:
+  *   - Increment outstanding mutating operations
+  *   - Forward the command to the user function
+  * - When we receive a reply from the user function, we do the following:
+  *   - Perform any update as required by the user function
+  *   - Send a reply back to the stream/initiator of the command
+  *   - If there is more than one outstanding mutating operation, we just decrement it, and we're done.
+  *   - Otherwise, we don't decrement yet. Instead, because we may have ignored some updates while the operations were
+  *     underway, we do a local get on the replicator.
+  *   - When we get the response (either success or not found) we decrement outstanding mutating operations, and then
+  *     check if it's zero (a command have have arrived while we were doing the read), and if it is, then we calculate
+  *     and send any deltas found, and we're done.
+  * - Similar logic is also used for stream cancelled messages.
   */
 final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, entityDiscovery: EntityDiscovery)(implicit mat: Materializer) extends Actor with Stash with ActorLogging {
 
@@ -154,7 +185,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
   private def maybeStart() = {
 
     if (relay != null && state != null) {
-      log.debug("Received relay and state, starting.")
+      log.debug("{} - Received relay and state, starting.", entityId)
 
       val wireState = state.map(WireTransformer.toWireState)
 
@@ -179,7 +210,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
             case CrdtChange.NoChange =>
             // Nothing to do
             case CrdtChange.IncompatibleChange =>
-              throw new RuntimeException(s"Incompatible CRDT change from $value to $data")
+              throw new RuntimeException(s"Incompatible CRDT change from $value to $data for entity $entityId")
             case CrdtChange.Updated(delta) =>
               sendToRelay(CrdtStreamIn.Message.Changed(delta))
           }
@@ -300,6 +331,9 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
       if (outstandingMutatingOperations == 0) {
         maybeSendAndUpdateState(success.dataValue)
       }
+
+    case NotFound(_, _) =>
+      outstandingMutatingOperations -= 1
 
     case UpdateTimeout(_, Some(InitiatorReply(commandId, _, _))) =>
       failCommandAndCrash(commandId, "Failed to update CRDT at requested write consistency", None)
