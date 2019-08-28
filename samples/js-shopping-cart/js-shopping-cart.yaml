@@ -9,7 +9,7 @@ spec:
   datastore:
 
     # Name of a deployed Datastore to use.
-    name: postgres
+    name: cassandra
 
     # Datastore specific configuration
     config:

@@ -438,7 +438,11 @@ lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
   )
 
 lazy val `proxy-postgres` = (project in file("proxy/postgres"))
+<<<<<<< HEAD
   .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin, AssemblyPlugin)
+=======
+  .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin)
+>>>>>>> Initial postgres support
   .dependsOn(`proxy-jdbc`)
   .settings(
     common,
@@ -461,6 +465,7 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
     // If run by sbt, run in dev mode
     javaOptions in run += "-Dcloudstate.proxy.dev-mode-enabled=true",
 
+<<<<<<< HEAD
     mainClass in assembly := (mainClass in Compile).value,
     assemblyJarName in assembly := "akka-proxy-postgres.jar",
     test in assembly := {},
@@ -482,6 +487,9 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
         ).mkString("=",",","")
       ,
     )
+=======
+    nativeImageDockerSettings,
+>>>>>>> Initial postgres support
   )
 
 
