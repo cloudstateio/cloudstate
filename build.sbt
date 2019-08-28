@@ -104,8 +104,6 @@ lazy val docs = (project in file("docs"))
 lazy val proxyDockerBuild = settingKey[Option[(String, Option[String])]]("Docker artifact name and configuration file which gets overridden by the buildProxy command")
 lazy val nativeImageDockerBuild = settingKey[Boolean]("Whether the docker image should be based on the native image or not.")
 
-val dockerTagVersion = !sys.props.get("docker.tag.version").forall(_ == "false")
-
 def dockerSettings: Seq[Setting[_]] = Seq(
   proxyDockerBuild := None,
   
@@ -122,9 +120,8 @@ def dockerSettings: Seq[Setting[_]] = Seq(
   dockerAliases := {
     val old = dockerAliases.value
     val single = dockerAlias.value
-    // So basically, by default we *just* publish latest, but if -Ddocker.tag.version is passed,
-    // we publish both latest and a tag for the version.
-    if (dockerTagVersion) {
+    // Just publish latest if it's a snapshot, otherwise, publish both latest and the version
+    if (!isSnapshot.value) {
       old
     } else {
       Seq(single.withTag(Some("latest")))
@@ -162,18 +159,20 @@ def buildProxyCommand(commandName: String, project: => Project, name: String, co
 commands ++= Seq(
   buildProxyCommand("DevMode", `proxy-core`, "dev-mode", Some("dev-mode.conf"), true),
   buildProxyCommand("DevMode", `proxy-core`, "dev-mode", Some("dev-mode.conf"), false),
-  buildProxyCommand("NoJournal", `proxy-core`, "no-journal", Some("no-journal.conf"), true),
-  buildProxyCommand("NoJournal", `proxy-core`, "no-journal", Some("no-journal.conf"), false),
+  buildProxyCommand("NoStore", `proxy-core`, "no-store", Some("no-store.conf"), true),
+  buildProxyCommand("NoStore", `proxy-core`, "no-store", Some("no-store.conf"), false),
   buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), true),
   buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), false),
   buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, true),
   buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, false),
+  buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, true),
+  buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, false),
   Command.single("dockerBuildAllNonNative", buildProxyHelp("dockerBuildAllNonNative", "all non native")) { (state, command) =>
-    List("DevMode", "NoJournal", "InMemory", "Cassandra")
+    List("DevMode", "NoJournal", "InMemory", "Cassandra", "Postgres")
       .map(c => s"dockerBuild$c $command") ::: state
   },
   Command.single("dockerBuildAllNative", buildProxyHelp("dockerBuildAllNative", "all native")) { (state, command) =>
-    List("DevMode", "NoJournal", "InMemory", "Cassandra")
+    List("DevMode", "NoJournal", "InMemory", "Cassandra", "Postgres")
       .map(c => s"dockerBuildNative$c $command") ::: state
   }
 )
@@ -426,6 +425,46 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
     )
   )
 
+lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
+  .dependsOn(`proxy-core`)
+  .settings(
+    common,
+    name := "cloudstate-proxy-jdbc",
+    libraryDependencies ++= Seq(
+      "com.github.dnvriend" %% "akka-persistence-jdbc" % "3.5.2"
+    ),
+    fork in run := true,
+    mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain")
+  )
+
+lazy val `proxy-postgres` = (project in file("proxy/postgres"))
+  .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin)
+  .dependsOn(`proxy-jdbc`)
+  .settings(
+    common,
+    name := "cloudstate-proxy-postgres",
+    libraryDependencies ++= Seq(
+      "org.postgresql" % "postgresql" % "42.2.6",
+      
+      // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
+      "org.graalvm.sdk"               % "graal-sdk"                          % "19.1.1" % "provided", // Only needed for compilation
+      "com.oracle.substratevm"        % "svm"                                % "19.1.1" % "provided", // Only needed for compilation
+
+      // Adds configuration to let Graal Native Image (SubstrateVM) work
+      "com.github.vmencik"           %% "graal-akka-actor"                   % GraalAkkaVersion % "provided", // Only needed for compilation
+      "com.github.vmencik"           %% "graal-akka-stream"                  % GraalAkkaVersion % "provided", // Only needed for compilation
+      "com.github.vmencik"           %% "graal-akka-http"                    % GraalAkkaVersion % "provided", // Only needed for compilation
+    ),
+
+    fork in run := true,
+    mainClass in Compile := Some("io.cloudstate.proxy.jdbc.CloudStateJdbcProxyMain"),
+    // If run by sbt, run in dev mode
+    javaOptions in run += "-Dcloudstate.proxy.dev-mode-enabled=true",
+
+    nativeImageDockerSettings,
+  )
+
+
 lazy val `proxy-tests` = (project in file("proxy/proxy-tests"))
   .dependsOn(`proxy-core`, `akka-client`)
   .settings(
@@ -459,14 +498,17 @@ lazy val operator = (project in file("operator"))
     dockerSettings,
     dockerBaseImage := "adoptopenjdk/openjdk8",
     dockerExposedPorts := Nil,
-    compileK8sDescriptors := doCompileK8sDescriptors(
-      baseDirectory.value / "deploy",
-      baseDirectory.value,
-      dockerRepository.value,
-      dockerUsername.value,
-      version.value,
-      streams.value
-    )
+    compileK8sDescriptors := {
+      val tag = version.value
+      doCompileK8sDescriptors(
+        baseDirectory.value / "deploy",
+        baseDirectory.value,
+        dockerRepository.value,
+        dockerUsername.value,
+        if (isSnapshot.value) "latest" else tag,
+        streams.value
+      )
+    }
   )
 
 lazy val `java-support` = (project in file("java-support"))
@@ -652,9 +694,9 @@ lazy val `tck` = (project in file("tck"))
     executeTests in IntegrationTest := (executeTests in IntegrationTest).dependsOn(`proxy-core`/assembly, `java-shopping-cart`/assembly).value
   )
 
-def doCompileK8sDescriptors(dir: File, targetDir: File, registry: Option[String], username: Option[String], version: String, streams: TaskStreams): File = {
+def doCompileK8sDescriptors(dir: File, targetDir: File, registry: Option[String], username: Option[String], tag: String, streams: TaskStreams): File = {
 
-  val targetFileName = if (dockerTagVersion) s"cloudstate-$version.yaml" else "cloudstate.yaml"
+  val targetFileName = if (tag != "latest") s"cloudstate-$tag.yaml" else "cloudstate.yaml"
   val target = targetDir / targetFileName
 
   val files = ((dir / "crds") * "*.yaml").get ++
@@ -664,7 +706,6 @@ def doCompileK8sDescriptors(dir: File, targetDir: File, registry: Option[String]
 
   val user = username.getOrElse("cloudstateio")
   val registryAndUsername = registry.fold(user)(r => s"$r/$user")
-  val tag = if (dockerTagVersion) version else "latest"
   val substitutedDescriptor = fullDescriptor.replaceAll(
     "cloudstateio/(cloudstate-.*):latest", 
     s"$registryAndUsername/$$1:$tag"

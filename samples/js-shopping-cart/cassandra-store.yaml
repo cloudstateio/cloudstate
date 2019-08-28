@@ -1,17 +1,17 @@
-# Deployment spec for a journal. A journal is a logical abstraction over a database
+# Deployment spec for a store. A store is a logical abstraction over a database
 # deployment, and captures how to deploy and connect to that database. Multiple
-# StatefulServices's would use a single journal.
+# StatefulServices's would use a single store.
 apiVersion: cloudstate.io/v1alpha1
-kind: Journal
+kind: StatefulStore
 metadata:
   name: cassandra
 spec:
 
-  # The type of Journal - valid values would come from an enum of supported databases.
+  # The type of store - valid values would come from an enum of supported databases.
   type: Cassandra
 
-  # The deployment type, ie, how this Journal is deployed. Valid values would depend on
-  # the Journal type, but all types would support "Unmanaged", which indicates that the
+  # The deployment type, ie, how this store is deployed. Valid values would depend on
+  # the store type, but all types would support "Unmanaged", which indicates that the
   # operator doesn't manage/deploy the database itself, ie, the user has to deploy
   # the database themselves. For Cassandra, future supported values might include
   # "GoogleCloudMarketplace", which would deploy Cassandra using Google's Application
@@ -19,7 +19,7 @@ spec:
   # Cassandra operator.
   deployment: Unmanaged
 
-  # Type and deployment specific configuration for the journal.
+  # Type and deployment specific configuration for the store.
   config:
 
     # The name of the unmanaged Cassandra service to connect to.

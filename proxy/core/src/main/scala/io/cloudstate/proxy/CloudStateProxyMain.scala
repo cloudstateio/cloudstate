@@ -120,7 +120,13 @@ object CloudStateProxyMain {
     field.get(null).asInstanceOf[AtomicLong].set(seed)
   }
 
+
+
   def main(args: Array[String]): Unit = {
+    start()
+  }
+
+  def start(): ActorSystem = {
     // Must do this first, before anything uses ThreadLocalRandom
     if (isGraalVM) {
       initializeThreadLocalRandom()
@@ -177,5 +183,7 @@ object CloudStateProxyMain {
         maxBackoff = appConfig.backoffMax,
         randomFactor = appConfig.backoffRandomFactor
       )), "server-manager-supervisor")
+
+    system
   }
 }

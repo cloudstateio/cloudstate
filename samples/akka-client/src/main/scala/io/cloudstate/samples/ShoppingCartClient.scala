@@ -11,7 +11,7 @@ import scala.concurrent.{Await, Future}
 object ShoppingCartClient {
   def main(args: Array[String]): Unit = {
 
-    val client = new ShoppingCartClient("35.197.173.27", 80, Some("shopping-cart.default.example.com"))
+    val client = new ShoppingCartClient("localhost", 9000, None)
 
     val userId = "viktor"
     val productId = "1337"
@@ -25,6 +25,8 @@ object ShoppingCartClient {
       println(client.getCart(userId))
       client.removeItem(userId, productId)
       println(client.getCart(userId))
+    } catch {
+      case t => t.printStackTrace()
     } finally {
       try {
         client.shutdown()

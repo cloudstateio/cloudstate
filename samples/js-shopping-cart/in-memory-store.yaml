@@ -1,0 +1,13 @@
+# Deployment spec for a store. A store is a logical abstraction over a database
+# deployment, and captures how to deploy and connect to that database. Multiple
+# StatefulService's would use a single store.
+apiVersion: cloudstate.io/v1alpha1
+kind: StatefulStore
+metadata:
+  name: inmemory
+spec:
+
+  # The type of store - valid values would come from an enum of supported databases.
+  # This is the InMemory store, which obviously should not be used in production.
+  type: InMemory
+

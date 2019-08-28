@@ -21,11 +21,11 @@ rules:
   verbs: ["get", "create", "delete", "patch", "update"]
 
 - apiGroups: ["cloudstate.io"]
-  resources: ["journals", "statefulservices"]
+  resources: ["statefulstores", "statefulservices"]
   verbs: ["get", "list", "watch"]
 
 - apiGroups: ["cloudstate.io"]
-  resources: ["journals/status", "statefulservices/status"]
+  resources: ["statefulstores/status", "statefulservices/status"]
   verbs: ["update", "patch"]
 
 ---
