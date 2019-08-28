@@ -43,7 +43,7 @@ class SlickEnsureTablesExistReadyCheck(system: ActorSystem) extends (() => Futur
         randomFactor = 0.2
       )), "jdbc-table-creator-supervisor")
 
-    implicit val timeout = Timeout(10.seconds)
+    implicit val timeout = Timeout(10.seconds) // TODO make configurable?
     import akka.pattern.ask
 
     () => (actor ? EnsureTablesExistsActor.Ready).mapTo[Boolean]
@@ -211,7 +211,7 @@ private class EnsureTablesExistsActor(db: SlickDatabase) extends Actor with Acto
   private def tryGetSchema(connection: Connection): Try[String] =
     try Success(connection.getSchema)
     catch {
-      case e: AbstractMethodError => Failure(e)
+      case e: AbstractMethodError => Failure(new IllegalStateException("Database driver does not support Connection.getSchema", e))
     }
 
   private def tableExists(
