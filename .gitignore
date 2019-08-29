@@ -34,3 +34,5 @@ tags
 target
 target-sbt
 node_modules
+.idea/
+.nyc_output

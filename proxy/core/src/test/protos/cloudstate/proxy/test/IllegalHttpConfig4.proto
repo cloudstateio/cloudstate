@@ -1,0 +1,22 @@
+// This is the public API offered by the shopping cart entity.
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "google/api/annotations.proto";
+import "google/api/http.proto";
+
+package cloudstate.proxy.test;
+
+option java_package = "io.cloudstate.proxy.test";
+
+message IllegalHttpConfig4Message {
+  string duplicated = 1;
+}
+
+service IllegalHttpConfig4 {
+    rpc fail(IllegalHttpConfig4Message) returns (google.protobuf.Empty) {
+        option (google.api.http) = {
+            post: "/{duplicated}/{duplicated}"
+        };
+    }
+}

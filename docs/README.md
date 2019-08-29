@@ -1,1 +1,0 @@
-# Stateful Serverless Documentation

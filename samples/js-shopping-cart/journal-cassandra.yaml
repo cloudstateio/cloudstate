@@ -1,0 +1,26 @@
+# Deployment spec for a journal. A journal is a logical abstraction over a database
+# deployment, and captures how to deploy and connect to that database. Multiple
+# StatefulServices's would use a single journal.
+apiVersion: cloudstate.io/v1alpha1
+kind: Journal
+metadata:
+  name: cassandra
+spec:
+
+  # The type of Journal - valid values would come from an enum of supported databases.
+  type: Cassandra
+
+  # The deployment type, ie, how this Journal is deployed. Valid values would depend on
+  # the Journal type, but all types would support "Unmanaged", which indicates that the
+  # operator doesn't manage/deploy the database itself, ie, the user has to deploy
+  # the database themselves. For Cassandra, future supported values might include
+  # "GoogleCloudMarketplace", which would deploy Cassandra using Google's Application
+  # CRD, or "InstaclustrOperator", which would deploy Cassandra using Instaclustr's
+  # Cassandra operator.
+  deployment: Unmanaged
+
+  # Type and deployment specific configuration for the journal.
+  config:
+
+    # The name of the unmanaged Cassandra service to connect to.
+    service: cassandra-cassandra-0.cassandra-cassandra-svc.cassandra.svc.cluster.local
