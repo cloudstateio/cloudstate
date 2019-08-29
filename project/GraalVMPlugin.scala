@@ -58,6 +58,7 @@ object GraalVMPlugin extends AutoPlugin {
       }
     }.value,
     packageBin := {
+      import sbt.util.CacheImplicits._
       val targetDirectory = target.value
       val binaryName = name.value
       val className = mainClass.value.getOrElse(sys.error("Could not find a main class."))
@@ -67,14 +68,12 @@ object GraalVMPlugin extends AutoPlugin {
       val dockerCommand = dockerExecCommand.value
       val graalResourceDirectories = resourceDirectories.value
       val graalResources = resources.value
+      val containerBuildImg = graalVMContainerBuildImage.value
+      val outputFile = targetDirectory / binaryName
+      val inputFiles: Seq[File] = classpathJars.map(_._1) ++ graalResources
 
-      onlyIfChanged(
-        streams,
-        Seq(targetDirectory, binaryName, className, classpathJars, extraOptions, dockerCommand, graalResources),
-        classpathJars.map(_._1) ++ graalResources,
-        targetDirectory / binaryName
-      ) {
-        graalVMContainerBuildImage.value match {
+      def doWork: File = {
+        containerBuildImg match {
           case None =>
             streams.log.info("Building GraalVM native image locally, this may take some time...")
             buildLocal(targetDirectory, binaryName, className, classpathJars.map(_._1), extraOptions, streams.log)
@@ -96,6 +95,14 @@ object GraalVMPlugin extends AutoPlugin {
             )
         }
       }
+      val cachedBuild = Tracked.inputChanged[(File, String, String, Seq[(File, String)], Seq[String], Seq[String],
+          Seq[ModifiedFileInfo]), File](streams.cacheStoreFactory.make("graalvm-native-image")) {
+        (inChanged, _) =>
+          if (inChanged || !outputFile.exists) doWork
+          else outputFile
+      }
+      cachedBuild((targetDirectory, binaryName, className, classpathJars, extraOptions, dockerCommand,
+        inputFiles map { FileInfo.lastModified(_) }))
     }
   )
 
@@ -149,30 +156,6 @@ object GraalVMPlugin extends AutoPlugin {
       case 0 => outputFile
       case x => sys.error(s"Failed to run $command, exit status: " + x)
     }
-  }
-
-  private def onlyIfChanged(streams: TaskStreams, settings: Seq[Any], inputFiles: Seq[File], outputFile: File)(build: => Unit): File = {
-    import sjsonnew.BasicJsonProtocol._
-    val cacheStore = streams.cacheStoreFactory.make("graalvm-native-image")
-    if (!outputFile.exists() || cacheStore.read("") != calculateDigest(settings, inputFiles, outputFile)) {
-      build
-      cacheStore.write(calculateDigest(settings, inputFiles, outputFile))
-    } else {
-      streams.log.info("No rebuild necessary for GraalVM native image " + outputFile.getAbsolutePath)
-    }
-    outputFile
-  }
-
-  private def calculateDigest(settings: Seq[Any], inputFiles: Seq[File], outputFile: File): String = {
-    val digest = MessageDigest.getInstance("md5")
-    // Digest the string representation of the settings, which should all either be files, strings, seqs of strings,
-    // or seqs of files, so will change whenever any of them changes
-    digest.update(settings.toString.getBytes())
-    // And digest the last modified time of each file
-    inputFiles.foreach { file =>
-      digest.update(file.lastModified().toString.getBytes())
-    }
-    Base64.getEncoder.encodeToString(digest.digest(outputFile.lastModified().toString.getBytes()))
   }
 
   /**

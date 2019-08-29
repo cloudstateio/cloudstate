@@ -354,7 +354,7 @@ TODO: add general docs
 3. Install the CloudState operator:
 
     ```
-    kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/master/operator/stateful-serverless.yaml
+    kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/master/operator/cloudstate.yaml
     ```
     
 You are now ready to install an event sourced function. We have a shopping cart example in the `samples/js-shopping-cart` directory of this project. This can be installed by following these instructions:
@@ -362,7 +362,7 @@ You are now ready to install an event sourced function. We have a shopping cart 
 1. Configure a Cassandra journal. If you called your Cassandra deployment `cassandra` and deployed it to the default namespace, this can be installed by running:
 
     ```
-    kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/master/samples/js-shopping-cart/cassandra-journal.yaml
+    kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/master/samples/js-shopping-cart/journal-cassandra.yaml
     ```
     
     Otherwise, download the above file and update the `service` parameter to match the first node of your Cassandra stateful set.
@@ -373,7 +373,7 @@ You are now ready to install an event sourced function. We have a shopping cart 
     kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/master/samples/js-shopping-cart/js-shopping-cart.yaml
     ```
     
-The operator will install a service, you can then create an ingress for that service. To test, instantiate a gRPC client in your favourite language for [this descriptor](https://raw.githubusercontent.com/cloudstateio/cloudstate/master/examples/shoppingcart/shoppingcart.proto). You may need to also download the [`cloudstate/entitykey.proto`](https://raw.githubusercontent.com/cloudstateio/cloudstate/master/protols/frontend/cloudstate/entity.proto) and [`google/protobuf/empty.proto`](https://raw.githubusercontent.com/protocolbuffers/protobuf/master/src/google/protobuf/empty.proto) descriptors to compile it in your language. The shopping cart descriptor is deployed with debug on, so try getting the logs of the `shopping-cart` container in each of the deployed pods to see what's happening when commands are sent.
+The operator will install a service, you can then create an ingress for that service. To test, instantiate a gRPC client in your favourite language for [this descriptor](https://raw.githubusercontent.com/cloudstateio/cloudstate/master/example/shoppingcart/shoppingcart.proto). You may need to also download the [`cloudstate/entitykey.proto`](https://raw.githubusercontent.com/cloudstateio/cloudstate/master/protocols/protocol/cloudstate/entity.proto) and [`google/protobuf/empty.proto`](https://raw.githubusercontent.com/protocolbuffers/protobuf/master/src/google/protobuf/empty.proto) descriptors to compile it in your language. The shopping cart descriptor is deployed with debug on, so try getting the logs of the `shopping-cart` container in each of the deployed pods to see what's happening when commands are sent.
 
 ### Points of interest in the code
 
@@ -385,8 +385,8 @@ We'll start with the user function, which can be found in [`samples/js-shopping-
 
 Onto the `cloudstate-event-sourcing` Node module, which can be found in [`node-support`](node-support). While there's no reason why the user function couldn't implement the event sourcing protocol directly, it is a little low level. This library provides an idiomatic JavaScript API binding to the protocol. It is expected that such a library would be provided for all support languages.
 
-* [`entity.proto`](protocols/protocol/cloudstate/entity.proto) - This is the protocol that is implemented by the library, and invoked by the Akka backend. Commands, replies, events and snapshots are serialized into `google.protobuf.Any` - the command payloads and reply payloads are the gRPC input and output messages, while the event and snapshot payloads are what gets stored to persistence. The `ready` rpc method on the `Entity` service is used by the Akka backend to ask the user function for the gRPC protobuf descriptor it wishes to be served, this uses `google.protobuf.FileDescriptorProto` to serialize the descriptor.
-* [`eventsourced-support.js`](node-support/src/eventsourced-support.js) - This is the implementation of the protocol, which adapts the protocol to the API used by the user function.
+* [`entity.proto`](protocol/cloudstate/entity.proto) - This is the protocol that is implemented by the library, and invoked by the Akka backend. Commands, replies, events and snapshots are serialized into `google.protobuf.Any` - the command payloads and reply payloads are the gRPC input and output messages, while the event and snapshot payloads are what gets stored to persistence. The `ready` rpc method on the `Entity` service is used by the Akka backend to ask the user function for the gRPC protobuf descriptor it wishes to be served, this uses `google.protobuf.FileDescriptorProto` to serialize the descriptor.
+* [`entity.js`](node-support/src/entity.js) - This is the implementation of the protocol, which adapts the protocol to the API used by the user function.
 
 Next we'll take a look at the Akka proxy, which can be found in [`proxy/core`](proxy/core).
 
