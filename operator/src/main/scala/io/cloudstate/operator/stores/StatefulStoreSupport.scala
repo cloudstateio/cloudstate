@@ -12,7 +12,7 @@ import scala.concurrent.Future
 
 
 object StatefulStoreSupport {
-  private val types: List[StatefulStoreSupport] = List(CassandraStoreSupport, InMemoryStoreSupport)
+  private val types: List[StatefulStoreSupport] = List(CassandraStoreSupport, InMemoryStoreSupport, PostgresStoreSupport)
 
   def get(storeType: String): Option[StatefulStoreSupport] = types.find(_.name == storeType)
 

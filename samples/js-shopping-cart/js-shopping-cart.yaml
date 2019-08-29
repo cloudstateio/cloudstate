@@ -9,7 +9,7 @@ spec:
   datastore:
 
     # Name of a deployed Datastore to use.
-    name: cassandra
+    name: postgres
 
     # Datastore specific configuration
     config:
@@ -18,4 +18,4 @@ spec:
       keyspace: shoppingcart
 
   containers:
-    - image: cloudstateio/js-shopping-cart:latest
+    - image: gcr.io/stateserv/js-shopping-cart:latest

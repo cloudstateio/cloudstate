@@ -7,6 +7,7 @@ import com.example.shoppingcart.shoppingcart._
 
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
+import scala.util.control.NonFatal
 
 object ShoppingCartClient {
   def main(args: Array[String]): Unit = {
@@ -26,7 +27,7 @@ object ShoppingCartClient {
       client.removeItem(userId, productId)
       println(client.getCart(userId))
     } catch {
-      case t => t.printStackTrace()
+      case NonFatal(e) => e.printStackTrace()
     } finally {
       try {
         client.shutdown()

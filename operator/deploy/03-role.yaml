@@ -14,7 +14,7 @@ rules:
 
 - apiGroups: ["apps"]
   resources: ["deployments", "deployments/scale"]
-  verbs: ["get", "create", "delete", "patch", "update", "watch"]
+  verbs: ["get", "create", "delete", "patch", "update", "watch", "list"]
 
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources: ["rolebindings", "roles"]

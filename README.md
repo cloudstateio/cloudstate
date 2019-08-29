@@ -313,7 +313,21 @@ The Akka sidecar supports serving the gRPC user functions services both as gRPC,
 
 ### Database support
 
-The CloudState Proxy Reference Implementation is using [Akka Persistence](https://doc.akka.io/docs/akka/current/persistence.html) for the durable storage, which has support for a [wide range](https://index.scala-lang.org/search?topics=akka-persistence) of NoSQL and SQL databases. That said, since it is compiled into a GraalVM native image, the database connection drivers need to be adapted. So far we have support for the Cassandra distributed database, with more databases (for example Postgres) in the works.   
+The CloudState Proxy Reference Implementation supports a number of databases. The table below indicates the range of support, the columns are explained as follows:
+
+Journal
+: Whether event sourced journals are supported with this databases. The RI event sourcing support is built using [Akka Persistence](https://doc.akka.io/docs/akka/current/persistence.html) for the durable storage, which has support for a [wide range](https://index.scala-lang.org/search?topics=akka-persistence) of NoSQL and SQL databases.
+
+Key-Value
+: Whether Key-Value support is implemented for this database. Key-Value support is not yet provided by the CloudState proxy, but will be in future.
+
+Native Image
+: Whether a GraalVM Native Image build is available for the CloudState Proxy for this database. It can be a considerable amount of effort getting a GraalVM native image working for any library, so not all proxies support it.
+
+| Database   | Journal            | Key-Value | Native image       |
+|------------|--------------------|-----------|--------------------|
+| Cassandra  | :heavy_check_mark: | :x:       | :heavy_check_mark: |
+| Postgresql | :heavy_check_mark: | :x:       | :x:                |
 
 ---
 ## Samples
