@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudstate-operator
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: cloudstate-operator
+  template:
+    metadata:
+      labels:
+        app: cloudstate-operator
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: cloudstate-operator
+      containers:
+      - name: operator
+        image: cloudstateio/cloudstate-operator:latest
+
+        env:
+        - name: JAVA_OPTS
+          value: "-Xms128m -Xmx128m"
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: "metadata.namespace"
+        - name: CONFIG_MAP
+          value: cloudstate-operator-config
+
+        resources:
+          limits:
+            memory: 256Mi
+          requests:
+            cpu: 0.1
+            memory: 256Mi
