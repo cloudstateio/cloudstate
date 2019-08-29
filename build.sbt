@@ -180,7 +180,7 @@ commands ++= Seq(
 // Shared settings for native image and docker builds
 def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   nativeImageDockerBuild := false,
-  graalVMVersion := Some("19.1.1"),
+  graalVMVersion := Some("19.1.1"), // FYI: Set this to None to make a local only native-image build
   graalVMNativeImageOptions ++= sharedNativeImageSettings,
 
   (mappings in Docker) := Def.taskDyn {
