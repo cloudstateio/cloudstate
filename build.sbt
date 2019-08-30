@@ -84,7 +84,7 @@ headerSources in Compile ++= {
 }
 
 lazy val root = (project in file("."))
-  .aggregate(`proxy-core`, `proxy-cassandra`, `java-support`, `java-shopping-cart`,`akka-client`, operator, `tck`, docs)
+  .aggregate(`proxy-core`, `proxy-cassandra`, `proxy-postgres`, `java-support`, `java-shopping-cart`,`akka-client`, operator, `tck`, docs)
   .settings(common)
 
 lazy val docs = (project in file("docs"))
@@ -438,7 +438,7 @@ lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
   )
 
 lazy val `proxy-postgres` = (project in file("proxy/postgres"))
-  .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin)
+  .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin, AssemblyPlugin)
   .dependsOn(`proxy-jdbc`)
   .settings(
     common,
@@ -461,7 +461,27 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
     // If run by sbt, run in dev mode
     javaOptions in run += "-Dcloudstate.proxy.dev-mode-enabled=true",
 
+    mainClass in assembly := (mainClass in Compile).value,
+    assemblyJarName in assembly := "akka-proxy-postgres.jar",
+    test in assembly := {},
+    // logLevel in assembly := Level.Debug,
+    assemblyMergeStrategy in assembly := {
+      /*ADD CUSTOMIZATIONS HERE*/
+      case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    },
+
     nativeImageDockerSettings,
+    graalVMNativeImageOptions ++= Seq(
+      "--initialize-at-build-time"
+        + Seq(
+          "org.postgresql.Driver",
+          "org.postgresql.util.SharedTimer"
+        ).mkString("=",",","")
+      ,
+    )
   )
 
 
@@ -691,7 +711,8 @@ lazy val `tck` = (project in file("tck"))
 
     parallelExecution in IntegrationTest := false,
 
-    executeTests in IntegrationTest := (executeTests in IntegrationTest).dependsOn(`proxy-core`/assembly, `java-shopping-cart`/assembly).value
+    executeTests in IntegrationTest := (executeTests in IntegrationTest).
+                                       dependsOn(`proxy-core`/assembly, `java-shopping-cart`/assembly).value
   )
 
 def doCompileK8sDescriptors(dir: File, targetDir: File, registry: Option[String], username: Option[String], tag: String, streams: TaskStreams): File = {
