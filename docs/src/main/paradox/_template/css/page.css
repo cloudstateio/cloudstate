@@ -660,7 +660,7 @@ small {
 .site-nav {
     margin-top: 1rem;
     margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
+    padding-bottom: 20px;
     border: solid 1px #10598f;
     border-radius: 20px;
 }

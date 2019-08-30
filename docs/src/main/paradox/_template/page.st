@@ -31,9 +31,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <link rel="stylesheet" type="text/css" href="$page.base$lib/foundation/dist/foundation.min.css"/>
 <link rel="stylesheet" type="text/css" href="$page.base$css/page.css"/>
 
-<!--
-<link rel="shortcut icon" href="$page.base$images/favicon.ico" />
--->
+<link rel="icon" type="image/x-icon" href="$page.base$../favicon.ico">
 </head>
 
 <body>
@@ -52,9 +50,6 @@ $navigation()$
 <div class="small-12 column">
 <a href="#" class="off-canvas-toggle hide-for-medium" data-toggle="off-canvas-menu">$menu()$</a>
 $title()$
-<!--
-<a href="https://www.example.com" class="logo show-for-medium">logo</a>
--->
 </div>
 </header>
 
