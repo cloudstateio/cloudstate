@@ -1,0 +1,1 @@
+<div class="title"><img src="$page.base$images/cloudstate-horizontal-white.svg" alt="$page.home.title$"/></div>

@@ -1,12 +1,75 @@
 language: scala
-before_script:
-  - ./protoc-installer.sh 3.7.1
-  - export PATH=$PATH:/usr/local/bin/protoc
-  - cd node-support && npm install && cd -
-  - cd samples/js-shopping-cart && npm install && cd -
-  - sbt update
-script:
-  - cd node-support && npm test && cd -
-  - cd samples/js-shopping-cart && npm test && cd -
-  - cd samples/js-shopping-cart && npm run dockerbuild && cd -
-  - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' test
+env:
+  global:
+  # GitHub personal access token
+  - secure: nPtepdKPvidwnxijiaIQiKnwuNvy+P4YAQUe4+1UzsiNMLILC/8UgWlUHoJMmlcS9ycYM5G1EwQNiT3hJetJbRL4VN3/uhnNpntmucASpC1KbpGjl3gaMfx7yDnJj252aj0yrSDoxJHDXe9p7zBY+bV+Dvp/SWGO1216ZgpiEx+T2n7QJ7kj5dhU+j6AIPj2R1U2lGOiAjHaCudGlv7evswSYrfdXL9yRZGXxeM361vien1akwTjSJzZr/EZmXhVyBSEWKitWMLuboCmXaUvr+VZVm5FkY8X7FKKBre05/itWGQTrnrEaKaUMd1bW+GfPOyFTjmuJnLiwmSmeEx2o/krQt9EfyFJpSfiX/b5bxYQan+ozxiwrsDF0/7tYfGBVg48miccqN+oAtAD1X8cWYa9svLOwKnv82ELq/18QE5OY9DPc9zARGDnPxwZ96Zl6dDtQkJz2+qBo/EU8dU2q1uaNTvuImmtLAHQZ2PtzdaGkklQQ3YvfZeWyD/fTVZdMQi2NXv0LRHkwAxf65vwrf84Edyy+HlqD5zTpKzhr1q6+wj54oOsQDnK6gSmmguG5Nd2HbJQxQhDlEZQ6+b00TY5WxYPG5Qo5zH0TXbu+/txLZlZOyJ5qJqGCICC1QW3YNDvFbTBIYGQUKVZ6vadXD8SqFUNvYK/wXXLYmdoXm8=
+  # DockerHub password for cloudstatebot
+  - secure: p7pMOBTTw3+T4QExVpulNrzepvGN6mReJD0y9k06gavcWOq9X1cogvNIAA1X7S8LMJuG/06Lr51kV77nc0Qtyu5M8Xc1SFfMzZ74eahahwqnJ5bXG3E1ov+vK5/4VT0y8MOJ012Wp+8WTpOtM5X/NdmxPVLFV0nzylF9rV0xdKX/6fXnw2ihPeYSd3VhI6gcuTzalJ+CHvWFo8gcdX2ZQ3KjV95HCJfrL3CxqJGdZxuwY+9Wmhkoxybb6sXT/0NQ1t8y5vPcSph3P8RT0C2A4B6rERotrzxby+rc+fvrfWHslUBdkvqqoet3tB8kDAJ4594UmCtyI1qwQEuLbQ1fmByY/E5GZW86+EjoKIUoG5JJDIBt74bjPKHaJFIUzDLHTbzSF84IXDQRvloog7W5bieiTxvYthSCi1+XyKYeHocjhBfjcr5i/lUIju8/Nei4OyD1ULmovI+5XmXUUt06hjErZNXG0XNnUJRvr/5sOGtGVYsMbh6aAoFWdSCaRm+DEx5Yo5Nmt55E7kF8sdIGEiXodmEvtEDyPcQJBaz/Um3KtvtXeYnuIjr/4t3gwo+Tm4XlZmgnVwT9pkQuIfW4BFGg+hRDnJG6jtywuyY1E8RDqoddd67h7BGgMp3LMJPU/g7pfw7sL9FmaLCw01ABzeDpoMBSQ7P8C0pLyaX+eAM=
+
+jobs:
+  include:
+  - stage: Unit tests
+    name: npm tests
+    before_script:
+    - cd node-support && npm install && cd -
+    - cd samples/js-shopping-cart && npm install && cd -
+    script:
+    - cd node-support && npm test && cd -
+    - cd samples/js-shopping-cart && npm test && cd -
+  - name: sbt tests
+    before_script:
+    - sbt update
+    script:
+    - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' test docs/paradox
+  - stage: TCK
+    name: Run TCK against reference implementation
+    before_script:
+    - sbt update
+    - cd node-support && npm install && cd -
+    - cd samples/js-shopping-cart && npm install && cd -
+    script:
+    - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
+  
+  - stage: Deploy
+    name: Deploy documentation to cloudstate.io
+    if: branch = master
+    script: sbt docs/paradox
+    deploy:
+      provider: pages
+      github_token: "$GITHUB_TOKEN"
+      local_dir: docs/target/paradox/site/main
+      repo: cloudstateio/docs
+      target_branch: master
+      skip_cleanup: true
+      keep_history: true
+      email: deploy@cloudstate.io
+      name: CloudState Deployment Bot
+      on:
+        branch: master
+  
+  - name: Publish docker images
+    if: tag =~ /^v*/
+    script:
+    - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
+    - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish
+  
+  - name: Upload CloudState descriptor
+    if: tag =~ /^v*/
+    script: sbt operator/compileK8sDescriptor
+    deploy:
+      provider: releases
+      api_key: "$GITHUB_TOKEN"
+      file: "operator/cloudstate-${TRAVIS_TAG:1}.yaml"
+      skip_cleanup: true
+      on:
+        tags: true
+
+cache:
+  directories:
+  - "$HOME/.ivy2/cache"
+  - "$HOME/.sbt"
+  - "$HOME/.npm"
+before_cache:
+- rm -fv $HOME/.ivy2/.sbt.ivy.lock
+- find $HOME/.ivy2/cache -name "ivydata-*.properties" -print -delete
+- find $HOME/.sbt        -name "*.lock"               -print -delete

@@ -84,8 +84,16 @@ headerSources in Compile ++= {
 }
 
 lazy val root = (project in file("."))
-  .aggregate(`proxy-core`, `proxy-cassandra`, `java-support`, `java-shopping-cart`,`akka-client`, operator, `tck`)
+  .aggregate(`proxy-core`, `proxy-cassandra`, `java-support`, `java-shopping-cart`,`akka-client`, operator, `tck`, docs)
   .settings(common)
+
+lazy val docs = (project in file("docs"))
+  .enablePlugins(ParadoxPlugin)
+  .settings(
+    common,
+    name := "CloudState Documentation",
+    paradoxTheme := Some(builtinParadoxTheme("generic"))
+  )
 
 lazy val proxyDockerBuild = settingKey[Option[(String, Option[String])]]("Docker artifact name and configuration file which gets overridden by the buildProxy command")
 lazy val nativeImageDockerBuild = settingKey[Boolean]("Whether the docker image should be based on the native image or not.")
@@ -154,10 +162,13 @@ commands ++= Seq(
   buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), false),
   buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, true),
   buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, false),
-  Command.single("dockerBuildAll", buildProxyHelp("dockerBuildAll", "all")) { (state, command) =>
+  Command.single("dockerBuildAllNonNative", buildProxyHelp("dockerBuildAllNonNative", "all non native")) { (state, command) =>
     List("DevMode", "NoJournal", "InMemory", "Cassandra")
-      .flatMap(c => List(c, s"Native$c"))
       .map(c => s"dockerBuild$c $command") ::: state
+  },
+  Command.single("dockerBuildAllNative", buildProxyHelp("dockerBuildAllNative", "all native")) { (state, command) =>
+    List("DevMode", "NoJournal", "InMemory", "Cassandra")
+      .map(c => s"dockerBuildNative$c $command") ::: state
   }
 )
 
@@ -529,6 +540,7 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
 
     mainClass in Compile := Some("io.cloudstate.samples.shoppingcart.Main"),
 
+    PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
 
     PB.protoSources in Compile ++= {
@@ -595,8 +607,10 @@ lazy val `load-generator` = (project in file("samples/js-shopping-cart-load-gene
 
 lazy val `tck` = (project in file("tck"))
   .enablePlugins(AkkaGrpcPlugin)
+  .configs(IntegrationTest)
   .dependsOn(`akka-client`)
   .settings(
+    Defaults.itSettings,
     common,
 
     name := "tck",
@@ -620,9 +634,9 @@ lazy val `tck` = (project in file("tck"))
 
     fork in test := true,
 
-    parallelExecution in Test := false,
+    parallelExecution in IntegrationTest := false,
 
-    executeTests in Test := (executeTests in Test).dependsOn(`proxy-core`/assembly).dependsOn(`java-shopping-cart`/assembly).value
+    executeTests in IntegrationTest := (executeTests in IntegrationTest).dependsOn(`proxy-core`/assembly, `java-shopping-cart`/assembly).value
   )
 
 def doCompileK8sDescriptors(dir: File, targetDir: File, registry: Option[String], username: Option[String], version: String, streams: TaskStreams): File = {
