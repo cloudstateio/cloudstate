@@ -678,9 +678,9 @@ Implementation details:
 Are you interested in helping out making this vision a reality? We would love to have you! 
 All contributions are welcome: ideas, criticism, praise, code, bug fixes, docs, buzz, etc. 
 
-Our [mailing list](https://groups.google.com/forum/#!forum/cloudstate) is a good place to start with open ended discussions about CloudState. 
+Our [Mailing List](https://groups.google.com/forum/#!forum/cloudstate) is a good place to start with open ended discussions about CloudState, or you can also join the discussion on our [Gitter Channel](https://gitter.im/CloudState-IO/community).
 
-The [GitHub issue tracker](https://github.com/cloudstateio/cloudstate/issues) is a good place to raise issues, including bug reports and feature requests.
+The [GitHub Issue Tracker](https://github.com/cloudstateio/cloudstate/issues) is a good place to raise issues, including bug reports and feature requests.
 
 You can also [follow us on Twitter](https://twitter.com/CloudstateIO).
 
