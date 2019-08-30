@@ -395,7 +395,7 @@ class CrdtHandler {
 
   handleCrdtStreamIn(crdtStreamIn) {
     if (crdtStreamIn.state) {
-      this.streamDebug("Received state for CRDT type %s", crdtStreamIn.changed.delta);
+      this.streamDebug("Received state for CRDT type %s", crdtStreamIn.state.state);
       this.handleState(crdtStreamIn.state);
       this.handleStateChange();
     } else if (crdtStreamIn.changed) {
