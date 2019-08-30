@@ -27,7 +27,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <script type="text/javascript" src="$page.base$js/page.js"></script>
 <script type="text/javascript" src="$page.base$js/warnOldVersion.js"></script>
 <script type="text/javascript" src="$page.base$js/groups.js"></script>
-<link rel="stylesheet" type="text/css" href="$page.base$lib/normalize.css/normalize.css"/>
 <link rel="stylesheet" type="text/css" href="$page.base$lib/foundation/dist/foundation.min.css"/>
 <link rel="stylesheet" type="text/css" href="$page.base$css/page.css"/>
 
