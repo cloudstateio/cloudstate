@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+protoc --go_out=plugins=grpc:. --proto_path=./protocols/frontend/ --proto_path=./protocols/protocol/ --proto_path=./protocols/proxy/ --proto_path=./protocols/example/ protocols/protocol/cloudstate/entity.proto
+protoc --go_out=plugins=grpc:. --proto_path=./protocols/frontend/ --proto_path=./protocols/protocol/ --proto_path=./protocols/proxy/ --proto_path=./protocols/example/ protocols/frontend/cloudstate/entity_key.proto
+protoc --go_out=plugins=grpc:. --proto_path=./protocols/frontend/ --proto_path=./protocols/protocol/ --proto_path=./protocols/proxy/ --proto_path=./protocols/example/ protocols/protocol/cloudstate/event_sourced.proto
+
+protoc --go_out=plugins=grpc:. --proto_path=./protocols/frontend/ --proto_path=./protocols/protocol/ --proto_path=./protocols/proxy/ --proto_path=./protocols/example/ protocols/protocol/cloudstate/crdt.proto
+protoc --go_out=plugins=grpc:. --proto_path=./protocols/frontend/ --proto_path=./protocols/protocol/ --proto_path=./protocols/proxy/ --proto_path=./protocols/example/ protocols/protocol/cloudstate/function.proto
+
+protoc --go_out=plugins=grpc:. --proto_path=./protocols/frontend/ --proto_path=./protocols/protocol/ --proto_path=./protocols/proxy/ --proto_path=./protocols/example/ protocols/example/shoppingcart/shoppingcart.proto

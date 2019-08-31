@@ -1,0 +1,379 @@
+// Copyright 2019 Lightbend Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// gRPC interface for Event Sourced Entity user functions.
+
+syntax = "proto3";
+
+package cloudstate.crdt;
+
+// Any is used so that domain events defined according to the functions business domain can be embedded inside
+// the protocol.
+import "google/protobuf/any.proto";
+import "cloudstate/entity.proto";
+
+option java_package = "io.cloudstate.protocol";
+option go_package = "cloudstate/protocol";
+
+// CRDT Protocol
+//
+// Note that while this protocol provides support for CRDTs, the data types sent across the protocol are not CRDTs
+// themselves. It is the responsibility of the CloudState proxy to implement the CRDTs, merge functions, vector clocks
+// etc, not the user function. The user function need only hold the current value in memory, and this protocol sends
+// deltas to the user function to update its in memory value as necessary. These deltas have no way of dealing with
+// conflicts, hence it important that the CloudState proxy always know what the state of the user functions in memory
+// value is before sending a delta. If the CloudState proxy is not sure what the value is, eg because it has just sent
+// an operation to the user function may have updated its value as a result, the proxy should wait until it gets the
+// result of the operation back, to ensure its in memory value is in sync with the user function so that it can
+// calculate deltas that won't conflict.
+//
+// The user function is expected to update its value both as the result of receiving deltas from the proxy, as well as
+// when it sends deltas. It must not update its value in any other circumstance, updating the value in response to any
+// other stimuli risks the value becoming out of sync with the CloudState proxy. The user function will not be sent
+// back deltas as a result of its own changes.
+//
+// An invocation of handle is made for each entity being handled. It may be kept alive and used to handle multiple
+// commands, and may subsequently be terminated if that entity becomes idle, or if the entity is deleted. Shutdown is
+// typically done for efficiency reasons, unless the entity is explicitly deleted, a terminated handle stream does not
+// mean the proxy has stopped tracking the state of the entity in its memory.
+//
+// Special care must be taken when working with maps and sets. The keys/values are google.protobuf.Any, which encodes
+// the value as binary protobuf, however, serialized protobufs are not stable, two semantically equal objects could
+// encode to different bytes. It is the responsibility of the user function to ensure that stable encodings are used.
+service Crdt {
+
+    // After invoking handle, the first message sent will always be a CrdtInit message, containing the entity ID, and,
+    // if it exists or is available, the current state of the entity. After that, one or more commands may be sent,
+    // as well as deltas as they arrive, and the entire state if either the entity is created, or the proxy wishes the
+    // user function to replace its entire state.
+    //
+    // The user function must respond with one reply per command in. They do not necessarily have to be sent in the same
+    // order that the commands were sent, the command ID is used to correlate commands to replies.
+    rpc handle(stream CrdtStreamIn) returns (stream CrdtStreamOut);
+}
+
+// Message for the Crdt handle stream in.
+message CrdtStreamIn {
+    oneof message {
+
+        // Always sent first, and only once.
+        CrdtInit init = 1;
+
+        // Sent to indicate the user function should replace its current state with this state. If the user function
+        // does not have a current state, either because the init function didn't send one and the user function hasn't
+        // updated the state itself in response to a command, or because the state was deleted, this must be sent before
+        // any deltas.
+        CrdtState state = 2;
+
+        // A delta to be applied to the current state. May be sent at any time as long as the user function already has
+        // state.
+        CrdtDelta changed = 3;
+
+        // Delete the entity. May be sent at any time. The user function should clear its state when it receives this.
+        // A proxy may decide to terminate the stream after sending this.
+        CrdtDelete deleted = 4;
+
+        // A command, may be sent at any time.
+        Command command = 5;
+
+        // A stream has been cancelled.
+        StreamCancelled stream_cancelled = 6;
+    }
+}
+
+// Message for the Crdt handle stream out.
+message CrdtStreamOut {
+    oneof message {
+        // A reply to an incoming command. Either one reply, or one failure, must be sent in response to each command.
+        CrdtReply reply = 1;
+        // A streamed message.
+        CrdtStreamedMessage streamed_message = 2;
+        // A stream cancelled response, may be sent in response to stream_cancelled.
+        CrdtStreamCancelledResponse stream_cancelled_response = 3;
+        // A failure. Either sent in response to a command, or sent if some other error occurs.
+        Failure failure = 4;
+    }
+}
+
+// The CRDT state. This represents the full state of a CRDT. When received, a user function should replace the current
+// state with this, not apply it as a delta. This includes both for the top level CRDT, and embedded CRDTs, such as
+// the values of an ORMap.
+message CrdtState {
+    oneof state {
+        // A Grow-only Counter
+        GCounterState gcounter = 1;
+
+        // A Positve-Negative Counter
+        PNCounterState pncounter = 2;
+
+        // A Grow-only Set
+        GSetState gset = 3;
+
+        // An Observed-Removed Set
+        ORSetState orset = 4;
+
+        // A Last-Write-Wins Register
+        LWWRegisterState lwwregister = 5;
+
+        // A Flag
+        FlagState flag = 6;
+
+        // An Observed-Removed Map
+        ORMapState ormap = 7;
+
+        // A vote
+        VoteState vote = 8;
+    }
+}
+
+// A Grow-only counter
+//
+// A G-Counter can only be incremented, it can't be decremented.
+message GCounterState {
+
+    // The current value of the counter.
+    uint64 value = 1;
+}
+
+// A Positve-Negative Counter
+//
+// A PN-Counter can be both incremented and decremented.
+message PNCounterState {
+
+    // The current value of the counter.
+    int64 value = 1;
+}
+
+// A Grow-only Set
+//
+// A G-Set can only have items added, items cannot be removed.
+message GSetState {
+
+    // The current items in the set.
+    repeated google.protobuf.Any items = 1;
+}
+
+// An Observed-Removed Set
+//
+// An OR-Set may have items added and removed, with the condition that an item must be observed to be in the set before
+// it is removed.
+message ORSetState {
+
+    // The current items in the set.
+    repeated google.protobuf.Any items = 1;
+}
+
+// A Last-Write-Wins Register
+//
+// A LWW-Register holds a single value, with the current value being selected based on when it was last written.
+// The time of the last write may either be determined using the proxies clock, or may be based on a custom, domain
+// specific value.
+message LWWRegisterState {
+
+    // The current value of the register.
+    google.protobuf.Any value = 1;
+
+    // The clock to use if this state needs to be merged with another one.
+    CrdtClock clock = 2;
+
+    // The clock value if the clock in use is a custom clock.
+    int64 custom_clock_value = 3;
+}
+
+// A Flag
+//
+// A Flag is a boolean value, that once set to true, stays true.
+message FlagState {
+
+    // The current value of the flag.
+    bool value = 1;
+}
+
+// An Observed-Removed Map
+//
+// Like an OR-Set, an OR-Map may have items added and removed, with the condition that an item must be observed to be
+// in the map before it is removed. The values of the map are CRDTs themselves. Different keys are allowed to use
+// different CRDTs, and if an item is removed, and then replaced, the new value may be a different CRDT.
+message ORMapState {
+
+    // The entries of the map.
+    repeated ORMapEntry entries = 1;
+}
+
+// An OR-Map entry.
+message ORMapEntry {
+
+    // The entry key.
+    google.protobuf.Any key = 1;
+
+    // The value of the entry, a CRDT itself.
+    CrdtState value = 2;
+}
+
+// A Vote. This allows nodes to vote on something.
+message VoteState {
+
+    // The number of votes for
+    uint32 votes_for = 1;
+
+    // The total number of voters
+    uint32 total_voters = 2;
+
+    // The vote of the current node, which is included in the above two numbers
+    bool self_vote = 3;
+}
+
+// A CRDT delta
+//
+// Deltas only carry the change in value, not the full value (unless
+message CrdtDelta {
+    oneof delta {
+        GCounterDelta gcounter = 1;
+        PNCounterDelta pncounter = 2;
+        GSetDelta gset = 3;
+        ORSetDelta orset = 4;
+        LWWRegisterDelta lwwregister = 5;
+        FlagDelta flag = 6;
+        ORMapDelta ormap = 7;
+        VoteDelta vote = 8;
+    }
+}
+
+message GCounterDelta {
+    uint64 increment = 1;
+}
+
+message PNCounterDelta {
+    sint64 change = 1;
+}
+
+message GSetDelta {
+    repeated google.protobuf.Any added = 1;
+}
+
+message ORSetDelta {
+    // If cleared is set, the set must be cleared before added is processed.
+    bool cleared = 1;
+    repeated google.protobuf.Any removed = 2;
+    repeated google.protobuf.Any added = 3;
+}
+
+message LWWRegisterDelta {
+    google.protobuf.Any value = 1;
+    CrdtClock clock = 2;
+    int64 custom_clock_value = 3;
+}
+
+message FlagDelta {
+    bool value = 1;
+}
+
+message ORMapDelta {
+    bool cleared = 1;
+    repeated google.protobuf.Any removed = 2;
+    repeated ORMapEntryDelta updated = 3;
+    repeated ORMapEntry added = 4;
+}
+
+message ORMapEntryDelta {
+    // The entry key.
+    google.protobuf.Any key = 1;
+
+    CrdtDelta delta = 2;
+}
+
+message VoteDelta {
+    // Only set by the user function to change the nodes current vote.
+    bool self_vote = 1;
+
+    // Only set by the proxy to change the votes for and total voters.
+    int32 votes_for = 2;
+    int32 total_voters = 3;
+}
+
+message CrdtInit {
+    string service_name = 1;
+    string entity_id = 2;
+    CrdtState state = 3;
+}
+
+message CrdtDelete {
+}
+
+message CrdtReply {
+
+    int64 command_id = 1;
+
+    ClientAction client_action = 2;
+
+    repeated SideEffect side_effects = 4;
+
+    CrdtStateAction state_action = 5;
+
+    // If the request was streamed, setting this to true indicates that the command should
+    // be handled as a stream. Subsequently, the user function may send CrdtStreamedMessage,
+    // and a CrdtStreamCancelled message will be sent if the stream is cancelled (though
+    // not if the a CrdtStreamedMessage ends the stream first).
+    bool streamed = 6;
+}
+
+message CrdtStateAction {
+    oneof action {
+        CrdtState create = 5;
+        CrdtDelta update = 6;
+        CrdtDelete delete = 7;
+    }
+
+    CrdtWriteConsistency write_consistency = 8;
+}
+
+// May be sent as often as liked if the first reply set streamed to true
+message CrdtStreamedMessage {
+
+    int64 command_id = 1;
+
+    ClientAction client_action = 2;
+
+    repeated SideEffect side_effects = 3;
+
+    // Indicates the stream should end, no messages may be sent for this command after this.
+    bool end_stream = 4;
+}
+
+message CrdtStreamCancelledResponse {
+    int64 command_id = 1;
+
+    repeated SideEffect side_effects = 2;
+
+    CrdtStateAction state_action = 3;
+}
+
+enum CrdtWriteConsistency {
+    LOCAL = 0;
+    MAJORITY = 1;
+    ALL = 2;
+}
+
+enum CrdtClock {
+    // Use the default clock for deciding the last write, which is the system clocks
+    // milliseconds since epoch.
+    DEFAULT = 0;
+    // Use the reverse semantics with the default clock, to enable first write wins.
+    REVERSE = 1;
+    // Use a custom clock value, set using custom_clock_value.
+    CUSTOM = 2;
+    // Use a custom clock value, but automatically increment it by one if the clock
+    // value from the current value is equal to the custom_clock_value.
+    CUSTOM_AUTO_INCREMENT = 3;
+}

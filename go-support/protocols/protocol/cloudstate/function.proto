@@ -1,0 +1,60 @@
+// Copyright 2019 Lightbend Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// gRPC interface for Event Sourced Entity user functions.
+
+syntax = "proto3";
+
+package cloudstate.function;
+
+// Any is used so that domain events defined according to the functions business domain can be embedded inside
+// the protocol.
+import "google/protobuf/any.proto";
+import "cloudstate/entity.proto";
+
+option java_package = "io.cloudstate.protocol";
+option go_package = "cloudstate/protocol";
+
+message FunctionCommand {
+    // The name of the service this function is on.
+    string service_name = 2;
+
+    // Command name
+    string name = 3;
+
+    // The command payload.
+    google.protobuf.Any payload = 4;
+}
+
+message FunctionReply {
+
+    oneof response {
+        Reply reply = 2;
+        Forward forward = 3;
+    }
+
+    repeated SideEffect side_effects = 4;
+}
+
+service StatelessFunction {
+
+    rpc handleUnary(FunctionCommand) returns (FunctionReply) {}
+
+    rpc handleStreamedIn(stream FunctionCommand) returns (FunctionReply) {}
+
+    rpc handleStreamedOut(FunctionCommand) returns (stream FunctionReply) {}
+
+    rpc handleStreamed(stream FunctionCommand) returns (stream FunctionReply) {}
+
+}
