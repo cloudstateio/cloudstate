@@ -1,13 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"cloudstate.io/gosupport/cloudstate/protocol"
 	"cloudstate.io/gosupport/shoppingcart"
+	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
+	"github.com/golang/protobuf/descriptor"
 	"github.com/golang/protobuf/proto"
+	descriptor2 "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/grpc"
+	"io/ioutil"
 	"log"
 	"net"
 	"runtime"
@@ -34,23 +40,53 @@ func (s *CartServer) GetCart(c context.Context, sc *shoppingcart.GetShoppingCart
 type EntityDiscoveryResponder struct {
 }
 
-func (edr *EntityDiscoveryResponder) Discover(c context.Context, pi *protocol.ProxyInfo) (*protocol.EntitySpec, error) {
-	fmt.Printf("Discover: %v\n", pi)
-	fmt.Printf("Received discovery call from sidecar [%s %s] supporting CloudState %v.%v\n", pi.ProxyName, pi.ProxyVersion, pi.ProtocolMajorVersion, pi.ProtocolMinorVersion)
-
-	entities := make([]*protocol.Entity, 0)
-	entities = append(entities, &protocol.Entity{
-		ServiceName:   "com.example.shoppingcart.ShoppingCart",
+func appendTypeTo(msg descriptor.Message, es *protocol.EntitySpec, set *descriptor2.FileDescriptorSet) {
+	fd, md := descriptor.ForMessage(msg)
+	es.Entities = append(es.Entities, &protocol.Entity{
+		ServiceName:   "com.example.shoppingcart.ShoppingCart", //fmt.Sprintf("%s.%s", fd.Package, fd.Service[0].Name),
 		EntityType:    "cloudstate.eventsourced.EventSourced",
 		PersistenceId: "0",
 	})
+	fmt.Printf("%v", md)
+	set.File = append(set.File, fd)
+	if bytes, e := proto.Marshal(set); e == nil {
+		es.Proto = bytes
+	} else {
+		panic("huiii")
+	}
+}
 
-	//fd, md := descriptor.ForMessage(&shoppingcart.Cart{})
-	fd := proto.FileDescriptor("shoppingcart/shoppingcart.proto")
+func unpackFile(gz []byte) (*descriptor2.FileDescriptorProto, error) {
+	r, err := gzip.NewReader(bytes.NewReader(gz))
+	if err != nil {
+		return nil, errors.New("failed to open gzip reader")
+	}
+	defer r.Close()
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, errors.New("failed to uncompress descriptor")
+	}
+	fd := new(descriptor2.FileDescriptorProto)
+	if err := proto.Unmarshal(b, fd); err != nil {
+		return nil, errors.New("malformed FileDescriptorProto")
+	}
+	return fd, nil
+}
 
+func unpackAndAdd(filename string, set *descriptor2.FileDescriptorSet) {
+	descriptorProto, e := unpackFile(proto.FileDescriptor(filename))
+	if e != nil {
+		panic(e)
+	}
+	set.File = append(set.File, descriptorProto)
+}
+
+func (edr *EntityDiscoveryResponder) Discover(c context.Context, pi *protocol.ProxyInfo) (*protocol.EntitySpec, error) {
+	fmt.Printf("Discover: %v\n", pi)
+	fmt.Printf("Received discovery call from sidecar [%s %s] supporting CloudState %v.%v\n", pi.ProxyName, pi.ProxyVersion, pi.ProtocolMajorVersion, pi.ProtocolMinorVersion)
 	es := protocol.EntitySpec{
-		Proto:    fd,
-		Entities: entities,
+		Proto:    nil,
+		Entities: make([]*protocol.Entity, 0),
 		ServiceInfo: &protocol.ServiceInfo{
 			ServiceName:           "shopping-chart",
 			ServiceVersion:        "0.0.1",
@@ -58,6 +94,21 @@ func (edr *EntityDiscoveryResponder) Discover(c context.Context, pi *protocol.Pr
 			SupportLibraryName:    "cloudstate-go-support",
 			SupportLibraryVersion: "0.0.1",
 		},
+	}
+	set := descriptor2.FileDescriptorSet{
+		File: make([]*descriptor2.FileDescriptorProto, 0),
+	}
+	appendTypeTo(&shoppingcart.Cart{}, &es, &set)
+	appendTypeTo(&empty.Empty{}, &es, &set)
+	unpackAndAdd("cloudstate/entity_key.proto", &set)
+	unpackAndAdd("google/protobuf/descriptor.proto", &set)
+	unpackAndAdd("google/api/annotations.proto", &set)
+	unpackAndAdd("google/api/http.proto", &set)
+
+	if bytes, e := proto.Marshal(&set); e == nil {
+		es.Proto = bytes
+	} else {
+		panic("huiii")
 	}
 
 	fmt.Printf("Responding with: %v\n", es.ServiceInfo)

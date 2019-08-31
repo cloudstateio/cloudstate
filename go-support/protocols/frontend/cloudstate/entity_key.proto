@@ -24,7 +24,6 @@ package cloudstate;
 
 option java_package = "io.cloudstate";
 option go_package = "cloudstate/protocol";
-//option go_package = "cloudstate.io/gosupport/cloudstate/protocol";
 
 extend google.protobuf.FieldOptions {
     bool entity_key = 50002;
