@@ -14,18 +14,18 @@ rules:
 
 - apiGroups: ["apps"]
   resources: ["deployments", "deployments/scale"]
-  verbs: ["get", "create", "delete", "patch", "update", "watch"]
+  verbs: ["get", "create", "delete", "patch", "update", "watch", "list"]
 
 - apiGroups: ["rbac.authorization.k8s.io"]
   resources: ["rolebindings", "roles"]
   verbs: ["get", "create", "delete", "patch", "update"]
 
 - apiGroups: ["cloudstate.io"]
-  resources: ["journals", "statefulservices"]
+  resources: ["statefulstores", "statefulservices"]
   verbs: ["get", "list", "watch"]
 
 - apiGroups: ["cloudstate.io"]
-  resources: ["journals/status", "statefulservices/status"]
+  resources: ["statefulstores/status", "statefulservices/status"]
   verbs: ["update", "patch"]
 
 ---

@@ -21,7 +21,7 @@ object StatefulService {
     volumes: Option[List[Volume]],
     serviceAccountName: Option[String],
     autoscaling: Option[Autoscaling],
-    journal: Option[Journal],
+    datastore: Option[StatefulStore],
     sidecarResources: Option[Resource.Requirements],
     sidecarJvmMemory: Option[String],
     nodeSelector: Option[Map[String, String]],
@@ -88,13 +88,13 @@ object StatefulService {
     implicit val format: Format[Autoscaling] = Json.format
   }
 
-  case class Journal(
+  case class StatefulStore(
     name: String,
     config: Option[JsObject]
   )
 
-  object Journal {
-    implicit val format: Format[Journal] = Json.format
+  object StatefulStore {
+    implicit val format: Format[StatefulStore] = Json.format
   }
 
   case class Status(
@@ -105,20 +105,6 @@ object StatefulService {
     implicit val format: Format[Status] =
       (__ \ "conditions").formatNullable[List[Condition]]
         .inmap[Status](c => Status(c.getOrElse(Nil)), s => Some(s.conditions))
-  }
-
-  case class Condition(
-    `type`: String,
-    status: String,
-    severity: Option[String] = None,
-    lastTransitionTime: Option[ZonedDateTime] = None,
-    reason: Option[String] = None,
-    message: Option[String] = None
-  )
-
-  object Condition {
-    private implicit val timeFormat: Format[ZonedDateTime] = Format(skuber.json.format.timeReads, skuber.json.format.timewWrites)
-    implicit val format: Format[Condition] = Json.format
   }
 
   implicit val eventSourcedServiceResourceDefinition = ResourceDefinition[Resource](

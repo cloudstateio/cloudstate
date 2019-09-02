@@ -313,7 +313,21 @@ The Akka sidecar supports serving the gRPC user functions services both as gRPC,
 
 ### Database support
 
-The CloudState Proxy Reference Implementation is using [Akka Persistence](https://doc.akka.io/docs/akka/current/persistence.html) for the durable storage, which has support for a [wide range](https://index.scala-lang.org/search?topics=akka-persistence) of NoSQL and SQL databases. That said, since it is compiled into a GraalVM native image, the database connection drivers need to be adapted. So far we have support for the Cassandra distributed database, with more databases (for example Postgres) in the works.   
+The CloudState Proxy Reference Implementation supports a number of databases. The table below indicates the range of support, the columns are explained as follows:
+
+Journal
+: Whether event sourced journals are supported with this databases. The RI event sourcing support is built using [Akka Persistence](https://doc.akka.io/docs/akka/current/persistence.html) for the durable storage, which has support for a [wide range](https://index.scala-lang.org/search?topics=akka-persistence) of NoSQL and SQL databases.
+
+Key-Value
+: Whether Key-Value support is implemented for this database. Key-Value support is not yet provided by the CloudState proxy, but will be in future.
+
+Native Image
+: Whether a GraalVM Native Image build is available for the CloudState Proxy for this database. It can be a considerable amount of effort getting a GraalVM native image working for any library, so not all proxies support it.
+
+| Database   | Journal            | Key-Value | Native image       |
+|------------|--------------------|-----------|--------------------|
+| Cassandra  | :heavy_check_mark: | :x:       | :heavy_check_mark: |
+| Postgresql | :heavy_check_mark: | :x:       | :x:                |
 
 ---
 ## Samples
@@ -350,7 +364,7 @@ TODO: add general docs
 ### Run on GKE
 
 1. Create a GKE cluster. We recommend at least 6 vCPUs (ie, a node pool of 3 `n1-standard-2` nodes). Also ensure that the current user is a cluster admin. Detailed instructions for creating the GKE cluster can be found in the [Knative documentation](https://github.com/knative/docs/blob/master/docs/install/Knative-with-GKE.md), follow all the steps up to (but not including) installing Knative.
-2. If using an event sourced entity, install Cassandra. This can be done from the Google Marketplace, by visiting the [Cassandra Cluster](https://console.cloud.google.com/marketplace/details/google/cassandra), selecting configure, selecting your GCloud project, and then installing it in the Kubernetes cluster you just created. The defaults should be good enough, in our examples we called the app instance name `cassandra`. Note there is an option to use an in memory journal if you just want to test it out, of course, as soon as your pods shut down (or if they are rebalanced), your journals will be lost.
+2. If using an event sourced entity, install Cassandra. This can be done from the Google Marketplace, by visiting the [Cassandra Cluster](https://console.cloud.google.com/marketplace/details/google/cassandra), selecting configure, selecting your GCloud project, and then installing it in the Kubernetes cluster you just created. The defaults should be good enough, in our examples we called the app instance name `cassandra`. Note there is an option to use an in memory store if you just want to test it out, of course, as soon as your pods shut down (or if they are rebalanced), your store will be lost.
 3. Install the CloudState operator:
 
     ```
@@ -359,7 +373,7 @@ TODO: add general docs
     
 You are now ready to install an event sourced function. We have a shopping cart example in the `samples/js-shopping-cart` directory of this project. This can be installed by following these instructions:
 
-1. Configure a Cassandra journal. If you called your Cassandra deployment `cassandra` and deployed it to the default namespace, this can be installed by running:
+1. Configure a Cassandra store. If you called your Cassandra deployment `cassandra` and deployed it to the default namespace, this can be installed by running:
 
     ```
     kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/master/samples/js-shopping-cart/journal-cassandra.yaml
@@ -494,7 +508,7 @@ This will take 5 or more minutes. Among the output you should see the result of 
 
 The resulting Docker image is `cloudstate-proxy-dev-mode:latest`.
 
-This image is a dev mode image, it uses an in memory journal, and forms a single cluster by itself. You can also run `dockerBuildNoJournal` and `dockerBuildInMemory`, `dockerBuildCassandra` to build a production proxy that has no journal, an in memory journal or Cassandra journal respectively. These will attempt the Kubernetes cluster bootstrap process, so can only be used in Kubernetes with appropriate environment variables set to help them discover other pods in the same deployment.
+This image is a dev mode image, it uses an in memory store, and forms a single cluster by itself. You can also run `dockerBuildNoStore` and `dockerBuildInMemory`, `dockerBuildCassandra` to build a production proxy that has no store, an in memory store or Cassandra store respectively. These will attempt the Kubernetes cluster bootstrap process, so can only be used in Kubernetes with appropriate environment variables set to help them discover other pods in the same deployment.
 
 Substituting `publishLocal` for `publish` will push the docker images to a remote Docker registry, to enable this the `-Ddocker.registry` and `-Ddocker.username` flags must be specified to the `sbt` command.
 

@@ -21,9 +21,9 @@ import skuber.ResourceSpecification.Subresources
 import skuber.apiextensions.CustomResourceDefinition
 import skuber.{CustomResource, ListResource, ResourceDefinition}
 
-object Journal {
+object StatefulStore {
 
-  type Resource = CustomResource[Journal.Spec, Status]
+  type Resource = CustomResource[StatefulStore.Spec, Status]
   type ResourceList = ListResource[Resource]
 
   case class Spec(`type`: Option[String], deployment: Option[String], config: Option[JsObject])
@@ -32,16 +32,16 @@ object Journal {
     implicit val format: Format[Spec] = Json.format
   }
 
-  case class Status(conditions: Option[List[Condition]], specHash: Option[String])
+  case class Status(conditions: Option[List[Condition]], lastConfig: Option[String])
 
   object Status {
     implicit val format: Format[Status] = Json.format
   }
 
-  implicit val journalResourceDefinition = ResourceDefinition[Resource](
+  implicit val statefulStoreResourceDefinition = ResourceDefinition[Resource](
     group = "cloudstate.io",
     version = "v1alpha1",
-    kind = "Journal",
+    kind = "StatefulStore",
     shortNames = Nil,
     subresources = Some(Subresources()
       .withStatusSubresource

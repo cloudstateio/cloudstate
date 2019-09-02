@@ -26,8 +26,8 @@ import skuber.api.client.KubernetesClient
 import skuber.apps.v1.Deployment
 
 import scala.concurrent.{ExecutionContext, Future}
-
 import StatefulService.Resource
+import io.cloudstate.operator.stores.{StatefulStoreSupport, StatefulStoreUsageConfiguration}
 
 class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionContext)
   extends OperatorFactory[StatefulService.Status, Resource] {
@@ -50,12 +50,47 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
     override def handleChanged(resource: Resource): Future[StatusUpdate] = {
       val deploymentName = deploymentNameFor(resource)
 
-      for {
-        maybeJournal <- resource.spec.journal.map(journal => client.getOption[Journal.Resource](journal.name))
-          .getOrElse(Future.successful(None))
-        maybeDeployment <- client.getOption[Deployment](deploymentName)
-        statusUpdate <- reconcileDeployment(resource, maybeJournal, maybeDeployment)
+      val validatedStoreUsage = resource.spec.datastore match {
+        case Some(store) => validateStore(store)
+        case None => Validated(StatefulStoreSupport.noStoreUsageConfiguration)
+      }
+      val validatedDeployment = lookupDeployment(deploymentName)
+
+
+      val result = for {
+        (storeUsage, maybeDeployment) <- validatedStoreUsage.zip(validatedDeployment)
+        statusUpdate <- reconcileDeployment(resource, storeUsage, maybeDeployment)
       } yield statusUpdate
+
+      result.fold(errors => updateCondition(resource, errors: _*), identity)
+    }
+
+    private def validateStore(store: StatefulService.StatefulStore): Validated[StatefulStoreUsageConfiguration] = {
+      for {
+        storeResource <- lookupStore(store.name)
+        storeSupport <- StatefulStoreSupport.get(storeResource)
+        storeConfig <- storeSupport.validate(storeResource, client)
+        usageConfiguration <- storeConfig.validateInstance(store.config, client)
+      } yield usageConfiguration
+    }
+
+    private def lookupDeployment(deploymentName: String): Validated[Option[Deployment]] = {
+      Validated.future(client.getOption[Deployment](deploymentName)).flatMap {
+        case Some(deployment) if isOwnedByStatefulServiceController(deployment) =>
+          Validated(Some(deployment))
+        case Some(_) =>
+          Validated.error(ConditionResourcesAvailable, ConditionResourcesAvailableNotOwned,
+            s"There is an existing Deployment $deploymentName that we do not own.")
+        case None => Validated(None)
+      }
+    }
+
+    private def lookupStore(storeName: String): Validated[StatefulStore.Resource] = {
+      client.getOption[StatefulStore.Resource](storeName).map {
+        case Some(store) => Validated(store)
+        case None =>
+          Validated.error(StatefulStoreConditionType, "StatefulStoreNotFound", s"StatefulStore with name $storeName not found.")
+      }
     }
 
     override def handleDeleted(resource: Resource): Future[Done] = {
@@ -80,7 +115,7 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
     override def statusFromError(error: Throwable, existing: Option[Resource]): StatusUpdate = {
       existing match {
         case Some(service) =>
-          updateCondition(service, StatefulService.Condition(
+          updateCondition(service, Condition(
             `type` = ConditionResourcesAvailable,
             status = UnknownStatus,
             reason = Some("UnknownError"),
@@ -94,7 +129,7 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       }
     }
 
-    private def updateCondition(service: Resource, conditions: StatefulService.Condition*): StatusUpdate = {
+    private def updateCondition(service: Resource, conditions: Condition*): StatusUpdate = {
       val status = service.status.getOrElse(new StatefulService.Status(Nil))
 
       if (conditions.forall(condition => status.conditions.exists(c =>
@@ -114,144 +149,59 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       }
     }
 
-    private def reconcileDeployment(service: Resource, maybeJournal: Option[Journal.Resource],
-      maybeDeployment: Option[Deployment]) = {
+    private def reconcileDeployment(service: Resource, store: StatefulStoreUsageConfiguration,
+      maybeDeployment: Option[Deployment]): Validated[StatusUpdate] = {
 
       val deploymentName = deploymentNameFor(service)
+      val newDeployment = createDeployment(service, store)
 
-      // for expression over eithers, only progresses when they return Right, otherwise we end up with Left of condition
-      val result = for {
-        _ <- verifyWeOwnDeployment(deploymentName, maybeDeployment)
-        sidecar <- validateJournal(service, maybeJournal)
-      } yield {
+      val createdDeployment = maybeDeployment match {
+        case Some(existing) =>
+          // todo why will the spec be None?
+          val existingSpec = existing.spec.get
+          val desired = existing.copy(spec = newDeployment.spec)
+            // Preserve current scale
+            .withReplicas(existingSpec.replicas.getOrElse(1))
+            // Selector is immutable so preserve that too
+            .withLabelSelector(existingSpec.selector)
 
-        val newDeployment = createDeployment(service, sidecar)
-
-        val deploymentFuture = maybeDeployment match {
-          case Some(existing) =>
-            // todo why will the spec be None?
-            val existingSpec = existing.spec.get
-            val desired = existing.copy(spec = newDeployment.spec)
-              // Preserve current scale
-              .withReplicas(existingSpec.replicas.getOrElse(1))
-              // Selector is immutable so preserve that too
-              .withLabelSelector(existingSpec.selector)
-
-            if (desired.spec != existing.spec) {
-              val desiredWithLabels = desired.copy(
-                metadata = desired.metadata.copy(
-                  labels = desired.metadata.labels ++ newDeployment.metadata.labels
-                )
+          if (desired.spec != existing.spec) {
+            val desiredWithLabels = desired.copy(
+              metadata = desired.metadata.copy(
+                labels = desired.metadata.labels ++ newDeployment.metadata.labels
               )
-              client.update(desiredWithLabels).map { updated =>
-                if (updated.spec != existing.spec) {
-                  println("Updated deployment spec.")
-                  println("Differences were: " + (updated.spec.toString diff existing.spec.toString))
-                }
+            )
+            Validated.future(client.update(desiredWithLabels).map { updated =>
+              if (updated.spec != existing.spec) {
+                println("Updated deployment spec.")
+                println("Differences were: " + (updated.spec.toString diff existing.spec.toString))
               }
-            } else {
-              Future.successful(())
-            }
-
-          case None =>
-            client.create(newDeployment)
-        }
-
-        for {
-          _ <- ensureOtherObjectsExist(service, service.spec.serviceAccountName.getOrElse("default"), deploymentName)
-          _ <- deploymentFuture
-        } yield updateCondition(service, StatefulService.Condition(
-          `type` = JournalConditionType,
-          status = TrueStatus,
-          severity = Some("Info"),
-          lastTransitionTime = Some(ZonedDateTime.now())
-        ), StatefulService.Condition(
-          `type` = ConditionResourcesAvailable,
-          status = TrueStatus,
-          severity = Some("Info"),
-          lastTransitionTime = Some(ZonedDateTime.now())
-        ))
-      }
-
-      result match {
-        case Left(error) =>
-          Future.successful(updateCondition(service, error))
-        case Right(action) =>
-          action
-      }
-    }
-
-    private def errorCondition(`type`: String, reason: String, message: String) = {
-      StatefulService.Condition(`type`, FalseStatus, Some("Error"), Some(ZonedDateTime.now()), Some(reason), Some(message))
-    }
-
-    private def verifyWeOwnDeployment(name: String, maybeDeployment: Option[Deployment]): Either[StatefulService.Condition, Done] = {
-      maybeDeployment match {
-        case None =>
-          Right(Done)
-        case Some(deployment) =>
-          if (isOwnedByStatefulServiceController(deployment)) {
-            Right(Done)
+            })
           } else {
-            Left(errorCondition(ConditionResourcesAvailable, ConditionResourcesAvailableNotOwned,
-              s"There is an existing Deployment $name that we do not own."))
+            Validated(())
           }
+
+        case None =>
+          Validated.future(client.create(newDeployment))
       }
+
+      for {
+        _ <- ensureOtherObjectsExist(service, service.spec.serviceAccountName.getOrElse("default"), deploymentName)
+        _ <- createdDeployment
+      } yield updateCondition(service, Condition(
+        `type` = StatefulStoreConditionType,
+        status = TrueStatus,
+        severity = Some("Info"),
+        lastTransitionTime = Some(ZonedDateTime.now())
+      ) :: Condition(
+        `type` = ConditionResourcesAvailable,
+        status = TrueStatus,
+        severity = Some("Info"),
+        lastTransitionTime = Some(ZonedDateTime.now())
+      ) :: store.successfulConditions: _*)
     }
 
-    private def validateJournal(service: Resource, maybeJournal: Option[Journal.Resource]): Either[StatefulService.Condition, Container] = {
-      (maybeJournal, service.spec.journal) match {
-        case (_, None) =>
-          Right(createNoJournalSidecar(service))
-        case (None, Some(journalConfig)) =>
-          Left(errorCondition(JournalConditionType, "JournalNotFound", s"Journal with name ${journalConfig.name} not found."))
-        case (Some(journal), Some(journalConfig)) =>
-          journal.spec.`type` match {
-            case Some(`CassandraJournalType`) =>
-              journal.spec.deployment match {
-                case Some(`UnmanagedJournalDeployment`) =>
-                  journal.spec.config.flatMap(c => (c \ "service").asOpt[String]) match {
-                    case Some(serviceName) =>
-                      journalConfig.config.flatMap(config => (config \ "keyspace").asOpt[String]) match {
-                        case Some(keyspace) =>
-                          Right(createCassandraSideCar(service, serviceName, keyspace))
-                        case None =>
-                          Left(errorCondition(JournalConditionType, "MissingKeyspace",
-                            "No keyspace declared for Cassandra journal"))
-                      }
-                    case None =>
-                      Left(errorCondition(JournalConditionType, "MissingServiceName",
-                        "No service name declared in unmanaged Cassandra journal"))
-                  }
-                case unknown =>
-                  Left(errorCondition(JournalConditionType, "UnknownDeploymentType",
-                    s"Unknown Cassandra deployment type: $unknown, supported types for Cassandra are: Unmanaged"))
-              }
-            case Some(`InMemoryJournalType`) =>
-              Right(createInMemorySidecar(service))
-            case unknown =>
-              Left(errorCondition(JournalConditionType, "UnknownJournalType",
-                s"Unknown journal type: $unknown, supported types are: Cassandra"))
-          }
-      }
-    }
-
-    private def createCassandraSideCar(serviceResource: Resource, serviceName: String, keyspace: String) = {
-      createSideCar(serviceResource, config.images.cassandra, List(
-        EnvVar("CASSANDRA_CONTACT_POINTS", serviceName),
-        EnvVar("CASSANDRA_KEYSPACE", keyspace)
-      ))
-    }
-
-    private def createInMemorySidecar(serviceResource: Resource) = {
-      createSideCar(serviceResource, config.images.inMemory, Nil)
-    }
-
-    private def createNoJournalSidecar(serviceResource: Resource) = {
-      createSideCar(serviceResource, config.images.noJournal, Nil)
-    }
-
-    private def createSideCar(service: Resource, image: String, env: List[EnvVar]) = {
+    private def createSideCar(service: Resource, store: StatefulStoreUsageConfiguration) = {
       val jvmMemory = service.spec.sidecarJvmMemory.getOrElse("256m")
       val sidecarResources = service.spec.sidecarResources.getOrElse(Resource.Requirements(
         limits = Map(
@@ -284,6 +234,8 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         case None => Nil
       }
 
+      val image = store.proxyImage(config.images)
+
       Container(
         name = "akka-sidecar",
         image = image,
@@ -291,7 +243,7 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         ports = List(
           Container.Port(containerPort = KnativeSidecarH2cPort, name = "grpc-proxy")
         ),
-        env = env ::: autoscalingEnvVars ::: List(
+        env = store.proxyContainerEnvVars ::: autoscalingEnvVars ::: List(
           EnvVar("HTTP_PORT", KnativeSidecarH2cPort.toString),
           EnvVar("USER_FUNCTION_PORT", userPort.toString),
           EnvVar("REMOTING_PORT", AkkaRemotingPort.toString),
@@ -321,10 +273,10 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
           initialDelaySeconds = 2
         ))
       )
-
     }
 
-    private def createDeployment(service: Resource, sidecar: Container) = {
+    private def createDeployment(service: Resource, store: StatefulStoreUsageConfiguration) = {
+      val sidecar = createSideCar(service, store)
 
       // todo perhaps validate?
       val orig = service.spec.containers.head
@@ -366,7 +318,7 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         val ls = service.metadata.labels ++ Map(
           StatefulServiceLabel -> service.name,
           StatefulServiceUidLabel -> service.uid
-        ) ++ service.spec.journal.map(j => JournalLabel -> j.name)
+        ) ++ service.spec.datastore.map(ds => StatefulStoreLabel -> ds.name)
         if (!ls.contains("app")) ls + ("app" -> service.name)
         else ls
       }
@@ -409,14 +361,14 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         ))
     }
 
-    private def ensureOtherObjectsExist(service: Resource, serviceAccountName: String, deploymentName: String) = {
-      for {
+    private def ensureOtherObjectsExist(service: Resource, serviceAccountName: String, deploymentName: String): Validated[Done] = {
+      Validated.future(for {
         _ <- helper.ensurePodReaderRoleExists()
         _ <- helper.ensurePodReaderRoleBindingExists(serviceAccountName)
         _ <- helper.ensureDeploymentScalerRoleExists(deploymentName, service)
         _ <- helper.ensureDeploymentScalerRoleBindingExists(serviceAccountName, service)
         _ <- helper.ensureServiceForStatefulServiceExists(service)
-      } yield ()
+      } yield Done)
     }
 
     private def deploymentNameFor(revision: Resource) = revision.metadata.name + "-deployment"

@@ -40,7 +40,7 @@ object OperatorMain extends App {
   val client = skuber.k8sInit
 
   private val runners = List(
-    new OperatorRunner(client, new JournalOperatorFactory()),
+    new OperatorRunner(client, new StatefulStoreOperatorFactory()),
     new OperatorRunner(client, new StatefulServiceOperatorFactory())
   )
 

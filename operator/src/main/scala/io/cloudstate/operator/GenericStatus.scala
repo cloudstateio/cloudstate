@@ -31,8 +31,9 @@ object GenericStatus {
 case class Condition(
   `type`: String,
   status: String,
-  reason: Option[String],
-  message: Option[String],
+  reason: Option[String] = None,
+  message: Option[String] = None,
+  severity: Option[String] = None,
   lastUpdateTime: Option[ZonedDateTime] = None,
   lastTransitionTime: Option[ZonedDateTime] = None
 )

@@ -17,7 +17,8 @@ data:
       proxy {
         image {
           cassandra = "cloudstateio/cloudstate-proxy-native-cassandra:latest"
-          no-journal = "cloudstateio/cloudstate-proxy-native-no-journal:latest"
+          postgres =  "cloudstateio/cloudstate-proxy-postgres:latest"
+          no-store = "cloudstateio/cloudstate-proxy-native-no-store:latest"
           in-memory = "cloudstateio/cloudstate-proxy-native-in-memory:latest"
         }
       }

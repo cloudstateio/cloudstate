@@ -14,10 +14,11 @@ object OperatorConfig {
       images = ImageConfig(
         cassandra = imageConfig.getString("cassandra"),
         inMemory = imageConfig.getString("in-memory"),
-        noJournal = imageConfig.getString("no-journal")
+        noStore = imageConfig.getString("no-store"),
+        postgres = imageConfig.getString("postgres")
       )
     )
   }
 }
 
-case class ImageConfig(cassandra: String, inMemory: String, noJournal: String)
+case class ImageConfig(cassandra: String, inMemory: String, noStore: String, postgres: String)

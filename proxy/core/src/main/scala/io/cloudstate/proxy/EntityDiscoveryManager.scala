@@ -167,7 +167,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
             case Some(factory) => EntityDiscoveryManager.ServableEntity(
               entity.serviceName, serviceDescriptor, factory.build(entity, serviceDescriptor))
             case None if entity.entityType == EventSourced.name =>
-              throw EntityDiscoveryException(s"Service [${entity.serviceName}] has declared an event sourced entity, however, this proxy does not have a configured journal. A journal must be configured in this stateful services resource if event sourcing is to be used.")
+              throw EntityDiscoveryException(s"Service [${entity.serviceName}] has declared an event sourced entity, however, this proxy does not have a configured store, or is using a store that doesn't support event sourced journals. A store that supports journals must be configured in this stateful services resource if event sourcing is to be used.")
             case None =>
               throw EntityDiscoveryException(s"Service [${entity.serviceName}] has declared an unsupported entity type [${entity.entityType}]. Supported types are ${supportFactories.keys.mkString(",")}")
           }

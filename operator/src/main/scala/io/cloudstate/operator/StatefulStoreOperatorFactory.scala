@@ -16,12 +16,13 @@
 
 package io.cloudstate.operator
 
-import java.security.MessageDigest
 import java.time.ZonedDateTime
 import java.util.Base64
 
 import akka.Done
 import akka.stream.Materializer
+import io.cloudstate.operator.stores.StatefulStoreSupport
+import play.api.libs.json.Json
 import skuber.LabelSelector.dsl._
 import skuber._
 import skuber.api.client.KubernetesClient
@@ -30,66 +31,59 @@ import scala.concurrent.{ExecutionContext, Future}
 import skuber.apps.v1.DeploymentList
 import skuber.apps.v1.Deployment
 
-class JournalOperatorFactory(implicit mat: Materializer, ec: ExecutionContext) extends
-  OperatorFactory[Journal.Status, Journal.Resource] {
+import scala.util.control.NonFatal
+
+class StatefulStoreOperatorFactory(implicit mat: Materializer, ec: ExecutionContext) extends
+  OperatorFactory[StatefulStore.Status, StatefulStore.Resource] {
 
   import OperatorConstants._
-  import Journal.Resource
+  import StatefulStore.Resource
 
-  override def apply(client: KubernetesClient, config: OperatorConfig): Operator = new JournalOperator(client)
+  override def apply(client: KubernetesClient, config: OperatorConfig): Operator = new StatefulStoreOperator(client)
 
-  class JournalOperator(client: KubernetesClient) extends Operator {
+  class StatefulStoreOperator(client: KubernetesClient) extends Operator {
 
-    private def status(spec: Option[Resource], status: String, reason: Option[String] = None, message: Option[String] = None) = Journal.Status(
+    private def status(maybeSpec: Option[Resource], status: String, reason: Option[String] = None, message: Option[String] = None) = StatefulStore.Status(
       conditions = Some(List(
         Condition(
-          `type` = JournalConditionType,
+          `type` = StatefulStoreConditionType,
           status = status,
           reason = reason,
           message = message,
           lastUpdateTime = Some(ZonedDateTime.now())
         )
       )),
-      specHash = spec.map(hashSpec)
+      lastConfig = maybeSpec.map(spec => Base64.getEncoder.encodeToString(Json.toBytes(Json.toJson(spec.spec))))
     )
 
-    private def hashSpec(spec: Resource) = {
-      val md = MessageDigest.getInstance("MD5")
-      val hashBytes = md.digest(spec.spec.toString.getBytes("utf-8"))
-      Base64.getEncoder.encodeToString(hashBytes)
-    }
-
-    private def errorStatus(spec: Option[Resource], reason: String, message: String) =
-      status(spec, FalseStatus, Some(reason), Some(message))
-
     override def handleChanged(resource: Resource): Future[StatusUpdate] = {
-      if (resource.status.exists(_.specHash.contains(hashSpec(resource))) &&
-        resource.status.exists(_.conditions.exists(_.exists(c => c.`type` == JournalConditionType && c.status == TrueStatus)))) {
+      val maybeLastConfig = parseLastConfig(resource.status)
+      if (maybeLastConfig.contains(resource.spec) &&
+        resource.status.exists(_.conditions.exists(_.exists(c => c.`type` == StatefulStoreConditionType && c.status == TrueStatus)))) {
         // Don't do anything if last time we saw it, we successfully validated it, and it hasn't changed since then.
         Future.successful(StatusUpdate.None)
       } else {
-        val maybeErrorStatus = resource.spec.`type` match {
-          case Some(`CassandraJournalType`) =>
-            resource.spec.deployment match {
-              case Some(`UnmanagedJournalDeployment`) =>
-                resource.spec.config.flatMap(c => (c \ "service").asOpt[String]) match {
-                  case Some(_) => None
-                  case None =>
-                    Some(errorStatus(Some(resource), "MissingServiceName", "No service name declared in unmanaged Cassandra journal"))
-                }
-              case unknown =>
-                Some(errorStatus(Some(resource), "UnknownDeploymentType", s"Unknown Cassandra deployment type: $unknown, supported types for Cassandra are: Unmanaged"))
-            }
-          case Some(`InMemoryJournalType`) => None
-          case unknown =>
-            Some(errorStatus(Some(resource), "UnknownJournalType", s"Unknown journal type: $unknown, supported types are: Cassandra"))
-        }
 
-        maybeErrorStatus match {
-          case Some(error) => Future.successful(StatusUpdate.Update(error))
-          case None =>
-            updateDependents(resource.name).map(_ => StatusUpdate.Update(status(Some(resource), TrueStatus)))
-        }
+        val maybeOldSupport: Option[(StatefulStore.Spec, StatefulStoreSupport)] = for {
+          lastConfig <- maybeLastConfig
+          oldType <- lastConfig.`type`
+          if !resource.spec.`type`.contains(oldType)
+          oldSupport <- StatefulStoreSupport.get(oldType)
+        } yield (lastConfig, oldSupport)
+
+        val result = for {
+          support <- StatefulStoreSupport.get(resource)
+          _ <- support.reconcile(resource, client)
+          _ <- Validated.future(updateDependents(resource.name))
+          _ <- maybeOldSupport.fold(Validated(Done.done())) {
+            case (lastConfig, oldSupport) => Validated.future(oldSupport.delete(lastConfig, client))
+          }
+        } yield Done
+
+        result.fold(
+          errors => StatusUpdate.Update(StatefulStore.Status(Some(errors), resource.status.flatMap(_.lastConfig))),
+          _ => StatusUpdate.Update(status(Some(resource), TrueStatus))
+        )
       }
     }
 
@@ -101,7 +95,7 @@ class JournalOperatorFactory(implicit mat: Materializer, ec: ExecutionContext) e
 
       (for {
         deployments <- client.listSelected[DeploymentList](LabelSelector(
-          JournalLabel is name
+          StatefulStoreLabel is name
         ))
         _ <- Future.sequence(deployments.map(deployment => updateServiceForDeployment(deployment)))
       } yield Done).recover {
@@ -149,19 +143,19 @@ class JournalOperatorFactory(implicit mat: Materializer, ec: ExecutionContext) e
     }
 
     // Here we change the validation to Unknown. It is the responsibility of the revision controller to
-    // handle updates to the journal, by changing to unknown we let it go in and do the update.
+    // handle updates to the store, by changing to unknown we let it go in and do the update.
     private def touchKnativeRevisionStatus(status: KnativeRevision.Status): KnativeRevision.Status = {
       val condition = KnativeRevision.Condition(
-        `type` = JournalConditionType,
+        `type` = StatefulStoreConditionType,
         status = UnknownStatus,
-        reason = Some("JournalChanged"),
+        reason = Some("StatefulStoreChanged"),
         lastTransitionTime = Some(ZonedDateTime.now())
       )
 
-      val hasExistingCondition = status.conditions.exists(_.`type` == JournalConditionType)
+      val hasExistingCondition = status.conditions.exists(_.`type` == StatefulStoreConditionType)
       val conditions = if (hasExistingCondition) {
         status.conditions.map {
-          case c if c.`type` == JournalConditionType => condition
+          case c if c.`type` == StatefulStoreConditionType => condition
           case other => other
         }
       } else {
@@ -171,17 +165,17 @@ class JournalOperatorFactory(implicit mat: Materializer, ec: ExecutionContext) e
     }
 
     private def touchStatefulServiceStatus(status: StatefulService.Status): StatefulService.Status = {
-      val condition = StatefulService.Condition(
-        `type` = JournalConditionType,
+      val condition = Condition(
+        `type` = StatefulStoreConditionType,
         status = UnknownStatus,
-        reason = Some("JournalChanged"),
+        reason = Some("StatefulStoreChanged"),
         lastTransitionTime = Some(ZonedDateTime.now())
       )
 
-      val hasExistingCondition = status.conditions.exists(_.`type` == JournalConditionType)
+      val hasExistingCondition = status.conditions.exists(_.`type` == StatefulStoreConditionType)
       val conditions = if (hasExistingCondition) {
         status.conditions.map {
-          case c if c.`type` == JournalConditionType => condition
+          case c if c.`type` == StatefulStoreConditionType => condition
           case other => other
         }
       } else {
@@ -192,6 +186,18 @@ class JournalOperatorFactory(implicit mat: Materializer, ec: ExecutionContext) e
 
     override def statusFromError(error: Throwable, existing: Option[Resource]): StatusUpdate = {
       StatusUpdate.Update(status(existing, UnknownStatus, Some("UnknownOperatorError"), Some(error.getMessage)))
+    }
+
+    private def parseLastConfig(maybeStatus: Option[StatefulStore.Status]) = {
+      for {
+        status <- maybeStatus
+        lastConfigJs <- status.lastConfig
+        lastConfig <- try {
+          Json.parse(Base64.getDecoder.decode(lastConfigJs)).validate[StatefulStore.Spec].asOpt
+        } catch {
+          case NonFatal(_) => None
+        }
+      } yield lastConfig
     }
   }
 

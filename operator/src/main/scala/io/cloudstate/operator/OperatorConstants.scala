@@ -23,7 +23,7 @@ object OperatorConstants {
   final val CloudStateApiVersionNumber = "v1alpha1"
   final val CloudStateApiVersion = s"$CloudStateGroup/$CloudStateApiVersionNumber"
   final val StatefulServiceKind = "StatefulService"
-  final val JournalLabel = s"$CloudStateGroup/journal"
+  final val StatefulStoreLabel = s"$CloudStateGroup/statefulStore"
 
   final val StatefulServiceLabel = s"$CloudStateGroup/statefulService"
   final val StatefulServiceUidLabel = s"$CloudStateGroup/statefulServiceUID"
@@ -47,7 +47,7 @@ object OperatorConstants {
   final val KnativeServingDeployerName = "KnativeServing"
   final val CloudStateDeployerName = "CloudState"
 
-  final val JournalConditionType = "JournalValid"
+  final val StatefulStoreConditionType = "StatefulStoreValid"
 
   final val TrueStatus = "True"
   final val FalseStatus = "False"
@@ -59,9 +59,9 @@ object OperatorConstants {
   final val DeploymentScalerRoleName = "cloudstate-deployment-scaler"
   final val DeploymentScalerRoleBindingName = "cloudstate-scale-deployment"
 
-  final val CassandraJournalType = "Cassandra"
-  final val InMemoryJournalType = "InMemory"
-  final val UnmanagedJournalDeployment = "Unmanaged"
+  final val CassandraStatefulStoreType = "Cassandra"
+  final val InMemoryStatefulStoreType = "InMemory"
+  final val UnmanagedStatefulStoreDeployment = "Unmanaged"
 
   final val UserContainerName = "user-container"
   final val UserPortName = "user-port"

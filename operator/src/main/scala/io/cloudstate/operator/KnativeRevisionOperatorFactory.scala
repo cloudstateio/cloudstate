@@ -84,7 +84,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       existing match {
         case Some(revision) =>
           updateCondition(revision, KnativeRevision.Condition(
-            `type` = JournalConditionType,
+            `type` = StatefulStoreConditionType,
             status = UnknownStatus,
             reason = Some("UnknownError"),
             message = Some(error.getMessage),
@@ -126,14 +126,14 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       val deploymentName = deploymentNameFor(revision)
 
       for {
-        maybeJournal <- client.getOption[Journal.Resource](deployer.journal.name)
+        maybeJournal <- client.getOption[StatefulStore.Resource](deployer.journal.name)
         maybeDeployment <- client.getOption[Deployment](deploymentName)
         statusUpdate <- reconcileDeployment(revision, deployer, maybeJournal, maybeDeployment)
       } yield statusUpdate
     }
 
     private def reconcileDeployment(revision: KnativeRevision.Resource, deployer: CloudStateDeployer,
-      maybeJournal: Option[Journal.Resource], maybeDeployment: Option[Deployment]) = {
+      maybeJournal: Option[StatefulStore.Resource], maybeDeployment: Option[Deployment]) = {
       val deploymentName = deploymentNameFor(revision)
 
       // for expression over eithers, only progresses when they return Right, otherwise we end up with Left of condition
@@ -178,7 +178,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
           _ <- ensureRbacPermissionsInNamespace(revision.spec.serviceAccountName.getOrElse("default"))
           _ <- deploymentFuture
         } yield updateCondition(revision, KnativeRevision.Condition(
-          `type` = JournalConditionType,
+          `type` = StatefulStoreConditionType,
           status = TrueStatus,
           severity = Some("Info"),
           lastTransitionTime = Some(ZonedDateTime.now())
@@ -212,34 +212,34 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
     }
 
     private def validateJournal(revision: KnativeRevision.Resource, deployer: CloudStateDeployer,
-      maybeJournal: Option[Journal.Resource]): Either[KnativeRevision.Condition, Container] = {
+      maybeJournal: Option[StatefulStore.Resource]): Either[KnativeRevision.Condition, Container] = {
       maybeJournal match {
         case None =>
-          Left(errorCondition(JournalConditionType, "JournalNotFound", s"Journal with name ${deployer.journal.name} not found."))
+          Left(errorCondition(StatefulStoreConditionType, "JournalNotFound", s"Journal with name ${deployer.journal.name} not found."))
         case Some(journal) =>
           journal.spec.`type` match {
-            case Some(`CassandraJournalType`) =>
+            case Some(CassandraStatefulStoreType) =>
               journal.spec.deployment match {
-                case Some(`UnmanagedJournalDeployment`) =>
+                case Some(`UnmanagedStatefulStoreDeployment`) =>
                   journal.spec.config.flatMap(c => (c \ "service").asOpt[String]) match {
                     case Some(serviceName) =>
                       deployer.journal.config.flatMap(config => (config \ "keyspace").asOpt[String]) match {
                         case Some(keyspace) =>
                           Right(createCassandraSideCar(revision, deployer, serviceName, keyspace))
                         case None =>
-                          Left(errorCondition(JournalConditionType, "MissingKeyspace",
+                          Left(errorCondition(StatefulStoreConditionType, "MissingKeyspace",
                             "No keyspace declared for Cassandra journal"))
                       }
                     case None =>
-                      Left(errorCondition(JournalConditionType, "MissingServiceName",
+                      Left(errorCondition(StatefulStoreConditionType, "MissingServiceName",
                         "No service name declared in unmanaged Cassandra journal"))
                   }
                 case unknown =>
-                  Left(errorCondition(JournalConditionType, "UnknownDeploymentType",
+                  Left(errorCondition(StatefulStoreConditionType, "UnknownDeploymentType",
                     s"Unknown Cassandra deployment type: $unknown, supported types for Cassandra are: Unmanaged"))
               }
             case unknown =>
-              Left(errorCondition(JournalConditionType, "UnknownJournalType",
+              Left(errorCondition(StatefulStoreConditionType, "UnknownJournalType",
                 s"Unknown journal type: $unknown, supported types are: Cassandra"))
           }
       }
@@ -370,7 +370,7 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         val ls = revision.metadata.labels ++ Map(
           RevisionLabel -> revision.name,
           RevisionUidLabel -> revision.uid,
-          JournalLabel -> deployer.journal.name
+          StatefulStoreLabel -> deployer.journal.name
         )
         if (!ls.contains("app")) ls + ("app" -> revision.name)
         else ls
