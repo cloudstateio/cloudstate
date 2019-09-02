@@ -485,11 +485,11 @@ small {
 }
 
 .site-header .off-canvas-toggle .svg-icon-menu .svg-icon-menu-path {
-    fill: #000;
+    fill: white;
 }
 
 .site-header .off-canvas-toggle .svg-icon-menu:hover .svg-icon-menu-path {
-    fill: #4183C4;
+    fill: #eee;
 }
 
 .site-header .logo {
