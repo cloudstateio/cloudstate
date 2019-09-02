@@ -2,7 +2,7 @@
 
 Documentation for CloudState users.
 
-@@toc
+@@toc{ depth=2 }
 
 @@@ index
 
