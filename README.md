@@ -55,10 +55,10 @@ Join us in making this vision a reality!
 *   The Serverless Developer Experience, from development to production, is revolutionary and will grow to dominate the future of Cloud Computing
     *   FaaS is however— with its ephemeral, stateless, and short-lived functions—only the first step and implementation of the Serverless Developer Experience. 
     *   FaaS is great for processing intensive, parallelizable workloads, moving data from A to B providing enrichment and transformation along the way. But it is quite limited and constrained in what use-cases it addresses well, which makes it very hard and inefficient to implement traditional application development and distributed systems protocols. 
-*   What's needed is a next generation Serverless platform and programming model for  general-purpose application development (e.g. microservices, streaming pipelines, AI/ML, etc.). 
+*   What's needed is a next generation Serverless platform (Serverless 2.0) and programming model for  general-purpose application development (e.g. microservices, streaming pipelines, AI/ML, etc.). 
     *   One that lets us implement common use-cases such as: shopping carts, user sessions, transactions, ML models training, low-latency prediction serving, job scheduling, and much more.  
     *   What is missing is support for long-lived virtual stateful services, a way to manage distributed state in a scalable and available fashion, and options for choosing the right consistency model for the job. 
-*   We are tackling these problems by attempting to build this next generation Serverless on Knative/Kubernetes, gRPC, and Akka (Cluster, Persistence, etc.), with a rich set of client APIs (JavaScript, Go, Python, Java, Scala, PHP, etc.)   
+*   We are tackling these problems by building this next generation Serverless on Knative/Kubernetes, gRPC, and Akka (Cluster, Persistence, etc.), with a rich set of client APIs (JavaScript, Go, Python, Java, Scala, PHP, etc.)   
 
 ### Limitations of current Serverless implementations 
 
@@ -109,7 +109,7 @@ We need to rethink the use of CRUD in Serverless. CRUD, in the general sense, me
 
 ![FaaS using CRUD](images/faas_with_crud.png)
 
-Unconstrained database access means that the user function itself needs to manage the nitty-gritty details about data access and storage, and your are thereby moving all the operational concerns from the Serverless framework into the user function. Now it's hard for the framework to know the intention of each access. For example: 
+Unconstrained database access means that the user function itself needs to manage the nitty-gritty details about data access and storage, and you are thereby moving all the operational concerns from the Serverless framework into the user function. Now it's hard for the framework to know the intention of each access. For example: 
 
 * Is the operation a read, or a write?
 * Can it be cached?
@@ -130,7 +130,7 @@ The question we asked ourselves was: can we abstract over state in the same way?
 
 ![Abstracting over state](images/abstract_over_state.png)
 
-This would allow the framework to manage durable state on behalf of the function, to monitor and manage it holistically across the whole system, and take more intelligent decisions.  
+This would allow the framework to manage durable state on behalf of the function, to monitor and manage it holistically across the whole system, and make more intelligent decisions.  
 
 Unconstrained CRUD does not work in in this model since we can't pass the entire data set in and out of the function. What we need are data storage patterns that have constrained input/output protocols. Patterns that fall into this category are Key-Value, Event Sourcing, and CRDTs. 
 
@@ -221,7 +221,7 @@ The gRPC protocol spoken between the Akka sidecar and the user code is a Common 
 
 There are two parts to the IR. The first is discovery. This is where a user function declares what services it wishes to expose, and what stateful features it needs those services to be enriched with. This is done by the sidecar making a call on the user function, using the IR protocol, to request a descriptor that describes it. This descriptor contains a serialized protobuf definition of the services that the user function wishes to expose. Each service is declared to have a particular entity type, supported types include Event Sourcing and CRDTs.
 
-The second part of the IR is a pluggable entity type protocol. Each entity type defines its own gRPC protocol for communicating between the sidecar and the user function. Here is an cut down snippet of the event sourcing protocol:
+The second part of the IR is a pluggable entity type protocol. Each entity type defines its own gRPC protocol for communicating between the sidecar and the user function. Here is a snippet of the event sourcing protocol:
 
 ```proto
 service EventSourced {
@@ -305,7 +305,7 @@ This request rate based scaling is not used when scaling down, since the request
 
 When an upgrade is detected, request rate based scaling decisions are also made, since upgrades cause a temporary degradation in performance as state is replicated and rebalanced to newly upgraded nodes.
 
-At time of writing, the autoscaler only works in standalone mode, which uses one deployment per user function. Support for Knatives one deployment per revision of a user function has not yet been implemented, nor has support in Knative to disable the Knative autoscaler when a custom deployer is used.
+At time of writing, the autoscaler only works in standalone mode, which uses one deployment per user function. Support for Knative's one deployment per revision of a user function has not yet been implemented, nor has support in Knative to disable the Knative autoscaler when a custom deployer is used.
 
 ### Support for HTTP and JSON
 
