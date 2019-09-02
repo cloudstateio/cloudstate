@@ -14,5 +14,6 @@
 * [Conflict-free Replicated Data Types](crdt.md)
 * [Forwarding and effects](effects.md)
 * [Serialization](serialization.md)
+* [API docs](api.md)
 
 @@@

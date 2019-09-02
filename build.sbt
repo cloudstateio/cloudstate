@@ -92,7 +92,13 @@ lazy val docs = (project in file("docs"))
   .settings(
     common,
     name := "CloudState Documentation",
-    paradoxTheme := Some(builtinParadoxTheme("generic"))
+    paradoxTheme := Some(builtinParadoxTheme("generic")),
+    mappings in (Compile, paradox) ++= {
+      val javaApiDocs = (doc in (`java-support`, Compile)).value
+      ((javaApiDocs ** "*") pair Path.relativeTo(javaApiDocs)).map {
+        case (file, path) => file -> s"user/lang/java/api/$path"
+      }
+    }
   )
 
 lazy val proxyDockerBuild = settingKey[Option[(String, Option[String])]]("Docker artifact name and configuration file which gets overridden by the buildProxy command")
@@ -475,6 +481,13 @@ lazy val `java-support` = (project in file("java-support"))
     
     buildInfoKeys := Seq[BuildInfoKey](name, version),
     buildInfoPackage := "io.cloudstate.javasupport",
+    
+    // Generate javadocs by just including non generated Java sources
+    sourceDirectories in (Compile, doc) := Seq((javaSource in Compile).value),
+    sources in (Compile, doc) := {
+      val javaSourceDir = (javaSource in Compile).value.getAbsolutePath
+      (sources in (Compile, doc)).value.filter(_.getAbsolutePath.startsWith(javaSourceDir))
+    },
     
     libraryDependencies ++= Seq(
       // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
