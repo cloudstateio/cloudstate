@@ -8,6 +8,6 @@ The CloudState docs are a work in progress. The best place to go right now for t
 
 * [User Documentation](user/index.md)
 * [Protocol Specification](spec/index.md)
-* [Reference Implementation](developer/index.md)
+* [Contributor Documentation](developer/index.md)
 
 @@@
