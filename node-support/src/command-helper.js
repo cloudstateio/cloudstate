@@ -28,6 +28,7 @@ class ContextFailure extends Error {
 
 /**
  * Creates the base for context objects.
+ * @private
  */
 module.exports = class CommandHelper {
 
@@ -45,6 +46,7 @@ module.exports = class CommandHelper {
    * Handle a command.
    *
    * @param command The command to handle.
+   * @private
    */
   handleCommand(command) {
     const ctx = this.createContext(command.id);
@@ -185,17 +187,57 @@ module.exports = class CommandHelper {
     accessor.error = null;
     accessor.forward = null;
 
+    /**
+     * Effect context.
+     *
+     * @interface cloudstate.EffectContext
+     * @property {string} entityId The id of the entity that the command is for.
+     * @property {Long} commandId The id of the command.
+     */
+
+    /**
+     * Context for a command.
+     *
+     * @interface cloudstate.CommandContext
+     * @extends cloudstate.EffectContext
+     */
     accessor.context = {
       entityId: this.entityId,
       commandId: commandId,
+
+      /**
+       * Emit an effect after processing this command.
+       *
+       * @function cloudstate.EffectContext#effect
+       * @param method The entity service method to invoke.
+       * @param {object} message The message to send to that service.
+       * @param {boolean} synchronous Whether the effect should be execute synchronously or not.
+       */
       effect: (method, message, synchronous = false) => {
         accessor.ensureActive();
         accessor.effects.push(this.serializeSideEffect(method, message, synchronous))
       },
+
+      /**
+       * Forward this command to another entity service call.
+       *
+       * @function cloudstate.CommandContext#thenForward
+       * @param method The entity service method to invoke.
+       * @param {object} message The message to send to that service.
+       */
       thenForward: (method, message) => {
         accessor.ensureActive();
         accessor.forward = this.serializeEffect(method, message);
       },
+
+      /**
+       * Fail handling this command.
+       *
+       * @function cloudstate.EffectContext#fail
+       * @param msg The failure message.
+       * @throws An error that captures the failure message. Note that even if you catch the error thrown by this
+       * method, the command will still be failed with the given message.
+       */
       fail: (msg) => {
         accessor.ensureActive();
         // We set it here to ensure that even if the user catches the error, for

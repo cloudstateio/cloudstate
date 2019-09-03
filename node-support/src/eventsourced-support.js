@@ -48,6 +48,7 @@ class EventSourcedSupport {
    * @param call
    * @param init
    * @returns {EventSourcedEntityHandler}
+   * @private
    */
   create(call, init) {
     const handler = new EventSourcedEntityHandler(this, call, init.entityId);
@@ -60,6 +61,7 @@ class EventSourcedSupport {
 
 /**
  * Handler for a single event sourced entity.
+ * @private
  */
 class EventSourcedEntityHandler {
 
@@ -67,6 +69,7 @@ class EventSourcedEntityHandler {
    * @param {EventSourcedSupport} support
    * @param call
    * @param entityId
+   * @private
    */
   constructor(support, call, entityId) {
     this.entity = support;
@@ -97,8 +100,25 @@ class EventSourcedEntityHandler {
       if (behavior.commandHandlers.hasOwnProperty(commandName)) {
 
         return (command, ctx) => {
+
+          /**
+           * Context for an event sourced command.
+           *
+           * @interface cloudstate.EventSourced.EventSourcedCommandContext
+           * @extends cloudstate.CommandContext
+           */
+
           ctx.events = [];
 
+          /**
+           * Persist an event.
+           *
+           * The event won't be persisted until the reply is sent to the proxy. Then, the event will be persisted
+           * before the reply is sent back to the client.
+           *
+           * @function cloudstate.EventSourced.EventSourcedCommandContext#emit
+           * @param {cloudstate.Serializable} event The event to emit.
+           */
           ctx.context.emit = (event) => {
             ctx.ensureActive();
 

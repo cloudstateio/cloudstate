@@ -16,42 +16,93 @@
 
 const util = require("util");
 
+/**
+ * @classdesc A Vote CRDT.
+ *
+ * A Vote CRDT allows all nodes an a cluster to vote on a condition, such as whether a user is online.
+ *
+ * @constructor cloudstate.crdt.Vote
+ * @extends cloudstate.crdt.CrdtState
+ */
 function Vote() {
   let currentSelfVote = false;
   let currentVotesFor = 0;
   let currentTotalVoters = 1;
   let delta = null;
 
+  /**
+   * The number of nodes that have voted for this condition.
+   *
+   * @name cloudstate.crdt.Vote#votesFor
+   * @type {number}
+   * @readonly
+   */
   Object.defineProperty(this, "votesFor", {
     get: function () {
       return currentVotesFor;
     }
   });
 
+  /**
+   * The total number of nodes that have voted.
+   *
+   * @name cloudstate.crdt.Vote#totalVoters
+   * @type {number}
+   * @readonly
+   */
   Object.defineProperty(this, "totalVoters", {
     get: function () {
       return currentTotalVoters;
     }
   });
 
+  /**
+   * Whether at least one node has voted for this condition.
+   *
+   * @name cloudstate.crdt.Vote#atLeastOne
+   * @type {boolean}
+   * @readonly
+   */
   Object.defineProperty(this, "atLeastOne", {
     get: function () {
       return currentVotesFor > 0;
     }
   });
 
+  /**
+   * Whether a majority of nodes have voted for this condition.
+   *
+   * @name cloudstate.crdt.Vote#majority
+   * @type {boolean}
+   * @readonly
+   */
   Object.defineProperty(this, "majority", {
     get: function () {
       return currentVotesFor > currentTotalVoters / 2;
     }
   });
 
+  /**
+   * Whether all of nodes have voted for this condition.
+   *
+   * @name cloudstate.crdt.Vote#all
+   * @type {boolean}
+   * @readonly
+   */
   Object.defineProperty(this, "all", {
     get: function () {
       return currentVotesFor === currentTotalVoters;
     }
   });
 
+  /**
+   * The current nodes vote.
+   *
+   * Setting this will update the current nodes vote accordingly.
+   *
+   * @name cloudstate.crdt.Vote#vote
+   * @type {boolean}
+   */
   Object.defineProperty(this, "vote", {
     get: function () {
       return currentSelfVote;

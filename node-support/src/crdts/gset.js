@@ -18,25 +18,66 @@ const debug = require("debug")("cloudstate-crdt");
 const util = require("util");
 const AnySupport = require("../protobuf-any");
 
+/**
+ * @classdesc A Grow-only Set CRDT.
+ *
+ * A grow only set can have elements added to it, but not removed.
+ *
+ * @constructor cloudstate.crdt.GSet
+ * @implements cloudstate.crdt.CrdtState
+ */
 function GSet() {
   // Map of a comparable form (that compares correctly using ===) of the elements to the elements
   let currentValue = new Map();
   let delta = new Set();
 
+  /**
+   * Does this set contain the given element?
+   *
+   * @function cloudstate.crdt.GSet#has
+   * @param {cloudstate.Serializable} element The element to check.
+   * @returns {boolean} True if the set contains the element.
+   */
   this.has = function (element) {
     return currentValue.has(AnySupport.toComparable(element));
   };
 
+  /**
+   * The size of this set.
+   *
+   * @name cloudstate.crdt.GSet#size
+   * @type {number}
+   * @readonly
+   */
   Object.defineProperty(this, "size", {
     get: function () {
       return currentValue.size;
     }
   });
 
+  /**
+   * Callback for handling elements iterated through by {@link cloudstate.crdt.GSet#forEach}.
+   *
+   * @callback cloudstate.crdt.GSet~forEachCallback
+   * @param {cloudstate.Serializable} element The element.
+   */
+
+  /**
+   * Execute the given callback for each element.
+   *
+   * @function cloudstate.crdt.GSet#forEach
+   * @param {cloudstate.crdt.GSet~forEachCallback} callback The callback to handle each element.
+   */
   this.forEach = function (callback) {
-    return currentValue.forEach((value, key) => callback(value));
+    currentValue.forEach((value, key) => callback(value));
   };
 
+  /**
+   * Create an iterator for this set.
+   *
+   * @function cloudstate.crdt.GSet#@@iterator
+   * @returns {iterator<cloudstate.Serializable>}
+   */
   this[Symbol.iterator] = function () {
     return currentValue.values();
   };
@@ -44,7 +85,9 @@ function GSet() {
   /**
    * Add an element to this set.
    *
-   * @param element The element.
+   * @function cloudstate.crdt.GSet#add
+   * @param {cloudstate.Serializable} element The element to add.
+   * @return {cloudstate.crdt.GSet} This set.
    */
   this.add = function (element) {
     const comparable = AnySupport.toComparable(element);

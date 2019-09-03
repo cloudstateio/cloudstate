@@ -16,16 +16,37 @@
 
 const util = require("util");
 
+/**
+ * @classdesc A flag CRDT.
+ *
+ * A flag starts out as being false (disabled), and then can be set to true (enabled). Once set to true, it stays true.
+ *
+ * @constructor cloudstate.crdt.Flag
+ * @implements cloudstate.crdt.CrdtState
+ */
 function Flag() {
   let currentValue = false;
   let delta = false;
 
+  /**
+   * Whether this flag is enabled or not.
+   *
+   * @name cloudstate.crdt.Flag#value
+   * @type {boolean}
+   * @readonly
+   */
   Object.defineProperty(this, "value", {
     get: function () {
       return currentValue;
     }
   });
 
+  /**
+   * Enable this flag.
+   *
+   * @function cloudstate.crdt.Flag#enable
+   * @returns {cloudstate.crdt.Flag} This flag.
+   */
   this.enable = function () {
     if (!currentValue) {
       currentValue = true;

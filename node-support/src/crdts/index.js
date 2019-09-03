@@ -26,15 +26,39 @@ const Flag = require("./flag");
 const ORMap = require("./ormap");
 const Vote = require("./vote");
 
-const Clocks = protobufHelper.moduleRoot.cloudstate.crdt.CrdtClock;
 const Empty = protobufHelper.moduleRoot.google.protobuf.Empty;
 
 /**
- * Instantiate a CRDT for the given wire protobuf state.
+ * All CRDTs and CRDT support classes.
  *
- * @param state
- * @returns {Flag|LWWRegister|ORSet|GSet|PNCounter|GCounter|ORMap|Vote}
+ * @namespace cloudstate.crdt
  */
+
+/**
+ * A Conflict-free Replicated Data Type.
+ *
+ * @interface cloudstate.crdt.CrdtState
+ */
+
+/**
+ * A clock that may be used by {@link cloudstate.crdt.LWWRegister}.
+ *
+ * @typedef cloudstate.crdt.Clock
+ */
+
+/**
+ * An enum of all clocks that can be used by {@link cloudstate.crdt.LWWRegister}.
+ *
+ * @name cloudstate.crdt.Clocks
+ * @enum {cloudstate.crdt.Clock}
+ * @property DEFAULT The default clock, uses the machines system time.
+ * @property REVERSE A reverse clock, for achieving first-write-wins semantics.
+ * @property CUSTOM A custom clock.
+ * @property CUSTOM_AUTO_INCREMENT A custom clock that automatically increments if the current clock value
+ * is less than the existing clock value.
+ */
+const Clocks = protobufHelper.moduleRoot.cloudstate.crdt.CrdtClock;
+
 function createCrdtForState(state) {
   if (state.gcounter) {
     return new GCounter();

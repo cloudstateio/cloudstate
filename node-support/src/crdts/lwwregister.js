@@ -20,6 +20,19 @@ const AnySupport = require("../protobuf-any");
 
 const Clocks = protobufHelper.moduleRoot.cloudstate.crdt.CrdtClock;
 
+/**
+ * @classdesc A Last-Write-Wins Register CRDT.
+ *
+ * A last write wins register uses a clock to determine which of two concurrent updates should win. The clock is
+ * represented as a number. The default clock uses the proxies system time, custom clocks can supply a custom number
+ * to be used. If two clock values are equal, the write from the node with the lowest address wins.
+ *
+ * @constructor cloudstate.crdt.LWWRegister
+ * @implements cloudstate.crdt.CrdtState
+ * @param {cloudstate.Serializable} value A value to hold in the register.
+ * @param {cloudstate.crdt.Clock} [clock=Clocks.DEFAULT] The clock to use.
+ * @param {number} [customClockValue=0] The custom clock value, if using a custom clock.
+ */
 function LWWRegister(value, clock = Clocks.DEFAULT, customClockValue = 0) {
   if (value === null || value === undefined) {
     throw new Error("LWWRegister must be instantiated with an initial value.")
@@ -35,6 +48,14 @@ function LWWRegister(value, clock = Clocks.DEFAULT, customClockValue = 0) {
     customClockValue: 0
   };
 
+  /**
+   * The value of this register.
+   *
+   * Setting it will cause it to be set with the default clock.
+   *
+   * @name cloudstate.crdt.LWWRegister#value
+   * @type {cloudstate.Serializable}
+   */
   Object.defineProperty(this, "value", {
     get: function () {
       return currentValue;
@@ -45,11 +66,12 @@ function LWWRegister(value, clock = Clocks.DEFAULT, customClockValue = 0) {
   });
 
   /**
-   * Set the the value.
+   * Set the the value using a custom clock.
    *
-   * @param value The value to set.
-   * @param clock The clock.
-   * @param customClockValue Ignored if a custom clock isn't specified.
+   * @function cloudstate.crdt.LWWRegister#setWithClock
+   * @param {cloudstate.Serializable} value The value to set.
+   * @param {cloudstate.crdt.Clock} [clock=Clocks.DEFAULT] The clock.
+   * @param {number} [customClockValue=0] Ignored if a custom clock isn't specified.
    */
   this.setWithClock = function (value, clock = Clocks.DEFAULT, customClockValue = 0) {
     delta.value = AnySupport.serialize(value, true, true);

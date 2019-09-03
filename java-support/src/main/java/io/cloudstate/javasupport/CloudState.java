@@ -75,7 +75,7 @@ public final class CloudState {
 
     /**
      * Register an annotated event sourced entity.
-     * <p/>
+     * <p>
      * The entity class must be annotated with {@link io.cloudstate.javasupport.eventsourced.EventSourcedEntity}.
      *
      * @param entityClass The entity class.
@@ -113,7 +113,7 @@ public final class CloudState {
 
     /**
      * Register an event sourced entity factor.
-     * <p/>
+     * <p>
      * This is a low level API intended for custom (eg, non reflection based) mechanisms for implementing the entity.
      *
      * @param factory The event sourced factory.
@@ -134,7 +134,7 @@ public final class CloudState {
 
     /**
      * Register an annotated CRDT entity.
-     * <p/>
+     * <p>
      * The entity class must be annotated with {@link io.cloudstate.javasupport.crdt.CrdtEntity}.
      *
      * @param entityClass The entity class.
@@ -161,7 +161,7 @@ public final class CloudState {
 
     /**
      * Register an CRDt entity factory.
-     * <p/>
+     * <p>
      * This is a low level API intended for custom (eg, non reflection based) mechanisms for implementing the entity.
      *
      * @param factory The CRDT factory.

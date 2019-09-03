@@ -10,10 +10,10 @@ import java.lang.annotation.Target;
 
 /**
  * Annotation used to indicate that the annotated parameter accepts an entity id.
- * <p/>
+ * <p>
  * This parameter may appear on handler methods and constructors for any class that provides behavior for stateful
  * service entity.
- * <p/>
+ * <p>
  * The type of the parameter must be {@link String}.
  */
 @CloudStateAnnotation

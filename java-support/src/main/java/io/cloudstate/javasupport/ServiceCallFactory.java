@@ -2,8 +2,8 @@ package io.cloudstate.javasupport;
 
 /**
  * A service call factory.
- * <p/>
- * This is used to create {@link ServiceCall's} that can be passed to {@link EffectContext#effect(ServiceCall)} and
+ * <p>
+ * This is used to create {@link ServiceCall}'s that can be passed to {@link EffectContext#effect(ServiceCall)} and
  * {@link ClientActionContext#forward(ServiceCall)} f}.
  */
 public interface ServiceCallFactory {

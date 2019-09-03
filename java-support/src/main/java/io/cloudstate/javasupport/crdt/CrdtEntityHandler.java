@@ -6,9 +6,9 @@ import java.util.Optional;
 
 /**
  * Low level interface for handling CRDT commands.
- * <p/>
+ * <p>
  * These are instantiated by a {@link CrdtEntityFactory}.
- * <p/>
+ * <p>
  * Generally, this should not be used, rather, a {@link CrdtEntity} annotated class should be used.
  */
 public interface CrdtEntityHandler {

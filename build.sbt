@@ -95,9 +95,20 @@ lazy val docs = (project in file("docs"))
     paradoxTheme := Some(builtinParadoxTheme("generic")),
     mappings in (Compile, paradox) ++= {
       val javaApiDocs = (doc in (`java-support`, Compile)).value
+
+      // Run the npm docs build
+      val nodeSupportDir = (baseDirectory in ThisBuild).value / "node-support"
+      import sys.process._
+      val rc = Process("npm run jsdoc", nodeSupportDir).run(streams.value.log).exitValue()
+      if (rc != 0) sys.error(s"jsdoc failed with return code $rc")
+      val javaScriptApiDocs = nodeSupportDir / "apidocs"
+
       ((javaApiDocs ** "*") pair Path.relativeTo(javaApiDocs)).map {
         case (file, path) => file -> s"user/lang/java/api/$path"
-      }
+      } ++
+        ((javaScriptApiDocs ** "*") pair Path.relativeTo(javaScriptApiDocs)).map {
+          case (file, path) => file -> s"user/lang/javascript/api/$path"
+        }
     }
   )
 
@@ -550,6 +561,9 @@ lazy val `java-support` = (project in file("java-support"))
       val javaSourceDir = (javaSource in Compile).value.getAbsolutePath
       (sources in (Compile, doc)).value.filter(_.getAbsolutePath.startsWith(javaSourceDir))
     },
+    // javadoc (I think java 9 onwards) refuses to compile javadocs if it can't compile the entire source path.
+    // but since we have java files depending on Scala files, we need to include ourselves on the classpath.
+    dependencyClasspath in (Compile, doc) := (fullClasspath in Compile).value,
     
     libraryDependencies ++= Seq(
       // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that

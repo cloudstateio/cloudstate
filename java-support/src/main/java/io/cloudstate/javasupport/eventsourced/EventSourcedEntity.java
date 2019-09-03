@@ -16,7 +16,7 @@ import java.lang.annotation.Target;
 public @interface EventSourcedEntity {
     /**
      * The name of the persistence id.
-     * <p/>
+     * <p>
      * If not specifed, defaults to the entities unqualified classname. It's strongly recommended that you specify it
      * explicitly.
      */

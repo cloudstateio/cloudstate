@@ -23,8 +23,88 @@ const CloudState = require("./cloudstate");
 
 const eventSourcedServices = new EventSourcedServices();
 
-module.exports = class EventSourced {
+/**
+ * An event sourced command handler.
+ *
+ * @callback cloudstate.EventSourced~commandHandler
+ * @param {Object} command The command message, this will be of the type of the gRPC service call input type.
+ * @param {cloudstate.Serializable} state The entity state.
+ * @param {cloudstate.EventSourced.EventSourcedCommandContext} context The command context.
+ * @returns {undefined|Object} The message to reply with, it must match the gRPC service call output type for this
+ * command.
+ */
 
+/**
+ * An event sourced event handler.
+ *
+ * @callback cloudstate.EventSourced~eventHandler
+ * @param {cloudstate.Serializable} event The event.
+ * @param {cloudstate.Serializable} state The entity state.
+ * @returns {cloudstate.Serializable} The new entity state.
+ */
+
+/**
+ * An event sourced entity behavior.
+ *
+ * @typedef cloudstate.EventSourced~behavior
+ * @property {Object<String, cloudstate.EventSourced~commandHandler>} commandHandlers The command handlers.
+ *
+ * The names of the properties must match the names of the service calls specified in the gRPC descriptor for this
+ * event sourced entities service.
+ * @property {Object<String, cloudstate.EventSourced~eventHandler>} eventHandlers The event handlers.
+ *
+ * The names of the properties must match the short names of the events.
+ */
+
+/**
+ * An event sourced entity behavior callback.
+ *
+ * This callback takes the current entity state, and returns a set of handlers to handle commands and events for it.
+ *
+ * @callback cloudstate.EventSourced~behaviorCallback
+ * @param {cloudstate.Serializable} state The entity state.
+ * @returns {cloudstate.EventSourced~behavior} The new entity state.
+ */
+
+/**
+ * Initial state callback.
+ *
+ * This is invoked if the entity is started with no snapshot.
+ *
+ * @callback cloudstate.EventSourced~initialCallback
+ * @param {string} entityId The entity id.
+ * @returns {cloudstate.Serializable} The entity state.
+ */
+
+/**
+ * Options for an event sourced entity.
+ *
+ * @typedef cloudstate.EventSourced~options
+ * @property {string} [persistenceId="entity"] A persistence id for all event source entities of this type. This will be prefixed
+ * onto the entityId when storing the events for this entity.
+ * @property {number} [snapshotEvery=100] A snapshot will be persisted every time this many events are emitted.
+ * @property {array<string>} [includeDirs=["."]] The directories to include when looking up imported protobuf files.
+ * @property {boolean} [serializeAllowPrimitives=false] Whether serialization of primitives should be supported when
+ * serializing events and snapshots.
+ * @property {boolean} [serializeFallbackToJson=false] Whether serialization should fallback to using JSON if an event
+ * or snapshot can't be serialized as a protobuf.
+ */
+
+/**
+ * An event sourced entity.
+ *
+ * @memberOf cloudstate
+ * @extends cloudstate.Entity
+ */
+class EventSourced {
+
+  /**
+   * Create a new event sourced entity.
+   *
+   * @param {string|string[]} desc A descriptor or list of descriptors to parse, containing the service to serve.
+   * @param {string} serviceName The fully qualified name of the service that provides this entities interface.
+   * @param {cloudstate.EventSourced~options=} options The options for this event sourced entity
+   */
   constructor(desc, serviceName, options) {
 
     this.options = {
@@ -60,16 +140,51 @@ module.exports = class EventSourced {
     return eventSourcedServices.entityType();
   }
 
+  /**
+   * Lookup a protobuf message type.
+   *
+   * This is provided as a convenience to lookup protobuf message types for use with events and snapshots.
+   *
+   * @param {string} messageType The fully qualified name of the type to lookup.
+   */
   lookupType(messageType) {
     return this.root.lookupType(messageType);
   }
 
+  /**
+   * The initial state callback.
+   *
+   * @member cloudstate.EventSourced#initial
+   * @type cloudstate.EventSourced~initialCallback
+   */
+
+  /**
+   * Set the initial state callback.
+   *
+   * @param {cloudstate.EventSourced~initialCallback} callback The initial state callback.
+   * @return {cloudstate.EventSourced} This entity.
+   */
   setInitial(callback) {
     this.initial = callback;
+    return this;
   }
 
+  /**
+   * The behavior callback.
+   *
+   * @member cloudstate.EventSourced#behavior
+   * @type cloudstate.EventSourced~behaviorCallback
+   */
+
+  /**
+   * Set the behavior callback.
+   *
+   * @param {cloudstate.EventSourced~behaviorCallback} callback The behavior callback.
+   * @return {cloudstate.EventSourced} This entity.
+   */
   setBehavior(callback) {
     this.behavior = callback;
+    return this;
   }
 
   register(allEntities) {
@@ -83,4 +198,6 @@ module.exports = class EventSourced {
 
     return server.start(options);
   }
-};
+}
+
+module.exports = EventSourced;

@@ -2,7 +2,7 @@ package io.cloudstate.javasupport.crdt;
 
 /**
  * A Grow-only Counter.
- * <p/>
+ * <p>
  * A Grow-only Counter can be incremented, but can't be decremented.
  */
 public interface GCounter extends Crdt {
