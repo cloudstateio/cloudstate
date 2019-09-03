@@ -7,11 +7,11 @@ public interface BehaviorContext extends EventSourcedContext {
 
     /**
      * Become the new behavior specified by the given behavior objects.
-     * <p/>
+     * <p>
      * More than one object may be passed to allow composing behaviors from multiple objects. If two objects define
      * a handler for the same event or command, the one that comes earlier in the supplied array of objects is the one
      * that is used.
-     * <p/>
+     * <p>
      * Note that event and snapshot handlers, where handlers are matched on a given behavior object by specificity
      * (ie, a handler for a child class will take precedence over a handler for a parent class), this precedence is
      * not honored across multiple behaviors. So, if the first behavior defines an event handler for {@link Object},

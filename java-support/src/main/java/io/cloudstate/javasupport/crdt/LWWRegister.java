@@ -2,10 +2,10 @@ package io.cloudstate.javasupport.crdt;
 
 /**
  * A Last-Write-Wins Register.
- * <p/>
+ * <p>
  * This uses a clock value to determine which of two concurrent writes should win. When both clock values are the same,
  * an ordering defined over the node addresses is used to break the tie.
- * <p/>
+ * <p>
  * By default, the clock used is the clock of the node that set the value. This can be affected by clock skew, which
  * means two successive writes delegated to two separate nodes could result in the first one winning. This can be
  * avoided by using a custom clock with a domain specific clock value, if such a causally ordered value is available.
@@ -54,16 +54,16 @@ public interface LWWRegister<T> extends Crdt {
 
         /**
          * A reverse clock, based on the system clock.
-         * <p/>
+         * <p>
          * Using this effectively achieves First-Write-Wins semantics.
-         * <p/>
+         * <p>
          * This is susceptible to the same clock skew problems as the default clock.
          */
         REVERSE,
 
         /**
          * A custom clock.
-         * <p/>
+         * <p>
          * The custom clock value is passed by using the <code>customClockValue</code> parameter on the
          * {@link LWWRegister#set(Object, Clock, long)} method. The value should be a domain specific monotonically
          * increasing value. For example, if the source of the value for this register is a single device, that device
@@ -74,11 +74,11 @@ public interface LWWRegister<T> extends Crdt {
 
         /**
          * A custom clock, that automatically increments the custom value if the local clock value is greater than it.
-         * <p/>
+         * <p>
          * This is like {@link Clock#CUSTOM}, however if when performing the update in the proxy, it's found that the
          * clock value of the register is greater than the specified clock value for the update, the proxy will instead
          * use the current clock value of the register plus one.
-         * <p/>
+         * <p>
          * This can guarantee that updates done on the same node will be causally ordered (addressing problems caused by
          * the system clock being adjusted), but will not guarantee causal ordering for updates on different nodes,
          * since it's possible that an update on a different node has not yet been replicated to this node.

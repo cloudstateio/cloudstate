@@ -1,0 +1,28 @@
+{
+    "tags": {
+        "allowUnknownTags": true
+    },
+    "source": {
+        "include": [
+            "src",
+            "index.js",
+            "README.md"
+        ],
+        "exclude": [],
+        "includePattern": ".+\\.js(doc)?$"
+    },
+    "plugins": ["plugins/markdown"],
+    "templates": {
+        "cleverLinks": true,
+        "monospaceLinks": false,
+        "theme": "cosmo",
+        "includeDate": false,
+        "systemName": "CloudState"
+    },
+    "opts": {
+        "destination": "./apidocs/",
+        "encoding": "utf8",
+        "recurse": true,
+        "template": "./node_modules/ink-docstrap/template"
+    }
+}

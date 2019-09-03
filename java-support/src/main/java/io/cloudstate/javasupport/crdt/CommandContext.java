@@ -7,7 +7,7 @@ import java.util.Optional;
 
 /**
  * Context for handling a command.
- * </p>
+ * <p>
  * This may be passed to any {@link CommandHandler} annotated element.
  */
 public interface CommandContext extends CrdtContext, CrdtFactory, EffectContext, ClientActionContext {
@@ -21,7 +21,7 @@ public interface CommandContext extends CrdtContext, CrdtFactory, EffectContext,
 
     /**
      * The name of the command.
-     * </p>
+     * <p>
      * Corresponds to the name of the rpc call in the protobuf definition.
      *
      * @return The name of the command.
@@ -30,7 +30,7 @@ public interface CommandContext extends CrdtContext, CrdtFactory, EffectContext,
 
     /**
      * Delete the CRDT.
-     * </p>
+     * <p>
      * When a CRDT is deleted, it may not be created again. Additionally, CRDT deletion results in tombstones that
      * get accumulated for the life of the cluster. If you expect to delete CRDTs frequently, it's recommended that you
      * store them in a single or sharded {@link ORMap}, rather than individual CRDTs.

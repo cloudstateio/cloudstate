@@ -4,7 +4,7 @@ import java.util.*;
 
 /**
  * Convenience wrapper class for {@link ORMap} that uses {@link PNCounter}'s for values.
- * <p/>
+ * <p>
  * This offers a few extra methods for interacting with the map.
  *
  * @param <K> The type for keys.
@@ -17,7 +17,7 @@ public final class PNCounterMap<K> extends AbstractORMapWrapper<K, Long, PNCount
 
     /**
      * Get the value for the given key.
-     * <p/>
+     * <p>
      * This differs from {@link Map#get(Object)} in that it returns a primitive <code>long</code>, and thus avoids an
      * allocation.
      *
@@ -35,7 +35,7 @@ public final class PNCounterMap<K> extends AbstractORMapWrapper<K, Long, PNCount
 
     /**
      * Increment the counter at the given key by the given amount.
-     * <p/>
+     * <p>
      * The counter will be created if it is not already in the map.
      *
      * @param key The key of the counter.
@@ -48,7 +48,7 @@ public final class PNCounterMap<K> extends AbstractORMapWrapper<K, Long, PNCount
 
     /**
      * Decrement the counter at the given key by the given amount.
-     * <p/>
+     * <p>
      * The counter will be created if it is not already in the map.
      *
      * @param key The key of the counter.

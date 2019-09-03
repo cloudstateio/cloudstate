@@ -4,9 +4,9 @@ import java.util.Set;
 
 /**
  * A Grow-only Set.
- * <p/>
+ * <p>
  * A Grow-only Set can have elements added to it, but cannot have elements removed from it.
- * <p/>
+ * <p>
  * Care needs to be taken to ensure that the serialized value of elements in the set is stable. For example, if using
  * protobufs, the serialized value of any maps contain in the protobuf is not stable, and can yield a different set of
  * bytes for the same logically equal element. Hence maps, should be avoided. Additionally, some changes in protobuf

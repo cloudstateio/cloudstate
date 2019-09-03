@@ -2,7 +2,7 @@ package io.cloudstate.javasupport.crdt;
 
 /**
  * A Positive-Negative Counter.
- * </p>
+ * <p>
  * A Positive-Negative Counter is a counter that allows both incrementing, and decrementing. It is based on two
  * {@link GCounter}'s, a positive one that is incremented for every increment, and a negative one that is incremented
  * for every decrement. The current value of the counter is calculated by subtracting the negative counter from the
@@ -18,7 +18,7 @@ public interface PNCounter extends Crdt {
 
     /**
      * Increment the counter.
-     * <p/>
+     * <p>
      * If <code>by</code> is negative, then the counter will be decremented by that much instead.
      *
      * @param by The amount to increment the counter by.
@@ -28,7 +28,7 @@ public interface PNCounter extends Crdt {
 
     /**
      * Decrement the counter.
-     * <p/>
+     * <p>
      * If <code>by</code> is negative, then the counter will be incremented by that much instead.
      *
      * @param by The amount to decrement the counter by.

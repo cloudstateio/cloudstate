@@ -2,9 +2,9 @@ package io.cloudstate.javasupport.crdt;
 
 /**
  * Factory for creating CRDTs.
- * <p/>
+ * <p>
  * This is used both by CRDT contexts that allow creating CRDTs, as well as by CRDTs that allow nesting other CRDTs.
- * <p/>
+ * <p>
  * CRDTs may only be created by a supplied CRDT factory, CRDTs created any other way will not be known by the
  * library and so won't have their deltas synced to and from the proxy.
  */

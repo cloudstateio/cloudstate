@@ -14,6 +14,26 @@
  * limitations under the License.
  */
 
+/**
+ * The CloudState namespace.
+ *
+ * @namespace cloudstate
+ */
+
+/**
+ * A CloudState entity.
+ *
+ * @interface cloudstate.Entity
+ */
+
+/**
+ * Start a user function server with just this entity.
+ *
+ * @function cloudstate.Entity#start
+ * @param {cloudstate.CloudState~startOptions=} options The options for starting the server.
+ * @returns {number} The port number that the server bound to.
+ */
+
 const path = require("path");
 const grpc = require("grpc");
 const protoLoader = require("@grpc/proto-loader");
@@ -40,7 +60,24 @@ try {
   // ignore, if we can't find it, no big deal
 }
 
-module.exports = class CloudState {
+/**
+ * A CloudState server.
+ *
+ * @memberOf cloudstate
+ */
+class CloudState {
+
+  /**
+   * @typedef cloudstate.CloudState~options
+   * @property {string} [serviceName=<name from package.json>] The name of this service.
+   * @property {string} [serviceVersion=<version from package.json>] The version of this service.
+   */
+
+  /**
+   * Create a new cloudstate server.
+   *
+   * @param {cloudstate.CloudState~options=} options The options for this server.
+   */
   constructor(options) {
     try {
       this.proto = fs.readFileSync("user-function.desc");
@@ -49,7 +86,6 @@ module.exports = class CloudState {
       throw e;
     }
 
-    // we could auto discover this info using https://github.com/indexzero/node-pkginfo/blob/master/lib/pkginfo.js
     this.options = {
       ...serviceInfo,
       ...options
@@ -58,10 +94,31 @@ module.exports = class CloudState {
     this.entities = [];
   }
 
+  /**
+   * Add an entity to this server.
+   *
+   * @param {cloudstate.Entity} entities The entities to add.
+   * @returns {cloudstate.CloudState} This server.
+   */
   addEntity(...entities) {
     this.entities = this.entities.concat(entities);
+    return this;
   }
 
+  /**
+   * Options for starting a server.
+   *
+   * @typedef cloudstate.CloudState~startOptions
+   * @property {string} [bindAddress="0.0.0.0"] The address to bind to.
+   * @property {number} [bindPort=8080] The port to bind to, specify zero for a random ephemeral port.
+   */
+
+  /**
+   * Start this server.
+   *
+   * @param {cloudstate.CloudState~startOptions=} options The options for starting.
+   * @returns {number} The port that was bound to, useful for when a random ephemeral port was requested.
+   */
   start(options) {
     const opts = {
       ...{
@@ -140,9 +197,14 @@ module.exports = class CloudState {
     callback(null, {});
   }
 
+  /**
+   * Shutdown this server.
+   */
   shutdown() {
     this.server.tryShutdown(() => {
       console.log("gRPC server has shutdown.");
     });
   }
-};
+}
+
+module.exports = CloudState;

@@ -35,6 +35,33 @@ const CloudStateSupportedPrimitiveTypes = new Set();
 
 const CloudStateJson = "json.cloudstate.io/";
 
+
+/**
+ * This is any type that has been returned by the protobufjs Message.create method.
+ *
+ * It should have a encode() method on it.
+ *
+ * @typedef cloudstate.SerializableProtobufMessage
+ * @type {Object}
+ */
+
+/**
+ * Any type that has a type property on it can be serialized as JSON, with the value of the type property describing
+ * the type of the value.
+ *
+ * @typedef cloudstate.TypedJson
+ * @type {Object}
+ * @property {string} type The type of the object.
+ */
+
+/**
+ * A type that is serializable.
+ *
+ * @typedef cloudstate.Serializable
+ * @type {cloudstate.SerializableProtobufMessage|cloudstate.TypedJson|Object|string|number|boolean|Long|Buffer}
+ */
+
+
 module.exports = class AnySupport {
   constructor(root) {
     this.root = root;
@@ -91,6 +118,7 @@ module.exports = class AnySupport {
    * - Longs
    * - any protobufjs types
    * - objects (based on stable JSON serialization)
+   * @private
    */
   static toComparable(obj) {
     // When outputting strings, we prefix with a letter for the type, to guarantee uniqueness of different types.
@@ -123,6 +151,7 @@ module.exports = class AnySupport {
    *        is not a protobuf, but defines a type property.
    * @param requireJsonType If fallbackToJson is true, then if this is true, a property
    *        called type is required.
+   * @private
    */
   static serialize(obj, allowPrimitives, fallbackToJson, requireJsonType = false) {
     if (allowPrimitives) {
@@ -167,6 +196,7 @@ module.exports = class AnySupport {
    * Deserialize an any using the given protobufjs root object.
    *
    * @param any The any.
+   * @private
    */
   deserialize(any) {
     const url = any.type_url;

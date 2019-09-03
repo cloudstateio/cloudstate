@@ -24,8 +24,59 @@ const support = require("./crdt-support");
 
 const crdtServices = new support.CrdtServices();
 
+/**
+ * Options for creating a CRDT entity.
+ *
+ * @typedef cloudstate.crdt.Crdt~options
+ * @property {array<string>} includeDirs The directories to include when looking up imported protobuf files.
+ */
+
+/**
+ * A command handler callback.
+ *
+ * @callback cloudstate.crdt.Crdt~commandHandler
+ * @param {Object} command The command message, this will be of the type of the gRPC service call input type.
+ * @param {cloudstate.crdt.CrdtCommandContext} context The command context.
+ * @returns {undefined|Object} The message to reply with, it must match the gRPC service call output type for this
+ * command.
+ */
+
+/**
+ * A state set handler callback.
+ *
+ * This is invoked whenever a new state is set on the CRDT, to allow the state to be enriched with domain specific
+ * properties and methods. This may be due to the state being set explicitly from a command handler on the command
+ * context, or implicitly as the default value, or implicitly when a new state is received from the proxy.
+ *
+ * @callback cloudstate.crdt.Crdt~onStateSetCallback
+ * @param {cloudstate.crdt.CrdtState} state The state that was set.
+ * @param {string} entityId The id of the entity.
+ */
+
+/**
+ * A callback that is invoked to create a default value if the CloudState proxy doesn't send an existing one.
+ *
+ * @callback cloudstate.crdt.Crdt~defaultValueCallback
+ * @param {string} entityId The id of the entity.
+ * @returns {Object} The default value to use for this entity.
+ */
+
+/**
+ * A CRDT entity.
+ *
+ * @memberOf cloudstate.crdt
+ * @extends cloudstate.Entity
+ */
 class Crdt {
 
+  /**
+   * Create a CRDT entity.
+   *
+   * @param desc {string|string[]} The file name of a protobuf descriptor or set of descriptors containing the
+   * CRDT service.
+   * @param serviceName {string} The fully qualified name of the gRPC service that this CRDT implements.
+   * @param options {cloudstate.crdt.Crdt~options=} The options.
+   */
   constructor(desc, serviceName, options) {
 
     this.options = {
@@ -52,7 +103,32 @@ class Crdt {
     });
     this.grpc = grpc.loadPackageDefinition(packageDefinition);
 
+    /**
+     * The command handlers.
+     *
+     * The names of the properties must match the names of the service calls specified in the gRPC descriptor for this
+     * CRDTs service.
+     *
+     * @type {Object.<string, cloudstate.crdt.Crdt~commandHandler>}
+     */
+    this.commandHandlers = {};
+
+    /**
+     * A callback that is invoked whenever the state is set for this CRDT.
+     *
+     * This is invoked whenever a new state is set on the CRDT, to allow the state to be enriched with domain specific
+     * properties and methods. This may be due to the state being set explicitly from a command handler on the command
+     * context, or implicitly as the default value, or implicitly when a new state is received from the proxy.
+     *
+     * @member {cloudstate.crdt.Crdt~onStateSetCallback} cloudstate.crdt.Crdt#onStateSet
+     */
     this.onStateSet = (state, entityId) => undefined;
+
+    /**
+     * A callback that is invoked to create a default value if the CloudState proxy doesn't send an existing one.
+     *
+     * @member {cloudstate.crdt.Crdt~defaultValueCallback} cloudstate.crdt.Crdt#defaultValue
+     */
     this.defaultValue = (entityId) => null;
   }
 
@@ -62,49 +138,14 @@ class Crdt {
 
   /**
    * Lookup a Protobuf message type.
+   *
+   * This is provided as a convenience to lookup protobuf message types for use, for example, as values in sets and
+   * maps.
+   *
+   * @param {string} messageType The fully qualified name of the type to lookup.
    */
   lookupType(messageType) {
     return this.root.lookupType(messageType);
-  }
-
-  /**
-   * Set the command handlers for this CRDT service.
-   *
-   * @param handlers An object, with keys equalling the names of the commands (as they appear in the protobuf file)
-   *        and values being functions that take the command, and context.
-   */
-  setCommandHandlers(handlers) {
-    this.commandHandlers = handlers;
-  }
-
-  /**
-   * Set a callback which is invoked anytime the current state of the entity is set.
-   *
-   * This can be used to initialise the CRDT with transient state, such as a default value generator for ORMap.
-   *
-   * Events that can trigger this:
-   *   - Setting the state manually on the context, via ctx.state = ...
-   *   - The proxy pushing the current state on init.
-   *   - The proxy pushing a new state to replace the current state.
-   *
-   * It is not called when deltas are received.
-   *
-   * @param handler A function that takes the state, and the entity id.
-   */
-  setOnStateSet(handler) {
-    this.onStateSet = handler;
-  }
-
-  /**
-   * Set a callback for generating the default CRDT when no state is set.
-   *
-   * This can be used to ensure that command handlers always have a state to work with, eliminating the need for
-   * null checks.
-   *
-   * @param callback A function that takes the current entity id, and returns a CRDT.
-   */
-  setDefaultValue(callback) {
-    this.defaultValue = callback;
   }
 
   register(allEntities) {

@@ -38,6 +38,20 @@ function mapIterator(iter, f) {
   return mapped;
 }
 
+/**
+ * @classdesc An Observed-Removed Map CRDT.
+ *
+ * Observed-Removed-Map's are a mapping of keys (which can be any {@link cloudstate.Serializable}), to CRDTs. Values
+ * of the map are merged together. Elements can be added and removed, however, when an element is removed and then
+ * added again, it's possible that the old value will be merged with the new, depending on whether the remove was
+ * replicated to all nodes before the add was.
+ *
+ * Note that while the map may contain different types of CRDTs for different keys, a given key may not change its type,
+ * and doing so will likely result in the CRDT entering a non mergable state, from which it can't recover.
+ *
+ * @constructor cloudstate.crdt.ORMap
+ * @implements cloudstate.crdt.CrdtState
+ */
 function ORMap() {
   // Map of a comparable form (that compares correctly using ===) to an object that holds the
   // actual key and the value.
@@ -59,42 +73,118 @@ function ORMap() {
    * If using default values, the get method should not be used in queries where an empty value for the CRDT means
    * the value is not present.
    *
-   * @param key The key the default value is being generated for.
-   * @returns The default value, or undefined if no default value should be returned.
+   * @callback cloudstate.crdt.ORMap~defaultValueCallback
+   * @param {cloudstate.Serializable} key The key the default value is being generated for.
+   * @returns {undefined|cloudstate.crdt.CrdtState} The default value, or undefined if no default value should be returned.
+   */
+
+  /**
+   * Generator for default values.
+   *
+   * This is invoked by get when the current map has no CRDT defined for the key.
+   *
+   * If this returns a CRDT, it will be added to the map.
+   *
+   * Care should be taken when using this, since it means that the get method can trigger elements to be created.
+   * If using default values, the get method should not be used in queries where an empty value for the CRDT means
+   * the value is not present.
+   *
+   * @name cloudstate.crdt.ORMap#defaultValue
+   * @type {cloudstate.crdt.ORMap~defaultValueCallback}
    */
   this.defaultValue = (key) => undefined;
 
+  /**
+   * Check whether this map contains a value of the given key.
+   *
+   * @function cloudstate.crdt.ORMap#has
+   * @param {cloudstate.Serializable} key The key to check.
+   * @returns {boolean} True if this map contains a value of the given key.
+   */
   this.has = function(key) {
     return currentValue.has(AnySupport.toComparable(key));
   };
 
+  /**
+   * The number of elements in this map.
+   *
+   * @name cloudstate.crdt.ORMap#size
+   * @type {number}
+   * @readonly
+   */
   Object.defineProperty(this, "size", {
     get: function () {
       return currentValue.size;
     }
   });
 
+  /**
+   * Callback for handling elements iterated through by {@link cloudstate.crdt.ORMap#forEach}.
+   *
+   * @callback cloudstate.crdt.ORMap~forEachCallback
+   * @param {cloudstate.crdt.CrdtState} value The CRDT value.
+   * @param {cloudstate.Serializable} key The key.
+   * @param {cloudstate.ORMap} This map.
+   */
+
+  /**
+   * Execute the given callback for each element.
+   *
+   * @function cloudstate.crdt.ORMap#forEach
+   * @param {cloudstate.crdt.ORMap~forEachCallback} callback The callback to handle each element.
+   */
   this.forEach = function(callback) {
     return currentValue.forEach((value, key) => callback(value.value, value.key, this));
   };
 
+  /**
+   * Return an iterator of the entries of this map.
+   *
+   * @function cloudstate.crdt.ORMap#entries
+   * @returns {Iterator<Array>}
+   */
   this.entries = function() {
     // For some reason, these arrays are key, value, even though callbacks are passed value, key
     return mapIterator(currentValue.values(), value => [value.key, value.value]);
   };
 
+  /**
+   * Return an iterator of the entries of this map.
+   *
+   * @function cloudstate.crdt.ORMap#@@iterator
+   * @returns {iterator<Array>}
+   */
   this[Symbol.iterator] = function() {
     return entries();
   };
 
+  /**
+   * Return an iterator of the values of this map.
+   *
+   * @function cloudstate.crdt.ORMap#values
+   * @returns {iterator<cloudstate.crdt.CrdtState>}
+   */
   this.values = function() {
     return mapIterator(currentValue.values(), value => value.value);
   };
 
+  /**
+   * Return an iterator of the keys of this map.
+   *
+   * @function cloudstate.crdt.ORMap#keys
+   * @returns {iterator<cloudstate.Serializable>}
+   */
   this.keys = function() {
     return mapIterator(currentValue.values(), value => value.key);
   };
 
+  /**
+   * Get the value at the given key.
+   *
+   * @function {cloudstate.crdt.ORMap#get}
+   * @param {cloudstate.Serializable} key The key to get.
+   * @returns {undefined|cloudstate.crdt.CrdtState} The CRDT value, or undefined if no value is defined at that key.
+   */
   this.get = (key) => {
     const value = currentValue.get(AnySupport.toComparable(key));
     if (value !== undefined) {
@@ -108,9 +198,6 @@ function ORMap() {
     }
   };
 
-  /**
-   * Special representation that works with string keys
-   */
   const asObject = new Proxy({}, {
     get: (target, key) => this.get(key),
     set: (target, key, value) => this.set(key, value),
@@ -138,10 +225,28 @@ function ORMap() {
       } : undefined;
     }
   });
+
+  /**
+   * A representation of this map as an object.
+   *
+   * All entries whose keys are strings will be properties of this object, and setting any property of the object will
+   * insert that property as a key into the map.
+   *
+   * @name cloudstate.crdt.ORMap#asObject
+   * @type {Object<String, cloudstate.crdt.CrdtState>}
+   */
   Object.defineProperty(this, "asObject", {
     get: () => asObject
   });
 
+  /**
+   * Set the given value for the given key.
+   *
+   * @function cloudstate.crdt.ORMap#set
+   * @param {cloudstate.Serializable} key The key to set.
+   * @param {cloudstate.crdt.CrdtState} value The value to set.
+   * @return {cloudstate.crdt.ORMap} This map.
+   */
   this.set = function(key, value) {
     if (!value.hasOwnProperty("getStateAndResetDelta")) {
       throw new Error(util.format("Cannot add %o with value %o to ORMap, only CRDTs may be added as values.", key, value))
@@ -165,8 +270,15 @@ function ORMap() {
     return this;
   };
 
-  this.delete = function(element) {
-    const comparable = AnySupport.toComparable(element);
+  /**
+   * Delete the value at the given key.
+   *
+   * @function cloudstate.crdt.ORMap#delete
+   * @param {cloudstate.Serializable} key The key to delete.
+   * @return {cloudstate.crdt.ORMap} This map.
+   */
+  this.delete = function(key) {
+    const comparable = AnySupport.toComparable(key);
     if (currentValue.has(comparable)) {
       if (currentValue.size === 1) {
         this.clear();
@@ -175,14 +287,20 @@ function ORMap() {
         if (delta.added.has(comparable)) {
           delta.added.delete(comparable);
         } else {
-          const serializedElement = AnySupport.serialize(element, true, true);
-          delta.removed.set(comparable, serializedElement);
+          const serializedKey = AnySupport.serialize(key, true, true);
+          delta.removed.set(comparable, serializedKey);
         }
       }
     }
     return this;
   };
 
+  /**
+   * Clear all entries from this map.
+   *
+   * @function cloudstate.crdt.ORMap#clear
+   * @return {cloudstate.crdt.ORMap} This map.
+   */
   this.clear = function() {
     if (currentValue.size > 0) {
       delta.cleared = true;

@@ -6,7 +6,7 @@ import java.util.function.Consumer;
 
 /**
  * Context for a stream cancelled event.
- * <p/>
+ * <p>
  * This is sent to callbacks registered by {@link StreamedCommandContext#onCancel(Consumer)}.
  */
 public interface StreamCancelledContext extends CrdtContext, EffectContext {

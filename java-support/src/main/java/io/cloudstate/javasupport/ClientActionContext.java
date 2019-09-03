@@ -2,7 +2,7 @@ package io.cloudstate.javasupport;
 
 /**
  * Context that provides client actions, which include failing and forwarding.
- * <p/>
+ * <p>
  * These contexts are typically made available in response to commands.
  */
 public interface ClientActionContext extends Context {
@@ -15,10 +15,10 @@ public interface ClientActionContext extends Context {
 
     /**
      * Instruct the proxy to forward handling of this command to another entity served by this stateful function.
-     * <p/>
+     * <p>
      * The command will be forwarded after successful completion of handling this command, including any persistence
      * that this command does.
-     * <p/>
+     * <p>
      * {@link ServiceCall} instances can be created using the {@link ServiceCallFactory} obtained from any (including
      * this) contexts {@link Context#serviceCallFactory()} method.
      *

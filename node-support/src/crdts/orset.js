@@ -18,6 +18,14 @@ const debug = require("debug")("cloudstate-crdt");
 const util = require("util");
 const AnySupport = require("../protobuf-any");
 
+/**
+ * @classdesc An Observed-Removed Set CRDT.
+ *
+ * Observed-Removed-Set's are a set of {@link cloudstate.Serializable} values. Elements can be added and removed.
+ *
+ * @constructor cloudstate.crdt.ORSet
+ * @implements cloudstate.crdt.CrdtState
+ */
 function ORSet() {
   // Map of a comparable form (that compares correctly using ===) of the elements to the elements
   let currentValue = new Map();
@@ -27,20 +35,53 @@ function ORSet() {
     cleared: false
   };
 
+  /**
+   * Does this set contain the given element?
+   *
+   * @function cloudstate.crdt.ORSet#has
+   * @param {cloudstate.Serializable} element The element to check.
+   * @returns {boolean} True if the set contains the element.
+   */
   this.has = function (element) {
     return currentValue.has(AnySupport.toComparable(element));
   };
 
+  /**
+   * The number of elements in this set.
+   *
+   * @name cloudstate.crdt.ORSet#size
+   * @type {number}
+   * @readonly
+   */
   Object.defineProperty(this, "size", {
     get: function () {
       return currentValue.size;
     }
   });
 
+  /**
+   * Callback for handling elements iterated through by {@link cloudstate.crdt.ORSet#forEach}.
+   *
+   * @callback cloudstate.crdt.ORSet~forEachCallback
+   * @param {cloudstate.Serializable} element The element.
+   */
+
+  /**
+   * Execute the given callback for each element.
+   *
+   * @function cloudstate.crdt.ORSet#forEach
+   * @param {cloudstate.crdt.ORSet~forEachCallback} callback The callback to handle each element.
+   */
   this.forEach = function (callback) {
     return currentValue.forEach((value, key) => callback(value));
   };
 
+  /**
+   * Create an iterator for this set.
+   *
+   * @function cloudstate.crdt.ORSet#@@iterator
+   * @returns {iterator<cloudstate.Serializable>}
+   */
   this[Symbol.iterator] = function () {
     return currentValue.values();
   };
@@ -48,7 +89,9 @@ function ORSet() {
   /**
    * Add an element to this set.
    *
-   * @param element The element.
+   * @function cloudstate.crdt.ORSet#add
+   * @param {cloudstate.Serializable} element The element to add.
+   * @return {cloudstate.crdt.ORSet} This set.
    */
   this.add = function (element) {
     const comparable = AnySupport.toComparable(element);
@@ -64,6 +107,13 @@ function ORSet() {
     return this;
   };
 
+  /**
+   * Remove an element from this set.
+   *
+   * @function cloudstate.crdt.ORSet#delete
+   * @param {cloudstate.Serializable} element The element to delete.
+   * @return {cloudstate.crdt.ORSet} This set.
+   */
   this.delete = function (element) {
     const comparable = AnySupport.toComparable(element);
     if (currentValue.has(comparable)) {
@@ -82,6 +132,12 @@ function ORSet() {
     return this;
   };
 
+  /**
+   * Remove all elements from this set.
+   *
+   * @function cloudstate.crdt.ORSet#clear
+   * @return {cloudstate.crdt.ORSet} This set.
+   */
   this.clear = function () {
     if (currentValue.size > 0) {
       delta.cleared = true;

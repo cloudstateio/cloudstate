@@ -2,7 +2,7 @@ package io.cloudstate.javasupport.crdt;
 
 /**
  * A Vote CRDT.
- * <p/>
+ * <p>
  * This CRDT is used to allow all the nodes in a cluster to vote on a condition.
  */
 public interface Vote extends Crdt {

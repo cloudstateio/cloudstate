@@ -4,7 +4,7 @@ import java.util.*;
 
 /**
  * Convenience wrapper class for {@link ORMap} that uses {@link LWWRegister}'s for values.
- * <p/>
+ * <p>
  * This is useful as it allows the map to be used more idiomatically, with plain {@link Map#get(Object)} and
  * {@link Map#put(Object, Object)} calls for values.
  *
