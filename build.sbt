@@ -574,6 +574,11 @@ lazy val `java-support` = (project in file("java-support"))
     // javadoc (I think java 9 onwards) refuses to compile javadocs if it can't compile the entire source path.
     // but since we have java files depending on Scala files, we need to include ourselves on the classpath.
     dependencyClasspath in (Compile, doc) := (fullClasspath in Compile).value,
+    javacOptions in (Compile, doc) ++= Seq(
+      "-overview", ((javaSource in Compile).value / "overview.html").getAbsolutePath,
+      "-notimestamp",
+      "-doctitle", "CloudState Java Support"
+    ),
     
     libraryDependencies ++= Seq(
       // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
