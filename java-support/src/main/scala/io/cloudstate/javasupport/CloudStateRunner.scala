@@ -37,12 +37,13 @@ import scala.concurrent.Future
 import scala.collection.JavaConverters._
 
 object CloudStateRunner {
-  final case class Configuration(userFunctionInterface: String, userFunctionPort: Int) {
+  final case class Configuration(userFunctionInterface: String, userFunctionPort: Int, snapshotEvery: Int) {
     validate()
     def this(config: Config) = {
       this(
         userFunctionInterface      = config.getString("user-function-interface"),
         userFunctionPort           = config.getInt("user-function-port"),
+        snapshotEvery              = config.getInt("eventsourced.snapshot-every")
       )
     }
 
@@ -88,7 +89,7 @@ final class CloudStateRunner private[this](_system: ActorSystem, services: Map[S
 
       case (route, (serviceClass, eventSourcedServices: Map[String, EventSourcedStatefulService] @unchecked))
         if serviceClass == classOf[EventSourcedStatefulService] =>
-          val eventSourcedImpl = new EventSourcedImpl(system, eventSourcedServices, rootContext)
+          val eventSourcedImpl = new EventSourcedImpl(system, eventSourcedServices, rootContext, configuration)
           route orElse EventSourcedHandler.partial(eventSourcedImpl)
 
       case (route, (serviceClass, crdtServices: Map[String, CrdtStatefulService] @unchecked))

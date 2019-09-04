@@ -11,7 +11,7 @@ public interface ClientActionContext extends Context {
      *
      * @param errorMessage The error message to send to the client.
      */
-    void fail(String errorMessage);
+    RuntimeException fail(String errorMessage);
 
     /**
      * Instruct the proxy to forward handling of this command to another entity served by this stateful function.

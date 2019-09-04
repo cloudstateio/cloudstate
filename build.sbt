@@ -88,7 +88,8 @@ lazy val root = (project in file("."))
   .settings(common)
 
 lazy val docs = (project in file("docs"))
-  .enablePlugins(ParadoxPlugin)
+  .enablePlugins(ParadoxPlugin, ProtocPlugin)
+  .dependsOn(`java-support` % Test)
   .settings(
     common,
     name := "CloudState Documentation",
@@ -109,7 +110,16 @@ lazy val docs = (project in file("docs"))
         ((javaScriptApiDocs ** "*") pair Path.relativeTo(javaScriptApiDocs)).map {
           case (file, path) => file -> s"user/lang/javascript/api/$path"
         }
-    }
+    },
+    paradoxProperties in Compile ++= Map(
+      "javadoc.io.cloudstate.javasupport.base_url" -> ".../user/lang/java/api/index.html"
+    ),
+    inConfig(Test)(
+      sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
+        PB.protoSources += sourceDirectory.value / "proto",
+        PB.targets += PB.gens.java -> sourceManaged.value
+      )
+    )
   )
 
 lazy val proxyDockerBuild = settingKey[Option[(String, Option[String])]]("Docker artifact name and configuration file which gets overridden by the buildProxy command")

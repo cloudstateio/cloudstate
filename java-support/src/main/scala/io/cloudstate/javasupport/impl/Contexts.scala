@@ -41,7 +41,7 @@ private[impl] trait AbstractClientActionContext extends ClientActionContext {
   private final var error: Option[String] = None
   private final var forward: Option[Forward] = None
 
-  override final def fail(errorMessage: String): Unit = {
+  override final def fail(errorMessage: String): RuntimeException = {
     checkActive()
     if (error.isEmpty) {
       error = Some(errorMessage)

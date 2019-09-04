@@ -226,6 +226,7 @@ pre > code {
 }
 
 p code {
+    background-color: #eeeeee;
     border: none;
     color: #0c323b;
     padding: 0 0.2em !important;
@@ -235,6 +236,10 @@ li code {
     border: none;
     color: #0c323b;
     padding: 0 0.2em !important;
+}
+
+a > code {
+    color: #1070b2;
 }
 
 /* Github-like */
@@ -365,6 +370,22 @@ dl.tabbed dd.has-note blockquote {
     border-bottom-right-radius: 5px;
     margin-top: 0;
     font-style: italic;
+}
+
+/* definition lists */
+
+dl:not(.tabbed) dt {
+    float: left;
+    clear: left;
+    width: 120px;
+    text-align: right;
+    font-weight: bold;
+    color: #1070b2;
+}
+
+dl:not(.tabbed) dd {
+    margin: 0 0 0 130px;
+    padding: 0 0 0.5em 0;
 }
 
 /* blockquotes */

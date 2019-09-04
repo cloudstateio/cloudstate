@@ -1,15 +1,12 @@
 # Java
 
-* Explain how to create a CloudState Java project
-  - Example Maven `pom.xml`
-* Explain how to use the CloudState class
-  - Instantiating
-  - Registering an entity
-  - Starting the server
-* Explain context and parameter injection/reflection
+CloudState offers an idiomatic, annotation based Java support library for writing stateful services.
+
+@@toc { depth=1 }
 
 @@@ index
 
+* [Getting started](gettingstarted.md)
 * [Event sourcing](eventsourced.md)
 * [Conflict-free Replicated Data Types](crdt.md)
 * [Forwarding and effects](effects.md)
