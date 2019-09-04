@@ -23,6 +23,7 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.Flow
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 import com.google.protobuf.any.{Any => ScalaPbAny}
+import io.cloudstate.javasupport.CloudStateRunner.Configuration
 import io.cloudstate.javasupport.{Context, ServiceCallFactory, StatefulService}
 import io.cloudstate.javasupport.eventsourced._
 import io.cloudstate.javasupport.impl.{AbstractClientActionContext, AbstractEffectContext, ActivatableContext, AnySupport, FailInvoked, ResolvedEntityFactory, ResolvedServiceMethod}
@@ -52,12 +53,12 @@ final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
   }
 }
 
-final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventSourcedStatefulService], rootContext: Context) extends EventSourced {
+final class EventSourcedImpl(_system: ActorSystem, _services: Map[String, EventSourcedStatefulService], rootContext: Context, configuration: Configuration) extends EventSourced {
   private final val system = _system
   private final val services = _services.iterator.map({
     case (name, esss) =>
       // FIXME overlay configuration provided by _system
-      (name, if (esss.snapshotEvery == 0) esss.withSnapshotEvery(esss.snapshotEvery) else esss)
+      (name, if (esss.snapshotEvery == 0) esss.withSnapshotEvery(configuration.snapshotEvery) else esss)
   }).toMap
 
   /**

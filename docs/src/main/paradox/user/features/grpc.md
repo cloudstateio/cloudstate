@@ -3,12 +3,14 @@
 CloudState entities specify their interfaces using [gRPC](https://grpc.io) descriptors. Here is an example descriptor:
 
 ```proto
+syntax = "proto3";
+
 import "google/protobuf/empty.proto";
 import "cloudstate/entity_key.proto";
 
 package example.shoppingcart;
 
-service ShoppingCart {
+service ShoppingCartService {
     rpc AddItem(AddLineItem) returns (google.protobuf.Empty);
     rpc RemoveItem(RemoveLineItem) returns (google.protobuf.Empty);
     rpc GetCart(GetShoppingCart) returns (Cart);

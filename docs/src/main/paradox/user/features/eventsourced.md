@@ -18,29 +18,26 @@ Because each entity lives on exactly one node, that node can handle commands for
 
 CloudState uses the following terminology in relation to event sourcing:
 
-### State
+State
+: The state is the current state on an event sourced entity instance. It is held in memory by an event sourced entity.
 
-The state is the current state on an event sourced entity instance. It is held in memory by an event sourced entity.
+Command
+: A command is a message addressed to a particular entity to do something. A command comes from a sender, and a reply may be sent to the sender.
 
-### Command
+Command handler
+: A command handler is the code that handles a command. It may validate the command using the current state, and may emit new events as part of its processing. A command handler **must not** update the state of the entity, except by emitting new events. If a command handler does update the state, then when the entity is passivated, those updates will be lost.
 
-A command is a message addressed to a particular entity to do something. A command comes from a sender, and a reply may be sent to the sender.
+Event
+: An event is a piece of data that gets persisted indicating something that happened to the entity. Events are stored in a journal, and are read and replayed each time the entity is reloaded by the state management system.
 
-### Command handler
+Event handler
+: An event handler is the only thing that is allowed to update the state of the entity. It receives events, and, according to the event, updates the state.
 
-A command handler is the code that handles a command. It may validate the command using the current state, and may emit new events as part of its processing. A command handler **must not** update the state of the entity, except by emitting new events. If a command handler does update the state, then when the entity is passivated, those updates will be lost.
+Snapshot
+: A snapshot is a snapshot of the state, persisted periodically (eg, every 100 events), as an optimization so that when the entity is reloaded from the journal, the entire journal doesn't need to be replayed.
 
-### Event
-
-An event is a piece of data that gets persisted indicating something that happened to the entity. Events are stored in a journal, and are read and replayed each time the entity is reloaded by the state management system.
-
-### Event handler
-
-An event handler is the only thing that is allowed to update the state of the entity. It receives events, and, according to the event, updates the state.
-
-### Snapshot
-
-A snapshot is a snapshot of the state, persisted periodically (eg, every 100 events), as an optimization so that when the entity is reloaded from the journal, the entire journal doesn't need to be replayed.
+Persistence id
+: The persistence id is an identifier that is prepended to each entity id when persisted. If you are sharing databases between multiple stateful services, it is important that you select unique persistence ids for each entity, so that their entity instances don't conflict.
 
 ## Language support
 
