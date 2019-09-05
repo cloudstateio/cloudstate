@@ -691,7 +691,6 @@ lazy val `akka-client` = (project in file("samples/akka-client"))
       "com.typesafe.akka"    %% "akka-http-spray-json" % AkkaHttpVersion,
       "com.typesafe.akka"    %% "akka-http-core"       % AkkaHttpVersion,
       "com.typesafe.akka"    %% "akka-http2-support"   % AkkaHttpVersion,
-      "com.typesafe.akka"    %% "akka-parsing"         % AkkaVersion,
       "com.google.protobuf"   % "protobuf-java"        % ProtobufVersion % "protobuf",
       "com.thesamet.scalapb" %% "scalapb-runtime"      % scalapb.compiler.Version.scalapbVersion % "protobuf"
     ),
