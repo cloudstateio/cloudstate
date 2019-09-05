@@ -22,10 +22,12 @@ jobs:
     script: sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' test
   
   - name: docs tests
-    before_script: cd node-support && npm install && cd -
-    script: sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' docs/paradox
-
-  
+    before_script:
+    - cd node-support && npm install && cd -
+    - cd docs/src/test/js && npm install && cd -
+    script:
+    - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' docs/paradox docs/test
+    - cd docs/src/test/js && npm test && cd -
   
   - stage: TCK
     name: Run TCK against reference implementation

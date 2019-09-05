@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "cloudstate/entity_key.proto";
+
+package example.shoppingcart;
+
+service ShoppingCartService {
+    rpc AddItem(AddLineItem) returns (google.protobuf.Empty);
+    rpc RemoveItem(RemoveLineItem) returns (google.protobuf.Empty);
+    rpc GetCart(GetShoppingCart) returns (Cart);
+}
+
+message AddLineItem {
+    string user_id = 1 [(.cloudstate.entity_key) = true];
+    string product_id = 2;
+    string name = 3;
+    int32 quantity = 4;
+}
+
+message RemoveLineItem {
+    string user_id = 1 [(.cloudstate.entity_key) = true];
+    string product_id = 2;
+}
+
+message GetShoppingCart {
+    string user_id = 1 [(.cloudstate.entity_key) = true];
+}
+
+message LineItem {
+    string product_id = 1;
+    string name = 2;
+    int32 quantity = 3;
+}
+
+message Cart {
+    repeated LineItem items = 1;
+}

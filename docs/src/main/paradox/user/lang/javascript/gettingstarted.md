@@ -36,7 +36,7 @@ CloudState provides a utility that does this for you, downloading the `protoc` b
 
 Multiple protobuf files can be passed, in addition, any arguments accepted by `protoc` can be passed, for example, if you are importing files from other directories, you can add those directories as an include path by adding `-Ipath/to/protobuf/dir`.
 
-By default, the descriptor is written to `user-function.desc`, if you wish to change this, you can set `--descriptor-set-out=my-descriptor.desc`. Note that if you output the descriptor to a different path, you will also need to pass that custom path to the constructor of the `CloudState` class when you got to instantiate it.
+By default, the descriptor is written to `user-function.desc`, if you wish to change this, you can set `--descriptor_set_out=my-descriptor.desc`. Note that if you output the descriptor to a different path, you will also need to pass that custom path to the constructor of the `CloudState` class when you got to instantiate it.
 
 ## package.json example
 
@@ -66,11 +66,11 @@ You can place protobuf files in your project wherever you like, for example, in 
 
 There are two ways to create and start a CloudState gRPC server. The first is to create an @extref:[`Entity`](jsdoc:Entity.html), and invoke @extref:[`start`](jsdoc:Entity.html#start) on it. This allows creating a server that serves a single entity, with the default options. We'll look at this more in the subsequent pages. Alternatively, you can use the @extref:[`CloudState`](jsdoc:CloudState.html) class, add one or more entities to it, and then invoke @extref:[`start`](jsdoc:CloudState.html#start), like so:
 
-@@snip [index.js](/docs/src/test/js/gettingstarted/index.js) { #start }
+@@snip [index.js](/docs/src/test/js/test/gettingstarted/index.js) { #start }
 
 If you created your protobuf file descriptor set at a different location to the default of `user-function.desc`, you can configure that here:
 
-@@snip [index.js](/docs/src/test/js/gettingstarted/index.js) { #custom-desc }
+@@snip [index.js](/docs/src/test/js/test/gettingstarted/index.js) { #custom-desc }
 
 
 For the full range of options available on the `CloudState` class, see @extref:[`CloudState~options`](jsdoc:CloudState.html#~options).
