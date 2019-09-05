@@ -1,15 +1,13 @@
 # JavaScript
 
-* Explain how to create a CloudState JavaScript project
-  - Example npm `package.json`
-* Explain how to generate the compiled descriptor and why this is needed.
-* Explain how to use the CloudState class
-  - Instantiating
-  - Registering an entity
-  - Starting the server
+CloudState offers a straight forward JavaScript API for implements stateful service entities.
+
+@@toc { depth=1 }
+
 
 @@@ index
 
+* [Getting started](gettingstarted.md)
 * [Event sourcing](eventsourced.md)
 * [Conflict-free Replicated Data Types](crdt.md)
 * [Forwarding and effects](effects.md)

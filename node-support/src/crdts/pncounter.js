@@ -24,8 +24,8 @@ const Long = require("long");
  *
  * The value is stored as a 64-bit signed long, hence values over `2^63 - 1` and less than `2^63` can't be represented.
  *
- * @constructor cloudstate.crdt.PNCounter
- * @implements cloudstate.crdt.CrdtState
+ * @constructor module:cloudstate.crdt.PNCounter
+ * @implements module:cloudstate.crdt.CrdtState
  */
 function PNCounter() {
   let currentValue = Long.ZERO;
@@ -34,7 +34,7 @@ function PNCounter() {
   /**
    * The value as a long.
    *
-   * @name cloudstate.crdt.PNCounter#longValue
+   * @name module:cloudstate.crdt.PNCounter#longValue
    * @type {Long}
    * @readonly
    */
@@ -46,10 +46,10 @@ function PNCounter() {
 
   /**
    * The value as a number. Note that once the value exceeds `2^53`, this will not be an accurate
-   * representation of the value. If you expect it to exceed `2^53`, {@link cloudstate.crdt.PNCounter#longValue}
+   * representation of the value. If you expect it to exceed `2^53`, {@link module:cloudstate.crdt.PNCounter#longValue}
    * should be used instead.
    *
-   * @name cloudstate.crdt.PNCounter#value
+   * @name module:cloudstate.crdt.PNCounter#value
    * @type {number}
    * @readonly
    */
@@ -62,9 +62,9 @@ function PNCounter() {
   /**
    * Increment the counter by the given number.
    *
-   * @function cloudstate.crdt.PNCounter#increment
+   * @function module:cloudstate.crdt.PNCounter#increment
    * @param {Long|number} increment The amount to increment the counter by. If negative, it will be decremented instead.
-   * @returns {cloudstate.crdt.PNCounter} This counter.
+   * @returns {module:cloudstate.crdt.PNCounter} This counter.
    */
   this.increment = function (increment) {
     currentValue = currentValue.add(increment);
@@ -75,9 +75,9 @@ function PNCounter() {
   /**
    * Decrement the counter by the given number.
    *
-   * @function cloudstate.crdt.PNCounter#decrement
+   * @function module:cloudstate.crdt.PNCounter#decrement
    * @param {Long|number} decrement The amount to decrement the counter by. If negative, it will be incremented instead.
-   * @returns {cloudstate.crdt.PNCounter} This counter.
+   * @returns {module:cloudstate.crdt.PNCounter} This counter.
    */
   this.decrement = function (decrement) {
     currentValue = currentValue.subtract(decrement);

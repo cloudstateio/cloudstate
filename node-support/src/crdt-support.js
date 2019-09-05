@@ -131,27 +131,27 @@ class CrdtSupport {
 }
 
 /**
- * Callback for handling {@link cloudstate.crdt.CrdtCommandContext#onStateChange} events for a CRDT, specific to a
+ * Callback for handling {@link module:cloudstate.crdt.CrdtCommandContext#onStateChange} events for a CRDT, specific to a
  * given streamed connection.
  *
  * The callback may not modify the CRDT, doing so will cause an error.
  *
- * @callback cloudstate.crdt.CrdtCommandContext~onStateChangeCallback
- * @param {cloudstate.crdt.CrdtState} state The current state that has changed
- * @param {cloudstate.crdt.StateChangedContext} context The context for the state change.
+ * @callback module:cloudstate.crdt.CrdtCommandContext~onStateChangeCallback
+ * @param {module:cloudstate.crdt.CrdtState} state The current state that has changed
+ * @param {module:cloudstate.crdt.StateChangedContext} context The context for the state change.
  * @returns {undefined|object} If an object is returned, that will be sent as a message to the current streamed call.
  * It must be an object that conforms to this streamed commands output type.
  */
 
 /**
- * Callback for handling {@link cloudstate.crdt.CrdtCommandContext#onStreamCancel} events for a CRDT, specific to a
+ * Callback for handling {@link module:cloudstate.crdt.CrdtCommandContext#onStreamCancel} events for a CRDT, specific to a
  * given streamed connection.
  *
  * The callback may modify the CRDT if it pleases.
  *
- * @callback cloudstate.crdt.CrdtCommandContext~onStreamCancelCallback
- * @param {cloudstate.crdt.CrdtState} state The current state that has changed
- * @param {cloudstate.crdt.StreamCancelledContext} context The context for the stream cancellation.
+ * @callback module:cloudstate.crdt.CrdtCommandContext~onStreamCancelCallback
+ * @param {module:cloudstate.crdt.CrdtState} state The current state that has changed
+ * @param {module:cloudstate.crdt.StreamCancelledContext} context The context for the stream cancellation.
  */
 
 /*
@@ -185,9 +185,9 @@ class CrdtHandler {
         /**
          * Context for a CRDT command handler.
          *
-         * @interface cloudstate.crdt.CrdtCommandContext
-         * @extends cloudstate.crdt.StateManagementContext
-         * @extends cloudstate.CommandContext
+         * @interface module:cloudstate.crdt.CrdtCommandContext
+         * @extends module:cloudstate.crdt.StateManagementContext
+         * @extends module:cloudstate.CommandContext
          */
 
         this.addStateManagementToContext(ctx);
@@ -202,8 +202,8 @@ class CrdtHandler {
          * This will be invoked every time the state of this CRDT changes, allowing the callback to send messages to
          * the stream.
          *
-         * @name cloudstate.crdt.CrdtCommandContext#onStateChange
-         * @type {cloudstate.crdt.CrdtCommandContext~onStateChangeCallback}
+         * @name module:cloudstate.crdt.CrdtCommandContext#onStateChange
+         * @type {module:cloudstate.crdt.CrdtCommandContext~onStateChangeCallback}
          */
         Object.defineProperty(ctx.context, "onStateChange", {
           set: (handler) => {
@@ -226,10 +226,10 @@ class CrdtHandler {
          * This may only be invoked on streamed commands. If invoked on a non streamed command, it will throw an error.
          *
          * This will be invoked if the client initiated a cancel, it will not be invoked if the stream was ended by
-         * invoking {@link cloudstate.crdt.StateChangedContext#end}.
+         * invoking {@link module:cloudstate.crdt.StateChangedContext#end}.
          *
-         * @name cloudstate.crdt.CrdtCommandContext#onStreamCancel
-         * @type {cloudstate.crdt.CrdtCommandContext~onStreamCancelCallback}
+         * @name module:cloudstate.crdt.CrdtCommandContext#onStreamCancel
+         * @type {module:cloudstate.crdt.CrdtCommandContext~onStreamCancelCallback}
          */
         Object.defineProperty(ctx.context, "onStreamCancel", {
           set: (handler) => {
@@ -249,7 +249,7 @@ class CrdtHandler {
         /**
          * Whether this command is streamed or not.
          *
-         * @name cloudstate.crdt.CrdtCommandContext#streamed
+         * @name module:cloudstate.crdt.CrdtCommandContext#streamed
          * @type {boolean}
          * @readonly
          */
@@ -321,13 +321,13 @@ class CrdtHandler {
     /**
      * Context that allows managing a CRDTs state.
      *
-     * @interface cloudstate.crdt.StateManagementContext
+     * @interface module:cloudstate.crdt.StateManagementContext
      */
 
     /**
      * Delete this CRDT.
      *
-     * @function cloudstate.crdt.StateManagementContext#delete
+     * @function module:cloudstate.crdt.StateManagementContext#delete
      */
     ctx.context.delete = () => {
       ctx.ensureActive();
@@ -343,8 +343,8 @@ class CrdtHandler {
     /**
      * The CRDT. It may only be set once, if it's already set, an error will be thrown.
      *
-     * @name cloudstate.crdt.StateManagementContext#state
-     * @type {cloudstate.crdt.CrdtState}
+     * @name module:cloudstate.crdt.StateManagementContext#state
+     * @type {module:cloudstate.crdt.CrdtState}
      */
     Object.defineProperty(ctx.context, "state", {
       get: () => {
@@ -397,18 +397,18 @@ class CrdtHandler {
   handleStateChange() {
     this.subscribers.forEach((subscriber, key) => {
       /**
-       * Context passed to {@link cloudstate.crdt.CrdtCommandContext#onStateChange} handlers.
+       * Context passed to {@link module:cloudstate.crdt.CrdtCommandContext#onStateChange} handlers.
        *
-       * @interface cloudstate.crdt.StateChangedContext
-       * @extends cloudstate.CommandContext
+       * @interface module:cloudstate.crdt.StateChangedContext
+       * @extends module:cloudstate.CommandContext
        */
       const ctx = this.commandHelper.createContext(subscriber.commandId);
 
       /**
        * The CRDT.
        *
-       * @name cloudstate.crdt.StateChangedContext#state
-       * @type cloudstate.crdt.CrdtState
+       * @name module:cloudstate.crdt.StateChangedContext#state
+       * @type module:cloudstate.crdt.CrdtState
        * @readonly
        */
       Object.defineProperty(ctx.context, "state", {
@@ -420,7 +420,7 @@ class CrdtHandler {
       /**
        * End this stream.
        *
-       * @function cloudstate.crdt.StateChangedContext#end
+       * @function module:cloudstate.crdt.StateChangedContext#end
        */
       ctx.context.end = () => {
         ctx.reply.endStream = true;
@@ -463,11 +463,11 @@ class CrdtHandler {
       const subscriber = this.cancelledCallbacks.get(subscriberKey);
 
       /**
-       * Context passed to {@link cloudstate.crdt.CrdtCommandContext#onStreamCancel} handlers.
+       * Context passed to {@link module:cloudstate.crdt.CrdtCommandContext#onStreamCancel} handlers.
        *
-       * @interface cloudstate.crdt.StreamCancelledContext
-       * @extends cloudstate.EffectContext
-       * @extends cloudstate.crdt.StateManagementContext
+       * @interface module:cloudstate.crdt.StreamCancelledContext
+       * @extends module:cloudstate.EffectContext
+       * @extends module:cloudstate.crdt.StateManagementContext
        */
 
 

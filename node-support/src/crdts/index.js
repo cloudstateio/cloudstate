@@ -31,26 +31,26 @@ const Empty = protobufHelper.moduleRoot.google.protobuf.Empty;
 /**
  * All CRDTs and CRDT support classes.
  *
- * @namespace cloudstate.crdt
+ * @namespace module:cloudstate.crdt
  */
 
 /**
  * A Conflict-free Replicated Data Type.
  *
- * @interface cloudstate.crdt.CrdtState
+ * @interface module:cloudstate.crdt.CrdtState
  */
 
 /**
- * A clock that may be used by {@link cloudstate.crdt.LWWRegister}.
+ * A clock that may be used by {@link module:cloudstate.crdt.LWWRegister}.
  *
- * @typedef cloudstate.crdt.Clock
+ * @typedef module:cloudstate.crdt.Clock
  */
 
 /**
- * An enum of all clocks that can be used by {@link cloudstate.crdt.LWWRegister}.
+ * An enum of all clocks that can be used by {@link module:cloudstate.crdt.LWWRegister}.
  *
- * @name cloudstate.crdt.Clocks
- * @enum {cloudstate.crdt.Clock}
+ * @name module:cloudstate.crdt.Clocks
+ * @enum {module:cloudstate.crdt.Clock}
  * @property DEFAULT The default clock, uses the machines system time.
  * @property REVERSE A reverse clock, for achieving first-write-wins semantics.
  * @property CUSTOM A custom clock.

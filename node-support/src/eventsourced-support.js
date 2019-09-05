@@ -104,8 +104,8 @@ class EventSourcedEntityHandler {
           /**
            * Context for an event sourced command.
            *
-           * @interface cloudstate.EventSourced.EventSourcedCommandContext
-           * @extends cloudstate.CommandContext
+           * @interface module:cloudstate.EventSourced.EventSourcedCommandContext
+           * @extends module:cloudstate.CommandContext
            */
 
           ctx.events = [];
@@ -116,8 +116,8 @@ class EventSourcedEntityHandler {
            * The event won't be persisted until the reply is sent to the proxy. Then, the event will be persisted
            * before the reply is sent back to the client.
            *
-           * @function cloudstate.EventSourced.EventSourcedCommandContext#emit
-           * @param {cloudstate.Serializable} event The event to emit.
+           * @function module:cloudstate.EventSourced.EventSourcedCommandContext#emit
+           * @param {module:cloudstate.Serializable} event The event to emit.
            */
           ctx.context.emit = (event) => {
             ctx.ensureActive();

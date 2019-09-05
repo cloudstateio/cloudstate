@@ -13,9 +13,12 @@ const builtInPaths = [
 const userArgs = process.argv.slice(2);
 
 const protocArgs = [
-  "--include_imports",
-  "--descriptor_set_out=user-function.desc"
+  "--include_imports"
 ].concat(builtInPaths.map(path => "--proto_path=" + path));
+
+if (!userArgs.some(arg => arg.startsWith("--descriptor_set_out"))) {
+    protocArgs.push("--descriptor_set_out=user-function.desc");
+}
 
 // We need to ensure that the files passed in is on the proto path. The user may have already ensured this by passing
 // their own proto path, but if not, we detect that, and add the files parent directory as a proto path.
