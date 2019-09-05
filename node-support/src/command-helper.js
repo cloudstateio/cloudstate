@@ -190,7 +190,7 @@ module.exports = class CommandHelper {
     /**
      * Effect context.
      *
-     * @interface cloudstate.EffectContext
+     * @interface module:cloudstate.EffectContext
      * @property {string} entityId The id of the entity that the command is for.
      * @property {Long} commandId The id of the command.
      */
@@ -198,8 +198,8 @@ module.exports = class CommandHelper {
     /**
      * Context for a command.
      *
-     * @interface cloudstate.CommandContext
-     * @extends cloudstate.EffectContext
+     * @interface module:cloudstate.CommandContext
+     * @extends module:cloudstate.EffectContext
      */
     accessor.context = {
       entityId: this.entityId,
@@ -208,7 +208,7 @@ module.exports = class CommandHelper {
       /**
        * Emit an effect after processing this command.
        *
-       * @function cloudstate.EffectContext#effect
+       * @function module:cloudstate.EffectContext#effect
        * @param method The entity service method to invoke.
        * @param {object} message The message to send to that service.
        * @param {boolean} synchronous Whether the effect should be execute synchronously or not.
@@ -221,7 +221,7 @@ module.exports = class CommandHelper {
       /**
        * Forward this command to another entity service call.
        *
-       * @function cloudstate.CommandContext#thenForward
+       * @function module:cloudstate.CommandContext#thenForward
        * @param method The entity service method to invoke.
        * @param {object} message The message to send to that service.
        */
@@ -233,7 +233,7 @@ module.exports = class CommandHelper {
       /**
        * Fail handling this command.
        *
-       * @function cloudstate.EffectContext#fail
+       * @function module:cloudstate.EffectContext#fail
        * @param msg The failure message.
        * @throws An error that captures the failure message. Note that even if you catch the error thrown by this
        * method, the command will still be failed with the given message.

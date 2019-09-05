@@ -27,16 +27,16 @@ const crdtServices = new support.CrdtServices();
 /**
  * Options for creating a CRDT entity.
  *
- * @typedef cloudstate.crdt.Crdt~options
+ * @typedef module:cloudstate.crdt.Crdt~options
  * @property {array<string>} includeDirs The directories to include when looking up imported protobuf files.
  */
 
 /**
  * A command handler callback.
  *
- * @callback cloudstate.crdt.Crdt~commandHandler
+ * @callback module:cloudstate.crdt.Crdt~commandHandler
  * @param {Object} command The command message, this will be of the type of the gRPC service call input type.
- * @param {cloudstate.crdt.CrdtCommandContext} context The command context.
+ * @param {module:cloudstate.crdt.CrdtCommandContext} context The command context.
  * @returns {undefined|Object} The message to reply with, it must match the gRPC service call output type for this
  * command.
  */
@@ -48,15 +48,15 @@ const crdtServices = new support.CrdtServices();
  * properties and methods. This may be due to the state being set explicitly from a command handler on the command
  * context, or implicitly as the default value, or implicitly when a new state is received from the proxy.
  *
- * @callback cloudstate.crdt.Crdt~onStateSetCallback
- * @param {cloudstate.crdt.CrdtState} state The state that was set.
+ * @callback module:cloudstate.crdt.Crdt~onStateSetCallback
+ * @param {module:cloudstate.crdt.CrdtState} state The state that was set.
  * @param {string} entityId The id of the entity.
  */
 
 /**
  * A callback that is invoked to create a default value if the CloudState proxy doesn't send an existing one.
  *
- * @callback cloudstate.crdt.Crdt~defaultValueCallback
+ * @callback module:cloudstate.crdt.Crdt~defaultValueCallback
  * @param {string} entityId The id of the entity.
  * @returns {Object} The default value to use for this entity.
  */
@@ -64,8 +64,8 @@ const crdtServices = new support.CrdtServices();
 /**
  * A CRDT entity.
  *
- * @memberOf cloudstate.crdt
- * @extends cloudstate.Entity
+ * @memberOf module:cloudstate.crdt
+ * @extends module:cloudstate.Entity
  */
 class Crdt {
 
@@ -75,7 +75,7 @@ class Crdt {
    * @param desc {string|string[]} The file name of a protobuf descriptor or set of descriptors containing the
    * CRDT service.
    * @param serviceName {string} The fully qualified name of the gRPC service that this CRDT implements.
-   * @param options {cloudstate.crdt.Crdt~options=} The options.
+   * @param options {module:cloudstate.crdt.Crdt~options=} The options.
    */
   constructor(desc, serviceName, options) {
 
@@ -109,7 +109,7 @@ class Crdt {
      * The names of the properties must match the names of the service calls specified in the gRPC descriptor for this
      * CRDTs service.
      *
-     * @type {Object.<string, cloudstate.crdt.Crdt~commandHandler>}
+     * @type {Object.<string, module:cloudstate.crdt.Crdt~commandHandler>}
      */
     this.commandHandlers = {};
 
@@ -120,14 +120,14 @@ class Crdt {
      * properties and methods. This may be due to the state being set explicitly from a command handler on the command
      * context, or implicitly as the default value, or implicitly when a new state is received from the proxy.
      *
-     * @member {cloudstate.crdt.Crdt~onStateSetCallback} cloudstate.crdt.Crdt#onStateSet
+     * @member {module:cloudstate.crdt.Crdt~onStateSetCallback} module:cloudstate.crdt.Crdt#onStateSet
      */
     this.onStateSet = (state, entityId) => undefined;
 
     /**
      * A callback that is invoked to create a default value if the CloudState proxy doesn't send an existing one.
      *
-     * @member {cloudstate.crdt.Crdt~defaultValueCallback} cloudstate.crdt.Crdt#defaultValue
+     * @member {module:cloudstate.crdt.Crdt~defaultValueCallback} module:cloudstate.crdt.Crdt#defaultValue
      */
     this.defaultValue = (entityId) => null;
   }
@@ -154,10 +154,21 @@ class Crdt {
   }
 
   start(options) {
-    const server = new CloudState();
-    server.addEntity(this);
+    if (this.server !== undefined) {
+      throw new Error("Server already started!")
+    }
+    this.server = new CloudState();
+    this.server.addEntity(this);
 
-    return server.start(options);
+    return this.server.start(options);
+  }
+
+  shutdown() {
+    if (this.server === undefined) {
+      throw new Error("Server not started!")
+    }
+    this.server.shutdown();
+    delete this.server;
   }
 }
 

@@ -26,10 +26,10 @@ const eventSourcedServices = new EventSourcedServices();
 /**
  * An event sourced command handler.
  *
- * @callback cloudstate.EventSourced~commandHandler
+ * @callback module:cloudstate.EventSourced~commandHandler
  * @param {Object} command The command message, this will be of the type of the gRPC service call input type.
- * @param {cloudstate.Serializable} state The entity state.
- * @param {cloudstate.EventSourced.EventSourcedCommandContext} context The command context.
+ * @param {module:cloudstate.Serializable} state The entity state.
+ * @param {module:cloudstate.EventSourced.EventSourcedCommandContext} context The command context.
  * @returns {undefined|Object} The message to reply with, it must match the gRPC service call output type for this
  * command.
  */
@@ -37,21 +37,21 @@ const eventSourcedServices = new EventSourcedServices();
 /**
  * An event sourced event handler.
  *
- * @callback cloudstate.EventSourced~eventHandler
- * @param {cloudstate.Serializable} event The event.
- * @param {cloudstate.Serializable} state The entity state.
- * @returns {cloudstate.Serializable} The new entity state.
+ * @callback module:cloudstate.EventSourced~eventHandler
+ * @param {module:cloudstate.Serializable} event The event.
+ * @param {module:cloudstate.Serializable} state The entity state.
+ * @returns {module:cloudstate.Serializable} The new entity state.
  */
 
 /**
  * An event sourced entity behavior.
  *
- * @typedef cloudstate.EventSourced~behavior
- * @property {Object<String, cloudstate.EventSourced~commandHandler>} commandHandlers The command handlers.
+ * @typedef module:cloudstate.EventSourced~behavior
+ * @property {Object<String, module:cloudstate.EventSourced~commandHandler>} commandHandlers The command handlers.
  *
  * The names of the properties must match the names of the service calls specified in the gRPC descriptor for this
  * event sourced entities service.
- * @property {Object<String, cloudstate.EventSourced~eventHandler>} eventHandlers The event handlers.
+ * @property {Object<String, module:cloudstate.EventSourced~eventHandler>} eventHandlers The event handlers.
  *
  * The names of the properties must match the short names of the events.
  */
@@ -61,9 +61,9 @@ const eventSourcedServices = new EventSourcedServices();
  *
  * This callback takes the current entity state, and returns a set of handlers to handle commands and events for it.
  *
- * @callback cloudstate.EventSourced~behaviorCallback
- * @param {cloudstate.Serializable} state The entity state.
- * @returns {cloudstate.EventSourced~behavior} The new entity state.
+ * @callback module:cloudstate.EventSourced~behaviorCallback
+ * @param {module:cloudstate.Serializable} state The entity state.
+ * @returns {module:cloudstate.EventSourced~behavior} The new entity state.
  */
 
 /**
@@ -71,15 +71,15 @@ const eventSourcedServices = new EventSourcedServices();
  *
  * This is invoked if the entity is started with no snapshot.
  *
- * @callback cloudstate.EventSourced~initialCallback
+ * @callback module:cloudstate.EventSourced~initialCallback
  * @param {string} entityId The entity id.
- * @returns {cloudstate.Serializable} The entity state.
+ * @returns {module:cloudstate.Serializable} The entity state.
  */
 
 /**
  * Options for an event sourced entity.
  *
- * @typedef cloudstate.EventSourced~options
+ * @typedef module:cloudstate.EventSourced~options
  * @property {string} [persistenceId="entity"] A persistence id for all event source entities of this type. This will be prefixed
  * onto the entityId when storing the events for this entity.
  * @property {number} [snapshotEvery=100] A snapshot will be persisted every time this many events are emitted.
@@ -93,8 +93,8 @@ const eventSourcedServices = new EventSourcedServices();
 /**
  * An event sourced entity.
  *
- * @memberOf cloudstate
- * @extends cloudstate.Entity
+ * @memberOf module:cloudstate
+ * @extends module:cloudstate.Entity
  */
 class EventSourced {
 
@@ -103,7 +103,7 @@ class EventSourced {
    *
    * @param {string|string[]} desc A descriptor or list of descriptors to parse, containing the service to serve.
    * @param {string} serviceName The fully qualified name of the service that provides this entities interface.
-   * @param {cloudstate.EventSourced~options=} options The options for this event sourced entity
+   * @param {module:cloudstate.EventSourced~options=} options The options for this event sourced entity
    */
   constructor(desc, serviceName, options) {
 
@@ -154,15 +154,15 @@ class EventSourced {
   /**
    * The initial state callback.
    *
-   * @member cloudstate.EventSourced#initial
-   * @type cloudstate.EventSourced~initialCallback
+   * @member module:cloudstate.EventSourced#initial
+   * @type module:cloudstate.EventSourced~initialCallback
    */
 
   /**
    * Set the initial state callback.
    *
-   * @param {cloudstate.EventSourced~initialCallback} callback The initial state callback.
-   * @return {cloudstate.EventSourced} This entity.
+   * @param {module:cloudstate.EventSourced~initialCallback} callback The initial state callback.
+   * @return {module:cloudstate.EventSourced} This entity.
    */
   setInitial(callback) {
     this.initial = callback;
@@ -172,15 +172,15 @@ class EventSourced {
   /**
    * The behavior callback.
    *
-   * @member cloudstate.EventSourced#behavior
-   * @type cloudstate.EventSourced~behaviorCallback
+   * @member module:cloudstate.EventSourced#behavior
+   * @type module:cloudstate.EventSourced~behaviorCallback
    */
 
   /**
    * Set the behavior callback.
    *
-   * @param {cloudstate.EventSourced~behaviorCallback} callback The behavior callback.
-   * @return {cloudstate.EventSourced} This entity.
+   * @param {module:cloudstate.EventSourced~behaviorCallback} callback The behavior callback.
+   * @return {module:cloudstate.EventSourced} This entity.
    */
   setBehavior(callback) {
     this.behavior = callback;
@@ -193,11 +193,23 @@ class EventSourced {
   }
 
   start(options) {
-    const server = new CloudState();
-    server.addEntity(this);
+    if (this.server !== undefined) {
+      throw new Error("Server already started!")
+    }
+    this.server = new CloudState();
+    this.server.addEntity(this);
 
-    return server.start(options);
+    return this.server.start(options);
   }
+
+  shutdown() {
+    if (this.server === undefined) {
+      throw new Error("Server not started!")
+    }
+    this.server.shutdown();
+    delete this.server;
+  }
+
 }
 
 module.exports = EventSourced;

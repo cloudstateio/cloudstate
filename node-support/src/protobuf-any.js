@@ -41,7 +41,7 @@ const CloudStateJson = "json.cloudstate.io/";
  *
  * It should have a encode() method on it.
  *
- * @typedef cloudstate.SerializableProtobufMessage
+ * @typedef module:cloudstate.SerializableProtobufMessage
  * @type {Object}
  */
 
@@ -49,7 +49,7 @@ const CloudStateJson = "json.cloudstate.io/";
  * Any type that has a type property on it can be serialized as JSON, with the value of the type property describing
  * the type of the value.
  *
- * @typedef cloudstate.TypedJson
+ * @typedef module:cloudstate.TypedJson
  * @type {Object}
  * @property {string} type The type of the object.
  */
@@ -57,8 +57,8 @@ const CloudStateJson = "json.cloudstate.io/";
 /**
  * A type that is serializable.
  *
- * @typedef cloudstate.Serializable
- * @type {cloudstate.SerializableProtobufMessage|cloudstate.TypedJson|Object|string|number|boolean|Long|Buffer}
+ * @typedef module:cloudstate.Serializable
+ * @type {module:cloudstate.SerializableProtobufMessage|module:cloudstate.TypedJson|Object|string|number|boolean|Long|Buffer}
  */
 
 

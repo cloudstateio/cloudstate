@@ -14,6 +14,13 @@
  * limitations under the License.
  */
 
+
+/**
+ * The CloudState module.
+ *
+ * @module cloudstate
+ */
+
 module.exports.CloudState = require("./src/cloudstate");
 module.exports.EventSourced = require("./src/eventsourced");
 module.exports.crdt = require("./src/crdt");

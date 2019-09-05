@@ -22,7 +22,7 @@ Maven
 <depependency>
   <groupId>io.cloudstate</groupId>
   <artifactId>cloudstate-java-support</artifactId>
-  <version>$cloudstate.java.support.version$</version>
+  <version>$cloudstate.java-support.version$</version>
 </depependency>
 ```
 @@@
@@ -30,14 +30,14 @@ Maven
 sbt
 : @@@vars
 ```scala
-libraryDependencies += "io.cloudstate" % "cloudstate-java-support" % "$cloudstate.java.support.version$"
+libraryDependencies += "io.cloudstate" % "cloudstate-java-support" % "$cloudstate.java-support.version$"
 ```
 @@@
 
 gradle
 : @@@vars
 ```groovy
-compile group: 'io.cloudstate', name: 'cloudstate-java-support', version: '$cloudstate.java.support.version$'
+compile group: 'io.cloudstate', name: 'cloudstate-java-support', version: '$cloudstate.java-support.version$'
 ```
 @@@
 

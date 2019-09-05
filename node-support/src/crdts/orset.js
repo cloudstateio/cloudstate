@@ -21,10 +21,10 @@ const AnySupport = require("../protobuf-any");
 /**
  * @classdesc An Observed-Removed Set CRDT.
  *
- * Observed-Removed-Set's are a set of {@link cloudstate.Serializable} values. Elements can be added and removed.
+ * Observed-Removed-Set's are a set of {@link module:cloudstate.Serializable} values. Elements can be added and removed.
  *
- * @constructor cloudstate.crdt.ORSet
- * @implements cloudstate.crdt.CrdtState
+ * @constructor module:cloudstate.crdt.ORSet
+ * @implements module:cloudstate.crdt.CrdtState
  */
 function ORSet() {
   // Map of a comparable form (that compares correctly using ===) of the elements to the elements
@@ -38,8 +38,8 @@ function ORSet() {
   /**
    * Does this set contain the given element?
    *
-   * @function cloudstate.crdt.ORSet#has
-   * @param {cloudstate.Serializable} element The element to check.
+   * @function module:cloudstate.crdt.ORSet#has
+   * @param {module:cloudstate.Serializable} element The element to check.
    * @returns {boolean} True if the set contains the element.
    */
   this.has = function (element) {
@@ -49,7 +49,7 @@ function ORSet() {
   /**
    * The number of elements in this set.
    *
-   * @name cloudstate.crdt.ORSet#size
+   * @name module:cloudstate.crdt.ORSet#size
    * @type {number}
    * @readonly
    */
@@ -60,17 +60,17 @@ function ORSet() {
   });
 
   /**
-   * Callback for handling elements iterated through by {@link cloudstate.crdt.ORSet#forEach}.
+   * Callback for handling elements iterated through by {@link module:cloudstate.crdt.ORSet#forEach}.
    *
-   * @callback cloudstate.crdt.ORSet~forEachCallback
-   * @param {cloudstate.Serializable} element The element.
+   * @callback module:cloudstate.crdt.ORSet~forEachCallback
+   * @param {module:cloudstate.Serializable} element The element.
    */
 
   /**
    * Execute the given callback for each element.
    *
-   * @function cloudstate.crdt.ORSet#forEach
-   * @param {cloudstate.crdt.ORSet~forEachCallback} callback The callback to handle each element.
+   * @function module:cloudstate.crdt.ORSet#forEach
+   * @param {module:cloudstate.crdt.ORSet~forEachCallback} callback The callback to handle each element.
    */
   this.forEach = function (callback) {
     return currentValue.forEach((value, key) => callback(value));
@@ -79,8 +79,8 @@ function ORSet() {
   /**
    * Create an iterator for this set.
    *
-   * @function cloudstate.crdt.ORSet#@@iterator
-   * @returns {iterator<cloudstate.Serializable>}
+   * @function module:cloudstate.crdt.ORSet#@@iterator
+   * @returns {iterator<module:cloudstate.Serializable>}
    */
   this[Symbol.iterator] = function () {
     return currentValue.values();
@@ -89,9 +89,9 @@ function ORSet() {
   /**
    * Add an element to this set.
    *
-   * @function cloudstate.crdt.ORSet#add
-   * @param {cloudstate.Serializable} element The element to add.
-   * @return {cloudstate.crdt.ORSet} This set.
+   * @function module:cloudstate.crdt.ORSet#add
+   * @param {module:cloudstate.Serializable} element The element to add.
+   * @return {module:cloudstate.crdt.ORSet} This set.
    */
   this.add = function (element) {
     const comparable = AnySupport.toComparable(element);
@@ -110,9 +110,9 @@ function ORSet() {
   /**
    * Remove an element from this set.
    *
-   * @function cloudstate.crdt.ORSet#delete
-   * @param {cloudstate.Serializable} element The element to delete.
-   * @return {cloudstate.crdt.ORSet} This set.
+   * @function module:cloudstate.crdt.ORSet#delete
+   * @param {module:cloudstate.Serializable} element The element to delete.
+   * @return {module:cloudstate.crdt.ORSet} This set.
    */
   this.delete = function (element) {
     const comparable = AnySupport.toComparable(element);
@@ -135,8 +135,8 @@ function ORSet() {
   /**
    * Remove all elements from this set.
    *
-   * @function cloudstate.crdt.ORSet#clear
-   * @return {cloudstate.crdt.ORSet} This set.
+   * @function module:cloudstate.crdt.ORSet#clear
+   * @return {module:cloudstate.crdt.ORSet} This set.
    */
   this.clear = function () {
     if (currentValue.size > 0) {

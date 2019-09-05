@@ -14,26 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * The CloudState namespace.
- *
- * @namespace cloudstate
- */
-
-/**
- * A CloudState entity.
- *
- * @interface cloudstate.Entity
- */
-
-/**
- * Start a user function server with just this entity.
- *
- * @function cloudstate.Entity#start
- * @param {cloudstate.CloudState~startOptions=} options The options for starting the server.
- * @returns {number} The port number that the server bound to.
- */
-
 const path = require("path");
 const grpc = require("grpc");
 const protoLoader = require("@grpc/proto-loader");
@@ -63,33 +43,76 @@ try {
 /**
  * A CloudState server.
  *
- * @memberOf cloudstate
+ * @interface module:cloudstate.Server
+ */
+
+/**
+ * Start the server.
+ *
+ * @function module:cloudstate.Server#start
+ * @param {module:cloudstate.Server~startOptions=} options The options for starting the server.
+ * @returns {number} The port number that the server bound to.
+ */
+
+/**
+ * Shutdown the server
+ *
+ * @function module:cloudstate.Server#shutdown
+ */
+
+/**
+ * Options for starting a server.
+ *
+ * @typedef module:cloudstate.Server~startOptions
+ * @property {string} [bindAddress="0.0.0.0"] The address to bind to.
+ * @property {number} [bindPort=8080] The port to bind to, specify zero for a random ephemeral port.
+ */
+
+/**
+ * A CloudState entity.
+ *
+ * @interface module:cloudstate.Entity
+ * @extends module:cloudstate.Server
+ */
+
+
+/**
+ * A CloudState root server.
+ *
+ * @memberOf module:cloudstate
+ * @extends module:cloudstate.Server
  */
 class CloudState {
 
   /**
-   * @typedef cloudstate.CloudState~options
+   * @typedef module:cloudstate.CloudState~options
    * @property {string} [serviceName=<name from package.json>] The name of this service.
    * @property {string} [serviceVersion=<version from package.json>] The version of this service.
+   * @property {string} [descriptorSetPath="user-function.desc"] A path to a compiled Protobuf FileDescriptor set,
+   * as output by protoc --descriptor_set_out=somefile.desc. This file must contain all of the entity services that
+   * this user function serves.
    */
 
   /**
    * Create a new cloudstate server.
    *
-   * @param {cloudstate.CloudState~options=} options The options for this server.
+   * @param {module:cloudstate.CloudState~options=} options The options for this server.
    */
   constructor(options) {
-    try {
-      this.proto = fs.readFileSync("user-function.desc");
-    } catch (e) {
-      console.error("Unable to load user-function.desc protobuf descriptor!");
-      throw e;
-    }
-
     this.options = {
+      ...{
+        descriptorSetPath: "user-function.desc"
+      },
       ...serviceInfo,
       ...options
     };
+
+    try {
+      this.proto = fs.readFileSync(this.options.descriptorSetPath);
+    } catch (e) {
+      console.error("Unable to read protobuf descriptor from: " + this.options.descriptorSetPath);
+      throw e;
+    }
 
     this.entities = [];
   }
@@ -97,8 +120,8 @@ class CloudState {
   /**
    * Add an entity to this server.
    *
-   * @param {cloudstate.Entity} entities The entities to add.
-   * @returns {cloudstate.CloudState} This server.
+   * @param {module:cloudstate.Entity} entities The entities to add.
+   * @returns {module:cloudstate.CloudState} This server.
    */
   addEntity(...entities) {
     this.entities = this.entities.concat(entities);
@@ -106,17 +129,9 @@ class CloudState {
   }
 
   /**
-   * Options for starting a server.
-   *
-   * @typedef cloudstate.CloudState~startOptions
-   * @property {string} [bindAddress="0.0.0.0"] The address to bind to.
-   * @property {number} [bindPort=8080] The port to bind to, specify zero for a random ephemeral port.
-   */
-
-  /**
    * Start this server.
    *
-   * @param {cloudstate.CloudState~startOptions=} options The options for starting.
+   * @param {module:cloudstate.CloudState~startOptions=} options The options for starting.
    * @returns {number} The port that was bound to, useful for when a random ephemeral port was requested.
    */
   start(options) {
@@ -179,7 +194,7 @@ class CloudState {
       };
     });
     callback(null, {
-      proto: fs.readFileSync("user-function.desc"), // Why not serve "this.proto"? We already load it in the constructor…
+      proto: this.proto,
       entities: entities,
       serviceInfo: {
         serviceName: this.options.serviceName,
@@ -197,9 +212,6 @@ class CloudState {
     callback(null, {});
   }
 
-  /**
-   * Shutdown this server.
-   */
   shutdown() {
     this.server.tryShutdown(() => {
       console.log("gRPC server has shutdown.");

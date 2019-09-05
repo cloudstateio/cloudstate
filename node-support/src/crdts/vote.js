@@ -21,8 +21,8 @@ const util = require("util");
  *
  * A Vote CRDT allows all nodes an a cluster to vote on a condition, such as whether a user is online.
  *
- * @constructor cloudstate.crdt.Vote
- * @extends cloudstate.crdt.CrdtState
+ * @constructor module:cloudstate.crdt.Vote
+ * @extends module:cloudstate.crdt.CrdtState
  */
 function Vote() {
   let currentSelfVote = false;
@@ -33,7 +33,7 @@ function Vote() {
   /**
    * The number of nodes that have voted for this condition.
    *
-   * @name cloudstate.crdt.Vote#votesFor
+   * @name module:cloudstate.crdt.Vote#votesFor
    * @type {number}
    * @readonly
    */
@@ -46,7 +46,7 @@ function Vote() {
   /**
    * The total number of nodes that have voted.
    *
-   * @name cloudstate.crdt.Vote#totalVoters
+   * @name module:cloudstate.crdt.Vote#totalVoters
    * @type {number}
    * @readonly
    */
@@ -59,7 +59,7 @@ function Vote() {
   /**
    * Whether at least one node has voted for this condition.
    *
-   * @name cloudstate.crdt.Vote#atLeastOne
+   * @name module:cloudstate.crdt.Vote#atLeastOne
    * @type {boolean}
    * @readonly
    */
@@ -72,7 +72,7 @@ function Vote() {
   /**
    * Whether a majority of nodes have voted for this condition.
    *
-   * @name cloudstate.crdt.Vote#majority
+   * @name module:cloudstate.crdt.Vote#majority
    * @type {boolean}
    * @readonly
    */
@@ -85,7 +85,7 @@ function Vote() {
   /**
    * Whether all of nodes have voted for this condition.
    *
-   * @name cloudstate.crdt.Vote#all
+   * @name module:cloudstate.crdt.Vote#all
    * @type {boolean}
    * @readonly
    */
@@ -100,7 +100,7 @@ function Vote() {
    *
    * Setting this will update the current nodes vote accordingly.
    *
-   * @name cloudstate.crdt.Vote#vote
+   * @name module:cloudstate.crdt.Vote#vote
    * @type {boolean}
    */
   Object.defineProperty(this, "vote", {
