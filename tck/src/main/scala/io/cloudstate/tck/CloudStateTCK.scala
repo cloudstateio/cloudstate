@@ -255,7 +255,7 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
             finally Await.ready(tckProxy.unbind().transformWith(_ => system.terminate())(system.dispatcher), 30.seconds)
   }
 
-  final def fromFrontend_expectEntitySpec(within: FiniteDuration): EntitySpec = {
+  final def fromFrontend_expectEntitySpec(within: FiniteDuration): EntitySpec = withClue("EntitySpec was not received, or not well-formed: ") {
     val spec = discoveryFromFrontend.expectMsgType[EntitySpec](within)
     spec.proto must not be ProtobufByteString.EMPTY
     spec.entities must not be empty
@@ -266,7 +266,7 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     spec
   }
 
-  final def fromBackend_expectInit(within: FiniteDuration): EventSourcedInit = {
+  final def fromBackend_expectInit(within: FiniteDuration): EventSourcedInit = withClue("Init message was not received, or not well-formed: ") {
     val init = eventSourcedFromBackend.expectMsgType[EventSourcedStreamIn](noWait)
     init must not be(null)
     init.message must be('init)
@@ -274,7 +274,7 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     init.message.init.get
   }
 
-  final def fromBackend_expectCommand(within: FiniteDuration): Command = {
+  final def fromBackend_expectCommand(within: FiniteDuration): Command = withClue("Command was not received, or not well-formed: ") {
     val command = eventSourcedFromBackend.expectMsgType[EventSourcedStreamIn](noWait)
     command must not be(null)  // FIXME validate Command
     command.message must be('command)
@@ -284,7 +284,7 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     c
   }
 
-  final def fromFrontend_expectReply(events: Int, within: FiniteDuration): EventSourcedReply = {
+  final def fromFrontend_expectReply(events: Int, within: FiniteDuration): EventSourcedReply = withClue("Reply was not received, or not well-formed: ") {
     val reply = eventSourcedFromFrontend.expectMsgType[EventSourcedStreamOut](noWait)
     reply must not be(null)
     reply.message must be('reply)
@@ -294,11 +294,11 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     val clientAction = r.clientAction.get
     clientAction.action must be('reply)
     clientAction.action.reply must be('defined)
-    r.events.size must be (events)
+    withClue("Reply did not have the expected number of events: ") { r.events.size must be (events) }
     r
   }
 
-  final def fromFrontend_expectFailure(within: FiniteDuration): Failure = {
+  final def fromFrontend_expectFailure(within: FiniteDuration): Failure = withClue("Failure was not received, or not well-formed: ") {
     val failure = eventSourcedFromFrontend.expectMsgType[EventSourcedStreamOut](noWait) // FIXME Expects entity.Failure, but gets lientAction.Action.Failure(Failure(commandId, msg)))
     failure must not be(null)
     failure.message must be('reply)
@@ -310,8 +310,8 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     clientAction.action.failure.get
   }
 
-  final def correlate(cmd: Command, commandId: Long)     = cmd.id must be(commandId)
-  final def unrelated(cmd: Command, commandId: Long)    = cmd.id must not be commandId
+  final def correlate(cmd: Command, commandId: Long)    = withClue("Command had the wrong id: ") { cmd.id must be(commandId) }
+  final def unrelated(cmd: Command, commandId: Long)    = withClue("Command had the wrong id: ") { cmd.id must not be commandId }
 
   ("The TCK for" + config.name) must {
     implicit val scheduler = system.scheduler
@@ -382,10 +382,11 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
           (true,1),(false,0),(false,0),(false,0),(true,0)).
         foldLeft(Set.empty[Long]){ case (set, (isReply, eventCount)) =>
           val cmd = fromBackend_expectCommand(noWait)
-          if (isReply)
-            correlate(cmd, fromFrontend_expectReply(events = eventCount, noWait).commandId) // Verify correlation
-          else
-            correlate(cmd, fromFrontend_expectFailure(noWait).commandId) // Verify correlation
+          correlate(
+            cmd,
+            if (isReply) fromFrontend_expectReply(events = eventCount +1, noWait).commandId
+            else fromFrontend_expectFailure(noWait).commandId
+          )
           init.entityId must be(cmd.entityId)
           set must not contain(cmd.id)
           set + cmd.id
