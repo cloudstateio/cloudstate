@@ -384,7 +384,7 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
           val cmd = fromBackend_expectCommand(noWait)
           correlate(
             cmd,
-            if (isReply) fromFrontend_expectReply(events = eventCount +1, noWait).commandId
+            if (isReply) fromFrontend_expectReply(events = eventCount, noWait).commandId
             else fromFrontend_expectFailure(noWait).commandId
           )
           init.entityId must be(cmd.entityId)
