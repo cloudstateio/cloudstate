@@ -61,7 +61,7 @@ func (edr *EntityDiscoveryResponder) Discover(c context.Context, pi *protocol.Pr
 	if protoBytes, e := proto.Marshal(&set); e == nil {
 		es.Proto = protoBytes
 	} else {
-		log.Fatalf("unable to Marshal FileDescriptorSet")
+		return nil, errors.New("unable to Marshal FileDescriptorSet")
 	}
 	log.Printf("Responding with: %v\n", es.ServiceInfo)
 	return &es, nil
@@ -72,7 +72,7 @@ func (edr *EntityDiscoveryResponder) ReportError(c context.Context, ufe *protoco
 	return &empty.Empty{}, nil
 }
 
-func appendTypeTo(msg descriptor.Message, es *protocol.EntitySpec, set *filedescr.FileDescriptorSet) {
+func appendTypeTo(msg descriptor.Message, es *protocol.EntitySpec, set *filedescr.FileDescriptorSet) error {
 	fd, md := descriptor.ForMessage(msg)
 	es.Entities = append(es.Entities, &protocol.Entity{
 		ServiceName:   "com.example.shoppingcart.ShoppingCart", //fmt.Sprintf("%s.%s", fd.Package, fd.Service[0].Name),
@@ -83,13 +83,14 @@ func appendTypeTo(msg descriptor.Message, es *protocol.EntitySpec, set *filedesc
 	if b, e := proto.Marshal(set); e == nil {
 		es.Proto = b
 	} else {
-		panic("huiii")
+		return errors.New("unable to Marshal FileDescriptorSet")
 	}
 
 	// TODO: we should remember what we've added
 	//for _, filename := range fd.Dependency {
 	//	unpackAndAdd(filename, set)
 	//}
+	return nil
 }
 
 func unpackFile(gz []byte) (*filedescr.FileDescriptorProto, error) {
