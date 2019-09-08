@@ -23,11 +23,9 @@ jobs:
     before_script:
     - cd node-support && npm install && cd -
     - cd samples/js-shopping-cart && npm install && cd -
-    - cd go-support/shoppingcart && go build && cd -
     script:
     - cd node-support && npm test && cd -
     - cd samples/js-shopping-cart && npm test && cd -
-    - cd go-support/shoppingcart && go build && cd -
   
   - name: sbt tests
     before_script: sbt update
