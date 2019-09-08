@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/descriptor"
 	"github.com/golang/protobuf/proto"
-	descriptor2 "github.com/golang/protobuf/protoc-gen-go/descriptor"
+	filedescr "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"github.com/golang/protobuf/ptypes/any"
 	"github.com/golang/protobuf/ptypes/empty"
 	"google.golang.org/grpc"
@@ -25,55 +25,9 @@ import (
 type EntityDiscoveryResponder struct {
 }
 
-func appendTypeTo(msg descriptor.Message, es *protocol.EntitySpec, set *descriptor2.FileDescriptorSet) {
-	fd, md := descriptor.ForMessage(msg)
-	es.Entities = append(es.Entities, &protocol.Entity{
-		ServiceName:   "com.example.shoppingcart.ShoppingCart", //fmt.Sprintf("%s.%s", fd.Package, fd.Service[0].Name),
-		EntityType:    "cloudstate.eventsourced.EventSourced",
-		PersistenceId: "ShoppingCartEntity",
-	})
-	log.Printf("%v", md)
-	set.File = append(set.File, fd)
-	if b, e := proto.Marshal(set); e == nil {
-		es.Proto = b
-	} else {
-		panic("huiii")
-	}
-
-	// TODO: we should remember what we've added
-	//for _, filename := range fd.Dependency {
-	//	unpackAndAdd(filename, set)
-	//}
-}
-
-func unpackFile(gz []byte) (*descriptor2.FileDescriptorProto, error) {
-	r, err := gzip.NewReader(bytes.NewReader(gz))
-	if err != nil {
-		return nil, errors.New("failed to open gzip reader")
-	}
-	defer r.Close()
-	b, err := ioutil.ReadAll(r)
-	if err != nil {
-		return nil, errors.New("failed to uncompress descriptor")
-	}
-	fd := new(descriptor2.FileDescriptorProto)
-	if err := proto.Unmarshal(b, fd); err != nil {
-		return nil, errors.New("malformed FileDescriptorProto")
-	}
-	return fd, nil
-}
-
-func unpackAndAdd(filename string, set *descriptor2.FileDescriptorSet) {
-	if descriptorProto, e := unpackFile(proto.FileDescriptor(filename)); e != nil {
-		panic(e)
-	} else {
-		set.File = append(set.File, descriptorProto)
-	}
-}
-
 func (edr *EntityDiscoveryResponder) Discover(c context.Context, pi *protocol.ProxyInfo) (*protocol.EntitySpec, error) {
 	log.Printf("Discover: %v\n", pi)
-	log.Printf("Received discovery call from sidecar [%s %s] supporting CloudState %v.%v\n",
+	log.Printf("Received discovery call from sidecar [%s w%s] supporting CloudState %v.%v\n",
 		pi.ProxyName,
 		pi.ProxyVersion,
 		pi.ProtocolMajorVersion,
@@ -90,8 +44,8 @@ func (edr *EntityDiscoveryResponder) Discover(c context.Context, pi *protocol.Pr
 			SupportLibraryVersion: "0.0.1",
 		},
 	}
-	set := descriptor2.FileDescriptorSet{
-		File: make([]*descriptor2.FileDescriptorProto, 0),
+	set := filedescr.FileDescriptorSet{
+		File: make([]*filedescr.FileDescriptorProto, 0),
 	}
 	appendTypeTo(&shoppingcart.Cart{}, &es, &set)
 	// TODO: resolve dependent proto files by the message itself
@@ -118,41 +72,116 @@ func (edr *EntityDiscoveryResponder) ReportError(c context.Context, ufe *protoco
 	return &empty.Empty{}, nil
 }
 
-type CartServer struct {
-	cart map[string]shoppingcart.LineItem
-}
-
-func NewCartServer() *CartServer {
-	return &CartServer{cart: make(map[string]shoppingcart.LineItem, 0)}
-}
-
-func (s *CartServer) AddItem(c context.Context, li *shoppingcart.AddLineItem) (*empty.Empty, error) {
-	log.Printf("  AddItem: %v\n", li)
-	if item, exists := s.cart[li.GetProductId()]; exists {
-		s.cart[li.GetProductId()] = shoppingcart.LineItem{
-			ProductId: li.GetProductId(),
-			Name:      li.GetName(),
-			Quantity:  item.Quantity + li.GetQuantity(),
-		}
+func appendTypeTo(msg descriptor.Message, es *protocol.EntitySpec, set *filedescr.FileDescriptorSet) {
+	fd, md := descriptor.ForMessage(msg)
+	es.Entities = append(es.Entities, &protocol.Entity{
+		ServiceName:   "com.example.shoppingcart.ShoppingCart", //fmt.Sprintf("%s.%s", fd.Package, fd.Service[0].Name),
+		EntityType:    "cloudstate.eventsourced.EventSourced",
+		PersistenceId: "ShoppingCartEntity"})
+	log.Printf("%v", md)
+	set.File = append(set.File, fd)
+	if b, e := proto.Marshal(set); e == nil {
+		es.Proto = b
 	} else {
-		s.cart[li.GetProductId()] = shoppingcart.LineItem{
+		panic("huiii")
+	}
+
+	// TODO: we should remember what we've added
+	//for _, filename := range fd.Dependency {
+	//	unpackAndAdd(filename, set)
+	//}
+}
+
+func unpackFile(gz []byte) (*filedescr.FileDescriptorProto, error) {
+	r, err := gzip.NewReader(bytes.NewReader(gz))
+	if err != nil {
+		return nil, errors.New("failed to open gzip reader")
+	}
+	defer r.Close()
+	b, err := ioutil.ReadAll(r)
+	if err != nil {
+		return nil, errors.New("failed to uncompress descriptor")
+	}
+	fd := new(filedescr.FileDescriptorProto)
+	if err := proto.Unmarshal(b, fd); err != nil {
+		return nil, errors.New("malformed FileDescriptorProto")
+	}
+	return fd, nil
+}
+
+func unpackAndAdd(filename string, set *filedescr.FileDescriptorSet) {
+	if descriptorProto, e := unpackFile(proto.FileDescriptor(filename)); e != nil {
+		panic(e)
+	} else {
+		set.File = append(set.File, descriptorProto)
+	}
+}
+
+type ShoppingCart struct {
+	shoppingcart.Cart
+}
+
+func NewShoppingCart() *ShoppingCart {
+	return &ShoppingCart{
+		Cart: shoppingcart.Cart{
+			Items: make([]*shoppingcart.LineItem, 0)[:],
+		},
+	}
+}
+
+func (s *ShoppingCart) find(productId string) (item *shoppingcart.LineItem, index int) {
+	for i, item := range s.Items {
+		if productId == item.GetProductId() {
+			return item, i
+		}
+	}
+	return nil, 0
+}
+
+func (s *ShoppingCart) remove(productId string) (ok bool) {
+	if item, i := s.find(productId); item != nil {
+		// remove and re-slice
+		copy(s.Items[i:], s.Items[i+1:])
+		s.Items = s.Items[:len(s.Items)-1]
+		return true
+	} else {
+		return false
+	}
+}
+
+func (s *ShoppingCart) AddItem(c context.Context, li *shoppingcart.AddLineItem) (*empty.Empty, error) {
+	log.Printf("  AddItem: %v\n", li)
+	if li.GetQuantity() <= 0 {
+		return nil, errors.New(fmt.Sprintf("Cannot add negative quantity of to item %s", li.GetProductId()))
+	}
+
+	if item, _ := s.find(li.GetProductId()); item != nil {
+		item.Quantity += li.GetQuantity()
+	} else {
+		s.Items = append(s.Items, &shoppingcart.LineItem{
 			ProductId: li.GetProductId(),
 			Name:      li.GetName(),
 			Quantity:  li.GetQuantity(),
-		}
+		})
 	}
 	return &empty.Empty{}, nil
 }
 
-func (s *CartServer) RemoveItem(c context.Context, li *shoppingcart.RemoveLineItem) (*empty.Empty, error) {
+func (s *ShoppingCart) RemoveItem(c context.Context, li *shoppingcart.RemoveLineItem) (*empty.Empty, error) {
 	log.Printf("  RemoveItem: %v\n", li)
-	delete(s.cart, li.GetProductId())
+	if removed := s.remove(li.GetProductId()); !removed {
+		return nil, errors.New(fmt.Sprintf("Cannot remove item %s because it is not in the cart.", li.GetProductId()))
+	}
 	return &empty.Empty{}, nil
 }
 
-func (s *CartServer) GetCart(c context.Context, sc *shoppingcart.GetShoppingCart) (*shoppingcart.Cart, error) {
+func (s *ShoppingCart) GetCart(c context.Context, sc *shoppingcart.GetShoppingCart) (*shoppingcart.Cart, error) {
 	log.Printf("GetCart: %v\n", sc)
-	return &shoppingcart.Cart{}, nil
+	cart := &shoppingcart.Cart{}
+	for _, item := range s.Items {
+		cart.Items = append(cart.Items, item)
+	}
+	return cart, nil
 }
 
 type EventSourcedHandler struct {
@@ -160,20 +189,19 @@ type EventSourcedHandler struct {
 }
 
 type EventSourcedEntityContext struct {
-	esi protocol.EventSourcedInit
-	c   CartServer
+	esi  protocol.EventSourcedInit
+	cart ShoppingCart
 }
 
 func (esh *EventSourcedHandler) Handle(server protocol.EventSourced_HandleServer) error {
 	for {
-		streamIn, err := server.Recv()
+		msg, err := server.Recv()
 		if err == io.EOF {
 			return nil
 		}
-		if i := streamIn.GetInit(); i != nil {
+		if i := msg.GetInit(); i != nil {
 			log.Printf("received init: %v\n", i)
 			// received init: service_name:"com.example.shoppingcart.ShoppingCart" entity_id:"testuser:1"
-			//i.GetSnapshot().Snapshot
 			//serviceName := i.GetServiceName()
 			eid := i.GetEntityId()
 			log.Printf("  register init with entityId: %v", eid)
@@ -189,69 +217,142 @@ func (esh *EventSourcedHandler) Handle(server protocol.EventSourced_HandleServer
 				}
 			} else {
 				esh.entities[eid] = &EventSourcedEntityContext{
-					esi: *i,
-					c:   *NewCartServer(),
+					esi:  *i,
+					cart: *NewShoppingCart(),
 				}
 			}
 		}
-		if cmd := streamIn.GetCommand(); cmd != nil {
+		if cmd := msg.GetCommand(); cmd != nil {
 			log.Printf("received command: %v\n", cmd)
-
-			//entityId := c.GetEntityId()
-			//i := esh.entities[entityId]
-
-			//serviceName := i.GetServiceName()
-			//serviceMethodName := c.GetName()
-			//typeUrl := c.GetPayload().GetTypeUrl()
+			//serviceName := cmd.GetServiceName()
+			//serviceMethodName := cart.GetName()
+			//typeUrl := cart.GetPayload().GetTypeUrl()
 			//
 			// we are instructed to call <serviceMethodName> from the service <serviceName> using the
 			// serviceMethodName's payload, in this case
-
 			if cmd.GetName() == "RemoveItem" {
 				removeLineItem := shoppingcart.RemoveLineItem{}
 				if proto.Unmarshal(cmd.GetPayload().GetValue(), &removeLineItem) != nil {
 					log.Fatalf("failed to unmarshal AddLineItem")
 				}
-
 				ctx := esh.entities[cmd.GetEntityId()]
-				reply, _ := ctx.c.RemoveItem(server.Context(), &removeLineItem)
-				marshal, err := proto.Marshal(reply)
+				// TODO: we should infer here the call to RemoveItem by the cmd.GetServiceName()
+				reply, err := ctx.cart.RemoveItem(server.Context(), &removeLineItem)
 				if err != nil {
-					log.Fatalf("unable to Marshal")
-				}
-				log.Printf("  reply with: %v\n", marshal)
-				_ = server.Send(&protocol.EventSourcedStreamOut{
-					Message: &protocol.EventSourcedStreamOut_Reply{
-						Reply: &protocol.EventSourcedReply{
-							CommandId: cmd.GetId(),
-							ClientAction: &protocol.ClientAction{
-								Action: &protocol.ClientAction_Reply{
-									Reply: &protocol.Reply{
-										Payload: &any.Any{
-											TypeUrl: "type.googleapis.com/google.protobuf.Empty",
-											Value:   marshal,
+					// TCK says: FIXME Expects entity.Failure, but gets lientAction.Action.Failure(Failure(commandId, msg)))
+					//send := &protocol.EventSourcedStreamOut{
+					//	Message: &protocol.EventSourcedStreamOut_Failure{
+					//		Failure: &protocol.Failure{
+					//			CommandId:   cmd.GetId(),
+					//			Description: err.Error(),
+					//		}},
+					//}
+					send := &protocol.EventSourcedStreamOut{
+						Message: &protocol.EventSourcedStreamOut_Reply{
+							Reply: &protocol.EventSourcedReply{
+								CommandId: cmd.GetId(),
+								ClientAction: &protocol.ClientAction{
+									Action: &protocol.ClientAction_Failure{
+										Failure: &protocol.Failure{
+											CommandId:   cmd.GetId(),
+											Description: err.Error(),
 										},
 									},
 								},
+								Events: []*any.Any{{
+									TypeUrl: cmd.GetPayload().GetTypeUrl(),
+									Value:   cmd.GetPayload().GetValue(),
+								}},
 							},
 						},
-					},
-				})
-			}
+					}
+					log.Printf("  reply with: %v\n", send)
+					_ = server.Send(send)
+					continue
+				}
+				if payload, err := proto.Marshal(reply); err != nil {
+					log.Fatalf("unable to Marshal")
+				} else {
+					// so here we should produce what we would
+					// replay as an event. the java client example
+					// uses a separate Domain proto to capture that
+					// so here we produce an event from a command
+					// => command(
 
+					// a ctx for one specific entity holds the entity
+					// and has to match the event with a eventhandler
+					// so that it gets called
+
+					// for now, we just persist the payload we've got for the command
+					send := &protocol.EventSourcedStreamOut{
+						Message: &protocol.EventSourcedStreamOut_Reply{
+							Reply: &protocol.EventSourcedReply{
+								CommandId: cmd.GetId(),
+								ClientAction: &protocol.ClientAction{
+									Action: &protocol.ClientAction_Reply{
+										Reply: &protocol.Reply{
+											Payload: &any.Any{
+												TypeUrl: "type.googleapis.com/google.protobuf.Empty",
+												Value:   payload,
+											},
+										},
+									},
+								},
+								Events: []*any.Any{{
+									TypeUrl: cmd.GetPayload().GetTypeUrl(),
+									Value:   cmd.GetPayload().GetValue(),
+								}},
+							},
+						},
+					}
+					log.Printf("  reply with: %v\n", send)
+					_ = server.Send(send)
+				}
+			}
 			if cmd.GetName() == "AddItem" {
 				addLineItem := shoppingcart.AddLineItem{}
 				if proto.Unmarshal(cmd.GetPayload().GetValue(), &addLineItem) != nil {
 					log.Fatalf("failed to unmarshal AddLineItem")
 				}
 				ctx := esh.entities[cmd.GetEntityId()]
-				reply, _ := ctx.c.AddItem(server.Context(), &addLineItem)
+				reply, err := ctx.cart.AddItem(server.Context(), &addLineItem)
+				if err != nil {
+					// TCK says: FIXME Expects entity.Failure, but gets lientAction.Action.Failure(Failure(commandId, msg)))
+					//send := &protocol.EventSourcedStreamOut{
+					//	Message: &protocol.EventSourcedStreamOut_Failure{
+					//		Failure: &protocol.Failure{
+					//			CommandId:   cmd.GetId(),
+					//			Description: err.Error(),
+					//		}},
+					//}
+					send := &protocol.EventSourcedStreamOut{
+						Message: &protocol.EventSourcedStreamOut_Reply{
+							Reply: &protocol.EventSourcedReply{
+								CommandId: cmd.GetId(),
+								ClientAction: &protocol.ClientAction{
+									Action: &protocol.ClientAction_Failure{
+										Failure: &protocol.Failure{
+											CommandId:   cmd.GetId(),
+											Description: err.Error(),
+										},
+									},
+								},
+								Events: []*any.Any{{
+									TypeUrl: cmd.GetPayload().GetTypeUrl(),
+									Value:   cmd.GetPayload().GetValue(),
+								}},
+							},
+						},
+					}
+					log.Printf("  reply with: %v\n", send)
+					_ = server.Send(send)
+					continue
+				}
 				marshal, err := proto.Marshal(reply)
 				if err != nil {
 					log.Fatalf("unable to Marshal")
 				}
-				log.Printf("  reply with: %v\n", marshal)
-				_ = server.Send(&protocol.EventSourcedStreamOut{
+				send := &protocol.EventSourcedStreamOut{
 					Message: &protocol.EventSourcedStreamOut_Reply{
 						Reply: &protocol.EventSourcedReply{
 							CommandId: cmd.GetId(),
@@ -265,33 +366,27 @@ func (esh *EventSourcedHandler) Handle(server protocol.EventSourced_HandleServer
 									},
 								},
 							},
+							Events: []*any.Any{{
+								TypeUrl: cmd.GetPayload().GetTypeUrl(),
+								Value:   cmd.GetPayload().GetValue(),
+							}},
 						},
 					},
-				})
+				}
+				log.Printf("  reply with: %v\n", send)
+				_ = server.Send(send)
 			}
-
 			if cmd.GetName() == "GetCart" {
 				getShoppingCart := shoppingcart.GetShoppingCart{}
 				if proto.Unmarshal(cmd.GetPayload().GetValue(), &getShoppingCart) != nil {
 					log.Fatalf("failed to unmarshal GetShoppingCart")
 				}
 				ctx := esh.entities[cmd.GetEntityId()]
-				cart := shoppingcart.Cart{
-				}
-				for _, c := range ctx.c.cart {
-					cart.Items = append(cart.Items, &shoppingcart.LineItem{
-						ProductId: c.GetProductId(),
-						Name:      c.GetName(),
-						Quantity:  c.GetQuantity(),
-					})
-				}
-				marshal, err := proto.Marshal(&cart);
+				marshal, err := proto.Marshal(&ctx.cart.Cart);
 				if err != nil {
 					log.Fatalf("unable to Marshal")
 				}
-				log.Printf("  reply with: %v\n", cart)
-
-				if (server.Send(&protocol.EventSourcedStreamOut{
+				send := &protocol.EventSourcedStreamOut{
 					Message: &protocol.EventSourcedStreamOut_Reply{
 						Reply: &protocol.EventSourcedReply{
 							CommandId: cmd.GetId(),
@@ -307,21 +402,21 @@ func (esh *EventSourcedHandler) Handle(server protocol.EventSourced_HandleServer
 							},
 						},
 					},
-				}) != nil) {
+				}
+				log.Printf("  reply with: %v\n", send)
+				if server.Send(send) != nil {
 					log.Fatalf("unable to server.Send")
 				}
 			}
 		}
-		if c := streamIn.GetEvent(); c != nil {
+		if c := msg.GetEvent(); c != nil {
 			log.Printf("received event: %v\n", c)
 		}
 	}
-	// https://grpc.io/docs/tutorials/basic/go/
-	return nil;
+	return nil
 }
 
 func main() {
-	//lis, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%s", os.Getenv("PORT")))
 	lis, err := net.Listen("tcp",
 		fmt.Sprintf("%s:%s", os.Getenv("HOST"), os.Getenv("PORT")),
 	)
@@ -331,12 +426,12 @@ func main() {
 	grpcServer := grpc.NewServer()
 	protocol.RegisterEntityDiscoveryServer(grpcServer, &EntityDiscoveryResponder{})
 	log.Println("RegisterEntityDiscoveryServer")
-	protocol.RegisterEventSourcedServer(grpcServer, &EventSourcedHandler{
-		entities: make(map[string]*EventSourcedEntityContext, 0),
-	})
+	protocol.RegisterEventSourcedServer(grpcServer,
+		&EventSourcedHandler{
+			entities: make(map[string]*EventSourcedEntityContext, 0),
+		},
+	)
 	log.Println("RegisterEventSourcedServer")
-	shoppingcart.RegisterShoppingCartServer(grpcServer, &CartServer{})
-	log.Println("RegisterShoppingCartServer")
 	if e := grpcServer.Serve(lis); e != nil {
 		log.Fatalf("failed to grpcServer.Serve for: %v", lis)
 	}
