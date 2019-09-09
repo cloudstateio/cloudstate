@@ -23,47 +23,51 @@ import scala.collection.immutable.Queue
 import scala.concurrent.duration.{Deadline, FiniteDuration}
 
 /**
-  * This actor enforces the concurrency of requests going to the user code.
-  *
-  * Background reading necessary to understand before reading this:
-  *
-  * https://github.com/knative/serving/blob/master/docs/scaling/DEVELOPMENT.md
-  *
-  * The Autoscaler selects a desired concurrency level (though, this is currently not implemented and hardcoded at 1)
-  * based on CPU/memory/other resource usage of the pod. This is referred to as slow brain scaling. We need to enforce
-  * that concurrency level, and then also report metrics on outstanding requests to the user function. When the
-  * autoscaler sees the number of queued request go up, it scales the deployment. This is referred to as fast brain
-  * scaling.
-  *
-  * One challenge that we have is that not all our communication with the pod is request based - we also send init
-  * messages and events, and these messages don't send a reply, so there's no way to measure how long they take to
-  * process. We could potentially use backpressure to determine when they are processed, however it's more complex than
-  * that because a lot of the time in hydrating the events will come from loading the database, which we don't want to
-  * include in metrics.
-  *
-  * All this said, it's not as bad as it sounds. Currently we don't wait for events to be consumed by the user function
-  * before sending the command. If the user function is slow at consuming them, then the command will end up queuing
-  * behind the events, and the slow processing of events will cause the command to be delayed in being processed. So,
-  * our strategy is to just report metrics on command handling, and let event handling just happen.
-  */
+ * This actor enforces the concurrency of requests going to the user code.
+ *
+ * Background reading necessary to understand before reading this:
+ *
+ * https://github.com/knative/serving/blob/master/docs/scaling/DEVELOPMENT.md
+ *
+ * The Autoscaler selects a desired concurrency level (though, this is currently not implemented and hardcoded at 1)
+ * based on CPU/memory/other resource usage of the pod. This is referred to as slow brain scaling. We need to enforce
+ * that concurrency level, and then also report metrics on outstanding requests to the user function. When the
+ * autoscaler sees the number of queued request go up, it scales the deployment. This is referred to as fast brain
+ * scaling.
+ *
+ * One challenge that we have is that not all our communication with the pod is request based - we also send init
+ * messages and events, and these messages don't send a reply, so there's no way to measure how long they take to
+ * process. We could potentially use backpressure to determine when they are processed, however it's more complex than
+ * that because a lot of the time in hydrating the events will come from loading the database, which we don't want to
+ * include in metrics.
+ *
+ * All this said, it's not as bad as it sounds. Currently we don't wait for events to be consumed by the user function
+ * before sending the command. If the user function is slow at consuming them, then the command will end up queuing
+ * behind the events, and the slow processing of events will cause the command to be delayed in being processed. So,
+ * our strategy is to just report metrics on command handling, and let event handling just happen.
+ */
 object ConcurrencyEnforcer {
   final case class Action(id: String, start: () => Unit)
   final case class ActionCompleted(id: String, timeNanos: Long)
 
   final case class ConcurrencyEnforcerSettings(
-    concurrency: Int,
-    actionTimeout: FiniteDuration,
-    cleanupPeriod: FiniteDuration
+      concurrency: Int,
+      actionTimeout: FiniteDuration,
+      cleanupPeriod: FiniteDuration
   )
 
   private case object Tick extends DeadLetterSuppression
 
-  def props(settings: ConcurrencyEnforcerSettings, statsCollector: ActorRef): Props = Props(new ConcurrencyEnforcer(settings, statsCollector))
+  def props(settings: ConcurrencyEnforcerSettings, statsCollector: ActorRef): Props =
+    Props(new ConcurrencyEnforcer(settings, statsCollector))
 
   private final case class OutstandingAction(deadline: Deadline)
 }
 
-class ConcurrencyEnforcer(settings: ConcurrencyEnforcerSettings, statsCollector: ActorRef) extends Actor with ActorLogging with Timers {
+class ConcurrencyEnforcer(settings: ConcurrencyEnforcerSettings, statsCollector: ActorRef)
+    extends Actor
+    with ActorLogging
+    with Timers {
   import ConcurrencyEnforcer._
 
   private[this] final var outstanding = Map.empty[String, OutstandingAction]
@@ -103,13 +107,11 @@ class ConcurrencyEnforcer(settings: ConcurrencyEnforcerSettings, statsCollector:
       }
   }
 
-  private def reportCommand(action: Action) = {
+  private def reportCommand(action: Action) =
     statsCollector ! StatsCollector.CommandSent
-  }
 
-  private def reportReply(timeNanos: Long) = {
+  private def reportReply(timeNanos: Long) =
     statsCollector ! StatsCollector.ReplyReceived(timeNanos)
-  }
 
   private def completeAction(id: String, timeNanos: Long) = {
     reportReply(timeNanos)
@@ -122,7 +124,7 @@ class ConcurrencyEnforcer(settings: ConcurrencyEnforcerSettings, statsCollector:
     }
   }
 
-  private def startAction(action: Action)= {
+  private def startAction(action: Action) = {
     if (outstanding.contains(action.id)) {
       log.warning("Action {} already outstanding?", action.id)
     }

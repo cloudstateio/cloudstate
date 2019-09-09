@@ -26,10 +26,13 @@ inThisBuild(Seq(
     "scm:git@github.com:cloudstateio/cloudstate.git"
   )),
   developers := List(
-    Developer(id="jroper", name="James Roper", email="james@jazzy.id.au", url=url("https://jazzy.id.au"))
+    Developer(id="jroper", name="James Roper", email="james@jazzy.id.au", url=url("https://jazzy.id.au")),
+    Developer(id="viktorklang", name="Viktor Klang", email="viktor.klang@gmail.com", url=url("https://viktorklang.com")),
   ),
   
   sonatypeProfileName := "io.cloudstate",
+
+  scalafmtOnCompile := true,
 ))
 
 // Make sure the version doesn't change each time it gets built, this ensures we don't rebuild the native image

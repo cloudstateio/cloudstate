@@ -37,7 +37,6 @@ import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
 import io.grpc.Status
 import org.slf4j.LoggerFactory
 
-
 object Serve {
 
   private final val log = LoggerFactory.getLogger(getClass)
@@ -63,7 +62,8 @@ object Serve {
       else ProtobufByteString.readFrom(bytes.iterator.asInputStream)
   }
 
-  private final class CommandSerializer(commandName: String, desc: Descriptor) extends ProtobufSerializer[UserFunctionCommand] {
+  private final class CommandSerializer(commandName: String, desc: Descriptor)
+      extends ProtobufSerializer[UserFunctionCommand] {
     private[this] final val commandTypeUrl = AnyTypeUrlHostName + desc.getFullName
 
     // Should not be used in practice
@@ -72,52 +72,68 @@ object Serve {
       case Some(payload) => ByteString(payload.value.asReadOnlyByteBuffer())
     }
 
-    override final def deserialize(bytes: ByteString): UserFunctionCommand = {
+    override final def deserialize(bytes: ByteString): UserFunctionCommand =
       UserFunctionCommand(
         name = commandName,
         payload = Some(ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer)))
       )
-    }
   }
 
-  private final case class CommandHandler(fullCommandName: String, serializer: CommandSerializer, flow: Flow[UserFunctionCommand,
-    UserFunctionReply, NotUsed], unary: Boolean, expectedReplyTypeUrl: String)
+  private final case class CommandHandler(fullCommandName: String,
+                                          serializer: CommandSerializer,
+                                          flow: Flow[UserFunctionCommand, UserFunctionReply, NotUsed],
+                                          unary: Boolean,
+                                          expectedReplyTypeUrl: String)
 
-  def createRoute(entities: Seq[ServableEntity], router: UserFunctionRouter, statsCollector: ActorRef,
-    entityDiscoveryClient: EntityDiscoveryClient, fileDescriptors: Seq[FileDescriptor])(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
-
+  def createRoute(entities: Seq[ServableEntity],
+                  router: UserFunctionRouter,
+                  statsCollector: ActorRef,
+                  entityDiscoveryClient: EntityDiscoveryClient,
+                  fileDescriptors: Seq[FileDescriptor])(
+      implicit sys: ActorSystem,
+      mat: Materializer,
+      ec: ExecutionContext
+  ): PartialFunction[HttpRequest, Future[HttpResponse]] =
     compileProxy(entities, router, statsCollector, entityDiscoveryClient) orElse // Fast path
-                       handleNetworkProbe() orElse
-                       Reflection.serve(fileDescriptors, entities.map(_.serviceName).toList) orElse
-                       HttpApi.serve(router, entities, entityDiscoveryClient) orElse // Slow path
-                       NotFound // No match. TODO: Consider having the caller of this method deal with this condition
-  }
+    handleNetworkProbe() orElse
+    Reflection.serve(fileDescriptors, entities.map(_.serviceName).toList) orElse
+    HttpApi.serve(router, entities, entityDiscoveryClient) orElse // Slow path
+    NotFound // No match. TODO: Consider having the caller of this method deal with this condition
 
   /**
-    * Knative network probe handler.
-    */
+   * Knative network probe handler.
+   */
   def handleNetworkProbe(): PartialFunction[HttpRequest, Future[HttpResponse]] = Function.unlift { req =>
     req.headers.find(_.name.equalsIgnoreCase("K-Network-Probe")).map { header =>
       Future.successful(header.value match {
         case "queue" => HttpResponse(entity = HttpEntity("queue"))
-        case other => HttpResponse(status = StatusCodes.BadRequest, entity = HttpEntity(s"unexpected probe header value: $other"))
+        case other =>
+          HttpResponse(status = StatusCodes.BadRequest, entity = HttpEntity(s"unexpected probe header value: $other"))
       })
     }
   }
 
-  private[this] final def compileProxy(entities: Seq[ServableEntity], router: UserFunctionRouter, statsCollector: ActorRef, entityDiscoveryClient: EntityDiscoveryClient)(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+  private[this] final def compileProxy(entities: Seq[ServableEntity],
+                                       router: UserFunctionRouter,
+                                       statsCollector: ActorRef,
+                                       entityDiscoveryClient: EntityDiscoveryClient)(
+      implicit sys: ActorSystem,
+      mat: Materializer,
+      ec: ExecutionContext
+  ): PartialFunction[HttpRequest, Future[HttpResponse]] = {
 
     val rpcMethodSerializers = (for {
       entity <- entities.iterator
       method <- entity.serviceDescriptor.getMethods.iterator.asScala
     } yield {
-      (Path / entity.serviceName / method.getName, CommandHandler(
-        fullCommandName = entity.serviceName + "." + method.getName,
-        new CommandSerializer(method.getName, method.getInputType),
-        router.handle(entity.serviceName),
-        unary = !method.toProto.getClientStreaming && !method.toProto.getServerStreaming,
-        expectedReplyTypeUrl = AnyTypeUrlHostName + method.getOutputType.getFullName
-      ))
+      (Path / entity.serviceName / method.getName,
+       CommandHandler(
+         fullCommandName = entity.serviceName + "." + method.getName,
+         new CommandSerializer(method.getName, method.getInputType),
+         router.handle(entity.serviceName),
+         unary = !method.toProto.getClientStreaming && !method.toProto.getServerStreaming,
+         expectedReplyTypeUrl = AnyTypeUrlHostName + method.getOutputType.getFullName
+       ))
     }).toMap
 
     val mapRequestFailureExceptions: ActorSystem => PartialFunction[Throwable, Status] = {
@@ -144,7 +160,8 @@ object Serve {
                 reply.clientAction match {
                   case Some(ClientAction(ClientAction.Action.Reply(Reply(Some(payload))))) =>
                     if (payload.typeUrl != handler.expectedReplyTypeUrl) {
-                      val msg = s"${handler.fullCommandName}: Expected reply type_url to be [${handler.expectedReplyTypeUrl}] but was [${payload.typeUrl}]."
+                      val msg =
+                        s"${handler.fullCommandName}: Expected reply type_url to be [${handler.expectedReplyTypeUrl}] but was [${payload.typeUrl}]."
                       log.warn(msg)
                       entityDiscoveryClient.reportError(UserFunctionError("Warning: " + msg))
                     }
@@ -157,7 +174,8 @@ object Serve {
                   case _ =>
                     None
                 }
-              }.collect(Function.unlift(identity))
+              }
+              .collect(Function.unlift(identity))
               .watchTermination() { (_, complete) =>
                 if (handler.unary) {
                   complete.onComplete { _ =>
@@ -168,10 +186,10 @@ object Serve {
               }
 
             marshalStream(pipeline, mapRequestFailureExceptions)(ReplySerializer, mat, responseCodec, sys)
-          }.recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
+          }
+          .recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
     }
   }
 
   private case class CommandException(msg: String) extends RuntimeException(msg, null, false, false)
 }
-

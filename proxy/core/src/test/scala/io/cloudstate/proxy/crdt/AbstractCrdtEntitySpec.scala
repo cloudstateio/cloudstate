@@ -24,8 +24,7 @@ import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 
 object AbstractCrdtEntitySpec {
-  def config: Config = ConfigFactory.parseString(
-    """
+  def config: Config = ConfigFactory.parseString("""
       |akka.actor.provider = cluster
       |# Make the tests run faster
       |akka.cluster.distributed-data.notify-subscribers-interval = 50ms
@@ -49,15 +48,16 @@ object AbstractCrdtEntitySpec {
   final val element3 = ProtoAny("element3", ByteString.copyFromUtf8("3"))
 }
 
-abstract class AbstractCrdtEntitySpec extends TestKit(ActorSystem("test", AbstractCrdtEntitySpec.config))
-  with WordSpecLike
-  with Matchers
-  with Inside
-  with Eventually
-  with BeforeAndAfter
-  with BeforeAndAfterAll
-  with ImplicitSender
-  with OptionValues {
+abstract class AbstractCrdtEntitySpec
+    extends TestKit(ActorSystem("test", AbstractCrdtEntitySpec.config))
+    with WordSpecLike
+    with Matchers
+    with Inside
+    with Eventually
+    with BeforeAndAfter
+    with BeforeAndAfterAll
+    with ImplicitSender
+    with OptionValues {
 
   import AbstractCrdtEntitySpec._
 
@@ -116,50 +116,71 @@ abstract class AbstractCrdtEntitySpec extends TestKit(ActorSystem("test", Abstra
     (expectCommand(name, payload, true), streamProbe)
   }
 
-  protected def expectState(): S = {
+  protected def expectState(): S =
     inside(toUserFunction.expectMsgType[CrdtStreamIn].message) {
       case CrdtStreamIn.Message.State(state) => extractState(state.state)
     }
-  }
 
-  protected def expectDelta(): D = {
+  protected def expectDelta(): D =
     inside(toUserFunction.expectMsgType[CrdtStreamIn].message) {
       case CrdtStreamIn.Message.Changed(delta) => extractDelta(delta.delta)
     }
-  }
 
-  protected def sendAndExpectReply(commandId: Long, action: CrdtStateAction.Action = CrdtStateAction.Action.Empty,
-    writeConsistency: CrdtWriteConsistency = CrdtWriteConsistency.LOCAL): UserFunctionReply = {
+  protected def sendAndExpectReply(
+      commandId: Long,
+      action: CrdtStateAction.Action = CrdtStateAction.Action.Empty,
+      writeConsistency: CrdtWriteConsistency = CrdtWriteConsistency.LOCAL
+  ): UserFunctionReply = {
     val reply = doSendAndExpectReply(commandId, action, writeConsistency)
     reply.clientAction shouldBe None
     reply
   }
 
-  protected def sendStreamedMessage(commandId: Long, payload: Option[ProtoAny] = None, endStream: Boolean = false): Unit = {
-    fromUserFunction ! CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(CrdtStreamedMessage(commandId = commandId,
-      sideEffects = Nil, clientAction = payload.map(p => ClientAction(ClientAction.Action.Reply(Reply(Some(p))))), endStream = endStream)))
-  }
+  protected def sendStreamedMessage(commandId: Long,
+                                    payload: Option[ProtoAny] = None,
+                                    endStream: Boolean = false): Unit =
+    fromUserFunction ! CrdtStreamOut(
+      CrdtStreamOut.Message.StreamedMessage(
+        CrdtStreamedMessage(commandId = commandId,
+                            sideEffects = Nil,
+                            clientAction = payload.map(p => ClientAction(ClientAction.Action.Reply(Reply(Some(p))))),
+                            endStream = endStream)
+      )
+    )
 
-  protected def sendAndExpectFailure(commandId: Long, action: CrdtStateAction.Action = CrdtStateAction.Action.Empty,
-    writeConsistency: CrdtWriteConsistency = CrdtWriteConsistency.LOCAL): Failure = {
+  protected def sendAndExpectFailure(commandId: Long,
+                                     action: CrdtStateAction.Action = CrdtStateAction.Action.Empty,
+                                     writeConsistency: CrdtWriteConsistency = CrdtWriteConsistency.LOCAL): Failure = {
     val reply = doSendAndExpectReply(commandId, action, writeConsistency)
     inside(reply.clientAction) {
       case Some(ClientAction(ClientAction.Action.Failure(failure))) => failure
     }
   }
 
-  protected def sendReply(commandId: Long, action: CrdtStateAction.Action = CrdtStateAction.Action.Empty,
-    writeConsistency: CrdtWriteConsistency = CrdtWriteConsistency.LOCAL, streamed: Boolean = false) = {
-    fromUserFunction ! CrdtStreamOut(CrdtStreamOut.Message.Reply(CrdtReply(commandId = commandId, sideEffects = Nil,
-      clientAction = None, stateAction = Some(CrdtStateAction(action = action, writeConsistency = writeConsistency)), streamed = streamed)))
-  }
+  protected def sendReply(commandId: Long,
+                          action: CrdtStateAction.Action = CrdtStateAction.Action.Empty,
+                          writeConsistency: CrdtWriteConsistency = CrdtWriteConsistency.LOCAL,
+                          streamed: Boolean = false) =
+    fromUserFunction ! CrdtStreamOut(
+      CrdtStreamOut.Message.Reply(
+        CrdtReply(
+          commandId = commandId,
+          sideEffects = Nil,
+          clientAction = None,
+          stateAction = Some(CrdtStateAction(action = action, writeConsistency = writeConsistency)),
+          streamed = streamed
+        )
+      )
+    )
 
-  protected def doSendAndExpectReply(commandId: Long, action: CrdtStateAction.Action, writeConsistency: CrdtWriteConsistency): UserFunctionReply = {
+  protected def doSendAndExpectReply(commandId: Long,
+                                     action: CrdtStateAction.Action,
+                                     writeConsistency: CrdtWriteConsistency): UserFunctionReply = {
     sendReply(commandId, action, writeConsistency)
     expectMsgType[UserFunctionReply]
   }
 
-  protected def expectCommand(name: String, payload: ProtoAny, streamed: Boolean = false): Long = {
+  protected def expectCommand(name: String, payload: ProtoAny, streamed: Boolean = false): Long =
     inside(toUserFunction.expectMsgType[CrdtStreamIn].message) {
       case CrdtStreamIn.Message.Command(Command(eid, cid, n, p, s)) =>
         eid should ===(entityId)
@@ -168,30 +189,35 @@ abstract class AbstractCrdtEntitySpec extends TestKit(ActorSystem("test", Abstra
         s shouldBe streamed
         cid
     }
-  }
 
   protected def createAndExpectInit(): Option[S] = {
     toUserFunction = TestProbe()
     entityDiscovery = TestProbe()
-    entity = system.actorOf(CrdtEntity.props(new Crdt() {
-      override def handle(in: Source[CrdtStreamIn, NotUsed]): Source[CrdtStreamOut, NotUsed] = {
-        in.runWith(Sink.actorRef(toUserFunction.testActor, StreamClosed))
-        Source.actorRef(100, OverflowStrategy.fail).mapMaterializedValue { actor =>
-          fromUserFunction = actor
-          NotUsed
+    entity = system.actorOf(
+      CrdtEntity.props(
+        new Crdt() {
+          override def handle(in: Source[CrdtStreamIn, NotUsed]): Source[CrdtStreamOut, NotUsed] = {
+            in.runWith(Sink.actorRef(toUserFunction.testActor, StreamClosed))
+            Source.actorRef(100, OverflowStrategy.fail).mapMaterializedValue { actor =>
+              fromUserFunction = actor
+              NotUsed
+            }
+          }
+        },
+        CrdtEntity.Configuration(ServiceName, UserFunctionName, Timeout(10.minutes), 100, 10.minutes, 10.minutes),
+        new EntityDiscovery {
+          override def discover(in: ProxyInfo): Future[EntitySpec] = {
+            entityDiscovery.testActor ! in
+            Future.failed(new Exception("Not expecting discover"))
+          }
+          override def reportError(in: UserFunctionError): Future[Empty] = {
+            entityDiscovery.testActor ! in
+            Future.successful(Empty())
+          }
         }
-      }
-    }, CrdtEntity.Configuration(ServiceName, UserFunctionName, Timeout(10.minutes), 100, 10.minutes, 10.minutes),
-      new EntityDiscovery {
-        override def discover(in: ProxyInfo): Future[EntitySpec] = {
-          entityDiscovery.testActor ! in
-          Future.failed(new Exception("Not expecting discover"))
-        }
-        override def reportError(in: UserFunctionError): Future[Empty] = {
-          entityDiscovery.testActor ! in
-          Future.successful(Empty())
-        }
-      }), entityId)
+      ),
+      entityId
+    )
 
     val init = toUserFunction.expectMsgType[CrdtStreamIn]
     inside(init.message) {
@@ -218,13 +244,10 @@ abstract class AbstractCrdtEntitySpec extends TestKit(ActorSystem("test", Abstra
     }
   }
 
-  override protected def beforeAll(): Unit = {
+  override protected def beforeAll(): Unit =
     cluster.join(cluster.selfAddress)
-  }
 
-  override protected def afterAll(): Unit = {
+  override protected def afterAll(): Unit =
     Await.ready(system.terminate(), 10.seconds)
-  }
-
 
 }

@@ -6,7 +6,6 @@ import com.google.protobuf.any.{Any => ProtoAny}
 
 import scala.concurrent.duration._
 
-
 class ORSetCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   import AbstractCrdtEntitySpec._
@@ -23,13 +22,13 @@ class ORSetCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.orset.value
 
-  def createSet(elements: ProtoAny*) = {
+  def createSet(elements: ProtoAny*) =
     CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Orset(ORSetState(elements))))
-  }
 
-  def updateSet(added: Seq[ProtoAny] = Nil, removed: Seq[ProtoAny] = Nil, cleared: Boolean = false) = {
-    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Orset(ORSetDelta(added = added, removed = removed, cleared = cleared))))
-  }
+  def updateSet(added: Seq[ProtoAny] = Nil, removed: Seq[ProtoAny] = Nil, cleared: Boolean = false) =
+    CrdtStateAction.Action.Update(
+      CrdtDelta(CrdtDelta.Delta.Orset(ORSetDelta(added = added, removed = removed, cleared = cleared)))
+    )
 
   "The ORSet CrdtEntity" should {
 

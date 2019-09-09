@@ -5,7 +5,6 @@ import io.cloudstate.protocol.crdt._
 
 import scala.concurrent.duration._
 
-
 class PNCounterCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   import AbstractCrdtEntitySpec._
@@ -22,13 +21,11 @@ class PNCounterCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.pncounter.value
 
-  def create(value: Long) = {
+  def create(value: Long) =
     CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Pncounter(PNCounterState(value))))
-  }
 
-  def updateCounter(update: Long) = {
+  def updateCounter(update: Long) =
     CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Pncounter(PNCounterDelta(update))))
-  }
 
   "The PNCounter CrdtEntity" should {
 

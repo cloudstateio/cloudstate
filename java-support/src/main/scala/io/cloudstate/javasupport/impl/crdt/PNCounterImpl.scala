@@ -20,9 +20,10 @@ private[crdt] final class PNCounterImpl extends InternalCrdt with PNCounter {
 
   override def hasDelta: Boolean = deltaValue != 0
 
-  override def delta: Option[CrdtDelta.Delta] = if (hasDelta) {
-    Some(CrdtDelta.Delta.Pncounter(PNCounterDelta(deltaValue)))
-  } else None
+  override def delta: Option[CrdtDelta.Delta] =
+    if (hasDelta) {
+      Some(CrdtDelta.Delta.Pncounter(PNCounterDelta(deltaValue)))
+    } else None
 
   override def resetDelta(): Unit = deltaValue = 0
 

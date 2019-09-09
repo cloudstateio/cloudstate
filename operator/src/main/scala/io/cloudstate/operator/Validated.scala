@@ -1,6 +1,5 @@
 package io.cloudstate.operator
 
-
 import java.time.ZonedDateTime
 
 import io.cloudstate.operator.OperatorConstants.FalseStatus
@@ -8,8 +7,8 @@ import io.cloudstate.operator.OperatorConstants.FalseStatus
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
-  * Probably could do this better with cats
-  */
+ * Probably could do this better with cats
+ */
 sealed trait Validated[+T] {
   import io.cloudstate.operator.Validated._
 
@@ -44,14 +43,17 @@ sealed trait Validated[+T] {
   }
 
   def filter(predicate: T => Boolean)(implicit ec: ExecutionContext): Validated[T] = this match {
-    case v@ Valid(t) if predicate(t) => v
-    case Valid(_) => invalid(Condition(
-      `type` = "Filtered",
-      status = OperatorConstants.FalseStatus,
-      reason = Some("PredicateFailed"),
-      message = Some("A generic predicate failed"),
-      lastTransitionTime = Some(ZonedDateTime.now())
-    ))
+    case v @ Valid(t) if predicate(t) => v
+    case Valid(_) =>
+      invalid(
+        Condition(
+          `type` = "Filtered",
+          status = OperatorConstants.FalseStatus,
+          reason = Some("PredicateFailed"),
+          message = Some("A generic predicate failed"),
+          lastTransitionTime = Some(ZonedDateTime.now())
+        )
+      )
     case invalid @ Invalid(_) => invalid
     case FutureBased(future) => FutureBased(future.map(_.filter(predicate)))
   }
@@ -66,15 +68,15 @@ object Validated {
   def invalid(errors: List[Condition]): Validated[Nothing] = Invalid(errors)
   def invalid(error: Condition): Validated[Nothing] = Invalid(List(error))
 
-  def error(`type`: String, reason: String, message: String) = {
-    Validated.invalid(Condition(
-      `type` = `type`,
-      status = FalseStatus,
-      severity = Some("Error"),
-      lastTransitionTime = Some(ZonedDateTime.now()),
-      reason = Some(reason),
-      message = Some(message)))
-  }
+  def error(`type`: String, reason: String, message: String) =
+    Validated.invalid(
+      Condition(`type` = `type`,
+                status = FalseStatus,
+                severity = Some("Error"),
+                lastTransitionTime = Some(ZonedDateTime.now()),
+                reason = Some(reason),
+                message = Some(message))
+    )
 
   implicit def futureT2Validated[T](future: Future[T])(implicit ec: ExecutionContext): Validated[T] =
     Validated.future(future)
@@ -89,4 +91,3 @@ object Validated {
   private case class Valid[+T](t: T) extends Validated[T]
   private case class Invalid(errors: List[Condition]) extends Validated[Nothing]
 }
-

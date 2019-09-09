@@ -6,7 +6,6 @@ import io.cloudstate.protocol.entity.UserFunctionError
 
 import scala.concurrent.duration._
 
-
 class FlagCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   import AbstractCrdtEntitySpec._
@@ -23,13 +22,11 @@ class FlagCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.flag.value
 
-  def create(value: Boolean) = {
+  def create(value: Boolean) =
     CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Flag(FlagState(value))))
-  }
 
-  def enable(value: Boolean = true) = {
+  def enable(value: Boolean = true) =
     CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Flag(FlagDelta(value))))
-  }
 
   "The Flag CrdtEntity" should {
 

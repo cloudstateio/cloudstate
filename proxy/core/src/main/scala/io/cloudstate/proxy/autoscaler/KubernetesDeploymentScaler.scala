@@ -23,60 +23,60 @@ import scala.util.control.NonFatal
 
 object KubernetesDeploymentScaler {
   private final case class DeploymentList(
-    items: List[Deployment]
+      items: List[Deployment]
   )
 
   private final case class Deployment(
-    metadata: Metadata,
-    spec: DeploymentSpec,
-    status: Option[DeploymentStatus]
+      metadata: Metadata,
+      spec: DeploymentSpec,
+      status: Option[DeploymentStatus]
   )
 
   private final case class Metadata(
-    name: String,
-    namespace: String,
+      name: String,
+      namespace: String
   )
 
   private final case class DeploymentSpec(
-    replicas: Int
+      replicas: Int
   )
 
   private final case class DeploymentStatus(
-    readyReplicas: Option[Int],
-    conditions: Option[List[DeploymentCondition]]
+      readyReplicas: Option[Int],
+      conditions: Option[List[DeploymentCondition]]
   )
 
   /**
-    * This gives the status of upgrades.
-    */
+   * This gives the status of upgrades.
+   */
   private final val DeploymentProgressingConditionType = "Progressing"
 
   /**
-    * There are at least three reasons for the progressing type,
-    * NewReplicaSetAvailable - the deployment is ready and stable, no upgrade in progress
-    * NewReplicaSetCreated - an upgrade has started with the new replica set being created
-    * NewReplicaSetUpdated - an upgrade is in progress with the new replica set providing some nodes
-    * So, if the reason isn't the first one, then we're currently upgrading
-    */
+   * There are at least three reasons for the progressing type,
+   * NewReplicaSetAvailable - the deployment is ready and stable, no upgrade in progress
+   * NewReplicaSetCreated - an upgrade has started with the new replica set being created
+   * NewReplicaSetUpdated - an upgrade is in progress with the new replica set providing some nodes
+   * So, if the reason isn't the first one, then we're currently upgrading
+   */
   private final val DeploymentProgressingReasonNotUpgrading = "NewReplicaSetAvailable"
 
   private final case class DeploymentCondition(
-    `type`: String,
-    reason: String
+      `type`: String,
+      reason: String
   )
 
   private final case class Scale(
-    metadata: Metadata,
-    spec: ScaleSpec,
-    status: Option[ScaleStatus]
+      metadata: Metadata,
+      spec: ScaleSpec,
+      status: Option[ScaleStatus]
   )
 
   private final case class ScaleSpec(
-    replicas: Option[Int]
+      replicas: Option[Int]
   )
 
   private final case class ScaleStatus(
-    replicas: Option[Int]
+      replicas: Option[Int]
   )
 
   private object JsonFormat extends SprayJsonSupport with DefaultJsonProtocol {
@@ -111,23 +111,24 @@ class KubernetesDeploymentScaler(autoscaler: ActorRef) extends Actor with ActorL
   // A lot of the below is copied shamelessly from KubernetesApiServiceDiscovery
   private[this] final val http = Http()(context.system)
   private[this] final val kubernetesSettings = Settings(context.system)
-  private[this] final val clusterBootstrapSettings = ClusterBootstrapSettings(context.system.settings.config, context.system.log)
+  private[this] final val clusterBootstrapSettings =
+    ClusterBootstrapSettings(context.system.settings.config, context.system.log)
   private[this] final val httpsTrustStoreConfig =
     TrustStoreConfig(data = None, filePath = Some(kubernetesSettings.apiCaPath)).withStoreType("PEM")
   private[this] final val httpsConfig =
     AkkaSSLConfig()(context.system).mapSettings(
-      s => s.withTrustManagerConfig(s.trustManagerConfig.withTrustStoreConfigs(Seq(httpsTrustStoreConfig))))
+      s => s.withTrustManagerConfig(s.trustManagerConfig.withTrustStoreConfigs(Seq(httpsTrustStoreConfig)))
+    )
   private[this] final val httpsContext = http.createClientHttpsContext(httpsConfig)
   private[this] final val apiToken = readConfigVarFromFilesystem(kubernetesSettings.apiTokenPath, "api-token") getOrElse ""
   private[this] final val deployNamespace = kubernetesSettings.podNamespace orElse
     readConfigVarFromFilesystem(kubernetesSettings.podNamespacePath, "pod-namespace") getOrElse "default"
-  private[this] final val serviceName = clusterBootstrapSettings.contactPointDiscovery.serviceName  getOrElse {
-    throw new RuntimeException("No service name defined")
-  }
+  private[this] final val serviceName = clusterBootstrapSettings.contactPointDiscovery.serviceName getOrElse {
+      throw new RuntimeException("No service name defined")
+    }
   private[this] final val host = sys.env(kubernetesSettings.apiServiceHostEnvName)
   private[this] final val port = sys.env(kubernetesSettings.apiServicePortEnvName).toInt
   private[this] final val appsV1ApiPath = Uri.Path / "apis" / "apps" / "v1" / "namespaces" / deployNamespace
-
 
   // Rather than polling, we could watch the resource
   timers.startPeriodicTimer("tick", Tick, 20.seconds)
@@ -160,8 +161,11 @@ class KubernetesDeploymentScaler(autoscaler: ActorRef) extends Actor with ActorL
       log.warning(s"No deployments found that match selector '{}'", kubernetesSettings.podLabelSelector(serviceName))
 
     case DeploymentList(deps) =>
-      log.warning(s"Got back multiple deployments that match selector '{}': {}, using the first one.",
-        kubernetesSettings.podLabelSelector(serviceName), deps.map(_.metadata.name).mkString(","))
+      log.warning(
+        s"Got back multiple deployments that match selector '{}': {}, using the first one.",
+        kubernetesSettings.podLabelSelector(serviceName),
+        deps.map(_.metadata.name).mkString(",")
+      )
 
       updateDeployment(deps.head)
 
@@ -184,16 +188,20 @@ class KubernetesDeploymentScaler(autoscaler: ActorRef) extends Actor with ActorL
     context become running(dep)
   }
 
-  private def isUpgrading(dep: Deployment) = {
-    !dep.status.exists(_.conditions.exists(_.exists(condition =>
-      condition.`type` == DeploymentProgressingConditionType &&
-        condition.reason == DeploymentProgressingReasonNotUpgrading
-    )))
-  }
+  private def isUpgrading(dep: Deployment) =
+    !dep.status.exists(
+      _.conditions.exists(
+        _.exists(
+          condition =>
+            condition.`type` == DeploymentProgressingConditionType &&
+            condition.reason == DeploymentProgressingReasonNotUpgrading
+        )
+      )
+    )
 
   /**
-    * This uses blocking IO, and so should only be used to read configuration at startup.
-    */
+   * This uses blocking IO, and so should only be used to read configuration at startup.
+   */
   private def readConfigVarFromFilesystem(path: String, name: String): Option[String] = {
     val file = Paths.get(path)
     if (Files.exists(file)) {
@@ -210,7 +218,9 @@ class KubernetesDeploymentScaler(autoscaler: ActorRef) extends Actor with ActorL
     }
   }
 
-  private def makeRequest[T](request: HttpRequest)(implicit unmarshaller: Unmarshaller[HttpEntity.Strict, T]): Future[T] = {
+  private def makeRequest[T](
+      request: HttpRequest
+  )(implicit unmarshaller: Unmarshaller[HttpEntity.Strict, T]): Future[T] = {
     log.debug("Making request {}", request)
     for {
       response <- http.singleRequest(request, httpsContext)
@@ -223,17 +233,20 @@ class KubernetesDeploymentScaler(autoscaler: ActorRef) extends Actor with ActorL
             unmarshalled.failed.foreach { t =>
               log.warning(
                 "Failed to unmarshal Kubernetes API response.  Status code: [{}]; Response body: [{}]. Ex: [{}]",
-                response.status.value, entity, t.getMessage)
+                response.status.value,
+                entity,
+                t.getMessage
+              )
             }
             unmarshalled
           case StatusCodes.Forbidden =>
             Unmarshal(entity).to[String].foreach { body =>
               log.warning("Forbidden to communicate with Kubernetes API server; check RBAC settings. Response: [{}]",
-                body)
+                          body)
             }
             Future.failed(
-              new RuntimeException(
-                "Forbidden when communicating with the Kubernetes API. Check RBAC settings."))
+              new RuntimeException("Forbidden when communicating with the Kubernetes API. Check RBAC settings.")
+            )
           case other =>
             Unmarshal(entity).to[String].foreach { body =>
               log.warning(

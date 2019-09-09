@@ -4,14 +4,14 @@ import akka.cluster.UniqueAddress
 import akka.cluster.ddata.{DeltaReplicatedData, FastMerge, RemovedNodePruning, ReplicatedDelta}
 
 /**
-  * An abstract node vector, where each node has its own value that it and it only is responsible for.
-  *
-  * The values of the vector must have a stable merge function, implemented by [[mergeValues()]], which is used to
-  * merge different values for the same node when encountered.
-  */
+ * An abstract node vector, where each node has its own value that it and it only is responsible for.
+ *
+ * The values of the vector must have a stable merge function, implemented by [[mergeValues()]], which is used to
+ * merge different values for the same node when encountered.
+ */
 @SerialVersionUID(1L) // FIXME Java Serialization?
 abstract class NodeVector[V](private val state: Map[UniqueAddress, V])
-  extends DeltaReplicatedData
+    extends DeltaReplicatedData
     with ReplicatedDelta
     with RemovedNodePruning {
 
@@ -19,20 +19,20 @@ abstract class NodeVector[V](private val state: Map[UniqueAddress, V])
   final type D = T
 
   /**
-    * Create a new vector with the given state and delta.
-    *
-    * This is needed by operations such as [[merge()]] to create the new version of this CRDT.
-    */
+   * Create a new vector with the given state and delta.
+   *
+   * This is needed by operations such as [[merge()]] to create the new version of this CRDT.
+   */
   protected def newVector(state: Map[UniqueAddress, V], delta: Option[T]): T
 
   /**
-    * Merge the given values for a node.
-    */
+   * Merge the given values for a node.
+   */
   protected def mergeValues(thisValue: V, thatValue: V): V
 
   /**
-    * Collapse the given value into the given node.
-    */
+   * Collapse the given value into the given node.
+   */
   protected def collapseInto(key: UniqueAddress, value: V): T
 
   // Is not final because overrides can implement it without allocating.
@@ -75,7 +75,7 @@ abstract class NodeVector[V](private val state: Map[UniqueAddress, V])
   override final def prune(removedNode: UniqueAddress, collapseInto: UniqueAddress): T =
     state.get(removedNode) match {
       case Some(value) => newVector(state - removedNode, None).collapseInto(collapseInto, value).asInstanceOf[T]
-      case None        => this.asInstanceOf[T]
+      case None => this.asInstanceOf[T]
     }
 
   override final def pruningCleanup(removedNode: UniqueAddress): T =

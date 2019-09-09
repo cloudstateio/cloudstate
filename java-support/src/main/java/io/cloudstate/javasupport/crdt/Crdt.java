@@ -1,7 +1,4 @@
 package io.cloudstate.javasupport.crdt;
 
-/**
- * Root interface for all CRDTs.
- */
-public interface Crdt {
-}
+/** Root interface for all CRDTs. */
+public interface Crdt {}

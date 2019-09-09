@@ -39,33 +39,45 @@ object EventSourcedEntitySupervisor {
 
   private final case class Relay(actorRef: ActorRef)
 
-  def props(client: EventSourcedClient, configuration: EventSourcedEntity.Configuration, concurrencyEnforcer: ActorRef, statsCollector: ActorRef)(implicit mat: Materializer): Props =
+  def props(client: EventSourcedClient,
+            configuration: EventSourcedEntity.Configuration,
+            concurrencyEnforcer: ActorRef,
+            statsCollector: ActorRef)(implicit mat: Materializer): Props =
     Props(new EventSourcedEntitySupervisor(client, configuration, concurrencyEnforcer, statsCollector))
 }
 
 /**
-  * This serves two purposes.
-  *
-  * Firstly, when the StateManager crashes, we don't want it restarted. Cluster sharding restarts, and there's no way
-  * to customise that.
-  *
-  * Secondly, we need to ensure that we have an Akka Streams actorRef source to publish messages two before Akka
-  * persistence starts feeding us events. There's a race condition if we do this in the same persistent actor. This
-  * establishes that connection first.
-  */
-final class EventSourcedEntitySupervisor(client: EventSourcedClient, configuration: EventSourcedEntity.Configuration, concurrencyEnforcer: ActorRef, statsCollector: ActorRef)(implicit mat: Materializer)
-  extends Actor with Stash {
+ * This serves two purposes.
+ *
+ * Firstly, when the StateManager crashes, we don't want it restarted. Cluster sharding restarts, and there's no way
+ * to customise that.
+ *
+ * Secondly, we need to ensure that we have an Akka Streams actorRef source to publish messages two before Akka
+ * persistence starts feeding us events. There's a race condition if we do this in the same persistent actor. This
+ * establishes that connection first.
+ */
+final class EventSourcedEntitySupervisor(client: EventSourcedClient,
+                                         configuration: EventSourcedEntity.Configuration,
+                                         concurrencyEnforcer: ActorRef,
+                                         statsCollector: ActorRef)(implicit mat: Materializer)
+    extends Actor
+    with Stash {
 
   import EventSourcedEntitySupervisor._
 
   override final def receive: Receive = PartialFunction.empty
 
   override final def preStart(): Unit = {
-    client.handle(Source.actorRef[EventSourcedStreamIn](configuration.sendQueueSize, OverflowStrategy.fail)
-      .mapMaterializedValue { ref =>
-        self ! Relay(ref)
-        NotUsed
-      }).runWith(Sink.actorRef(self, EventSourcedEntity.StreamClosed))
+    client
+      .handle(
+        Source
+          .actorRef[EventSourcedStreamIn](configuration.sendQueueSize, OverflowStrategy.fail)
+          .mapMaterializedValue { ref =>
+            self ! Relay(ref)
+            NotUsed
+          }
+      )
+      .runWith(Sink.actorRef(self, EventSourcedEntity.StreamClosed))
     context.become(waitingForRelay)
   }
 
@@ -73,7 +85,11 @@ final class EventSourcedEntitySupervisor(client: EventSourcedClient, configurati
     case Relay(relayRef) =>
       // Cluster sharding URL encodes entity ids, so to extract it we need to decode.
       val entityId = URLDecoder.decode(self.path.name, "utf-8")
-      val manager = context.watch(context.actorOf(EventSourcedEntity.props(configuration, entityId, relayRef, concurrencyEnforcer, statsCollector), "entity"))
+      val manager = context.watch(
+        context
+          .actorOf(EventSourcedEntity.props(configuration, entityId, relayRef, concurrencyEnforcer, statsCollector),
+                   "entity")
+      )
       context.become(forwarding(manager))
       unstashAll()
     case _ => stash()
@@ -98,28 +114,37 @@ object EventSourcedEntity {
   final case object StreamClosed extends DeadLetterSuppression
 
   final case class Configuration(
-    serviceName: String,
-    userFunctionName: String,
-    passivationTimeout: Timeout,
-    sendQueueSize: Int
+      serviceName: String,
+      userFunctionName: String,
+      passivationTimeout: Timeout,
+      sendQueueSize: Int
   )
 
   private final case class OutstandingCommand(
-    commandId: Long,
-    replyTo: ActorRef
+      commandId: Long,
+      replyTo: ActorRef
   )
 
-  final def props(configuration: Configuration, entityId: String, relay: ActorRef, concurrencyEnforcer: ActorRef, statsCollector: ActorRef): Props =
+  final def props(configuration: Configuration,
+                  entityId: String,
+                  relay: ActorRef,
+                  concurrencyEnforcer: ActorRef,
+                  statsCollector: ActorRef): Props =
     Props(new EventSourcedEntity(configuration, entityId, relay, concurrencyEnforcer, statsCollector))
 
   /**
-    * Used to ensure the action ids sent to the concurrency enforcer are indeed unique.
-    */
+   * Used to ensure the action ids sent to the concurrency enforcer are indeed unique.
+   */
   private val actorCounter = new AtomicLong(0)
 }
 
-final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, entityId: String, relay: ActorRef,
-  concurrencyEnforcer: ActorRef, statsCollector: ActorRef) extends PersistentActor with ActorLogging {
+final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
+                               entityId: String,
+                               relay: ActorRef,
+                               concurrencyEnforcer: ActorRef,
+                               statsCollector: ActorRef)
+    extends PersistentActor
+    with ActorLogging {
   override final def persistenceId: String = configuration.userFunctionName + entityId
 
   private val actorId = EventSourcedEntity.actorCounter.incrementAndGet()
@@ -127,12 +152,12 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
   private[this] final var stashedCommands = Queue.empty[(EntityCommand, ActorRef)] // PERFORMANCE: look at options for data structures
   private[this] final var currentCommand: EventSourcedEntity.OutstandingCommand = null
   private[this] final var stopped = false
-  private[this] final var idCounter = 0l
+  private[this] final var idCounter = 0L
   private[this] final var inited = false
   private[this] final var currentActionId: String = null
   private[this] final var reportedDatabaseOperationStarted = false
-  private[this] final var databaseOperationStartTime = 0l
-  private[this] final var commandStartTime = 0l
+  private[this] final var databaseOperationStartTime = 0L
+  private[this] final var commandStartTime = 0L
 
   // Set up passivation timer
   context.setReceiveTimeout(configuration.passivationTimeout.duration)
@@ -200,18 +225,16 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
     })
   }
 
-  private final def esReplyToUfReply(reply: EventSourcedReply) = {
+  private final def esReplyToUfReply(reply: EventSourcedReply) =
     UserFunctionReply(
       clientAction = reply.clientAction,
       sideEffects = reply.sideEffects
     )
-  }
 
-  private final def createFailure(message: String) = {
+  private final def createFailure(message: String) =
     UserFunctionReply(
       clientAction = Some(ClientAction(ClientAction.Action.Failure(Failure(description = message))))
     )
-  }
 
   override final def receiveCommand: PartialFunction[Any, Unit] = {
 
@@ -222,7 +245,6 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
       handleCommand(command, sender())
 
     case EventSourcedStreamOut(m) =>
-
       import EventSourcedStreamOut.{Message => ESOMsg}
       m match {
 
@@ -301,19 +323,23 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
       }
   }
 
-  private[this] final def maybeInit(snapshot: Option[SnapshotOffer]): Unit = {
+  private[this] final def maybeInit(snapshot: Option[SnapshotOffer]): Unit =
     if (!inited) {
-      relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Init(EventSourcedInit(
-        serviceName = configuration.serviceName,
-        entityId = entityId,
-        snapshot = snapshot.map {
-          case SnapshotOffer(metadata, offeredSnapshot: pbAny) => EventSourcedSnapshot(metadata.sequenceNr, Some(offeredSnapshot))
-          case other => throw new IllegalStateException(s"Unexpected snapshot type received: ${other.getClass}")
-        }
-      )))
+      relay ! EventSourcedStreamIn(
+        EventSourcedStreamIn.Message.Init(
+          EventSourcedInit(
+            serviceName = configuration.serviceName,
+            entityId = entityId,
+            snapshot = snapshot.map {
+              case SnapshotOffer(metadata, offeredSnapshot: pbAny) =>
+                EventSourcedSnapshot(metadata.sequenceNr, Some(offeredSnapshot))
+              case other => throw new IllegalStateException(s"Unexpected snapshot type received: ${other.getClass}")
+            }
+          )
+        )
+      )
       inited = true
     }
-  }
 
   override final def receiveRecover: PartialFunction[Any, Unit] = {
     case offer: SnapshotOffer =>
@@ -328,7 +354,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
       relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Event(EventSourcedEvent(lastSequenceNr, Some(event))))
   }
 
-  private def reportDatabaseOperationStarted(): Unit = {
+  private def reportDatabaseOperationStarted(): Unit =
     if (reportedDatabaseOperationStarted) {
       log.warning("Already reported database operation started")
     } else {
@@ -336,14 +362,12 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
       reportedDatabaseOperationStarted = true
       statsCollector ! StatsCollector.DatabaseOperationStarted
     }
-  }
 
-  private def reportDatabaseOperationFinished(): Unit = {
+  private def reportDatabaseOperationFinished(): Unit =
     if (!reportedDatabaseOperationStarted) {
       log.warning("Hadn't reported database operation started")
     } else {
       reportedDatabaseOperationStarted = false
       statsCollector ! StatsCollector.DatabaseOperationFinished(System.nanoTime() - databaseOperationStartTime)
     }
-  }
 }

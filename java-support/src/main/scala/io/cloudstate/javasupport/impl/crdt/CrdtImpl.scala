@@ -16,7 +16,7 @@
 
 package io.cloudstate.javasupport.impl.crdt
 
-import java.util.{Optional, function}
+import java.util.{function, Optional}
 import java.util.function.Consumer
 
 import akka.NotUsed
@@ -24,8 +24,24 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Flow, Source}
 import com.google.protobuf.Descriptors
 import io.cloudstate.javasupport.{Context, ServiceCallFactory, StatefulService}
-import io.cloudstate.javasupport.crdt.{CommandContext, CrdtContext, CrdtCreationContext, CrdtEntityFactory, StreamCancelledContext, StreamedCommandContext, SubscriptionContext}
-import io.cloudstate.javasupport.impl.{AbstractClientActionContext, AbstractEffectContext, ActivatableContext, AnySupport, FailInvoked, ResolvedEntityFactory, ResolvedServiceMethod}
+import io.cloudstate.javasupport.crdt.{
+  CommandContext,
+  CrdtContext,
+  CrdtCreationContext,
+  CrdtEntityFactory,
+  StreamCancelledContext,
+  StreamedCommandContext,
+  SubscriptionContext
+}
+import io.cloudstate.javasupport.impl.{
+  AbstractClientActionContext,
+  AbstractEffectContext,
+  ActivatableContext,
+  AnySupport,
+  FailInvoked,
+  ResolvedEntityFactory,
+  ResolvedServiceMethod
+}
 import io.cloudstate.protocol.crdt._
 import io.cloudstate.protocol.crdt.CrdtStreamIn.{Message => In}
 import io.cloudstate.protocol.entity.{Command, Failure, StreamCancelled}
@@ -36,32 +52,32 @@ import scala.compat.java8.OptionConverters._
 import scala.collection.JavaConverters._
 
 final class CrdtStatefulService(val factory: CrdtEntityFactory,
-  override val descriptor: Descriptors.ServiceDescriptor,
-  val anySupport: AnySupport
-) extends StatefulService {
+                                override val descriptor: Descriptors.ServiceDescriptor,
+                                val anySupport: AnySupport)
+    extends StatefulService {
   override final val entityType = Crdt.name
 
-  override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] = {
+  override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] =
     factory match {
       case resolved: ResolvedEntityFactory => Some(resolved.resolvedMethods)
       case _ => None
     }
-  }
 
   private val streamed = descriptor.getMethods.asScala.filter(_.toProto.getServerStreaming).map(_.getName).toSet
   def isStreamed(command: String): Boolean = streamed(command)
 }
 
 class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], rootContext: Context) extends Crdt {
+
   /**
-    * After invoking handle, the first message sent will always be a CrdtInit message, containing the entity ID, and,
-    * if it exists or is available, the current state of the entity. After that, one or more commands may be sent,
-    * as well as deltas as they arrive, and the entire state if either the entity is created, or the proxy wishes the
-    * user function to replace its entire state.
-    * The user function must respond with one reply per command in. They do not necessarily have to be sent in the same
-    * order that the commands were sent, the command ID is used to correlate commands to replies.
-    */
-  def handle(in: Source[CrdtStreamIn, NotUsed]): Source[CrdtStreamOut, NotUsed] = {
+   * After invoking handle, the first message sent will always be a CrdtInit message, containing the entity ID, and,
+   * if it exists or is available, the current state of the entity. After that, one or more commands may be sent,
+   * as well as deltas as they arrive, and the entire state if either the entity is created, or the proxy wishes the
+   * user function to replace its entire state.
+   * The user function must respond with one reply per command in. They do not necessarily have to be sent in the same
+   * order that the commands were sent, the command ID is used to correlate commands to replies.
+   */
+  def handle(in: Source[CrdtStreamIn, NotUsed]): Source[CrdtStreamOut, NotUsed] =
     in.prefixAndTail(1)
       .flatMapConcat {
         case (Seq(CrdtStreamIn(In.Init(init))), source) =>
@@ -69,52 +85,53 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
         case _ =>
           // todo better error
           throw new RuntimeException("Expected Init message")
-      }.recover {
-      case e =>
-        // FIXME translate to failure message
-        throw e
-    }
-
-  }
+      }
+      .recover {
+        case e =>
+          // FIXME translate to failure message
+          throw e
+      }
 
   private def runEntity(init: CrdtInit): Flow[CrdtStreamIn, CrdtStreamOut, NotUsed] = {
-    val service = services.getOrElse(init.serviceName, throw new RuntimeException(s"Service not found: ${init.serviceName}"))
+    val service =
+      services.getOrElse(init.serviceName, throw new RuntimeException(s"Service not found: ${init.serviceName}"))
 
     val runner = new EntityRunner(service, init.entityId, init.state.map { state =>
       CrdtStateTransformer.create(state, service.anySupport)
     })
 
-    Flow[CrdtStreamIn].mapConcat { in =>
-      in.message match {
-        case In.Command(command) =>
-          runner.handleCommand(command)
-        case In.Changed(delta) =>
-          runner.handleDelta(delta).map { msg =>
-            CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(msg))
-          }
-        case In.State(state) =>
-          runner.handleState(state).map { msg =>
-            CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(msg))
-          }
-        case In.Deleted(_) =>
-          // ???
-          Nil
-        case In.StreamCancelled(cancelled) =>
-          runner.handleStreamCancelled(cancelled)
-        case In.Init(_) =>
-          throw new IllegalStateException("Duplicate init event for the same entity")
-        case In.Empty =>
-          throw new RuntimeException("Empty or unknown in message")
+    Flow[CrdtStreamIn]
+      .mapConcat { in =>
+        in.message match {
+          case In.Command(command) =>
+            runner.handleCommand(command)
+          case In.Changed(delta) =>
+            runner.handleDelta(delta).map { msg =>
+              CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(msg))
+            }
+          case In.State(state) =>
+            runner.handleState(state).map { msg =>
+              CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(msg))
+            }
+          case In.Deleted(_) =>
+            // ???
+            Nil
+          case In.StreamCancelled(cancelled) =>
+            runner.handleStreamCancelled(cancelled)
+          case In.Init(_) =>
+            throw new IllegalStateException("Duplicate init event for the same entity")
+          case In.Empty =>
+            throw new RuntimeException("Empty or unknown in message")
+        }
       }
-    }.recover {
-      case err =>
-        system.log.error(err, "Unexpected error, terminating CRDT.")
-        CrdtStreamOut(CrdtStreamOut.Message.Failure(Failure(description = err.getMessage)))
-    }
+      .recover {
+        case err =>
+          system.log.error(err, "Unexpected error, terminating CRDT.")
+          CrdtStreamOut(CrdtStreamOut.Message.Failure(Failure(description = err.getMessage)))
+      }
   }
 
-  private class EntityRunner(service: CrdtStatefulService, entityId: String,
-    private var crdt: Option[InternalCrdt]) {
+  private class EntityRunner(service: CrdtStatefulService, entityId: String, private var crdt: Option[InternalCrdt]) {
 
     private var crdtIsNew = false
     private var subscribers = Map.empty[Long, function.Function[SubscriptionContext, Optional[JavaPbAny]]]
@@ -129,13 +146,12 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
     }
     verifyNoDelta("creation")
 
-    private def verifyNoDelta(scope: String): Unit = {
+    private def verifyNoDelta(scope: String): Unit =
       crdt match {
         case Some(changed) if changed.hasDelta && !crdtIsNew =>
           throw new RuntimeException(s"CRDT was changed during $scope, this is not allowed.")
         case _ =>
       }
-    }
 
     def handleState(state: CrdtState): List[CrdtStreamedMessage] = {
       crdt match {
@@ -147,9 +163,14 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
 
     def handleDelta(delta: CrdtDelta): List[CrdtStreamedMessage] = {
       crdt match {
-        case Some(existing) => existing.applyDelta.applyOrElse(delta.delta, { noMatch: CrdtDelta.Delta =>
-          throw new IllegalStateException(s"Received delta ${noMatch.value.getClass}, but it doesn't match the CRDT that this entity has: ${existing.name}")
-        })
+        case Some(existing) =>
+          existing.applyDelta.applyOrElse(
+            delta.delta, { noMatch: CrdtDelta.Delta =>
+              throw new IllegalStateException(
+                s"Received delta ${noMatch.value.getClass}, but it doesn't match the CRDT that this entity has: ${existing.name}"
+              )
+            }
+          )
         case None => throw new IllegalStateException("Received delta for CRDT before it was created.")
       }
       notifySubscribers()
@@ -182,10 +203,14 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
 
       if (ctx.hasError) {
         verifyNoDelta("failed command handling")
-        CrdtStreamOut(CrdtStreamOut.Message.Reply(CrdtReply(
-          commandId = command.id,
-          clientAction = clientAction
-        ))) :: Nil
+        CrdtStreamOut(
+          CrdtStreamOut.Message.Reply(
+            CrdtReply(
+              commandId = command.id,
+              clientAction = clientAction
+            )
+          )
+        ) :: Nil
       } else {
         val crdtAction = ctx.createCrdtAction()
 
@@ -199,13 +224,17 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
           case _ => false
         }
 
-        CrdtStreamOut(CrdtStreamOut.Message.Reply(CrdtReply(
-          commandId = command.id,
-          clientAction = clientAction,
-          stateAction = crdtAction,
-          sideEffects = ctx.sideEffects,
-          streamed = streamAccepted
-        ))) :: streamedMessages.map(m => CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(m)))
+        CrdtStreamOut(
+          CrdtStreamOut.Message.Reply(
+            CrdtReply(
+              commandId = command.id,
+              clientAction = clientAction,
+              stateAction = crdtAction,
+              sideEffects = ctx.sideEffects,
+              streamed = streamAccepted
+            )
+          )
+        ) :: streamedMessages.map(m => CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(m)))
       }
     }
 
@@ -223,16 +252,24 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
 
           val crdtAction = ctx.createCrdtAction()
           if (crdtAction.isDefined) {
-            CrdtStreamOut(CrdtStreamOut.Message.StreamCancelledResponse(CrdtStreamCancelledResponse(
-              commandId = cancelled.id,
-              stateAction = crdtAction,
-              sideEffects = ctx.sideEffects,
-            ))) :: notifySubscribers().map(m => CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(m)))
+            CrdtStreamOut(
+              CrdtStreamOut.Message.StreamCancelledResponse(
+                CrdtStreamCancelledResponse(
+                  commandId = cancelled.id,
+                  stateAction = crdtAction,
+                  sideEffects = ctx.sideEffects
+                )
+              )
+            ) :: notifySubscribers().map(m => CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(m)))
           } else {
-            CrdtStreamOut(CrdtStreamOut.Message.StreamCancelledResponse(CrdtStreamCancelledResponse(
-              commandId = cancelled.id,
-              sideEffects = ctx.sideEffects,
-            ))) :: Nil
+            CrdtStreamOut(
+              CrdtStreamOut.Message.StreamCancelledResponse(
+                CrdtStreamCancelledResponse(
+                  commandId = cancelled.id,
+                  sideEffects = ctx.sideEffects
+                )
+              )
+            ) :: Nil
           }
 
         case None =>
@@ -241,46 +278,53 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
 
     }
 
-    private def notifySubscribers(): List[CrdtStreamedMessage] = {
-      subscribers.collect(Function.unlift {
-        case (id, callback) =>
-          val context = new CrdtSubscriptionContext(id)
-          val reply = try {
-            callback(context)
-          } catch {
-            case FailInvoked =>
-              Optional.empty[JavaPbAny]()
-          } finally {
-            context.deactivate()
-          }
+    private def notifySubscribers(): List[CrdtStreamedMessage] =
+      subscribers
+        .collect(Function.unlift {
+          case (id, callback) =>
+            val context = new CrdtSubscriptionContext(id)
+            val reply = try {
+              callback(context)
+            } catch {
+              case FailInvoked =>
+                Optional.empty[JavaPbAny]()
+            } finally {
+              context.deactivate()
+            }
 
-          val clientAction = context.createClientAction(reply, allowNoReply = true)
+            val clientAction = context.createClientAction(reply, allowNoReply = true)
 
-          if (context.hasError) {
-            subscribers -= id
-            cancelListeners -= id
-            Some(CrdtStreamedMessage(
-              commandId = id,
-              clientAction = clientAction
-            ))
-          } else if (clientAction.isDefined || context.isEnded || context.sideEffects.nonEmpty) {
-            if (context.isEnded) {
+            if (context.hasError) {
               subscribers -= id
               cancelListeners -= id
+              Some(
+                CrdtStreamedMessage(
+                  commandId = id,
+                  clientAction = clientAction
+                )
+              )
+            } else if (clientAction.isDefined || context.isEnded || context.sideEffects.nonEmpty) {
+              if (context.isEnded) {
+                subscribers -= id
+                cancelListeners -= id
+              }
+              Some(
+                CrdtStreamedMessage(
+                  commandId = id,
+                  clientAction = clientAction,
+                  sideEffects = context.sideEffects,
+                  endStream = context.isEnded
+                )
+              )
+            } else {
+              None
             }
-            Some(CrdtStreamedMessage(
-              commandId = id,
-              clientAction = clientAction,
-              sideEffects = context.sideEffects,
-              endStream = context.isEnded
-            ))
-          } else {
-            None
-          }
-      }).toList
-    }
+        })
+        .toList
 
-    class CrdtStreamedCommandContext(command: Command) extends CrdtCommandContext(command) with StreamedCommandContext[JavaPbAny] {
+    class CrdtStreamedCommandContext(command: Command)
+        extends CrdtCommandContext(command)
+        with StreamedCommandContext[JavaPbAny] {
       private final var changeCallback: Option[function.Function[SubscriptionContext, Optional[JavaPbAny]]] = None
       private final var cancelCallback: Option[Consumer[StreamCancelledContext]] = None
 
@@ -307,31 +351,34 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
       }
     }
 
-    class CrdtCommandContext(command: Command) extends CommandContext
-      with AbstractCrdtContext
-      with CapturingCrdtFactory
-      with AbstractEffectContext
-      with AbstractClientActionContext
-      with DeletableContext
-      with ActivatableContext {
+    class CrdtCommandContext(command: Command)
+        extends CommandContext
+        with AbstractCrdtContext
+        with CapturingCrdtFactory
+        with AbstractEffectContext
+        with AbstractClientActionContext
+        with DeletableContext
+        with ActivatableContext {
 
       override final def commandId: Long = command.id
 
       override final def commandName(): String = command.name
     }
 
-    class CrdtStreamCancelledContext(cancelled: StreamCancelled) extends StreamCancelledContext
-      with CapturingCrdtFactory
-      with AbstractEffectContext
-      with ActivatableContext {
+    class CrdtStreamCancelledContext(cancelled: StreamCancelled)
+        extends StreamCancelledContext
+        with CapturingCrdtFactory
+        with AbstractEffectContext
+        with ActivatableContext {
       override final def commandId(): Long = cancelled.id
     }
 
-    class CrdtSubscriptionContext(override val commandId: Long) extends SubscriptionContext
-      with AbstractCrdtContext
-      with AbstractClientActionContext
-      with AbstractEffectContext
-      with ActivatableContext {
+    class CrdtSubscriptionContext(override val commandId: Long)
+        extends SubscriptionContext
+        with AbstractCrdtContext
+        with AbstractClientActionContext
+        with AbstractEffectContext
+        with ActivatableContext {
       private final var ended = false
 
       override final def endStream(): Unit = {
@@ -354,7 +401,9 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
             Optional.of(crdtType.cast(crdt))
           case None => Optional.empty()
           case Some(wrongType) =>
-            throw new IllegalStateException(s"The current ${wrongType.name} CRDT state doesn't match requested type of ${crdtType.getSimpleName}")
+            throw new IllegalStateException(
+              s"The current ${wrongType.name} CRDT state doesn't match requested type of ${crdtType.getSimpleName}"
+            )
         }
 
       override final def entityId(): String = EntityRunner.this.entityId

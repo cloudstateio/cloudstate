@@ -16,7 +16,7 @@ private[crdt] final class VoteImpl extends InternalCrdt with Vote {
 
   override def getVotesFor: Int = votesFor
 
-  override def vote(vote: Boolean): Unit = {
+  override def vote(vote: Boolean): Unit =
     if (selfVote != vote) {
       if (selfVoteChanged) {
         selfVoteChanged = false
@@ -30,13 +30,13 @@ private[crdt] final class VoteImpl extends InternalCrdt with Vote {
         votesFor -= 1
       }
     }
-  }
 
   override def hasDelta: Boolean = selfVoteChanged
 
-  override def delta: Option[CrdtDelta.Delta] = if (selfVoteChanged) {
-    Some(CrdtDelta.Delta.Vote(VoteDelta(selfVote)))
-  } else None
+  override def delta: Option[CrdtDelta.Delta] =
+    if (selfVoteChanged) {
+      Some(CrdtDelta.Delta.Vote(VoteDelta(selfVote)))
+    } else None
 
   override def resetDelta(): Unit = selfVoteChanged = false
 

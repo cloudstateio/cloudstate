@@ -6,7 +6,6 @@ import io.cloudstate.protocol.crdt._
 
 import scala.concurrent.duration._
 
-
 class LWWRegisterCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   import AbstractCrdtEntitySpec._
@@ -23,13 +22,16 @@ class LWWRegisterCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.lwwregister.value
 
-  def create(element: ProtoAny) = {
+  def create(element: ProtoAny) =
     CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Lwwregister(LWWRegisterState(value = Some(element)))))
-  }
 
-  def updateRegister(element: ProtoAny, clock: CrdtClock = CrdtClock.DEFAULT, customClockValue: Long = 0) = {
-    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Lwwregister(LWWRegisterDelta(value = Some(element), clock = clock, customClockValue = customClockValue))))
-  }
+  def updateRegister(element: ProtoAny, clock: CrdtClock = CrdtClock.DEFAULT, customClockValue: Long = 0) =
+    CrdtStateAction.Action.Update(
+      CrdtDelta(
+        CrdtDelta.Delta
+          .Lwwregister(LWWRegisterDelta(value = Some(element), clock = clock, customClockValue = customClockValue))
+      )
+    )
 
   "The LWWRegister CrdtEntity" should {
 
@@ -107,12 +109,16 @@ class LWWRegisterCrdtEntitySpec extends AbstractCrdtEntitySpec {
       createAndExpectInit()
 
       val cid1 = sendAndExpectCommand("cmd", command)
-      sendAndExpectReply(cid1, updateRegister(element2, clock = CrdtClock.CUSTOM_AUTO_INCREMENT, customClockValue = start + 1000))
+      sendAndExpectReply(
+        cid1,
+        updateRegister(element2, clock = CrdtClock.CUSTOM_AUTO_INCREMENT, customClockValue = start + 1000)
+      )
       get().value shouldBe element2
       expectNoMessage(200.millis)
 
       val cid2 = sendAndExpectCommand("cmd", command)
-      sendAndExpectReply(cid2, updateRegister(element3, clock = CrdtClock.CUSTOM_AUTO_INCREMENT, customClockValue = start))
+      sendAndExpectReply(cid2,
+                         updateRegister(element3, clock = CrdtClock.CUSTOM_AUTO_INCREMENT, customClockValue = start))
       get().value shouldBe element3
       expectNoMessage(200.millis)
     }

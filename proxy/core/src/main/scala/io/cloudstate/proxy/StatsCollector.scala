@@ -26,39 +26,40 @@ import scala.collection.mutable
 import scala.concurrent.duration._
 
 /**
-  * Collects stats for actions executed.
-  *
-  * This actor attempts to replicate the stats collection logic in https://github.com/knative/serving/blob/master/pkg/queue/stats.go.
-  * That logic records the amount of time spent at each concurrency level, and uses that to periodically report
-  * the weighted average concurrency.
-  */
+ * Collects stats for actions executed.
+ *
+ * This actor attempts to replicate the stats collection logic in https://github.com/knative/serving/blob/master/pkg/queue/stats.go.
+ * That logic records the amount of time spent at each concurrency level, and uses that to periodically report
+ * the weighted average concurrency.
+ */
 object StatsCollector {
 
-  def props(settings: StatsCollectorSettings, autoscaler: ActorRef): Props = Props(new StatsCollector(settings, autoscaler))
+  def props(settings: StatsCollectorSettings, autoscaler: ActorRef): Props =
+    Props(new StatsCollector(settings, autoscaler))
 
   /**
-    * A request has been received by the proxy server
-    */
+   * A request has been received by the proxy server
+   */
   case object RequestReceived
 
   final case class ResponseSent(timeNanos: Long)
 
   /**
-    * A command has been sent to the user function.
-    */
+   * A command has been sent to the user function.
+   */
   case object CommandSent
 
   /**
-    * A reply has been received from the user function.
-    */
-  final case class ReplyReceived private(timeNanos: Long)
+   * A reply has been received from the user function.
+   */
+  final case class ReplyReceived private (timeNanos: Long)
 
   case object DatabaseOperationStarted
 
   final case class DatabaseOperationFinished(timeNanos: Long)
 
   final case class StatsCollectorSettings(
-    reportPeriod: FiniteDuration
+      reportPeriod: FiniteDuration
   ) {
     def this(config: Config) = this(
       reportPeriod = config.getDuration("report-period").toMillis.millis
@@ -71,7 +72,10 @@ object StatsCollector {
   private final val SecondInNanos: Long = 1000000000
 }
 
-class StatsCollector(settings: StatsCollectorSettings, autoscaler: ActorRef) extends Actor with Timers with ActorLogging {
+class StatsCollector(settings: StatsCollectorSettings, autoscaler: ActorRef)
+    extends Actor
+    with Timers
+    with ActorLogging {
 
   import StatsCollector._
 
@@ -106,24 +110,26 @@ class StatsCollector(settings: StatsCollectorSettings, autoscaler: ActorRef) ext
   private def updateCommandState(): Unit = {
     val currentNanos = System.nanoTime()
     val sinceLastNanos = currentNanos - commandLastChangedNanos
-    commandTimeNanosOnConcurrency.update(commandConcurrency, commandTimeNanosOnConcurrency(commandConcurrency) + sinceLastNanos)
+    commandTimeNanosOnConcurrency.update(commandConcurrency,
+                                         commandTimeNanosOnConcurrency(commandConcurrency) + sinceLastNanos)
     commandLastChangedNanos = currentNanos
   }
 
   private def updateRequestState(): Unit = {
     val currentNanos = System.nanoTime()
     val sinceLastNanos = currentNanos - requestLastChangedNanos
-    requestTimeNanosOnConcurrency.update(requestConcurrency, requestTimeNanosOnConcurrency(requestConcurrency) + sinceLastNanos)
+    requestTimeNanosOnConcurrency.update(requestConcurrency,
+                                         requestTimeNanosOnConcurrency(requestConcurrency) + sinceLastNanos)
     requestLastChangedNanos = currentNanos
   }
 
   private def updateDatabaseState(): Unit = {
     val currentNanos = System.nanoTime()
     val sinceLastNanos = currentNanos - databaseLastChangedNanos
-    databaseTimeNanosOnConcurrency.update(databaseConcurrency, databaseTimeNanosOnConcurrency(databaseConcurrency) + sinceLastNanos)
+    databaseTimeNanosOnConcurrency.update(databaseConcurrency,
+                                          databaseTimeNanosOnConcurrency(databaseConcurrency) + sinceLastNanos)
     databaseLastChangedNanos = currentNanos
   }
-
 
   private def weightedAverage(times: mutable.Map[Int, Long]): Double = {
 
@@ -207,9 +213,8 @@ class StatsCollector(settings: StatsCollectorSettings, autoscaler: ActorRef) ext
         userFunctionCount = commandCount,
         databaseConcurrency = avgDatabaseConcurrency,
         databaseTimeNanos = databaseTimeNanos,
-        databaseCount = databaseCount,
+        databaseCount = databaseCount
       )
-
 
       lastReportedNanos = currentTime
       commandCount = 0

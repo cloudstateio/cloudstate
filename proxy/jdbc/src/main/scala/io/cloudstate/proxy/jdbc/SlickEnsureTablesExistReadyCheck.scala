@@ -1,6 +1,5 @@
 package io.cloudstate.proxy.jdbc
 
-
 import java.sql.Connection
 
 import akka.Done
@@ -34,21 +33,25 @@ class SlickEnsureTablesExistReadyCheck(system: ActorSystem) extends (() => Futur
     // Get a hold of the akka-jdbc slick database instance
     val db = SlickExtension(system).database(ConfigFactory.parseMap(Map(ConfigKeys.useSharedDb -> "slick").asJava))
 
-    val actor = system.actorOf(BackoffSupervisor.props(
-      BackoffOpts.onFailure(
-        childProps = Props(new EnsureTablesExistsActor(db)),
-        childName = "jdbc-table-creator",
-        minBackoff = 3.seconds,
-        maxBackoff = 30.seconds,
-        randomFactor = 0.2
-      )), "jdbc-table-creator-supervisor")
+    val actor = system.actorOf(
+      BackoffSupervisor.props(
+        BackoffOpts.onFailure(
+          childProps = Props(new EnsureTablesExistsActor(db)),
+          childName = "jdbc-table-creator",
+          minBackoff = 3.seconds,
+          maxBackoff = 30.seconds,
+          randomFactor = 0.2
+        )
+      ),
+      "jdbc-table-creator-supervisor"
+    )
 
     implicit val timeout = Timeout(10.seconds) // TODO make configurable?
     import akka.pattern.ask
 
     () => (actor ? EnsureTablesExistsActor.Ready).mapTo[Boolean]
-  } else {
-    () => Future.successful(true)
+  } else { () =>
+    Future.successful(true)
   }
 
   override def apply(): Future[Boolean] = check()
@@ -61,8 +64,8 @@ private object EnsureTablesExistsActor {
 }
 
 /**
-  * Copied/adapted from https://github.com/lagom/lagom/blob/60897ef752ddbfc28553d3726b8fdb830a3ebdc4/persistence-jdbc/core/src/main/scala/com/lightbend/lagom/internal/persistence/jdbc/SlickProvider.scala
-  */
+ * Copied/adapted from https://github.com/lagom/lagom/blob/60897ef752ddbfc28553d3726b8fdb830a3ebdc4/persistence-jdbc/core/src/main/scala/com/lightbend/lagom/internal/persistence/jdbc/SlickProvider.scala
+ */
 private class EnsureTablesExistsActor(db: SlickDatabase) extends Actor with ActorLogging {
 
   import EnsureTablesExistsActor._
@@ -74,7 +77,9 @@ private class EnsureTablesExistsActor(db: SlickDatabase) extends Actor with Acto
   import context.dispatcher
 
   private val journalCfg = new JournalTableConfiguration(context.system.settings.config.getConfig("jdbc-read-journal"))
-  private val snapshotCfg = new SnapshotTableConfiguration(context.system.settings.config.getConfig("jdbc-snapshot-store"))
+  private val snapshotCfg = new SnapshotTableConfiguration(
+    context.system.settings.config.getConfig("jdbc-snapshot-store")
+  )
 
   private val journalTables = new JournalTables {
     override val journalTableCfg: JournalTableConfiguration = journalCfg
@@ -122,21 +127,19 @@ private class EnsureTablesExistsActor(db: SlickDatabase) extends Actor with Acto
     case Ready => sender() ! true
   }
 
-  private def createTable(schemaStatements: Seq[String], tableExists: (Vector[MTable], Option[String]) => Boolean) = {
+  private def createTable(schemaStatements: Seq[String], tableExists: (Vector[MTable], Option[String]) => Boolean) =
     for {
       currentSchema <- getCurrentSchema
       tables <- getTables(currentSchema)
       _ <- createTableInternal(tables, currentSchema, schemaStatements, tableExists)
     } yield Done.getInstance()
-  }
 
   private def createTableInternal(
-    tables: Vector[MTable],
-    currentSchema: Option[String],
-    schemaStatements: Seq[String],
-    tableExists: (Vector[MTable], Option[String]) => Boolean
-  ) = {
-
+      tables: Vector[MTable],
+      currentSchema: Option[String],
+      schemaStatements: Seq[String],
+      tableExists: (Vector[MTable], Option[String]) => Boolean
+  ) =
     if (tableExists(tables, currentSchema)) {
       DBIO.successful(())
     } else {
@@ -169,9 +172,8 @@ private class EnsureTablesExistsActor(db: SlickDatabase) extends Actor with Acto
             }
         }
     }
-  }
 
-  private def getTables(currentSchema: Option[String]) = {
+  private def getTables(currentSchema: Option[String]) =
     // Calling MTable.getTables without parameters fails on MySQL
     // See https://github.com/lagom/lagom/issues/446
     // and https://github.com/slick/slick/issues/1692
@@ -181,9 +183,8 @@ private class EnsureTablesExistsActor(db: SlickDatabase) extends Actor with Acto
       case _ =>
         MTable.getTables(None, currentSchema, Option("%"), None)
     }
-  }
 
-  private def getCurrentSchema: DBIO[Option[String]] = {
+  private def getCurrentSchema: DBIO[Option[String]] =
     SimpleDBIO(ctx => tryGetSchema(ctx.connection).getOrElse(null)).flatMap { schema =>
       if (schema == null) {
         // Not all JDBC drivers support the getSchema method:
@@ -201,7 +202,6 @@ private class EnsureTablesExistsActor(db: SlickDatabase) extends Actor with Acto
         }
       } else DBIO.successful(Some(schema))
     }
-  }
 
   // Some older JDBC drivers don't implement Connection.getSchema
   // (including some builds of H2). This causes them to throw an
@@ -211,13 +211,14 @@ private class EnsureTablesExistsActor(db: SlickDatabase) extends Actor with Acto
   private def tryGetSchema(connection: Connection): Try[String] =
     try Success(connection.getSchema)
     catch {
-      case e: AbstractMethodError => Failure(new IllegalStateException("Database driver does not support Connection.getSchema", e))
+      case e: AbstractMethodError =>
+        Failure(new IllegalStateException("Database driver does not support Connection.getSchema", e))
     }
 
   private def tableExists(
-    schemaName: Option[String],
-    tableName: String
-  )(tables: Vector[MTable], currentSchema: Option[String]): Boolean = {
+      schemaName: Option[String],
+      tableName: String
+  )(tables: Vector[MTable], currentSchema: Option[String]): Boolean =
     tables.exists { t =>
       profile match {
         case _: MySQLProfile =>
@@ -226,6 +227,5 @@ private class EnsureTablesExistsActor(db: SlickDatabase) extends Actor with Acto
           t.name.schema.orElse(currentSchema) == schemaName.orElse(currentSchema) && t.name.name == tableName
       }
     }
-  }
 
 }

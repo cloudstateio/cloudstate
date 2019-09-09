@@ -6,7 +6,6 @@ import io.cloudstate.protocol.crdt._
 
 import scala.concurrent.duration._
 
-
 class ORMapCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   import AbstractCrdtEntitySpec._
@@ -23,38 +22,41 @@ class ORMapCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.ormap.value
 
-  def mapCounterEntries(elements: (ProtoAny, Int)*) = {
+  def mapCounterEntries(elements: (ProtoAny, Int)*) =
     elements.map {
       case (k, v) => ORMapEntry(Some(k), Some(createCounter(v)))
     }
-  }
 
-  def mapCounterDeltas(elements: (ProtoAny, Int)*) = {
+  def mapCounterDeltas(elements: (ProtoAny, Int)*) =
     elements.map {
       case (k, v) => ORMapEntryDelta(Some(k), Some(updateCounter(v)))
     }
-  }
 
-  def createMap(elements: Seq[ORMapEntry]) = {
+  def createMap(elements: Seq[ORMapEntry]) =
     CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Ormap(ORMapState(elements))))
-  }
 
-  def updateMap(added: Seq[(ProtoAny, CrdtState)] = Nil, removed: Seq[ProtoAny] = Nil, updated: Seq[(ProtoAny, CrdtDelta)] = Nil, cleared: Boolean = false) = {
-    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Ormap(ORMapDelta(
-      added = added.map(e => ORMapEntry(Some(e._1), Some(e._2))),
-      updated = updated.map(e => ORMapEntryDelta(Some(e._1), Some(e._2))),
-      removed = removed,
-      cleared = cleared
-    ))))
-  }
+  def updateMap(added: Seq[(ProtoAny, CrdtState)] = Nil,
+                removed: Seq[ProtoAny] = Nil,
+                updated: Seq[(ProtoAny, CrdtDelta)] = Nil,
+                cleared: Boolean = false) =
+    CrdtStateAction.Action.Update(
+      CrdtDelta(
+        CrdtDelta.Delta.Ormap(
+          ORMapDelta(
+            added = added.map(e => ORMapEntry(Some(e._1), Some(e._2))),
+            updated = updated.map(e => ORMapEntryDelta(Some(e._1), Some(e._2))),
+            removed = removed,
+            cleared = cleared
+          )
+        )
+      )
+    )
 
-  def createCounter(value : Int) = {
+  def createCounter(value: Int) =
     CrdtState(CrdtState.State.Gcounter(GCounterState(value)))
-  }
 
-  def updateCounter(increment: Int) = {
+  def updateCounter(increment: Int) =
     CrdtDelta(CrdtDelta.Delta.Gcounter(GCounterDelta(increment)))
-  }
 
   def verifyMapHasCounters(entries: (ProtoAny, Int)*) = {
     val map = get()
@@ -100,7 +102,8 @@ class ORMapCrdtEntitySpec extends AbstractCrdtEntitySpec {
       update { s =>
         s :+ (element1 -> (GCounter.empty :+ 2)) :+ (element2 -> (GCounter.empty :+ 5))
       }
-      createAndExpectInit().value.entries should contain theSameElementsAs mapCounterEntries(element1 -> 2, element2 -> 5)
+      createAndExpectInit().value.entries should contain theSameElementsAs mapCounterEntries(element1 -> 2,
+                                                                                             element2 -> 5)
     }
 
     "push the full state when no entity exists" in {
@@ -203,9 +206,12 @@ class ORMapCrdtEntitySpec extends AbstractCrdtEntitySpec {
       val delta = expectDelta()
       delta.removed should contain theSameElementsAs Seq(element1)
       // Usually we should only get one delta, but there's a race condition that means we could get the readded elements in another delta
-      val added = if (delta.added.isEmpty) expectDelta().added
-      else delta.added
-      added should contain theSameElementsAs Seq(ORMapEntry(Some(element1), Some(CrdtState(CrdtState.State.Pncounter(PNCounterState(5))))))
+      val added =
+        if (delta.added.isEmpty) expectDelta().added
+        else delta.added
+      added should contain theSameElementsAs Seq(
+        ORMapEntry(Some(element1), Some(CrdtState(CrdtState.State.Pncounter(PNCounterState(5)))))
+      )
     }
 
     "detect and handle incompatible CRDT value changes" in {
@@ -216,8 +222,9 @@ class ORMapCrdtEntitySpec extends AbstractCrdtEntitySpec {
       val delta = expectDelta()
       delta.removed should contain theSameElementsAs Seq(element1)
       // Usually we should only get one delta, but there's a race condition that means we could get the readded elements in another delta
-      val added = if (delta.added.isEmpty) expectDelta().added
-      else delta.added
+      val added =
+        if (delta.added.isEmpty) expectDelta().added
+        else delta.added
       added should contain theSameElementsAs mapCounterEntries(element1 -> 3)
     }
 
@@ -279,13 +286,15 @@ class ORMapCrdtEntitySpec extends AbstractCrdtEntitySpec {
       }
       createAndExpectInit()
       val cid = sendAndExpectCommand("cmd", command)
-      sendAndExpectReply(cid, updateMap(updated = Seq(element1 -> updateCounter(4)), removed = Seq(element2), added = Seq(element3 -> createCounter(3))))
+      sendAndExpectReply(cid,
+                         updateMap(updated = Seq(element1 -> updateCounter(4)),
+                                   removed = Seq(element2),
+                                   added = Seq(element3 -> createCounter(3))))
       eventually {
         verifyMapHasCounters(element1 -> 6, element3 -> 3)
       }
       toUserFunction.expectNoMessage(200.millis)
     }
-
 
   }
 }

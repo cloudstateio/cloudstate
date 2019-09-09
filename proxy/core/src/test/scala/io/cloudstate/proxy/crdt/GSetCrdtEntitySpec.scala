@@ -6,7 +6,6 @@ import io.cloudstate.protocol.crdt._
 
 import scala.concurrent.duration._
 
-
 class GSetCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   import AbstractCrdtEntitySpec._
@@ -23,13 +22,11 @@ class GSetCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.gset.value
 
-  def createSet(elements: ProtoAny*) = {
+  def createSet(elements: ProtoAny*) =
     CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Gset(GSetState(elements))))
-  }
 
-  def updateSet(elements: ProtoAny*) = {
+  def updateSet(elements: ProtoAny*) =
     CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Gset(GSetDelta(elements))))
-  }
 
   "The GSet CrdtEntity" should {
 

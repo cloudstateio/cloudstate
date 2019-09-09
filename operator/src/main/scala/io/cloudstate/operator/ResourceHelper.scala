@@ -19,20 +19,27 @@ class ResourceHelper(client: KubernetesClient)(implicit ec: ExecutionContext) {
 
   def ensureServiceForStatefulServiceExists(service: StatefulService.Resource): Future[Service] = {
     val expectedService = Service(
-      metadata = createMetadata(service.name, Some(service)),
-    ).setPort(Service.Port(
-      name = "grpc",
-      port = 80,
-      targetPort = Some(Left(KnativeSidecarH2cPort))
-    )).withSelector(StatefulServiceUidLabel -> service.uid)
+      metadata = createMetadata(service.name, Some(service))
+    ).setPort(
+        Service.Port(
+          name = "grpc",
+          port = 80,
+          targetPort = Some(Left(KnativeSidecarH2cPort))
+        )
+      )
+      .withSelector(StatefulServiceUidLabel -> service.uid)
     ensureObjectOwnedByUsExists[Service](expectedService, Some(service)) { existing =>
-      existing.copy(spec = existing.spec.map(_.copy(
-        ports = expectedService.spec.get.ports,
-        selector = expectedService.spec.get.selector,
-        _type = expectedService.spec.get._type,
-        externalName = expectedService.spec.get.externalName,
-        sessionAffinity = expectedService.spec.get.sessionAffinity
-      )))
+      existing.copy(
+        spec = existing.spec.map(
+          _.copy(
+            ports = expectedService.spec.get.ports,
+            selector = expectedService.spec.get.selector,
+            _type = expectedService.spec.get._type,
+            externalName = expectedService.spec.get.externalName,
+            sessionAffinity = expectedService.spec.get.sessionAffinity
+          )
+        )
+      )
     }
   }
 
@@ -82,11 +89,10 @@ class ResourceHelper(client: KubernetesClient)(implicit ec: ExecutionContext) {
 
   private def deploymentScalerRoleName(serviceName: String) = s"$serviceName-$DeploymentScalerRoleName"
 
-  private def ensureRoleExists(expectedRole: Role, owner: Option[ObjectResource]): Future[Role] = {
+  private def ensureRoleExists(expectedRole: Role, owner: Option[ObjectResource]): Future[Role] =
     ensureObjectOwnedByUsExists[Role](expectedRole, owner) { existing =>
       existing.copy(rules = expectedRole.rules)
     }
-  }
 
   def ensurePodReaderRoleBindingExists(serviceAccountName: String): Future[RoleBinding] = {
     val name = s"$PodReaderRoleBindingName-$serviceAccountName"
@@ -110,7 +116,8 @@ class ResourceHelper(client: KubernetesClient)(implicit ec: ExecutionContext) {
     ensureRoleBindingExists(expectedRoleBinding, None)
   }
 
-  def ensureDeploymentScalerRoleBindingExists(serviceAccountName: String, owner: ObjectResource): Future[RoleBinding] = {
+  def ensureDeploymentScalerRoleBindingExists(serviceAccountName: String,
+                                              owner: ObjectResource): Future[RoleBinding] = {
     val roleName = deploymentScalerRoleName(owner.name)
     val name = s"${owner.name}-$DeploymentScalerRoleBindingName"
     val expectedRoleBinding = RoleBinding(
@@ -132,47 +139,49 @@ class ResourceHelper(client: KubernetesClient)(implicit ec: ExecutionContext) {
     ensureRoleBindingExists(expectedRoleBinding, Some(owner))
   }
 
-  private def createMetadata(name: String, owner: Option[ObjectResource]) = {
+  private def createMetadata(name: String, owner: Option[ObjectResource]) =
     ObjectMeta(
       name = name,
       labels = labels,
-      ownerReferences = owner.map(owner =>
-        OwnerReference(
-          apiVersion = owner.apiVersion,
-          kind = owner.kind,
-          name = owner.name,
-          uid = owner.uid,
-          controller = Some(true),
-          blockOwnerDeletion = Some(true)
+      ownerReferences = owner
+        .map(
+          owner =>
+            OwnerReference(
+              apiVersion = owner.apiVersion,
+              kind = owner.kind,
+              name = owner.name,
+              uid = owner.uid,
+              controller = Some(true),
+              blockOwnerDeletion = Some(true)
+            )
         )
-      ).toList
+        .toList
     )
-  }
 
-  private def ensureRoleBindingExists(roleBinding: RoleBinding, owner: Option[ObjectResource]): Future[RoleBinding] = {
+  private def ensureRoleBindingExists(roleBinding: RoleBinding, owner: Option[ObjectResource]): Future[RoleBinding] =
     ensureObjectOwnedByUsExists[RoleBinding](roleBinding, owner) { existing =>
       existing.copy(subjects = roleBinding.subjects, roleRef = roleBinding.roleRef)
     }
-  }
 
   /**
-    * If an owner is passed in, returns true if that owner is a controller owner reference of the passed in object.
-    *
-    * If no owner is passed in, returns true if the Kubernetes managed by label is cloud state.
-    */
-  private def isOwnedByUs(obj: ObjectResource, owner: Option[ObjectResource]): Boolean = {
+   * If an owner is passed in, returns true if that owner is a controller owner reference of the passed in object.
+   *
+   * If no owner is passed in, returns true if the Kubernetes managed by label is cloud state.
+   */
+  private def isOwnedByUs(obj: ObjectResource, owner: Option[ObjectResource]): Boolean =
     owner match {
       case Some(owner) =>
-        obj.metadata.ownerReferences.find(_.controller.getOrElse(false)).exists(ref =>
-          ref.apiVersion.startsWith(owner.apiVersion.takeWhile(_ != '/') + "/")
-        )
+        obj.metadata.ownerReferences
+          .find(_.controller.getOrElse(false))
+          .exists(ref => ref.apiVersion.startsWith(owner.apiVersion.takeWhile(_ != '/') + "/"))
       case None =>
         obj.metadata.labels.get(KubernetesManagedByLabel).contains(CloudStateGroup)
     }
-  }
 
-  private def ensureObjectOwnedByUsExists[O <: ObjectResource: Format: ResourceDefinition](obj: O, owner: Option[ObjectResource])
-    (update: O => O): Future[O] = {
+  private def ensureObjectOwnedByUsExists[O <: ObjectResource: Format: ResourceDefinition](
+      obj: O,
+      owner: Option[ObjectResource]
+  )(update: O => O): Future[O] =
     client.getOption[O](obj.name).flatMap {
       case Some(existing) if isOwnedByUs(existing, owner) =>
         // We manage it, check that it's up to date
@@ -191,6 +200,5 @@ class ResourceHelper(client: KubernetesClient)(implicit ec: ExecutionContext) {
         println(s"Did not find ${obj.kind} '${obj.name}', creating...")
         client.create(obj)
     }
-  }
 
 }

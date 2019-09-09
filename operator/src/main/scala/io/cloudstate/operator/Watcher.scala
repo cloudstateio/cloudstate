@@ -14,11 +14,13 @@ import scala.concurrent.ExecutionContext
 
 object Watcher {
 
-  private implicit def listResourceFormat[Resource <: ObjectResource: Format]: Format[ListResource[Resource]] = ListResourceFormat(implicitly[Format[Resource]])
+  private implicit def listResourceFormat[Resource <: ObjectResource: Format]: Format[ListResource[Resource]] =
+    ListResourceFormat(implicitly[Format[Resource]])
 
-  def watch[Resource <: ObjectResource: Format: ResourceDefinition](client: KubernetesClient,
-      handler: Flow[WatchEvent[Resource], _, _])(implicit ec: ExecutionContext, mat: Materializer): KillSwitch = {
-
+  def watch[Resource <: ObjectResource: Format: ResourceDefinition](
+      client: KubernetesClient,
+      handler: Flow[WatchEvent[Resource], _, _]
+  )(implicit ec: ExecutionContext, mat: Materializer): KillSwitch =
     // Summary of what we want our event loop to look like:
     // * We start by listing all the resources, and process them.
     // * Then we start watching from the resourceVersion that we got in our list, so we get all updates.
@@ -28,46 +30,66 @@ object Watcher {
     //   restarting.
     // * Also, if errors are encountered, we don't want to continually restart in a hot loop, so we use the
     //   RestartSource to restart with backoff.
-    RestartSource.onFailuresWithBackoff(2.seconds, 20.seconds, 0.2) { () =>
-      val source = Source.repeat(NotUsed)
-        .flatMapConcat { _ =>
-          Source.fromFutureSource(
-            client.list[ListResource[Resource]]()
-              .map { resources =>
-                val watch = client
-                  .watchAllContinuously[Resource](sinceResourceVersion = Some(resources.resourceVersion))
+    RestartSource
+      .onFailuresWithBackoff(2.seconds, 20.seconds, 0.2) { () =>
+        val source = Source
+          .repeat(NotUsed)
+          .flatMapConcat { _ =>
+            Source
+              .fromFutureSource(
+                client
+                  .list[ListResource[Resource]]()
+                  .map { resources =>
+                    val watch = client
+                      .watchAllContinuously[Resource](sinceResourceVersion = Some(resources.resourceVersion))
 
-                Source(resources)
-                  .map(WatchEvent(EventType.MODIFIED, _))
-                  .concat(watch)
-              }
-          ).takeWithin(5.minutes)
-        }
+                    Source(resources)
+                      .map(WatchEvent(EventType.MODIFIED, _))
+                      .concat(watch)
+                  }
+              )
+              .takeWithin(5.minutes)
+          }
 
-      source.via(handler)
-    }.viaMat(KillSwitches.single)(Keep.right).to(Sink.ignore).run()
-  }
+        source.via(handler)
+      }
+      .viaMat(KillSwitches.single)(Keep.right)
+      .to(Sink.ignore)
+      .run()
 
-  def watchSingle[Resource <: ObjectResource: Format: ResourceDefinition](client: KubernetesClient, resourceName: String,
-       handler: Flow[WatchEvent[Resource], _, _])(implicit ec: ExecutionContext, mat: Materializer): KillSwitch = {
+  def watchSingle[Resource <: ObjectResource: Format: ResourceDefinition](
+      client: KubernetesClient,
+      resourceName: String,
+      handler: Flow[WatchEvent[Resource], _, _]
+  )(implicit ec: ExecutionContext, mat: Materializer): KillSwitch =
+    RestartSource
+      .onFailuresWithBackoff(2.seconds, 20.seconds, 0.2) { () =>
+        val source = Source
+          .repeat(NotUsed)
+          .flatMapConcat { _ =>
+            Source
+              .fromFutureSource(
+                client.getOption[Resource](resourceName).map {
+                  case Some(resource) =>
+                    val watch =
+                      client.watchContinuously[Resource](resourceName,
+                                                         sinceResourceVersion = Some(resource.resourceVersion))
+                    Source
+                      .single(resource)
+                      .map(WatchEvent(EventType.MODIFIED, _))
+                      .concat(watch)
+                  case None =>
+                    throw new RuntimeException(
+                      s"Resource $resourceName not found in namespace ${client.namespaceName}!"
+                    )
+                }
+              )
+              .takeWithin(5.minutes)
+          }
 
-    RestartSource.onFailuresWithBackoff(2.seconds, 20.seconds, 0.2) { () =>
-      val source = Source.repeat(NotUsed)
-        .flatMapConcat { _ =>
-          Source.fromFutureSource(
-            client.getOption[Resource](resourceName).map {
-                case Some(resource) =>
-                  val watch = client.watchContinuously[Resource](resourceName, sinceResourceVersion = Some(resource.resourceVersion))
-                  Source.single(resource)
-                    .map(WatchEvent(EventType.MODIFIED, _))
-                    .concat(watch)
-                case None =>
-                  throw new RuntimeException(s"Resource $resourceName not found in namespace ${client.namespaceName}!")
-              }
-          ).takeWithin(5.minutes)
-        }
-
-      source.via(handler)
-    }.viaMat(KillSwitches.single)(Keep.right).to(Sink.ignore).run()
-  }
+        source.via(handler)
+      }
+      .viaMat(KillSwitches.single)(Keep.right)
+      .to(Sink.ignore)
+      .run()
 }

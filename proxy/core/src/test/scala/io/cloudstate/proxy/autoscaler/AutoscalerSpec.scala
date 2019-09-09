@@ -11,8 +11,12 @@ import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpecLike}
 
 import scala.concurrent.duration._
 
-class AutoscalerSpec extends TestKit(ActorSystem("AutoscalerSpec", ConfigFactory.load("test-in-memory")))
-  with WordSpecLike with Matchers with BeforeAndAfterAll with ImplicitSender {
+class AutoscalerSpec
+    extends TestKit(ActorSystem("AutoscalerSpec", ConfigFactory.load("test-in-memory")))
+    with WordSpecLike
+    with Matchers
+    with BeforeAndAfterAll
+    with ImplicitSender {
 
   // Start cluster with ourselves, necessary for ddata
   val cluster = Cluster(system)
@@ -26,25 +30,24 @@ class AutoscalerSpec extends TestKit(ActorSystem("AutoscalerSpec", ConfigFactory
 
   override protected def afterAll(): Unit = TestKit.shutdownActorSystem(system)
 
-  private def uniqueAddress(name: String): UniqueAddress = {
-    UniqueAddress(Address("akka", "system", Some(name), Some(2552)), 1l)
-  }
+  private def uniqueAddress(name: String): UniqueAddress =
+    UniqueAddress(Address("akka", "system", Some(name), Some(2552)), 1L)
 
   private def addressString(name: String) = uniqueAddress(name).address.toString
 
   private def withAutoscaler(
-    initialState: AutoscalerState = Stable(),
-    members: Seq[String] = Seq("a"),
-    targetUserFunctionConcurrency: Int = 1,
-    targetRequestConcurrency: Int = 10,
-    targetConcurrencyWindow: FiniteDuration = 60.seconds,
-    scaleUpStableDeadline: FiniteDuration = 2.minutes,
-    scaleDownStableDeadline: FiniteDuration = 30.seconds,
-    requestRateThresholdFactor: Double = 1.5,
-    requestRateThresholdWindow: FiniteDuration = 6.seconds,
-    maxScaleFactor: Double = 0,
-    maxScaleAbsolute: Int = 4,
-    maxMembers: Int = 10
+      initialState: AutoscalerState = Stable(),
+      members: Seq[String] = Seq("a"),
+      targetUserFunctionConcurrency: Int = 1,
+      targetRequestConcurrency: Int = 10,
+      targetConcurrencyWindow: FiniteDuration = 60.seconds,
+      scaleUpStableDeadline: FiniteDuration = 2.minutes,
+      scaleDownStableDeadline: FiniteDuration = 30.seconds,
+      requestRateThresholdFactor: Double = 1.5,
+      requestRateThresholdWindow: FiniteDuration = 6.seconds,
+      maxScaleFactor: Double = 0,
+      maxScaleAbsolute: Int = 4,
+      maxMembers: Int = 10
   )(block: ActorRef => Unit): Unit = {
     ensureScalerStateIs(initialState)
 
@@ -84,7 +87,7 @@ class AutoscalerSpec extends TestKit(ActorSystem("AutoscalerSpec", ConfigFactory
     expectMsg(UpdateSuccess(StateKey, None))
   }
 
-  def expectScalerStateToBe(pf: PartialFunction[Any, Unit]) = {
+  def expectScalerStateToBe(pf: PartialFunction[Any, Unit]) =
     within(3.seconds) {
       replicator ! Get(StateKey, ReadLocal)
       expectMsgPF() {
@@ -93,26 +96,25 @@ class AutoscalerSpec extends TestKit(ActorSystem("AutoscalerSpec", ConfigFactory
       }
 
     }
-  }
 
   private def aLongTimeFromNowMillis = System.currentTimeMillis() + 1.hour.toMillis
 
   private def metrics(
-    address: String = "a",
-    metricInterval: FiniteDuration = 1.second,
-    requestConcurrency: Double = 5.0,
-    requestTime: FiniteDuration = 10.millis,
-    requestCount: Int = 200,
-    userFunctionConcurrency: Double = 0.5,
-    userFunctionTime: FiniteDuration = 5.millis,
-    userFunctionCount: Int = 200,
-    databaseConcurrency: Double = 0.0,
-    databaseTime: FiniteDuration = Duration.Zero,
-    databaseCount: Int = 0
-  ): AutoscalerMetrics = {
+      address: String = "a",
+      metricInterval: FiniteDuration = 1.second,
+      requestConcurrency: Double = 5.0,
+      requestTime: FiniteDuration = 10.millis,
+      requestCount: Int = 200,
+      userFunctionConcurrency: Double = 0.5,
+      userFunctionTime: FiniteDuration = 5.millis,
+      userFunctionCount: Int = 200,
+      databaseConcurrency: Double = 0.0,
+      databaseTime: FiniteDuration = Duration.Zero,
+      databaseCount: Int = 0
+  ): AutoscalerMetrics =
     AutoscalerMetrics(
       address = addressString(address),
-      uniqueAddressLongId = 1l,
+      uniqueAddressLongId = 1L,
       metricIntervalNanos = metricInterval.toNanos,
       requestConcurrency = requestConcurrency,
       requestTimeNanos = requestTime.toNanos,
@@ -124,7 +126,6 @@ class AutoscalerSpec extends TestKit(ActorSystem("AutoscalerSpec", ConfigFactory
       databaseTimeNanos = databaseTime.toNanos,
       databaseCount = databaseCount
     )
-  }
 
   "The Autoscaler" should {
     "do nothing when there is one node and metrics are below thresholds" in withAutoscaler() { autoscaler =>
@@ -235,7 +236,6 @@ class AutoscalerSpec extends TestKit(ActorSystem("AutoscalerSpec", ConfigFactory
       )
       expectNoMessage(300.millis)
     }
-
 
   }
 

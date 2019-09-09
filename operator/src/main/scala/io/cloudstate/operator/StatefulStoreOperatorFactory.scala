@@ -33,8 +33,8 @@ import skuber.apps.v1.Deployment
 
 import scala.util.control.NonFatal
 
-class StatefulStoreOperatorFactory(implicit mat: Materializer, ec: ExecutionContext) extends
-  OperatorFactory[StatefulStore.Status, StatefulStore.Resource] {
+class StatefulStoreOperatorFactory(implicit mat: Materializer, ec: ExecutionContext)
+    extends OperatorFactory[StatefulStore.Status, StatefulStore.Resource] {
 
   import OperatorConstants._
   import StatefulStore.Resource
@@ -43,23 +43,30 @@ class StatefulStoreOperatorFactory(implicit mat: Materializer, ec: ExecutionCont
 
   class StatefulStoreOperator(client: KubernetesClient) extends Operator {
 
-    private def status(maybeSpec: Option[Resource], status: String, reason: Option[String] = None, message: Option[String] = None) = StatefulStore.Status(
-      conditions = Some(List(
-        Condition(
-          `type` = StatefulStoreConditionType,
-          status = status,
-          reason = reason,
-          message = message,
-          lastUpdateTime = Some(ZonedDateTime.now())
+    private def status(maybeSpec: Option[Resource],
+                       status: String,
+                       reason: Option[String] = None,
+                       message: Option[String] = None) = StatefulStore.Status(
+      conditions = Some(
+        List(
+          Condition(
+            `type` = StatefulStoreConditionType,
+            status = status,
+            reason = reason,
+            message = message,
+            lastUpdateTime = Some(ZonedDateTime.now())
+          )
         )
-      )),
+      ),
       lastConfig = maybeSpec.map(spec => Base64.getEncoder.encodeToString(Json.toBytes(Json.toJson(spec.spec))))
     )
 
     override def handleChanged(resource: Resource): Future[StatusUpdate] = {
       val maybeLastConfig = parseLastConfig(resource.status)
       if (maybeLastConfig.contains(resource.spec) &&
-        resource.status.exists(_.conditions.exists(_.exists(c => c.`type` == StatefulStoreConditionType && c.status == TrueStatus)))) {
+          resource.status.exists(
+            _.conditions.exists(_.exists(c => c.`type` == StatefulStoreConditionType && c.status == TrueStatus))
+          )) {
         // Don't do anything if last time we saw it, we successfully validated it, and it hasn't changed since then.
         Future.successful(StatusUpdate.None)
       } else {
@@ -87,16 +94,16 @@ class StatefulStoreOperatorFactory(implicit mat: Materializer, ec: ExecutionCont
       }
     }
 
-    override def handleDeleted(resource: Resource): Future[Done] = {
+    override def handleDeleted(resource: Resource): Future[Done] =
       updateDependents(resource.name)
-    }
 
-    private def updateDependents(name: String) = {
-
+    private def updateDependents(name: String) =
       (for {
-        deployments <- client.listSelected[DeploymentList](LabelSelector(
-          StatefulStoreLabel is name
-        ))
+        deployments <- client.listSelected[DeploymentList](
+          LabelSelector(
+            StatefulStoreLabel is name
+          )
+        )
         _ <- Future.sequence(deployments.map(deployment => updateServiceForDeployment(deployment)))
       } yield Done).recover {
         case error =>
@@ -104,15 +111,16 @@ class StatefulStoreOperatorFactory(implicit mat: Materializer, ec: ExecutionCont
           error.printStackTrace()
           Done
       }
-    }
 
-    private def updateServiceForDeployment(deployment: Deployment): Future[Done] = {
-
+    private def updateServiceForDeployment(deployment: Deployment): Future[Done] =
       if (deployment.metadata.labels.contains(RevisionLabel)) {
         for {
-          maybeRevision <- deployment.metadata.labels.get(RevisionLabel).map { revisionName =>
-            client.getOption[KnativeRevision.Resource](revisionName)
-          }.getOrElse(Future.successful(None))
+          maybeRevision <- deployment.metadata.labels
+            .get(RevisionLabel)
+            .map { revisionName =>
+              client.getOption[KnativeRevision.Resource](revisionName)
+            }
+            .getOrElse(Future.successful(None))
           _ <- maybeRevision match {
             case Some(revision) =>
               val status = revision.status.getOrElse(KnativeRevision.Status(None, Nil, None, None, None))
@@ -123,9 +131,12 @@ class StatefulStoreOperatorFactory(implicit mat: Materializer, ec: ExecutionCont
         } yield Done
       } else if (deployment.metadata.labels.contains(StatefulServiceLabel)) {
         for {
-          maybeStatefulService <- deployment.metadata.labels.get(StatefulServiceLabel).map { serviceName =>
-            client.getOption[StatefulService.Resource](serviceName)
-          }.getOrElse(Future.successful(None))
+          maybeStatefulService <- deployment.metadata.labels
+            .get(StatefulServiceLabel)
+            .map { serviceName =>
+              client.getOption[StatefulService.Resource](serviceName)
+            }
+            .getOrElse(Future.successful(None))
           _ <- maybeStatefulService match {
             case Some(service) =>
               val status = service.status.getOrElse(StatefulService.Status(Nil))
@@ -139,8 +150,6 @@ class StatefulStoreOperatorFactory(implicit mat: Materializer, ec: ExecutionCont
         // Don't know what deployed it, ignore.
         Future.successful(Done)
       }
-
-    }
 
     // Here we change the validation to Unknown. It is the responsibility of the revision controller to
     // handle updates to the store, by changing to unknown we let it go in and do the update.
@@ -184,11 +193,10 @@ class StatefulStoreOperatorFactory(implicit mat: Materializer, ec: ExecutionCont
       status.copy(conditions = conditions)
     }
 
-    override def statusFromError(error: Throwable, existing: Option[Resource]): StatusUpdate = {
+    override def statusFromError(error: Throwable, existing: Option[Resource]): StatusUpdate =
       StatusUpdate.Update(status(existing, UnknownStatus, Some("UnknownOperatorError"), Some(error.getMessage)))
-    }
 
-    private def parseLastConfig(maybeStatus: Option[StatefulStore.Status]) = {
+    private def parseLastConfig(maybeStatus: Option[StatefulStore.Status]) =
       for {
         status <- maybeStatus
         lastConfigJs <- status.lastConfig
@@ -198,7 +206,6 @@ class StatefulStoreOperatorFactory(implicit mat: Materializer, ec: ExecutionCont
           case NonFatal(_) => None
         }
       } yield lastConfig
-    }
   }
 
 }

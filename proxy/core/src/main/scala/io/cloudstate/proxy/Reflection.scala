@@ -38,11 +38,13 @@ object Reflection {
     ReflectionProto.javaDescriptor
   ).flatMap(flattenDependencies).distinct
 
-  private def flattenDependencies(descriptor: FileDescriptor): List[FileDescriptor] = {
+  private def flattenDependencies(descriptor: FileDescriptor): List[FileDescriptor] =
     descriptor :: descriptor.getDependencies.asScala.toList.flatMap(flattenDependencies)
-  }
 
-  def serve(fileDescriptors: Seq[FileDescriptor], services: List[String])(implicit mat: Materializer, sys: ActorSystem): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+  def serve(
+      fileDescriptors: Seq[FileDescriptor],
+      services: List[String]
+  )(implicit mat: Materializer, sys: ActorSystem): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     implicit val ec: ExecutionContext = mat.executionContext
     import ServerReflection.Serializers._
 
@@ -51,9 +53,16 @@ object Reflection {
     {
       case req: HttpRequest if req.uri.path == ReflectionPath =>
         val responseCodec = Codecs.negotiate(req)
-        GrpcMarshalling.unmarshalStream(req)(ServerReflectionRequestSerializer, mat)
-        .map(_ via handler)
-        .map(e => GrpcMarshalling.marshalStream(e, GrpcExceptionHandler.defaultMapper)(ServerReflectionResponseSerializer, mat, responseCodec, sys))
+        GrpcMarshalling
+          .unmarshalStream(req)(ServerReflectionRequestSerializer, mat)
+          .map(_ via handler)
+          .map(
+            e =>
+              GrpcMarshalling.marshalStream(e, GrpcExceptionHandler.defaultMapper)(ServerReflectionResponseSerializer,
+                                                                                   mat,
+                                                                                   responseCodec,
+                                                                                   sys)
+          )
     }
   }
 
@@ -62,37 +71,43 @@ object Reflection {
     (Names.splitNext(if (fileDesc.getPackage.isEmpty) symbol else symbol.drop(fileDesc.getPackage.length + 1)) match {
       case ("", "") => false
       case (typeOrService, "") =>
-      //fileDesc.findEnumTypeByName(typeOrService) != null || // TODO investigate if this is expected
+        //fileDesc.findEnumTypeByName(typeOrService) != null || // TODO investigate if this is expected
         fileDesc.findMessageTypeByName(typeOrService) != null ||
         fileDesc.findServiceByName(typeOrService) != null
       case (service, method) =>
         Option(fileDesc.findServiceByName(service)).exists(_.findMethodByName(method) != null)
     })
 
-  private final def findFileDescForSymbol(symbol: String, fileDescriptors: Map[String, FileDescriptor]): Option[FileDescriptor] =
+  private final def findFileDescForSymbol(symbol: String,
+                                          fileDescriptors: Map[String, FileDescriptor]): Option[FileDescriptor] =
     fileDescriptors.values.collectFirst {
       case fileDesc if containsSymbol(symbol, fileDesc) => fileDesc
     }
 
   private final def containsExtension(container: String, number: Int, fileDesc: FileDescriptor): Boolean =
-    fileDesc.getExtensions.iterator.asScala.exists(ext => container == ext.getContainingType.getFullName && number == ext.getNumber)
+    fileDesc.getExtensions.iterator.asScala
+      .exists(ext => container == ext.getContainingType.getFullName && number == ext.getNumber)
 
-  private final def findFileDescForExtension(container: String, number: Int, fileDescriptors: Map[String, FileDescriptor]): Option[FileDescriptor] =
+  private final def findFileDescForExtension(container: String,
+                                             number: Int,
+                                             fileDescriptors: Map[String, FileDescriptor]): Option[FileDescriptor] =
     fileDescriptors.values.collectFirst {
       case fileDesc if containsExtension(container, number, fileDesc) => fileDesc
     }
 
-  private final def findExtensionNumbersForContainingType(container: String, fileDescriptors: Map[String, FileDescriptor]): List[Int] =
+  private final def findExtensionNumbersForContainingType(container: String,
+                                                          fileDescriptors: Map[String, FileDescriptor]): List[Int] =
     (for {
       fileDesc <- fileDescriptors.values.iterator
       extension <- fileDesc.getExtensions.iterator.asScala
       if extension.getFullName == container
     } yield extension.getNumber).toList
 
-  private def handle(fileDescriptors: Map[String, FileDescriptor], services: List[String]): Flow[ServerReflectionRequest, ServerReflectionResponse, NotUsed] =
+  private def handle(fileDescriptors: Map[String, FileDescriptor],
+                     services: List[String]): Flow[ServerReflectionRequest, ServerReflectionResponse, NotUsed] =
     Flow[ServerReflectionRequest].map(req => {
-      import ServerReflectionRequest.{ MessageRequest => In}
-      import ServerReflectionResponse.{ MessageResponse => Out}
+      import ServerReflectionRequest.{MessageRequest => In}
+      import ServerReflectionResponse.{MessageResponse => Out}
 
       val response = req.messageRequest match {
         case In.Empty =>

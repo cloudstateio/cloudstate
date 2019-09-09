@@ -10,26 +10,29 @@ import skuber.api.client.KubernetesClient
 
 import scala.concurrent.Future
 
-
 object StatefulStoreSupport {
-  private val types: List[StatefulStoreSupport] = List(CassandraStoreSupport, InMemoryStoreSupport, PostgresStoreSupport)
+  private val types: List[StatefulStoreSupport] =
+    List(CassandraStoreSupport, InMemoryStoreSupport, PostgresStoreSupport)
 
   def get(storeType: String): Option[StatefulStoreSupport] = types.find(_.name == storeType)
 
-  def get(store: StatefulStore.Resource): Validated[StatefulStoreSupport] = {
+  def get(store: StatefulStore.Resource): Validated[StatefulStoreSupport] =
     store.spec.`type` match {
       case Some(storeType) =>
         StatefulStoreSupport.get(storeType) match {
           case Some(storeSupport) => Validated(storeSupport)
           case None =>
-            Validated.error(StatefulStoreConditionType, "UnknownStoreType",
-              s"Unknown store type: $storeType, supported types are: ${StatefulStoreSupport.supportedTypes.mkString(", ")}")
+            Validated.error(
+              StatefulStoreConditionType,
+              "UnknownStoreType",
+              s"Unknown store type: $storeType, supported types are: ${StatefulStoreSupport.supportedTypes.mkString(", ")}"
+            )
         }
       case None =>
-        Validated.error(StatefulStoreConditionType, "UnspecifiedStoreType",
-          s"StatefulStore ${store.name} does not specify a store type.")
+        Validated.error(StatefulStoreConditionType,
+                        "UnspecifiedStoreType",
+                        s"StatefulStore ${store.name} does not specify a store type.")
     }
-  }
 
   def supportedTypes: List[String] = types.map(_.name)
 

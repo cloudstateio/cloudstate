@@ -30,34 +30,35 @@ import scala.concurrent.{ExecutionContext, Future}
 import KnativeRevision._
 
 class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionContext)
-  extends OperatorFactory[KnativeRevision.Status, Resource] {
+    extends OperatorFactory[KnativeRevision.Status, Resource] {
 
   import OperatorConstants._
 
-  override def apply(client: KubernetesClient, config: OperatorConfig): Operator = new KnativeRevisionOperator(client, config)
+  override def apply(client: KubernetesClient, config: OperatorConfig): Operator =
+    new KnativeRevisionOperator(client, config)
 
   class KnativeRevisionOperator(client: KubernetesClient, config: OperatorConfig) extends Operator {
 
     private val helper = new ResourceHelper(client)
 
-    private def isOwnedByKnativeRevisionController(deployment: Deployment): Boolean = {
+    private def isOwnedByKnativeRevisionController(deployment: Deployment): Boolean =
       deployment.metadata.ownerReferences
         .find(_.controller.contains(true))
-        .exists(ref => ref.apiVersion.startsWith(KnativeServingGroup + "/")
-          && ref.kind == RevisionKind)
-    }
+        .exists(
+          ref =>
+            ref.apiVersion.startsWith(KnativeServingGroup + "/")
+            && ref.kind == RevisionKind
+        )
 
-    override def handleChanged(resource: Resource): Future[StatusUpdate] = {
+    override def handleChanged(resource: Resource): Future[StatusUpdate] =
       resource.spec.deployer match {
         case Some(esd: CloudStateDeployer) =>
           reconcile(resource, esd)
         case _ =>
           Future.successful(StatusUpdate.None)
       }
-    }
 
-    override def handleDeleted(resource: Resource): Future[Done] = {
-
+    override def handleDeleted(resource: Resource): Future[Done] =
       resource.spec.deployer match {
         case Some(esd: CloudStateDeployer) =>
           for {
@@ -78,34 +79,36 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
           Future.successful(Done)
       }
 
-    }
-
-    override def statusFromError(error: Throwable, existing: Option[Resource]): StatusUpdate = {
+    override def statusFromError(error: Throwable, existing: Option[Resource]): StatusUpdate =
       existing match {
         case Some(revision) =>
-          updateCondition(revision, KnativeRevision.Condition(
-            `type` = StatefulStoreConditionType,
-            status = UnknownStatus,
-            reason = Some("UnknownError"),
-            message = Some(error.getMessage),
-            lastTransitionTime = Some(ZonedDateTime.now())
-          ))
+          updateCondition(
+            revision,
+            KnativeRevision.Condition(
+              `type` = StatefulStoreConditionType,
+              status = UnknownStatus,
+              reason = Some("UnknownError"),
+              message = Some(error.getMessage),
+              lastTransitionTime = Some(ZonedDateTime.now())
+            )
+          )
         case None =>
           println("Unknown error handling revision change, but we don't have an existing revision to update: " + error)
           error.printStackTrace()
           StatusUpdate.None
       }
-    }
 
-    private def updateCondition(revision: KnativeRevision.Resource, condition: KnativeRevision.Condition): StatusUpdate = {
+    private def updateCondition(revision: KnativeRevision.Resource,
+                                condition: KnativeRevision.Condition): StatusUpdate = {
       val status = revision.status.getOrElse(new KnativeRevision.Status(None, Nil, None, None, None))
       // First check if the condition has actually changed - important, because otherwise we might end up in an
       // infinite loop with the Knative operator
-      if (status.conditions.exists(c =>
-        c.`type` == condition.`type` &&
-          c.status == condition.status &&
-          c.reason == condition.reason
-      )) {
+      if (status.conditions.exists(
+            c =>
+              c.`type` == condition.`type` &&
+              c.status == condition.status &&
+              c.reason == condition.reason
+          )) {
         // Hasn't changed, don't update.
         StatusUpdate.None
       } else {
@@ -132,8 +135,10 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       } yield statusUpdate
     }
 
-    private def reconcileDeployment(revision: KnativeRevision.Resource, deployer: CloudStateDeployer,
-      maybeJournal: Option[StatefulStore.Resource], maybeDeployment: Option[Deployment]) = {
+    private def reconcileDeployment(revision: KnativeRevision.Resource,
+                                    deployer: CloudStateDeployer,
+                                    maybeJournal: Option[StatefulStore.Resource],
+                                    maybeDeployment: Option[Deployment]) = {
       val deploymentName = deploymentNameFor(revision)
 
       // for expression over eithers, only progresses when they return Right, otherwise we end up with Left of condition
@@ -148,7 +153,8 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
           case Some(existing) =>
             // todo why will the spec be None?
             val existingSpec = existing.spec.get
-            val desired = existing.copy(spec = newDeployment.spec)
+            val desired = existing
+              .copy(spec = newDeployment.spec)
               // Preserve current scale
               .withReplicas(existingSpec.replicas.getOrElse(1))
               // Selector is immutable so preserve that too
@@ -177,12 +183,15 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         for {
           _ <- ensureRbacPermissionsInNamespace(revision.spec.serviceAccountName.getOrElse("default"))
           _ <- deploymentFuture
-        } yield updateCondition(revision, KnativeRevision.Condition(
-          `type` = StatefulStoreConditionType,
-          status = TrueStatus,
-          severity = Some("Info"),
-          lastTransitionTime = Some(ZonedDateTime.now())
-        ))
+        } yield updateCondition(
+          revision,
+          KnativeRevision.Condition(
+            `type` = StatefulStoreConditionType,
+            status = TrueStatus,
+            severity = Some("Info"),
+            lastTransitionTime = Some(ZonedDateTime.now())
+          )
+        )
       }
 
       result match {
@@ -193,11 +202,16 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       }
     }
 
-    private def errorCondition(`type`: String, reason: String, message: String) = {
-      KnativeRevision.Condition(`type`, FalseStatus, Some("Error"), Some(ZonedDateTime.now()), Some(reason), Some(message))
-    }
+    private def errorCondition(`type`: String, reason: String, message: String) =
+      KnativeRevision.Condition(`type`,
+                                FalseStatus,
+                                Some("Error"),
+                                Some(ZonedDateTime.now()),
+                                Some(reason),
+                                Some(message))
 
-    private def verifyWeOwnDeployment(name: String, maybeDeployment: Option[Deployment]): Either[KnativeRevision.Condition, Done] = {
+    private def verifyWeOwnDeployment(name: String,
+                                      maybeDeployment: Option[Deployment]): Either[KnativeRevision.Condition, Done] =
       maybeDeployment match {
         case None =>
           Right(Done)
@@ -205,17 +219,26 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
           if (isOwnedByKnativeRevisionController(deployment)) {
             Right(Done)
           } else {
-            Left(errorCondition(ConditionResourcesAvailable, ConditionResourcesAvailableNotOwned,
-              s"There is an existing Deployment $name that we do not own."))
+            Left(
+              errorCondition(ConditionResourcesAvailable,
+                             ConditionResourcesAvailableNotOwned,
+                             s"There is an existing Deployment $name that we do not own.")
+            )
           }
       }
-    }
 
-    private def validateJournal(revision: KnativeRevision.Resource, deployer: CloudStateDeployer,
-      maybeJournal: Option[StatefulStore.Resource]): Either[KnativeRevision.Condition, Container] = {
+    private def validateJournal(
+        revision: KnativeRevision.Resource,
+        deployer: CloudStateDeployer,
+        maybeJournal: Option[StatefulStore.Resource]
+    ): Either[KnativeRevision.Condition, Container] =
       maybeJournal match {
         case None =>
-          Left(errorCondition(StatefulStoreConditionType, "JournalNotFound", s"Journal with name ${deployer.journal.name} not found."))
+          Left(
+            errorCondition(StatefulStoreConditionType,
+                           "JournalNotFound",
+                           s"Journal with name ${deployer.journal.name} not found.")
+          )
         case Some(journal) =>
           journal.spec.`type` match {
             case Some(CassandraStatefulStoreType) =>
@@ -227,43 +250,65 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
                         case Some(keyspace) =>
                           Right(createCassandraSideCar(revision, deployer, serviceName, keyspace))
                         case None =>
-                          Left(errorCondition(StatefulStoreConditionType, "MissingKeyspace",
-                            "No keyspace declared for Cassandra journal"))
+                          Left(
+                            errorCondition(StatefulStoreConditionType,
+                                           "MissingKeyspace",
+                                           "No keyspace declared for Cassandra journal")
+                          )
                       }
                     case None =>
-                      Left(errorCondition(StatefulStoreConditionType, "MissingServiceName",
-                        "No service name declared in unmanaged Cassandra journal"))
+                      Left(
+                        errorCondition(StatefulStoreConditionType,
+                                       "MissingServiceName",
+                                       "No service name declared in unmanaged Cassandra journal")
+                      )
                   }
                 case unknown =>
-                  Left(errorCondition(StatefulStoreConditionType, "UnknownDeploymentType",
-                    s"Unknown Cassandra deployment type: $unknown, supported types for Cassandra are: Unmanaged"))
+                  Left(
+                    errorCondition(
+                      StatefulStoreConditionType,
+                      "UnknownDeploymentType",
+                      s"Unknown Cassandra deployment type: $unknown, supported types for Cassandra are: Unmanaged"
+                    )
+                  )
               }
             case unknown =>
-              Left(errorCondition(StatefulStoreConditionType, "UnknownJournalType",
-                s"Unknown journal type: $unknown, supported types are: Cassandra"))
+              Left(
+                errorCondition(StatefulStoreConditionType,
+                               "UnknownJournalType",
+                               s"Unknown journal type: $unknown, supported types are: Cassandra")
+              )
           }
       }
-    }
 
-    private def createCassandraSideCar(revision: KnativeRevision.Resource, deployer: CloudStateDeployer,
-      service: String, keyspace: String) = {
-      createSideCar(revision, deployer, config.images.cassandra, List(
-        EnvVar("CASSANDRA_CONTACT_POINTS", service),
-        EnvVar("CASSANDRA_KEYSPACE", keyspace)
-      ))
-    }
+    private def createCassandraSideCar(revision: KnativeRevision.Resource,
+                                       deployer: CloudStateDeployer,
+                                       service: String,
+                                       keyspace: String) =
+      createSideCar(revision,
+                    deployer,
+                    config.images.cassandra,
+                    List(
+                      EnvVar("CASSANDRA_CONTACT_POINTS", service),
+                      EnvVar("CASSANDRA_KEYSPACE", keyspace)
+                    ))
 
-    private def createSideCar(revision: KnativeRevision.Resource, deployer: CloudStateDeployer, image: String, env: Seq[EnvVar]) = {
+    private def createSideCar(revision: KnativeRevision.Resource,
+                              deployer: CloudStateDeployer,
+                              image: String,
+                              env: Seq[EnvVar]) = {
       val jvmMemory = deployer.sidecarJvmMemory.getOrElse("256m")
-      val sidecarResources = deployer.sidecarResources.getOrElse(Resource.Requirements(
-        limits = Map(
-          Resource.memory -> Resource.Quantity("512Mi")
-        ),
-        requests = Map(
-          Resource.memory -> Resource.Quantity("512Mi"),
-          Resource.cpu -> Resource.Quantity("400m")
+      val sidecarResources = deployer.sidecarResources.getOrElse(
+        Resource.Requirements(
+          limits = Map(
+            Resource.memory -> Resource.Quantity("512Mi")
+          ),
+          requests = Map(
+            Resource.memory -> Resource.Quantity("512Mi"),
+            Resource.cpu -> Resource.Quantity("400m")
+          )
         )
-      ))
+      )
 
       val userPort = revision.spec.containers.flatMap(_.ports).headOption.fold(DefaultUserPort)(_.containerPort)
       val configuration = revision.metadata.labels.getOrElse(ConfigurationLabel, "")
@@ -271,53 +316,60 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       Container(
         name = "akka-sidecar",
         image = image,
-        imagePullPolicy = if (image.endsWith(":latest")) Container.PullPolicy.Always else Container.PullPolicy.IfNotPresent,
+        imagePullPolicy =
+          if (image.endsWith(":latest")) Container.PullPolicy.Always else Container.PullPolicy.IfNotPresent,
         ports = List(
           Container.Port(containerPort = KnativeSidecarH2cPort, name = KnativeSidecarPortName),
           Container.Port(containerPort = MetricsPort, name = MetricsPortName)
         ),
         env = List(
-          EnvVar("HTTP_PORT", KnativeSidecarH2cPort.toString),
-          EnvVar("USER_FUNCTION_PORT", userPort.toString),
-          EnvVar("REMOTING_PORT", AkkaRemotingPort.toString),
-          EnvVar("MANAGEMENT_PORT", AkkaManagementPort.toString),
-          EnvVar("METRICS_PORT", MetricsPort.toString),
-          EnvVar("SELECTOR_LABEL_VALUE", configuration),
-          EnvVar("SELECTOR_LABEL", ConfigurationLabel),
-          EnvVar("CONTAINER_CONCURRENCY", revision.spec.containerConcurrency.getOrElse(0).toString),
-          EnvVar("REVISION_TIMEOUT", revision.spec.timeoutSeconds.getOrElse(10) + "s"),
-          EnvVar("SERVING_NAMESPACE", revision.namespace),
-          EnvVar("SERVING_CONFIGURATION", configuration),
-          EnvVar("SERVING_REVISION", revision.name),
-          EnvVar("SERVING_POD", EnvVar.FieldRef("metadata.name")),
-          // todo this should be based on minscale
-          EnvVar("REQUIRED_CONTACT_POINT_NR", "1"),
-          EnvVar("JAVA_OPTS", s"-Xms$jvmMemory -Xmx$jvmMemory")
-        ) ++ env,
+            EnvVar("HTTP_PORT", KnativeSidecarH2cPort.toString),
+            EnvVar("USER_FUNCTION_PORT", userPort.toString),
+            EnvVar("REMOTING_PORT", AkkaRemotingPort.toString),
+            EnvVar("MANAGEMENT_PORT", AkkaManagementPort.toString),
+            EnvVar("METRICS_PORT", MetricsPort.toString),
+            EnvVar("SELECTOR_LABEL_VALUE", configuration),
+            EnvVar("SELECTOR_LABEL", ConfigurationLabel),
+            EnvVar("CONTAINER_CONCURRENCY", revision.spec.containerConcurrency.getOrElse(0).toString),
+            EnvVar("REVISION_TIMEOUT", revision.spec.timeoutSeconds.getOrElse(10) + "s"),
+            EnvVar("SERVING_NAMESPACE", revision.namespace),
+            EnvVar("SERVING_CONFIGURATION", configuration),
+            EnvVar("SERVING_REVISION", revision.name),
+            EnvVar("SERVING_POD", EnvVar.FieldRef("metadata.name")),
+            // todo this should be based on minscale
+            EnvVar("REQUIRED_CONTACT_POINT_NR", "1"),
+            EnvVar("JAVA_OPTS", s"-Xms$jvmMemory -Xmx$jvmMemory")
+          ) ++ env,
         resources = Some(sidecarResources),
-        readinessProbe = Some(Probe(
-          action = HTTPGetAction(
-            port = Left(AkkaManagementPort),
-            path = "/ready"
-          ),
-          periodSeconds = Some(2),
-          failureThreshold = Some(20),
-          initialDelaySeconds = 2
-        )),
-        livenessProbe = Some(Probe(
-          action = HTTPGetAction(
-            port = Left(AkkaManagementPort),
-            path = "/alive"
-          ),
-          periodSeconds = Some(2),
-          failureThreshold = Some(20),
-          initialDelaySeconds = 2
-        ))
+        readinessProbe = Some(
+          Probe(
+            action = HTTPGetAction(
+              port = Left(AkkaManagementPort),
+              path = "/ready"
+            ),
+            periodSeconds = Some(2),
+            failureThreshold = Some(20),
+            initialDelaySeconds = 2
+          )
+        ),
+        livenessProbe = Some(
+          Probe(
+            action = HTTPGetAction(
+              port = Left(AkkaManagementPort),
+              path = "/alive"
+            ),
+            periodSeconds = Some(2),
+            failureThreshold = Some(20),
+            initialDelaySeconds = 2
+          )
+        )
       )
 
     }
 
-    private def createDeployment(revision: KnativeRevision.Resource, deployer: CloudStateDeployer, sidecar: Container) = {
+    private def createDeployment(revision: KnativeRevision.Resource,
+                                 deployer: CloudStateDeployer,
+                                 sidecar: Container) = {
 
       // validate? It should already be validated.
       val orig = revision.spec.containers.head
@@ -328,16 +380,19 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       val userContainer = orig.copy(
         name = UserContainerName,
         volumeMounts = orig.volumeMounts :+ Volume.Mount("varlog", "/var/log"),
-        ports = List(Container.Port(
-          name = UserPortName,
-          containerPort = userPort
-        )),
-        env = orig.env ++ List(
-          EnvVar(UserPortEnvVar, userPort.toString),
-          EnvVar(KnativeRevisionEnvVar, revision.name),
-          EnvVar(KnativeConfigruationEnvVar, EnvVar.StringValue(revision.metadata.labels.getOrElse(ConfigurationLabel, ""))),
-          EnvVar(KnativeServiceEnvVar, EnvVar.StringValue(revision.metadata.labels.getOrElse(ServiceLabel, "")))
+        ports = List(
+          Container.Port(
+            name = UserPortName,
+            containerPort = userPort
+          )
         ),
+        env = orig.env ++ List(
+            EnvVar(UserPortEnvVar, userPort.toString),
+            EnvVar(KnativeRevisionEnvVar, revision.name),
+            EnvVar(KnativeConfigruationEnvVar,
+                   EnvVar.StringValue(revision.metadata.labels.getOrElse(ConfigurationLabel, ""))),
+            EnvVar(KnativeServiceEnvVar, EnvVar.StringValue(revision.metadata.labels.getOrElse(ServiceLabel, "")))
+          ),
         stdin = Some(false),
         tty = Some(false),
         image = revision.status
@@ -368,18 +423,18 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
 
       val labels = {
         val ls = revision.metadata.labels ++ Map(
-          RevisionLabel -> revision.name,
-          RevisionUidLabel -> revision.uid,
-          StatefulStoreLabel -> deployer.journal.name
-        )
+            RevisionLabel -> revision.name,
+            RevisionUidLabel -> revision.uid,
+            StatefulStoreLabel -> deployer.journal.name
+          )
         if (!ls.contains("app")) ls + ("app" -> revision.name)
         else ls
       }
       val annotations = revision.metadata.annotations - LastPinnedLabel
       val podAnnotations = annotations ++ Seq(
-        "traffic.sidecar.istio.io/includeInboundPorts" -> s"$KnativeSidecarH2cPort",
-        "traffic.sidecar.istio.io/excludeOutboundPorts" -> s"$AkkaRemotingPort,$AkkaManagementPort"
-      )
+          "traffic.sidecar.istio.io/includeInboundPorts" -> s"$KnativeSidecarH2cPort",
+          "traffic.sidecar.istio.io/excludeOutboundPorts" -> s"$AkkaRemotingPort,$AkkaManagementPort"
+        )
 
       // Create the deployment
       Deployment(
@@ -405,21 +460,22 @@ class KnativeRevisionOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         .withLabelSelector(
           RevisionUidLabel is revision.uid
         )
-        .withTemplate(Pod.Template.Spec(
-          metadata = ObjectMeta(
-            labels = labels,
-            annotations = podAnnotations
-          ),
-          spec = Some(podSpec)
-        ))
+        .withTemplate(
+          Pod.Template.Spec(
+            metadata = ObjectMeta(
+              labels = labels,
+              annotations = podAnnotations
+            ),
+            spec = Some(podSpec)
+          )
+        )
     }
 
-    private def ensureRbacPermissionsInNamespace(serviceAccountName: String) = {
+    private def ensureRbacPermissionsInNamespace(serviceAccountName: String) =
       for {
         _ <- helper.ensurePodReaderRoleExists()
         _ <- helper.ensurePodReaderRoleBindingExists(serviceAccountName)
       } yield ()
-    }
 
     // Must match https://github.com/knative/serving/blob/2297b69327bbc457563cefc7d36a848159a4c7c0/pkg/reconciler/revision/resources/names/names.go#L24
     private def deploymentNameFor(revision: Resource) = revision.metadata.name + "-deployment"

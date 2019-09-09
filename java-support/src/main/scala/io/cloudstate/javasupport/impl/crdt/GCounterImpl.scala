@@ -21,9 +21,10 @@ private[crdt] final class GCounterImpl extends InternalCrdt with GCounter {
 
   override def hasDelta: Boolean = deltaValue != 0
 
-  override def delta: Option[CrdtDelta.Delta] = if (hasDelta) {
-    Some(CrdtDelta.Delta.Gcounter(GCounterDelta(deltaValue)))
-  } else None
+  override def delta: Option[CrdtDelta.Delta] =
+    if (hasDelta) {
+      Some(CrdtDelta.Delta.Gcounter(GCounterDelta(deltaValue)))
+    } else None
 
   override def resetDelta(): Unit = deltaValue = 0
 

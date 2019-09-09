@@ -7,23 +7,27 @@ import akka.cluster.sharding.ShardRegion.ShardId
 import scala.collection.immutable
 import scala.concurrent.Future
 
-class DynamicLeastShardAllocationStrategy(rebalanceThreshold: Int, maxSimultaneousRebalance: Int, rebalanceNumber: Int, rebalanceFactor: Double)
-  extends ShardAllocationStrategy
+class DynamicLeastShardAllocationStrategy(rebalanceThreshold: Int,
+                                          maxSimultaneousRebalance: Int,
+                                          rebalanceNumber: Int,
+                                          rebalanceFactor: Double)
+    extends ShardAllocationStrategy
     with Serializable {
 
-  def this(rebalanceThreshold: Int, maxSimultaneousRebalance: Int) = this(rebalanceThreshold, maxSimultaneousRebalance, rebalanceThreshold, 0.0)
+  def this(rebalanceThreshold: Int, maxSimultaneousRebalance: Int) =
+    this(rebalanceThreshold, maxSimultaneousRebalance, rebalanceThreshold, 0.0)
 
   override def allocateShard(
-    requester: ActorRef,
-    shardId: ShardId,
-    currentShardAllocations: Map[ActorRef, immutable.IndexedSeq[ShardId]]): Future[ActorRef] = {
+      requester: ActorRef,
+      shardId: ShardId,
+      currentShardAllocations: Map[ActorRef, immutable.IndexedSeq[ShardId]]
+  ): Future[ActorRef] = {
     val (regionWithLeastShards, _) = currentShardAllocations.minBy { case (_, v) => v.size }
     Future.successful(regionWithLeastShards)
   }
 
-  override def rebalance(
-    currentShardAllocations: Map[ActorRef, immutable.IndexedSeq[ShardId]],
-    rebalanceInProgress: Set[ShardId]): Future[Set[ShardId]] = {
+  override def rebalance(currentShardAllocations: Map[ActorRef, immutable.IndexedSeq[ShardId]],
+                         rebalanceInProgress: Set[ShardId]): Future[Set[ShardId]] =
     if (rebalanceInProgress.size < maxSimultaneousRebalance) {
       val (_, leastShards) = currentShardAllocations.minBy { case (_, v) => v.size }
       val mostShards = currentShardAllocations
@@ -46,14 +50,12 @@ class DynamicLeastShardAllocationStrategy(rebalanceThreshold: Int, maxSimultaneo
         // The ideal number to rebalance to so these nodes have an even number of shards
         val evenRebalance = difference / 2
 
-        val n = math.min(
-          math.min(factoredRebalanceLimit, evenRebalance),
-          maxSimultaneousRebalance - rebalanceInProgress.size)
+        val n =
+          math.min(math.min(factoredRebalanceLimit, evenRebalance), maxSimultaneousRebalance - rebalanceInProgress.size)
         Future.successful(mostShards.sorted.take(n).toSet)
       } else
         emptyRebalanceResult
     } else emptyRebalanceResult
-  }
 
   private[this] final val emptyRebalanceResult = Future.successful(Set.empty[ShardId])
 }

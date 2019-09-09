@@ -1,6 +1,17 @@
 package io.cloudstate.javasupport.impl.crdt
 
-import io.cloudstate.javasupport.crdt.{Crdt, CrdtFactory, Flag, GCounter, GSet, LWWRegister, ORMap, ORSet, PNCounter, Vote}
+import io.cloudstate.javasupport.crdt.{
+  Crdt,
+  CrdtFactory,
+  Flag,
+  GCounter,
+  GSet,
+  LWWRegister,
+  ORMap,
+  ORSet,
+  PNCounter,
+  Vote
+}
 import io.cloudstate.javasupport.impl.AnySupport
 
 // TODO JavaDoc

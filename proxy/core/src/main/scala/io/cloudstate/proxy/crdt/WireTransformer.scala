@@ -8,13 +8,14 @@ import io.cloudstate.protocol.crdt._
 import com.google.protobuf.any.{Any => ProtoAny}
 
 /**
-  * Transforms wire versions of CRDTs and deltas to/from the actual CRDTs/deltas
-  */
+ * Transforms wire versions of CRDTs and deltas to/from the actual CRDTs/deltas
+ */
 object WireTransformer {
 
   private[this] final val Zero = BigInt(0)
 
-  private def voteState(vote: Vote)(implicit clusterState: CurrentClusterState, selfUniqueAddress: SelfUniqueAddress): VoteState = {
+  private def voteState(vote: Vote)(implicit clusterState: CurrentClusterState,
+                                    selfUniqueAddress: SelfUniqueAddress): VoteState = {
     var votesFor = 0
     var votes = 0
     var selfVote = false
@@ -32,7 +33,8 @@ object WireTransformer {
     VoteState(votesFor, votes, selfVote)
   }
 
-  def toWireState(state: ReplicatedData)(implicit clusterState: CurrentClusterState, selfUniqueAddress: SelfUniqueAddress): CrdtState = {
+  def toWireState(state: ReplicatedData)(implicit clusterState: CurrentClusterState,
+                                         selfUniqueAddress: SelfUniqueAddress): CrdtState = {
     import CrdtState.{State => S}
 
     CrdtState(state match {
@@ -40,15 +42,15 @@ object WireTransformer {
         S.Gcounter(GCounterState(gcounter.value.toLong))
       case pncounter: PNCounter =>
         S.Pncounter(PNCounterState(pncounter.value.toLong))
-      case gset: GSet[ProtoAny@unchecked] =>
+      case gset: GSet[ProtoAny @unchecked] =>
         S.Gset(GSetState(gset.elements.toSeq))
-      case orset: ORSet[ProtoAny@unchecked] =>
+      case orset: ORSet[ProtoAny @unchecked] =>
         S.Orset(ORSetState(orset.elements.toSeq))
-      case lwwregister: LWWRegister[ProtoAny@unchecked] =>
+      case lwwregister: LWWRegister[ProtoAny @unchecked] =>
         S.Lwwregister(LWWRegisterState(Some(lwwregister.value)))
       case flag: Flag =>
         S.Flag(FlagState(flag.enabled))
-      case ormap: ORMap[ProtoAny@unchecked, ReplicatedData@unchecked] =>
+      case ormap: ORMap[ProtoAny @unchecked, ReplicatedData @unchecked] =>
         S.Ormap(ORMapState(ormap.entries.map {
           case (k, value) => ORMapEntry(Some(k), Some(toWireState(value)))
         }.toSeq))
@@ -62,7 +64,9 @@ object WireTransformer {
 
   // We both apply the update to our current state, as well as produce the function that will update the
   // replicators version, since these might not be the same thing.
-  def deltaToUpdate(delta: CrdtDelta)(implicit selfUniqueAddress: SelfUniqueAddress): (ReplicatedData, ReplicatedData => ReplicatedData) = {
+  def deltaToUpdate(
+      delta: CrdtDelta
+  )(implicit selfUniqueAddress: SelfUniqueAddress): (ReplicatedData, ReplicatedData => ReplicatedData) = {
 
     import CrdtDelta.{Delta => D}
 
@@ -85,15 +89,16 @@ object WireTransformer {
 
       case D.Gset(GSetDelta(added)) =>
         (GSet.empty[ProtoAny], {
-          case gset: GSet[ProtoAny@unchecked] => added.foldLeft(gset)((gset, e) => gset + e)
+          case gset: GSet[ProtoAny @unchecked] => added.foldLeft(gset)((gset, e) => gset + e)
           case other => throw IncompatibleCrdtChange(s"GSetDelta is incompatible with CRDT $other")
         })
 
       case D.Orset(ORSetDelta(cleared, removed, added)) =>
         (ORSet.empty[ProtoAny], {
-          case orset: ORSet[ProtoAny@unchecked] =>
-            val maybeCleared = if (cleared) orset.clear(selfUniqueAddress)
-            else orset
+          case orset: ORSet[ProtoAny @unchecked] =>
+            val maybeCleared =
+              if (cleared) orset.clear(selfUniqueAddress)
+              else orset
             val withRemoved = removed.foldLeft(maybeCleared)((orset, key) => orset remove key)
             added.foldLeft(withRemoved)((orset, value) => orset :+ value)
           case other => throw IncompatibleCrdtChange(s"ORSetDelta is incompatible with CRDT $other")
@@ -102,7 +107,7 @@ object WireTransformer {
       case D.Lwwregister(LWWRegisterDelta(maybeValue, clock, customClockValue)) =>
         val value = maybeValue.getOrElse(ProtoAny.defaultInstance)
         (LWWRegister.create(value), {
-          case lwwregister: LWWRegister[ProtoAny@unchecked] =>
+          case lwwregister: LWWRegister[ProtoAny @unchecked] =>
             lwwregister.withValue(selfUniqueAddress, value, toDdataClock(clock, customClockValue))
           case other => throw IncompatibleCrdtChange(s"LWWRegisterDelta is incompatible with CRDT $other")
         })
@@ -118,29 +123,30 @@ object WireTransformer {
 
       case D.Ormap(ORMapDelta(cleared, removed, updated, added)) =>
         (ORMap.empty[ProtoAny, ReplicatedData], {
-          case ormap: ORMap[ProtoAny@unchecked, ReplicatedData@unchecked] =>
-
-            val maybeCleared = if (cleared) ormap.entries.keySet.foldLeft(ormap)((ormap, key) => ormap remove key)
-            else ormap
+          case ormap: ORMap[ProtoAny @unchecked, ReplicatedData @unchecked] =>
+            val maybeCleared =
+              if (cleared) ormap.entries.keySet.foldLeft(ormap)((ormap, key) => ormap remove key)
+              else ormap
 
             val withRemoved = removed.foldLeft(maybeCleared)((ormap, key) => ormap remove key)
 
-            val withUpdated = updated.foldLeft(withRemoved) { case (ormap, ORMapEntryDelta(Some(key), Some(delta))) =>
-              // While the CRDT we're using won't have changed, the CRDT in the replicator may have, so we detect that.
-              ormap.get(key) match {
-                case Some(data) =>
-                  try {
-                    val (initial, modify) = deltaToUpdate(delta)
-                    ormap.updated(selfUniqueAddress, key, initial)(modify)
-                  } catch {
-                    case IncompatibleCrdtChange(_) =>
-                      // The delta is incompatible, the value must have been removed and then added again, so ignore
-                      ormap
-                  }
-                case None =>
-                  // There is no element, it must have been removed, ignore
-                  ormap
-              }
+            val withUpdated = updated.foldLeft(withRemoved) {
+              case (ormap, ORMapEntryDelta(Some(key), Some(delta))) =>
+                // While the CRDT we're using won't have changed, the CRDT in the replicator may have, so we detect that.
+                ormap.get(key) match {
+                  case Some(data) =>
+                    try {
+                      val (initial, modify) = deltaToUpdate(delta)
+                      ormap.updated(selfUniqueAddress, key, initial)(modify)
+                    } catch {
+                      case IncompatibleCrdtChange(_) =>
+                        // The delta is incompatible, the value must have been removed and then added again, so ignore
+                        ormap
+                    }
+                  case None =>
+                    // There is no element, it must have been removed, ignore
+                    ormap
+                }
             }
 
             added.foldLeft(withUpdated) {
@@ -170,11 +176,13 @@ object WireTransformer {
       case S.Pncounter(PNCounterState(value)) => PNCounter.empty :+ value
       case S.Gset(GSetState(items)) => items.foldLeft(GSet.empty[ProtoAny])((gset, item) => gset + item)
       case S.Orset(ORSetState(items)) => items.foldLeft(ORSet.empty[ProtoAny])((orset, item) => orset :+ item)
-      case S.Lwwregister(LWWRegisterState(value, clock, customClockValue)) => LWWRegister(selfUniqueAddress, value.getOrElse(ProtoAny.defaultInstance), toDdataClock(clock, customClockValue))
+      case S.Lwwregister(LWWRegisterState(value, clock, customClockValue)) =>
+        LWWRegister(selfUniqueAddress, value.getOrElse(ProtoAny.defaultInstance), toDdataClock(clock, customClockValue))
       case S.Flag(FlagState(value)) => if (value) Flag.Enabled else Flag.Disabled
-      case S.Ormap(ORMapState(items)) => items.foldLeft(ORMap.empty[ProtoAny, ReplicatedData]) {
-        case (ormap, ORMapEntry(Some(key), Some(state))) => ormap.put(selfUniqueAddress, key, stateToCrdt(state))
-      }
+      case S.Ormap(ORMapState(items)) =>
+        items.foldLeft(ORMap.empty[ProtoAny, ReplicatedData]) {
+          case (ormap, ORMapEntry(Some(key), Some(state))) => ormap.put(selfUniqueAddress, key, stateToCrdt(state))
+        }
       case S.Vote(VoteState(_, _, selfVote)) => Vote.empty.vote(selfVote)
       case S.Empty => throw UserFunctionProtocolError("Unknown state or state not set")
     }
@@ -206,7 +214,10 @@ object WireTransformer {
 
   }
 
-  def detectChange(original: ReplicatedData, changed: ReplicatedData)(implicit clusterState: CurrentClusterState, selfUniqueAddress: SelfUniqueAddress): CrdtChange = {
+  def detectChange(
+      original: ReplicatedData,
+      changed: ReplicatedData
+  )(implicit clusterState: CurrentClusterState, selfUniqueAddress: SelfUniqueAddress): CrdtChange = {
     import CrdtChange._
     import CrdtDelta.{Delta => D}
 
@@ -232,9 +243,9 @@ object WireTransformer {
           case _ => IncompatibleChange
         }
 
-      case gset: GSet[ProtoAny@unchecked] =>
+      case gset: GSet[ProtoAny @unchecked] =>
         original match {
-          case old: GSet[ProtoAny@unchecked] =>
+          case old: GSet[ProtoAny @unchecked] =>
             val diff = gset.elements -- old.elements
             if (old.elements.size + diff.size > gset.elements.size) IncompatibleChange
             else if (diff.isEmpty) NoChange
@@ -242,17 +253,23 @@ object WireTransformer {
           case _ => IncompatibleChange
         }
 
-      case orset: ORSet[ProtoAny@unchecked] =>
+      case orset: ORSet[ProtoAny @unchecked] =>
         original match {
-          case old: ORSet[ProtoAny@unchecked] =>
+          case old: ORSet[ProtoAny @unchecked] =>
             // Fast path, just cleared
             if (orset.elements.isEmpty) {
               if (old.elements.isEmpty) {
                 NoChange
               } else {
-                Updated(CrdtDelta(D.Orset(ORSetDelta(
-                  cleared = true
-                ))))
+                Updated(
+                  CrdtDelta(
+                    D.Orset(
+                      ORSetDelta(
+                        cleared = true
+                      )
+                    )
+                  )
+                )
               }
             } else {
               val removed = old.elements -- orset.elements
@@ -263,24 +280,36 @@ object WireTransformer {
                 // Optimisation, if we're going to end up sending more operations than there are elements in the set,
                 // it's cheaper to just clear it and send all the elements
                 if (removed.size + added.size > orset.elements.size) {
-                  Updated(CrdtDelta(D.Orset(ORSetDelta(
-                    cleared = true,
-                    added = orset.elements.toSeq
-                  ))))
+                  Updated(
+                    CrdtDelta(
+                      D.Orset(
+                        ORSetDelta(
+                          cleared = true,
+                          added = orset.elements.toSeq
+                        )
+                      )
+                    )
+                  )
                 } else {
-                  Updated(CrdtDelta(D.Orset(ORSetDelta(
-                    removed = removed.toSeq,
-                    added = added.toSeq
-                  ))))
+                  Updated(
+                    CrdtDelta(
+                      D.Orset(
+                        ORSetDelta(
+                          removed = removed.toSeq,
+                          added = added.toSeq
+                        )
+                      )
+                    )
+                  )
                 }
               }
             }
           case _ => IncompatibleChange
         }
 
-      case lwwregister: LWWRegister[ProtoAny@unchecked] =>
+      case lwwregister: LWWRegister[ProtoAny @unchecked] =>
         original match {
-          case old: LWWRegister[ProtoAny@unchecked] =>
+          case old: LWWRegister[ProtoAny @unchecked] =>
             if (old.value == lwwregister.value) NoChange
             else Updated(CrdtDelta(D.Lwwregister(LWWRegisterDelta(Some(lwwregister.value)))))
           case _ => IncompatibleChange
@@ -295,13 +324,11 @@ object WireTransformer {
           case _ => IncompatibleChange
         }
 
-      case ormap: ORMap[ProtoAny@unchecked, ReplicatedData@unchecked] =>
-
+      case ormap: ORMap[ProtoAny @unchecked, ReplicatedData @unchecked] =>
         import ORMapEntryAction._
         original match {
 
-          case old: ORMap[ProtoAny@unchecked, ReplicatedData@unchecked] =>
-
+          case old: ORMap[ProtoAny @unchecked, ReplicatedData @unchecked] =>
             if (ormap.isEmpty) {
               if (old.isEmpty) NoChange
               else Updated(CrdtDelta(D.Ormap(ORMapDelta(cleared = true))))
@@ -320,8 +347,8 @@ object WireTransformer {
               val deleted = old.entries.keySet -- ormap.entries.keys
 
               val allDeleted = deleted ++ changes.collect {
-                case DeleteThenAdd(k, _) => k
-              }
+                  case DeleteThenAdd(k, _) => k
+                }
               val updated = changes.collect {
                 case UpdateEntry(key, delta) => ORMapEntryDelta(Some(key), Some(delta))
               }
@@ -333,11 +360,17 @@ object WireTransformer {
               if (allDeleted.isEmpty && updated.isEmpty && added.isEmpty) {
                 NoChange
               } else {
-                Updated(CrdtDelta(D.Ormap(ORMapDelta(
-                  removed = allDeleted.toSeq,
-                  updated = updated,
-                  added = added
-                ))))
+                Updated(
+                  CrdtDelta(
+                    D.Ormap(
+                      ORMapDelta(
+                        removed = allDeleted.toSeq,
+                        updated = updated,
+                        added = added
+                      )
+                    )
+                  )
+                )
               }
             }
 
@@ -346,18 +379,23 @@ object WireTransformer {
         }
 
       case vote: Vote =>
-
         original match {
           case old: Vote =>
             val newState = voteState(vote)
             val oldState = voteState(old)
 
             if (newState != oldState) {
-              Updated(CrdtDelta(D.Vote(VoteDelta(
-                selfVote = newState.selfVote,
-                votesFor = newState.votesFor,
-                totalVoters = newState.totalVoters
-              ))))
+              Updated(
+                CrdtDelta(
+                  D.Vote(
+                    VoteDelta(
+                      selfVote = newState.selfVote,
+                      votesFor = newState.votesFor,
+                      totalVoters = newState.totalVoters
+                    )
+                  )
+                )
+              )
             } else {
               NoChange
             }
@@ -372,7 +410,7 @@ object WireTransformer {
     }
   }
 
-  private def toDdataClock(clock: CrdtClock, customClockValue: Long): Clock[ProtoAny] = {
+  private def toDdataClock(clock: CrdtClock, customClockValue: Long): Clock[ProtoAny] =
     clock match {
       case CrdtClock.DEFAULT => LWWRegister.defaultClock
       case CrdtClock.REVERSE => LWWRegister.reverseClock
@@ -380,7 +418,6 @@ object WireTransformer {
       case CrdtClock.CUSTOM_AUTO_INCREMENT => new CustomClock(customClockValue, true)
       case CrdtClock.Unrecognized(_) => LWWRegister.defaultClock
     }
-  }
 
   case class IncompatibleCrdtChange(message: String) extends RuntimeException(message, null, false, false)
 

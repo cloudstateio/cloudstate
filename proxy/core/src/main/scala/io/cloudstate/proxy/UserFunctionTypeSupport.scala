@@ -24,15 +24,17 @@ trait UserFunctionTypeSupportFactory {
 }
 
 /**
-  * Abstract support for any user function type that is entity based (ie, has entity id keys).
-  */
+ * Abstract support for any user function type that is entity based (ie, has entity id keys).
+ */
 abstract class EntityTypeSupportFactory extends UserFunctionTypeSupportFactory {
   override final def build(entity: Entity, serviceDescriptor: ServiceDescriptor): UserFunctionTypeSupport = {
     val idExtractors = serviceDescriptor.getMethods.asScala
       .map(method => method.getName -> new EntityMethodDescriptor(method))
       .toMap
 
-    new EntityUserFunctionTypeSupport(serviceDescriptor, idExtractors, buildEntityTypeSupport(entity, serviceDescriptor))
+    new EntityUserFunctionTypeSupport(serviceDescriptor,
+                                      idExtractors,
+                                      buildEntityTypeSupport(entity, serviceDescriptor))
   }
 
   protected def buildEntityTypeSupport(entity: Entity, serviceDescriptor: ServiceDescriptor): EntityTypeSupport
@@ -44,30 +46,33 @@ private object EntityMethodDescriptor {
 }
 
 final class EntityMethodDescriptor(val method: MethodDescriptor) {
-  /**
-    * ScalaPB doesn't do this conversion for us unfortunately.
-    * By doing it, we can use EntitykeyProto.entityKey.get() to read the entity key nicely.
-    */
-  private def convertFieldOptions(field: FieldDescriptor): ScalaPBDescriptorProtos.FieldOptions = {
-    ScalaPBDescriptorProtos.
-      FieldOptions.
-      fromJavaProto(field.toProto.getOptions).
-      withUnknownFields(scalapb.UnknownFieldSet(field.getOptions.getUnknownFields.asMap.asScala.map {
-        case (idx, f) => idx.toInt -> scalapb.UnknownFieldSet.Field(
-          varint          = f.getVarintList.asScala.map(_.toLong),
-          fixed64         = f.getFixed64List.asScala.map(_.toLong),
-          fixed32         = f.getFixed32List.asScala.map(_.toInt),
-          lengthDelimited = f.getLengthDelimitedList.asScala
-        )
-      }.toMap))
-  }
 
-  private val fields = method.getInputType.getFields.iterator.asScala.
-    filter(field => EntityKeyProto.entityKey.get(convertFieldOptions(field))).
-    toArray.sortBy(_.getIndex)
+  /**
+   * ScalaPB doesn't do this conversion for us unfortunately.
+   * By doing it, we can use EntitykeyProto.entityKey.get() to read the entity key nicely.
+   */
+  private def convertFieldOptions(field: FieldDescriptor): ScalaPBDescriptorProtos.FieldOptions =
+    ScalaPBDescriptorProtos.FieldOptions
+      .fromJavaProto(field.toProto.getOptions)
+      .withUnknownFields(scalapb.UnknownFieldSet(field.getOptions.getUnknownFields.asMap.asScala.map {
+        case (idx, f) =>
+          idx.toInt -> scalapb.UnknownFieldSet.Field(
+            varint = f.getVarintList.asScala.map(_.toLong),
+            fixed64 = f.getFixed64List.asScala.map(_.toLong),
+            fixed32 = f.getFixed32List.asScala.map(_.toInt),
+            lengthDelimited = f.getLengthDelimitedList.asScala
+          )
+      }.toMap))
+
+  private val fields = method.getInputType.getFields.iterator.asScala
+    .filter(field => EntityKeyProto.entityKey.get(convertFieldOptions(field)))
+    .toArray
+    .sortBy(_.getIndex)
 
   if (fields.isEmpty) {
-    throw EntityDiscoveryException(s"No field marked with [(cloudstate.entity_key) = true] found for in type ${method.getInputType.getName}, this is needed to associate commands sent to ${method.getFullName} with the entities that they are for.")
+    throw EntityDiscoveryException(
+      s"No field marked with [(cloudstate.entity_key) = true] found for in type ${method.getInputType.getName}, this is needed to associate commands sent to ${method.getFullName} with the entities that they are for."
+    )
   }
 
   def extractId(bytes: ByteString): String = {
@@ -82,26 +87,30 @@ final class EntityMethodDescriptor(val method: MethodDescriptor) {
 }
 
 private final class EntityUserFunctionTypeSupport(serviceDescriptor: ServiceDescriptor,
-  methodDescriptors: Map[String, EntityMethodDescriptor], entityTypeSupport: EntityTypeSupport) extends UserFunctionTypeSupport {
+                                                  methodDescriptors: Map[String, EntityMethodDescriptor],
+                                                  entityTypeSupport: EntityTypeSupport)
+    extends UserFunctionTypeSupport {
 
   override def handler(name: String): Flow[UserFunctionCommand, UserFunctionReply, NotUsed] = {
     val method = methodDescriptor(name)
     Flow[UserFunctionCommand].map(ufToEntityCommand(method)).via(entityTypeSupport.handler(method))
   }
 
-
-  override def handleUnary(command: UserFunctionCommand): Future[UserFunctionReply] = {
+  override def handleUnary(command: UserFunctionCommand): Future[UserFunctionReply] =
     entityTypeSupport.handleUnary(ufToEntityCommand(methodDescriptor(command.name))(command))
-  }
 
   private def ufToEntityCommand(method: EntityMethodDescriptor): UserFunctionCommand => EntityCommand = { command =>
     val entityId = method.extractId(command.payload.fold(ByteString.EMPTY)(_.value))
-    EntityCommand(entityId = entityId, name = command.name, payload = command.payload, streamed = method.method.isServerStreaming)
+    EntityCommand(entityId = entityId,
+                  name = command.name,
+                  payload = command.payload,
+                  streamed = method.method.isServerStreaming)
   }
 
   private def methodDescriptor(name: String): EntityMethodDescriptor =
     methodDescriptors
-      .getOrElse(name, throw EntityDiscoveryException(s"Unknown command $name on service ${serviceDescriptor.getFullName}"))
+      .getOrElse(name,
+                 throw EntityDiscoveryException(s"Unknown command $name on service ${serviceDescriptor.getFullName}"))
 }
 
 trait EntityTypeSupport {

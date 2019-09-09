@@ -22,19 +22,20 @@ private[crdt] class ORSetImpl[T](anySupport: AnySupport) extends util.AbstractSe
 
   override def contains(o: Any): Boolean = value.contains(o)
 
-  override def add(e: T): Boolean = if (value.contains(e)) {
-    false
-  } else {
-    val encoded = anySupport.encodeScala(e)
-    if (removed.contains(encoded)) {
-      removed.remove(encoded)
+  override def add(e: T): Boolean =
+    if (value.contains(e)) {
+      false
     } else {
-      added.add(anySupport.encodeScala(e))
+      val encoded = anySupport.encodeScala(e)
+      if (removed.contains(encoded)) {
+        removed.remove(encoded)
+      } else {
+        added.add(anySupport.encodeScala(e))
+      }
+      value.add(e)
     }
-    value.add(e)
-  }
 
-  override def remove(o: Any): Boolean = {
+  override def remove(o: Any): Boolean =
     if (!value.contains(o)) {
       false
     } else {
@@ -51,7 +52,6 @@ private[crdt] class ORSetImpl[T](anySupport: AnySupport) extends util.AbstractSe
       }
       true
     }
-  }
 
   override def iterator(): util.Iterator[T] = new util.Iterator[T] {
     private val iter = value.iterator()
@@ -84,9 +84,12 @@ private[crdt] class ORSetImpl[T](anySupport: AnySupport) extends util.AbstractSe
 
   override def hasDelta: Boolean = cleared || !added.isEmpty || !removed.isEmpty
 
-  override def delta: Option[CrdtDelta.Delta] = if (hasDelta) {
-    Some(CrdtDelta.Delta.Orset(ORSetDelta(cleared, removed = removed.asScala.toVector, added = added.asScala.toVector)))
-  } else None
+  override def delta: Option[CrdtDelta.Delta] =
+    if (hasDelta) {
+      Some(
+        CrdtDelta.Delta.Orset(ORSetDelta(cleared, removed = removed.asScala.toVector, added = added.asScala.toVector))
+      )
+    } else None
 
   override def resetDelta(): Unit = {
     cleared = false
@@ -94,7 +97,8 @@ private[crdt] class ORSetImpl[T](anySupport: AnySupport) extends util.AbstractSe
     removed.clear()
   }
 
-  override def state: CrdtState.State = CrdtState.State.Orset(ORSetState(value.asScala.toSeq.map(anySupport.encodeScala)))
+  override def state: CrdtState.State =
+    CrdtState.State.Orset(ORSetState(value.asScala.toSeq.map(anySupport.encodeScala)))
 
   override val applyDelta = {
     case CrdtDelta.Delta.Orset(ORSetDelta(cleared, removed, added)) =>

@@ -5,7 +5,16 @@ import java.util.Locale
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.common.base.CaseFormat
-import com.google.protobuf.{ByteString, CodedInputStream, CodedOutputStream, Descriptors, Parser, UnsafeByteOperations, WireFormat, Any => JavaPbAny}
+import com.google.protobuf.{
+  ByteString,
+  CodedInputStream,
+  CodedOutputStream,
+  Descriptors,
+  Parser,
+  UnsafeByteOperations,
+  WireFormat,
+  Any => JavaPbAny
+}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import io.cloudstate.javasupport.Jsonable
 import io.cloudstate.javasupport.impl.AnySupport.Prefer.{Java, Scala}
@@ -60,38 +69,46 @@ object AnySupport {
     },
     new Primitive[java.lang.Long] {
       override def fieldType = WireFormat.FieldType.INT64
-      override def defaultValue = 0l
-      override def write(stream: CodedOutputStream, t: java.lang.Long) = stream.writeInt64(CloudStatePrimitiveFieldNumber, t)
+      override def defaultValue = 0L
+      override def write(stream: CodedOutputStream, t: java.lang.Long) =
+        stream.writeInt64(CloudStatePrimitiveFieldNumber, t)
       override def read(stream: CodedInputStream) = stream.readInt64()
     },
     new Primitive[java.lang.Float] {
       override def fieldType = WireFormat.FieldType.FLOAT
       override def defaultValue = 0f
-      override def write(stream: CodedOutputStream, t: java.lang.Float) = stream.writeFloat(CloudStatePrimitiveFieldNumber, t)
+      override def write(stream: CodedOutputStream, t: java.lang.Float) =
+        stream.writeFloat(CloudStatePrimitiveFieldNumber, t)
       override def read(stream: CodedInputStream) = stream.readFloat()
     },
     new Primitive[java.lang.Double] {
       override def fieldType = WireFormat.FieldType.DOUBLE
       override def defaultValue = 0d
-      override def write(stream: CodedOutputStream, t: java.lang.Double) = stream.writeDouble(CloudStatePrimitiveFieldNumber, t)
+      override def write(stream: CodedOutputStream, t: java.lang.Double) =
+        stream.writeDouble(CloudStatePrimitiveFieldNumber, t)
       override def read(stream: CodedInputStream) = stream.readDouble()
     },
     new Primitive[java.lang.Boolean] {
       override def fieldType = WireFormat.FieldType.BOOL
       override def defaultValue = false
-      override def write(stream: CodedOutputStream, t: java.lang.Boolean) = stream.writeBool(CloudStatePrimitiveFieldNumber, t)
+      override def write(stream: CodedOutputStream, t: java.lang.Boolean) =
+        stream.writeBool(CloudStatePrimitiveFieldNumber, t)
       override def read(stream: CodedInputStream) = stream.readBool()
     }
   )
 
-  private final val ClassToPrimitives = Primitives.map(p => p.clazz -> p)
-    .asInstanceOf[Seq[(Any, Primitive[Any])]].toMap
-  private final val NameToPrimitives = Primitives.map(p => p.fullName -> p)
-    .asInstanceOf[Seq[(String, Primitive[Any])]].toMap
+  private final val ClassToPrimitives = Primitives
+    .map(p => p.clazz -> p)
+    .asInstanceOf[Seq[(Any, Primitive[Any])]]
+    .toMap
+  private final val NameToPrimitives = Primitives
+    .map(p => p.fullName -> p)
+    .asInstanceOf[Seq[(String, Primitive[Any])]]
+    .toMap
 
   private final val objectMapper = new ObjectMapper()
 
-  private def primitiveToBytes[T](primitive: Primitive[T], value: T): ByteString = {
+  private def primitiveToBytes[T](primitive: Primitive[T], value: T): ByteString =
     if (value != primitive.defaultValue) {
       val baos = new ByteArrayOutputStream()
       val stream = CodedOutputStream.newInstance(baos)
@@ -99,26 +116,26 @@ object AnySupport {
       stream.flush()
       UnsafeByteOperations.unsafeWrap(baos.toByteArray)
     } else ByteString.EMPTY
-  }
 
   private def bytesToPrimitive[T](primitive: Primitive[T], bytes: ByteString) = {
     val stream = bytes.newCodedInput()
-    if (Stream.continually(stream.readTag())
-      .takeWhile(_ != 0)
-      .exists { tag =>
-        if (primitive.tag != tag) {
-          stream.skipField(tag)
-          false
-        } else true
-      }) {
+    if (Stream
+          .continually(stream.readTag())
+          .takeWhile(_ != 0)
+          .exists { tag =>
+            if (primitive.tag != tag) {
+              stream.skipField(tag)
+              false
+            } else true
+          }) {
       primitive.read(stream)
     } else primitive.defaultValue
   }
 
   /**
-    * When locating protobufs, if both a Java and a ScalaPB generated class is found on the classpath, this says which
-    * should be preferred.
-    */
+   * When locating protobufs, if both a Java and a ScalaPB generated class is found on the classpath, this says which
+   * should be preferred.
+   */
   sealed trait Prefer
   final object Prefer {
     case object Java extends Prefer
@@ -128,11 +145,13 @@ object AnySupport {
   final val PREFER_JAVA = Java
   final val PREFER_SCALA = Scala
 
-  def flattenDescriptors(descriptors: Seq[Descriptors.FileDescriptor]): Map[String, Descriptors.FileDescriptor] = {
+  def flattenDescriptors(descriptors: Seq[Descriptors.FileDescriptor]): Map[String, Descriptors.FileDescriptor] =
     flattenDescriptors(Map.empty, descriptors)
-  }
 
-  private def flattenDescriptors(seenSoFar: Map[String, Descriptors.FileDescriptor], descriptors: Seq[Descriptors.FileDescriptor]): Map[String, Descriptors.FileDescriptor] = {
+  private def flattenDescriptors(
+      seenSoFar: Map[String, Descriptors.FileDescriptor],
+      descriptors: Seq[Descriptors.FileDescriptor]
+  ): Map[String, Descriptors.FileDescriptor] =
     descriptors.foldLeft(seenSoFar) {
       case (results, descriptor) =>
         val descriptorName = descriptor.getName
@@ -142,10 +161,11 @@ object AnySupport {
           flattenDescriptors(withDesc, descriptor.getDependencies.asScala ++ descriptor.getPublicDependencies.asScala)
         }
     }
-  }
 }
 
-class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: ClassLoader, typeUrlPrefix: String = AnySupport.DefaultTypeUrlPrefix,
+class AnySupport(descriptors: Array[Descriptors.FileDescriptor],
+                 classLoader: ClassLoader,
+                 typeUrlPrefix: String = AnySupport.DefaultTypeUrlPrefix,
                  prefer: AnySupport.Prefer = AnySupport.Prefer.Java) {
   import AnySupport._
   private val allDescriptors = flattenDescriptors(descriptors)
@@ -159,9 +179,8 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
 
   private val reflectionCache = TrieMap.empty[String, Try[ResolvedType[Any]]]
 
-  private def strippedFileName(fileName: String) = {
+  private def strippedFileName(fileName: String) =
     fileName.split(Array('/', '\\')).last.stripSuffix(".proto")
-  }
 
   private def tryResolveJavaPbType(typeDescriptor: Descriptors.Descriptor) = {
     val fileDescriptor = typeDescriptor.getFile
@@ -175,7 +194,8 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
     val outerClassName =
       if (options.hasJavaMultipleFiles && options.getJavaMultipleFiles) ""
       else if (options.hasJavaOuterClassname) options.getJavaOuterClassname + "$"
-      else if (fileDescriptor.getName.nonEmpty) CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, strippedFileName(fileDescriptor.getName)) + "$"
+      else if (fileDescriptor.getName.nonEmpty)
+        CaseFormat.LOWER_UNDERSCORE.to(CaseFormat.UPPER_CAMEL, strippedFileName(fileDescriptor.getName)) + "$"
       else ""
 
     val className = packageName + outerClassName + typeDescriptor.getName
@@ -184,8 +204,11 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
       val clazz = classLoader.loadClass(className)
       if (classOf[com.google.protobuf.Message].isAssignableFrom(clazz)) {
         val parser = clazz.getMethod("parser").invoke(null).asInstanceOf[Parser[com.google.protobuf.Message]]
-        Some(new JavaPbResolvedType(clazz.asInstanceOf[Class[com.google.protobuf.Message]],
-          typeUrlPrefix + "/" + typeDescriptor.getFullName, parser))
+        Some(
+          new JavaPbResolvedType(clazz.asInstanceOf[Class[com.google.protobuf.Message]],
+                                 typeUrlPrefix + "/" + typeDescriptor.getFullName,
+                                 parser)
+        )
       } else {
         None
       }
@@ -193,9 +216,15 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
       case cnfe: ClassNotFoundException =>
         log.debug("Failed to load class", cnfe)
         None
-      case nsme: NoSuchElementException => throw SerializationException(s"Found com.google.protobuf.Message class $className to deserialize protobuf ${typeDescriptor.getFullName} but it didn't have a static parser() method on it.", nsme)
-      case iae @ (_: IllegalAccessException | _: IllegalArgumentException) => throw SerializationException(s"Could not invoke $className.parser()", iae)
-      case cce: ClassCastException => throw SerializationException(s"$className.parser() did not return a ${classOf[Parser[_]]}", cce)
+      case nsme: NoSuchElementException =>
+        throw SerializationException(
+          s"Found com.google.protobuf.Message class $className to deserialize protobuf ${typeDescriptor.getFullName} but it didn't have a static parser() method on it.",
+          nsme
+        )
+      case iae @ (_: IllegalAccessException | _: IllegalArgumentException) =>
+        throw SerializationException(s"Could not invoke $className.parser()", iae)
+      case cce: ClassCastException =>
+        throw SerializationException(s"$className.parser() did not return a ${classOf[Parser[_]]}", cce)
     }
   }
 
@@ -231,10 +260,13 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
         val clazz = classLoader.loadClass(className)
         val companion = classLoader.loadClass(companionName)
         if (classOf[GeneratedMessageCompanion[_]].isAssignableFrom(companion) &&
-          classOf[scalapb.GeneratedMessage].isAssignableFrom(clazz)) {
+            classOf[scalapb.GeneratedMessage].isAssignableFrom(clazz)) {
           val companionObject = companion.getField("MODULE$").get(null).asInstanceOf[GeneratedMessageCompanion[_]]
-          Some(new ScalaPbResolvedType(clazz.asInstanceOf[Class[scalapb.GeneratedMessage]], typeUrlPrefix + "/" + typeDescriptor.getFullName,
-            companionObject))
+          Some(
+            new ScalaPbResolvedType(clazz.asInstanceOf[Class[scalapb.GeneratedMessage]],
+                                    typeUrlPrefix + "/" + typeDescriptor.getFullName,
+                                    companionObject)
+          )
         } else {
           None
         }
@@ -246,59 +278,75 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
     })
   }
 
-  def resolveTypeDescriptor(typeDescriptor: Descriptors.Descriptor): ResolvedType[Any] = {
-    reflectionCache.getOrElseUpdate(typeDescriptor.getFullName, Try {
-      val maybeResolvedType = if (prefer == Prefer.Java) {
-        tryResolveJavaPbType(typeDescriptor) orElse
-          tryResolveScalaPbType(typeDescriptor)
-      } else {
-        tryResolveScalaPbType(typeDescriptor) orElse
-          tryResolveJavaPbType(typeDescriptor)
-      }
+  def resolveTypeDescriptor(typeDescriptor: Descriptors.Descriptor): ResolvedType[Any] =
+    reflectionCache
+      .getOrElseUpdate(
+        typeDescriptor.getFullName,
+        Try {
+          val maybeResolvedType = if (prefer == Prefer.Java) {
+            tryResolveJavaPbType(typeDescriptor) orElse
+            tryResolveScalaPbType(typeDescriptor)
+          } else {
+            tryResolveScalaPbType(typeDescriptor) orElse
+            tryResolveJavaPbType(typeDescriptor)
+          }
 
-      maybeResolvedType match {
-        case Some(resolvedType) => resolvedType.asInstanceOf[ResolvedType[Any]]
-        case None =>
-          throw SerializationException("Could not determine serializer for type " + typeDescriptor.getFullName)
-      }
-    }).get
-  }
+          maybeResolvedType match {
+            case Some(resolvedType) => resolvedType.asInstanceOf[ResolvedType[Any]]
+            case None =>
+              throw SerializationException("Could not determine serializer for type " + typeDescriptor.getFullName)
+          }
+        }
+      )
+      .get
 
-  def resolveServiceDescriptor(serviceDescriptor: Descriptors.ServiceDescriptor): Map[String, ResolvedServiceMethod[_, _]] = {
+  def resolveServiceDescriptor(
+      serviceDescriptor: Descriptors.ServiceDescriptor
+  ): Map[String, ResolvedServiceMethod[_, _]] =
     serviceDescriptor.getMethods.asScala.map { method =>
-      method.getName -> ResolvedServiceMethod(method, resolveTypeDescriptor(method.getInputType),
-        resolveTypeDescriptor(method.getOutputType))
+      method.getName -> ResolvedServiceMethod(method,
+                                              resolveTypeDescriptor(method.getInputType),
+                                              resolveTypeDescriptor(method.getOutputType))
     }.toMap
-  }
 
-  private def resolveTypeUrl(typeName: String): Option[ResolvedType[_]] = {
+  private def resolveTypeUrl(typeName: String): Option[ResolvedType[_]] =
     allTypes.get(typeName).map(resolveTypeDescriptor)
-  }
 
   private def decodeJson(typeUrl: String, bytes: ByteString) = {
     val jsonType = typeUrl.substring(CloudStateJson.length)
-    reflectionCache.getOrElseUpdate("$json$" + jsonType, Try {
-      try {
-        val jsonClass = classLoader.loadClass(jsonType)
-        if (jsonClass.getAnnotation(classOf[Jsonable]) == null) {
-          throw SerializationException(s"Illegal CloudEvents json class, no @Jsonable annotation is present: $jsonType")
+    reflectionCache
+      .getOrElseUpdate(
+        "$json$" + jsonType,
+        Try {
+          try {
+            val jsonClass = classLoader.loadClass(jsonType)
+            if (jsonClass.getAnnotation(classOf[Jsonable]) == null) {
+              throw SerializationException(
+                s"Illegal CloudEvents json class, no @Jsonable annotation is present: $jsonType"
+              )
+            }
+            new JacksonResolvedType(jsonClass.asInstanceOf[Class[Any]],
+                                    typeUrl,
+                                    objectMapper.readerFor(jsonClass),
+                                    objectMapper.writerFor(jsonClass))
+          } catch {
+            case cnfe: ClassNotFoundException =>
+              throw SerializationException("Could not load JSON class: " + jsonType, cnfe)
+          }
         }
-        new JacksonResolvedType(jsonClass.asInstanceOf[Class[Any]], typeUrl, objectMapper.readerFor(jsonClass), objectMapper.writerFor(jsonClass))
-      } catch {
-        case cnfe: ClassNotFoundException => throw SerializationException("Could not load JSON class: " + jsonType, cnfe)
-      }
-    }).get.parseFrom(bytesToPrimitive(BytesPrimitive, bytes))
+      )
+      .get
+      .parseFrom(bytesToPrimitive(BytesPrimitive, bytes))
   }
 
-  def encodeJava(value: Any): JavaPbAny = {
+  def encodeJava(value: Any): JavaPbAny =
     value match {
       case javaPbAny: JavaPbAny => javaPbAny
       case scalaPbAny: ScalaPbAny => ScalaPbAny.toJavaProto(scalaPbAny)
       case _ => ScalaPbAny.toJavaProto(encodeScala(value))
     }
-  }
 
-  def encodeScala(value: Any): ScalaPbAny = {
+  def encodeScala(value: Any): ScalaPbAny =
     value match {
       case javaPbAny: JavaPbAny => ScalaPbAny.fromJavaProto(javaPbAny)
       case scalaPbAny: ScalaPbAny => scalaPbAny
@@ -327,15 +375,16 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
         ScalaPbAny(CloudStateJson + value.getClass.getName, primitiveToBytes(BytesPrimitive, json))
 
       case other =>
-        throw SerializationException(s"Don't know how to serialize object of type ${other.getClass}. Try passing a protobuf, using a primitive type, or using a type annotated with @Jsonable.")
+        throw SerializationException(
+          s"Don't know how to serialize object of type ${other.getClass}. Try passing a protobuf, using a primitive type, or using a type annotated with @Jsonable."
+        )
     }
-  }
 
   def decode(any: ScalaPbAny): Any = decode(any.typeUrl, any.value)
 
   def decode(any: JavaPbAny): Any = decode(any.getTypeUrl, any.getValue)
 
-  private def decode(typeUrl: String, bytes: ByteString): Any = {
+  private def decode(typeUrl: String, bytes: ByteString): Any =
     if (typeUrl.startsWith(CloudStatePrimitive)) {
       NameToPrimitives.get(typeUrl) match {
         case Some(primitive) =>
@@ -349,11 +398,17 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
       val typeName = typeUrl.split("/", 2) match {
         case Array(host, typeName) =>
           if (host != typeUrlPrefix) {
-            log.warn("Message type [{}] does not match configured type url prefix [{}]", typeUrl: Any, typeUrlPrefix: Any)
+            log.warn("Message type [{}] does not match configured type url prefix [{}]",
+                     typeUrl: Any,
+                     typeUrlPrefix: Any)
           }
           typeName
         case _ =>
-          log.warn("Message type [{}] does not have a url prefix, it should have one that matchers the configured type url prefix [{}]", typeUrl: Any, typeUrlPrefix: Any)
+          log.warn(
+            "Message type [{}] does not have a url prefix, it should have one that matchers the configured type url prefix [{}]",
+            typeUrl: Any,
+            typeUrlPrefix: Any
+          )
           typeUrl
       }
 
@@ -364,12 +419,9 @@ class AnySupport(descriptors: Array[Descriptors.FileDescriptor], classLoader: Cl
           throw SerializationException("Unable to find descriptor for type: " + typeUrl)
       }
     }
-  }
 
-  def decodeProtobuf(typeDescriptor: Descriptors.Descriptor, any: ScalaPbAny) = {
+  def decodeProtobuf(typeDescriptor: Descriptors.Descriptor, any: ScalaPbAny) =
     resolveTypeDescriptor(typeDescriptor).parseFrom(any.value)
-  }
-
 
 }
 

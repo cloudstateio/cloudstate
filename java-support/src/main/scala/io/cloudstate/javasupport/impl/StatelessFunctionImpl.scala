@@ -22,8 +22,16 @@ import io.cloudstate.javasupport.CloudState
 
 // FIXME Implement support for this
 class StatelessFunctionImpl(system: ActorSystem) extends StatelessFunction {
-  override def handleUnary(in: io.cloudstate.protocol.function.FunctionCommand): scala.concurrent.Future[io.cloudstate.protocol.function.FunctionReply] = ???
-  override def handleStreamedIn(in: akka.stream.scaladsl.Source[io.cloudstate.protocol.function.FunctionCommand, akka.NotUsed]): scala.concurrent.Future[io.cloudstate.protocol.function.FunctionReply] = ???
-  override def handleStreamedOut(in: io.cloudstate.protocol.function.FunctionCommand): akka.stream.scaladsl.Source[io.cloudstate.protocol.function.FunctionReply, akka.NotUsed] = ???
-  override def handleStreamed(in: akka.stream.scaladsl.Source[io.cloudstate.protocol.function.FunctionCommand, akka.NotUsed]): akka.stream.scaladsl.Source[io.cloudstate.protocol.function.FunctionReply, akka.NotUsed] = ???
+  override def handleUnary(
+      in: io.cloudstate.protocol.function.FunctionCommand
+  ): scala.concurrent.Future[io.cloudstate.protocol.function.FunctionReply] = ???
+  override def handleStreamedIn(
+      in: akka.stream.scaladsl.Source[io.cloudstate.protocol.function.FunctionCommand, akka.NotUsed]
+  ): scala.concurrent.Future[io.cloudstate.protocol.function.FunctionReply] = ???
+  override def handleStreamedOut(
+      in: io.cloudstate.protocol.function.FunctionCommand
+  ): akka.stream.scaladsl.Source[io.cloudstate.protocol.function.FunctionReply, akka.NotUsed] = ???
+  override def handleStreamed(
+      in: akka.stream.scaladsl.Source[io.cloudstate.protocol.function.FunctionCommand, akka.NotUsed]
+  ): akka.stream.scaladsl.Source[io.cloudstate.protocol.function.FunctionReply, akka.NotUsed] = ???
 }

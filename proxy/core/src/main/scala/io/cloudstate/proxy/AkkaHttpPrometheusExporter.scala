@@ -31,9 +31,12 @@ import io.prometheus.client.exporter.common.TextFormat
 import scala.concurrent.Future
 
 /**
-  * Serves Prometheus metrics
-  */
-class AkkaHttpPrometheusExporter(metricsPort: Int, registry: CollectorRegistry = CollectorRegistry.defaultRegistry)(implicit system: ActorSystem, mat: Materializer) {
+ * Serves Prometheus metrics
+ */
+class AkkaHttpPrometheusExporter(metricsPort: Int, registry: CollectorRegistry = CollectorRegistry.defaultRegistry)(
+    implicit system: ActorSystem,
+    mat: Materializer
+) {
 
   private[this] final val PrometheusContentType = ContentType.parse(TextFormat.CONTENT_TYPE_004).right.get
 
@@ -56,7 +59,6 @@ class AkkaHttpPrometheusExporter(metricsPort: Int, registry: CollectorRegistry =
     }
   }
 
-  def start(): Future[Http.ServerBinding] = {
+  def start(): Future[Http.ServerBinding] =
     Http().bindAndHandle(routes, "0.0.0.0", metricsPort)
-  }
 }

@@ -28,33 +28,33 @@ trait OperatorFactory[Status, Resource <: CustomResource[_, Status]] {
   def apply(client: KubernetesClient, config: OperatorConfig): Operator
 
   /**
-    * An operator.
-    */
+   * An operator.
+   */
   trait Operator {
 
     /**
-      * Handle a resource being changed.
-      *
-      * @param resource The changed resource.
-      * @return Optionally, the status to update, if the status should be updated.
-      */
+     * Handle a resource being changed.
+     *
+     * @param resource The changed resource.
+     * @return Optionally, the status to update, if the status should be updated.
+     */
     def handleChanged(resource: Resource): Future[StatusUpdate]
 
     /**
-      * Handle a resource being deleted.
-      *
-      * @param resource The deleted resource.
-      * @return A future that is redeemed when the operation is done.
-      */
+     * Handle a resource being deleted.
+     *
+     * @param resource The deleted resource.
+     * @return A future that is redeemed when the operation is done.
+     */
     def handleDeleted(resource: Resource): Future[Done]
 
     /**
-      * Convert the given error to a status.
-      *
-      * @param error    The error to convert.
-      * @param existing The existing resource, if it could be successfully parsed.
-      * @return The status to set.
-      */
+     * Convert the given error to a status.
+     *
+     * @param error    The error to convert.
+     * @param existing The existing resource, if it could be successfully parsed.
+     * @return The status to set.
+     */
     def statusFromError(error: Throwable, existing: Option[Resource] = None): StatusUpdate
 
     sealed trait StatusUpdate
@@ -70,5 +70,3 @@ trait OperatorFactory[Status, Resource <: CustomResource[_, Status]] {
   }
 
 }
-
-
