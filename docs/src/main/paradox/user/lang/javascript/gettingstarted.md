@@ -1,4 +1,4 @@
-# Getting started with stateful services in Java
+# Getting started with stateful services in JavaScript
 
 ## Prerequisites
 
