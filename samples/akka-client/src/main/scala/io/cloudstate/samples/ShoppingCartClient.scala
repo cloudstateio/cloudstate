@@ -39,12 +39,13 @@ object ShoppingCartClient {
 }
 
 /**
-  * Designed for use in the REPL, run sbt console and then new io.cloudstate.samples.ShoppingCartClient("localhost", 9000)
-  * @param hostname
-  * @param port
-  */
+ * Designed for use in the REPL, run sbt console and then new io.cloudstate.samples.ShoppingCartClient("localhost", 9000)
+ * @param hostname
+ * @param port
+ */
 class ShoppingCartClient(hostname: String, port: Int, hostnameOverride: Option[String], sys: ActorSystem) {
-  def this(hostname: String, port: Int, hostnameOverride: Option[String] = None) = this(hostname, port, hostnameOverride, ActorSystem())
+  def this(hostname: String, port: Int, hostnameOverride: Option[String] = None) =
+    this(hostname, port, hostnameOverride, ActorSystem())
   private implicit val system = sys
   private implicit val materializer = ActorMaterializer()
   import sys.dispatcher

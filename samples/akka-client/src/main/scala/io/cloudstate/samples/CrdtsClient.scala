@@ -9,14 +9,14 @@ import com.example.crdts.crdt_example._
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 
-
 /**
-  * Designed for use in the REPL, run sbt console and then new io.cloudstate.samples.CrdtsClient("localhost", 9000)
-  * @param hostname
-  * @param port
-  */
+ * Designed for use in the REPL, run sbt console and then new io.cloudstate.samples.CrdtsClient("localhost", 9000)
+ * @param hostname
+ * @param port
+ */
 class CrdtsClient(hostname: String, port: Int, hostnameOverride: Option[String], sys: ActorSystem) {
-  def this(hostname: String, port: Int, hostnameOverride: Option[String] = None) = this(hostname, port, hostnameOverride, ActorSystem())
+  def this(hostname: String, port: Int, hostnameOverride: Option[String] = None) =
+    this(hostname, port, hostnameOverride, ActorSystem())
   private implicit val system = sys
   private implicit val materializer = ActorMaterializer()
   import sys.dispatcher
@@ -52,12 +52,21 @@ class CrdtsClient(hostname: String, port: Int, hostnameOverride: Option[String],
   def mutateORSet(id: String, add: Seq[SomeValue] = Nil, remove: Seq[SomeValue] = Nil, clear: Boolean = false) =
     await(service.mutateORSet(MutateSet(key = id, add = add, remove = remove, clear = clear))).size
 
-  def connect(id: String) = {
+  def connect(id: String) =
     service.connect(User(id)).viaMat(KillSwitches.single)(Keep.right).to(Sink.ignore).run()
-  }
 
-  def monitor(monitorId: String, id: String) = {
-    service.monitor(User(id)).viaMat(KillSwitches.single)(Keep.right)
-      .to(Sink.foreach(status => println(s"Monitor $monitorId saw user $id go " + (if (status.online) "online" else "offline")))).run()
-  }
+  def monitor(monitorId: String, id: String) =
+    service
+      .monitor(User(id))
+      .viaMat(KillSwitches.single)(Keep.right)
+      .to(
+        Sink.foreach(
+          status =>
+            println(
+              s"Monitor $monitorId saw user $id go " + (if (status.online) "online"
+                                                        else "offline")
+            )
+        )
+      )
+      .run()
 }

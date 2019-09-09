@@ -10,18 +10,18 @@ private[crdt] final class FlagImpl extends InternalCrdt with Flag {
 
   override def isEnabled: Boolean = value
 
-  override def enable(): Unit = {
+  override def enable(): Unit =
     if (!deltaValue && !value) {
       deltaValue = true
       value = true
     }
-  }
 
   override def hasDelta: Boolean = deltaValue
 
-  override def delta: Option[CrdtDelta.Delta] = if (hasDelta) {
-    Some(CrdtDelta.Delta.Flag(FlagDelta(deltaValue)))
-  } else None
+  override def delta: Option[CrdtDelta.Delta] =
+    if (hasDelta) {
+      Some(CrdtDelta.Delta.Flag(FlagDelta(deltaValue)))
+    } else None
 
   override def resetDelta(): Unit = deltaValue = false
 

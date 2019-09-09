@@ -28,9 +28,10 @@ private[crdt] final class LWWRegisterImpl[T](anySupport: AnySupport) extends Int
 
   override def hasDelta: Boolean = deltaValue.isDefined
 
-  override def delta: Option[CrdtDelta.Delta] = if (hasDelta) {
-    Some(CrdtDelta.Delta.Lwwregister(LWWRegisterDelta(deltaValue, convertClock(clock), customClockValue)))
-  } else None
+  override def delta: Option[CrdtDelta.Delta] =
+    if (hasDelta) {
+      Some(CrdtDelta.Delta.Lwwregister(LWWRegisterDelta(deltaValue, convertClock(clock), customClockValue)))
+    } else None
 
   override def resetDelta(): Unit = {
     deltaValue = None
@@ -39,10 +40,12 @@ private[crdt] final class LWWRegisterImpl[T](anySupport: AnySupport) extends Int
   }
 
   override def state: CrdtState.State =
-    CrdtState.State.Lwwregister(LWWRegisterState(Some(anySupport.encodeScala(value)), convertClock(clock), customClockValue))
+    CrdtState.State.Lwwregister(
+      LWWRegisterState(Some(anySupport.encodeScala(value)), convertClock(clock), customClockValue)
+    )
 
   override val applyDelta = {
-    case CrdtDelta.Delta.Lwwregister(LWWRegisterDelta(Some(any), _ , _)) =>
+    case CrdtDelta.Delta.Lwwregister(LWWRegisterDelta(Some(any), _, _)) =>
       this.value = anySupport.decode(any).asInstanceOf[T]
   }
 
@@ -51,14 +54,13 @@ private[crdt] final class LWWRegisterImpl[T](anySupport: AnySupport) extends Int
       this.value = anySupport.decode(any).asInstanceOf[T]
   }
 
-  private def convertClock(clock: LWWRegister.Clock): CrdtClock = {
+  private def convertClock(clock: LWWRegister.Clock): CrdtClock =
     clock match {
       case LWWRegister.Clock.DEFAULT => CrdtClock.DEFAULT
       case LWWRegister.Clock.REVERSE => CrdtClock.REVERSE
       case LWWRegister.Clock.CUSTOM => CrdtClock.CUSTOM
       case LWWRegister.Clock.CUSTOM_AUTO_INCREMENT => CrdtClock.CUSTOM_AUTO_INCREMENT
     }
-  }
 
   override def toString = s"LWWRegister($value)"
 }

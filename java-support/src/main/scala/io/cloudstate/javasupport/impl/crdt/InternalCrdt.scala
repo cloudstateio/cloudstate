@@ -12,4 +12,3 @@ private[crdt] trait InternalCrdt extends Crdt {
   def applyDelta: PartialFunction[CrdtDelta.Delta, Unit]
   def applyState: PartialFunction[CrdtState.State, Unit]
 }
-

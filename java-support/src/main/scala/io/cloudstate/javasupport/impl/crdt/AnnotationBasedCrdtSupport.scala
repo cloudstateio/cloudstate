@@ -1,29 +1,63 @@
 package io.cloudstate.javasupport.impl.crdt
 
 import java.lang.reflect.{Constructor, Executable, InvocationTargetException}
-import java.util.{Optional, function}
+import java.util.{function, Optional}
 import java.util.function.Consumer
 
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 import io.cloudstate.javasupport.{Context, ServiceCall, ServiceCallFactory}
-import io.cloudstate.javasupport.crdt.{CommandContext, CommandHandler, Crdt, CrdtContext, CrdtCreationContext, CrdtEntity, CrdtEntityFactory, CrdtEntityHandler, Flag, GCounter, GSet, LWWRegister, LWWRegisterMap, ORMap, ORSet, PNCounter, PNCounterMap, StreamCancelledContext, StreamedCommandContext, SubscriptionContext, Vote}
-import io.cloudstate.javasupport.impl.ReflectionHelper.{CommandHandlerInvoker, InvocationContext, MainArgumentParameterHandler, MethodParameter, ParameterHandler}
-import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEntityFactory, ResolvedServiceMethod, ResolvedType}
+import io.cloudstate.javasupport.crdt.{
+  CommandContext,
+  CommandHandler,
+  Crdt,
+  CrdtContext,
+  CrdtCreationContext,
+  CrdtEntity,
+  CrdtEntityFactory,
+  CrdtEntityHandler,
+  Flag,
+  GCounter,
+  GSet,
+  LWWRegister,
+  LWWRegisterMap,
+  ORMap,
+  ORSet,
+  PNCounter,
+  PNCounterMap,
+  StreamCancelledContext,
+  StreamedCommandContext,
+  SubscriptionContext,
+  Vote
+}
+import io.cloudstate.javasupport.impl.ReflectionHelper.{
+  CommandHandlerInvoker,
+  InvocationContext,
+  MainArgumentParameterHandler,
+  MethodParameter,
+  ParameterHandler
+}
+import io.cloudstate.javasupport.impl.{
+  AnySupport,
+  ReflectionHelper,
+  ResolvedEntityFactory,
+  ResolvedServiceMethod,
+  ResolvedType
+}
 
 import scala.reflect.ClassTag
 
-
 /**
-  * Annotation based implementation of the [[io.cloudstate.javasupport.crdt.CrdtEntityFactory]].
-  */
-private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_], anySupport: AnySupport,
-  override val resolvedMethods: Map[String, ResolvedServiceMethod[_, _]],
-  factory: Option[CrdtCreationContext => AnyRef] = None) extends CrdtEntityFactory with ResolvedEntityFactory {
+ * Annotation based implementation of the [[io.cloudstate.javasupport.crdt.CrdtEntityFactory]].
+ */
+private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_],
+                                               anySupport: AnySupport,
+                                               override val resolvedMethods: Map[String, ResolvedServiceMethod[_, _]],
+                                               factory: Option[CrdtCreationContext => AnyRef] = None)
+    extends CrdtEntityFactory
+    with ResolvedEntityFactory {
   // TODO JavaDoc
-  def this(entityClass: Class[_], anySupport: AnySupport,
-    serviceDescriptor: Descriptors.ServiceDescriptor) =
+  def this(entityClass: Class[_], anySupport: AnySupport, serviceDescriptor: Descriptors.ServiceDescriptor) =
     this(entityClass, anySupport, anySupport.resolveServiceDescriptor(serviceDescriptor))
-
 
   private val constructor: CrdtCreationContext => AnyRef = factory.getOrElse {
     entityClass.getConstructors match {
@@ -47,25 +81,32 @@ private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_], anySupport
         } else annotation.name()
 
         val serviceMethod = resolvedMethods.getOrElse(name, {
-          throw new RuntimeException(s"Command handler method ${method.getName} for command $name found, but the service has no command by that name.")
+          throw new RuntimeException(
+            s"Command handler method ${method.getName} for command $name found, but the service has no command by that name."
+          )
         })
         (ReflectionHelper.ensureAccessible(method), serviceMethod)
       }
 
-    def getHandlers[C <: CrdtContext : ClassTag](streamed: Boolean) =
-      handlers.filter(_._2.outputStreamed == streamed)
-      .map {
-        case (method, serviceMethod) => new CommandHandlerInvoker[C](method, serviceMethod, CrdtAnnotationHelper.crdtParameterHandlers)
-      }
-      .groupBy(_.serviceMethod.name)
-      .map {
-        case (commandName, Seq(invoker)) => commandName -> invoker
-        case (commandName, many) => throw new RuntimeException(s"Multiple methods found for handling command of name $commandName: ${many.map(_.method.getName)}")
-      }
+    def getHandlers[C <: CrdtContext: ClassTag](streamed: Boolean) =
+      handlers
+        .filter(_._2.outputStreamed == streamed)
+        .map {
+          case (method, serviceMethod) =>
+            new CommandHandlerInvoker[C](method, serviceMethod, CrdtAnnotationHelper.crdtParameterHandlers)
+        }
+        .groupBy(_.serviceMethod.name)
+        .map {
+          case (commandName, Seq(invoker)) => commandName -> invoker
+          case (commandName, many) =>
+            throw new RuntimeException(
+              s"Multiple methods found for handling command of name $commandName: ${many.map(_.method.getName)}"
+            )
+        }
 
     (getHandlers[CommandContext](false), getHandlers[StreamedCommandContext[AnyRef]](true))
   }
-  
+
   // TODO JavaDoc
   override def create(context: CrdtCreationContext): CrdtEntityHandler = {
     val entity = constructor(context)
@@ -80,27 +121,35 @@ private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_], anySupport
       }
 
       maybeResult.getOrElse {
-        throw new RuntimeException(s"No command handler found for command [${context.commandName()}] on CRDT entity: $entityClass")
+        throw new RuntimeException(
+          s"No command handler found for command [${context.commandName()}] on CRDT entity: $entityClass"
+        )
       }
     }
 
-    override def handleStreamedCommand(command: JavaPbAny, context: StreamedCommandContext[JavaPbAny]): Optional[JavaPbAny] = unwrap {
+    override def handleStreamedCommand(command: JavaPbAny,
+                                       context: StreamedCommandContext[JavaPbAny]): Optional[JavaPbAny] = unwrap {
       val maybeResult = streamedCommandHandlers.get(context.commandName()).map { handler =>
-        val adaptedContext = new AdaptedStreamedCommandContext(context, handler.serviceMethod.outputType.asInstanceOf[ResolvedType[AnyRef]])
+        val adaptedContext =
+          new AdaptedStreamedCommandContext(context,
+                                            handler.serviceMethod.outputType.asInstanceOf[ResolvedType[AnyRef]])
         handler.invoke(entity, command, adaptedContext)
       }
 
       maybeResult.getOrElse {
-        throw new RuntimeException(s"No streamed command handler found for command [${context.commandName()}] on CRDT entity: $entityClass")
+        throw new RuntimeException(
+          s"No streamed command handler found for command [${context.commandName()}] on CRDT entity: $entityClass"
+        )
       }
     }
 
-    private def unwrap[T](block: => T): T = try {
-      block
-    } catch {
-      case ite: InvocationTargetException if ite.getCause != null =>
-        throw ite.getCause
-    }
+    private def unwrap[T](block: => T): T =
+      try {
+        block
+      } catch {
+        case ite: InvocationTargetException if ite.getCause != null =>
+          throw ite.getCause
+      }
   }
 
 }
@@ -109,39 +158,50 @@ private object CrdtAnnotationHelper {
   val crdtParameterHandlers: PartialFunction[MethodParameter, ParameterHandler[CrdtContext]] = {
     case crdt if classOf[Crdt].isAssignableFrom(crdt.parameterType) =>
       new CrdtParameterHandler(crdt.parameterType.asInstanceOf[Class[_ <: Crdt]], crdt.method)
-    case crdt if crdt.parameterType == classOf[Optional[_]] &&
-      classOf[Crdt].isAssignableFrom(ReflectionHelper.getFirstParameter(crdt.genericParameterType)) =>
-      new OptionalCrdtParameterHandler(ReflectionHelper.getFirstParameter(crdt.genericParameterType).asInstanceOf[Class[_ <: Crdt]], crdt.method)
+    case crdt
+        if crdt.parameterType == classOf[Optional[_]] &&
+        classOf[Crdt].isAssignableFrom(ReflectionHelper.getFirstParameter(crdt.genericParameterType)) =>
+      new OptionalCrdtParameterHandler(
+        ReflectionHelper.getFirstParameter(crdt.genericParameterType).asInstanceOf[Class[_ <: Crdt]],
+        crdt.method
+      )
   }
 
-  private class CrdtParameterHandler(crdtClass: Class[_ <: Crdt], method: Executable) extends ParameterHandler[CrdtContext] {
+  private class CrdtParameterHandler(crdtClass: Class[_ <: Crdt], method: Executable)
+      extends ParameterHandler[CrdtContext] {
     override def apply(ctx: InvocationContext[CrdtContext]): AnyRef = {
       val state = ctx.context.state(crdtClass)
       if (state.isPresent) {
         state.get()
       } else {
-        throw new IllegalStateException(s"${method.getDeclaringClass.getName}.${method.getName} requires a CRDT " +
-          s"of type ${crdtClass.getName}, but this entity has no CRDT created for it yet.")
+        throw new IllegalStateException(
+          s"${method.getDeclaringClass.getName}.${method.getName} requires a CRDT " +
+          s"of type ${crdtClass.getName}, but this entity has no CRDT created for it yet."
+        )
       }
     }
   }
 
-  private class OptionalCrdtParameterHandler(crdtClass: Class[_ <: Crdt], method: Executable) extends ParameterHandler[CrdtContext] {
-    override def apply(ctx: InvocationContext[CrdtContext]): AnyRef = {
+  private class OptionalCrdtParameterHandler(crdtClass: Class[_ <: Crdt], method: Executable)
+      extends ParameterHandler[CrdtContext] {
+    override def apply(ctx: InvocationContext[CrdtContext]): AnyRef =
       ctx.context.state(crdtClass)
-    }
   }
 
 }
 
-private final class AdaptedStreamedCommandContext(val delegate: StreamedCommandContext[JavaPbAny], resolvedType: ResolvedType[AnyRef]) extends StreamedCommandContext[AnyRef] {
+private final class AdaptedStreamedCommandContext(val delegate: StreamedCommandContext[JavaPbAny],
+                                                  resolvedType: ResolvedType[AnyRef])
+    extends StreamedCommandContext[AnyRef] {
   override def isStreamed: Boolean = delegate.isStreamed
 
-  def onChange(subscriber: function.Function[SubscriptionContext, Optional[AnyRef]]): Unit = {
+  def onChange(subscriber: function.Function[SubscriptionContext, Optional[AnyRef]]): Unit =
     delegate.onChange { ctx =>
       val result = subscriber(ctx)
       if (result.isPresent) {
-        Optional.of(JavaPbAny.newBuilder()
+        Optional.of(
+          JavaPbAny
+            .newBuilder()
             .setTypeUrl(resolvedType.typeUrl)
             .setValue(resolvedType.toByteString(result.get))
             .build()
@@ -150,7 +210,6 @@ private final class AdaptedStreamedCommandContext(val delegate: StreamedCommandC
         Optional.empty()
       }
     }
-  }
 
   override def onCancel(effect: Consumer[StreamCancelledContext]): Unit = delegate.onCancel(effect)
 
@@ -177,7 +236,8 @@ private final class AdaptedStreamedCommandContext(val delegate: StreamedCommandC
 }
 
 private final class EntityConstructorInvoker(constructor: Constructor[_]) extends (CrdtCreationContext => AnyRef) {
-  private val parameters = ReflectionHelper.getParameterHandlers[CrdtCreationContext](constructor)(CrdtAnnotationHelper.crdtParameterHandlers)
+  private val parameters =
+    ReflectionHelper.getParameterHandlers[CrdtCreationContext](constructor)(CrdtAnnotationHelper.crdtParameterHandlers)
   parameters.foreach {
     case MainArgumentParameterHandler(clazz) =>
       throw new RuntimeException(s"Don't know how to handle argument of type $clazz in constructor")
@@ -189,5 +249,3 @@ private final class EntityConstructorInvoker(constructor: Constructor[_]) extend
     constructor.newInstance(parameters.map(_.apply(ctx)): _*).asInstanceOf[AnyRef]
   }
 }
-
-

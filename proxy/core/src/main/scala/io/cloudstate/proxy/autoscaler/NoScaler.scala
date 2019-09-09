@@ -6,8 +6,8 @@ import akka.cluster.{Cluster, MemberStatus}
 import Autoscaler.{Deployment, Scale}
 
 /**
-  * A scaler that doesn't do anything other than reports current cluster size.
-  */
+ * A scaler that doesn't do anything other than reports current cluster size.
+ */
 class NoScaler(autoscaler: ActorRef) extends Actor with ActorLogging {
 
   private[this] final val cluster = Cluster(context.system)
@@ -15,18 +15,16 @@ class NoScaler(autoscaler: ActorRef) extends Actor with ActorLogging {
   cluster.subscribe(self, classOf[ClusterDomainEvent])
   sendDeployment()
 
-  override def postStop(): Unit = {
+  override def postStop(): Unit =
     cluster.unsubscribe(self)
-  }
 
-  private def sendDeployment(): Unit = {
+  private def sendDeployment(): Unit =
     autoscaler ! Deployment(
       name = context.system.name,
       ready = cluster.state.members.count(c => c.status == MemberStatus.Up || c.status == MemberStatus.WeaklyUp),
       scale = cluster.state.members.size,
       upgrading = false
     )
-  }
 
   override def receive: Receive = {
     case Scale(_, scale) =>

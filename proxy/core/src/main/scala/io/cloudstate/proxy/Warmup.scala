@@ -34,17 +34,24 @@ object Warmup {
 }
 
 /**
-  * Warms things up by starting a dummy instance of the state manager actor up, this ensures
-  * Cassandra gets connected to etc, so a lot of classloading and jitting is done here.
-  */
+ * Warms things up by starting a dummy instance of the state manager actor up, this ensures
+ * Cassandra gets connected to etc, so a lot of classloading and jitting is done here.
+ */
 class Warmup(needsWarmup: Boolean) extends Actor with ActorLogging {
 
   if (needsWarmup) {
     log.debug("Starting warmup...")
 
-    val stateManager = context.watch(context.actorOf(EventSourcedEntity.props(
-      Configuration("warmup.Service", "###warmup", 30.seconds, 100), "###warmup-entity", self, self, self
-    ), "entity"))
+    val stateManager = context.watch(
+      context.actorOf(EventSourcedEntity.props(
+                        Configuration("warmup.Service", "###warmup", 30.seconds, 100),
+                        "###warmup-entity",
+                        self,
+                        self,
+                        self
+                      ),
+                      "entity")
+    )
 
     stateManager ! EntityCommand(
       entityId = "###warmup-entity",
@@ -64,17 +71,23 @@ class Warmup(needsWarmup: Boolean) extends Actor with ActorLogging {
       log.debug("Warmup received action, starting it.")
       start()
     case EventSourcedStreamIn(EventSourcedStreamIn.Message.Event(_)) =>
-      // Ignore
+    // Ignore
     case EventSourcedStreamIn(EventSourcedStreamIn.Message.Init(_)) =>
       log.debug("Warmup got init.")
-      // Ignore
+    // Ignore
     case EventSourcedStreamIn(EventSourcedStreamIn.Message.Command(cmd)) =>
       log.debug("Warmup got forwarded command")
       // It's forwarded us our command, send it a reply
-      eventSourcedEntityManager ! EventSourcedStreamOut(EventSourcedStreamOut.Message.Reply(EventSourcedReply(
-        commandId = cmd.id,
-        clientAction = Some(ClientAction(ClientAction.Action.Reply(Reply(Some(com.google.protobuf.any.Any("url", ByteString.EMPTY))))))
-      )))
+      eventSourcedEntityManager ! EventSourcedStreamOut(
+        EventSourcedStreamOut.Message.Reply(
+          EventSourcedReply(
+            commandId = cmd.id,
+            clientAction = Some(
+              ClientAction(ClientAction.Action.Reply(Reply(Some(com.google.protobuf.any.Any("url", ByteString.EMPTY)))))
+            )
+          )
+        )
+      )
     case _: UserFunctionReply =>
       log.debug("Warmup got forwarded reply")
       // It's forwarded the reply, now stop it

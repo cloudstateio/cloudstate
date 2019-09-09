@@ -17,7 +17,8 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
 
   trait BaseContext extends Context {
     override def serviceCallFactory(): ServiceCallFactory = new ServiceCallFactory {
-      override def lookup[T](serviceName: String, methodName: String, messageType: Class[T]): ServiceCallRef[T] = throw new NoSuchElementException
+      override def lookup[T](serviceName: String, methodName: String, messageType: Class[T]): ServiceCallRef[T] =
+        throw new NoSuchElementException
     }
   }
 
@@ -29,13 +30,18 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
   val anySupport = new AnySupport(Array(Shoppingcart.getDescriptor), this.getClass.getClassLoader)
 
   object MockCreationContext extends MockCreationContext(None)
-  class MockCreationContext(crdt: Option[Crdt] = None) extends CrdtCreationContext with BaseContext with CrdtFactoryContext {
+  class MockCreationContext(crdt: Option[Crdt] = None)
+      extends CrdtCreationContext
+      with BaseContext
+      with CrdtFactoryContext {
     override def entityId(): String = "foo"
     override def state[T <: Crdt](crdtType: Class[T]): Optional[T] = crdt match {
       case Some(crdt) if crdtType.isInstance(crdt) => Optional.of(crdtType.cast(crdt))
       case None => Optional.empty()
       case Some(wrongType) =>
-        throw new IllegalStateException(s"The current ${wrongType} CRDT state doesn't match requested type of ${crdtType.getSimpleName}")
+        throw new IllegalStateException(
+          s"The current ${wrongType} CRDT state doesn't match requested type of ${crdtType.getSimpleName}"
+        )
     }
   }
 
@@ -54,22 +60,22 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
   }
 
   case class Wrapped(value: String)
-  val descriptor = Shoppingcart.getDescriptor.findServiceByName("ShoppingCart")
+  val descriptor = Shoppingcart.getDescriptor
+    .findServiceByName("ShoppingCart")
     .findMethodByName("AddItem")
   val method = ResolvedServiceMethod(descriptor, StringResolvedType, WrappedResolvedType)
 
-  def create(behavior: AnyRef, methods: ResolvedServiceMethod[_, _]*) = {
-    new AnnotationBasedCrdtSupport(behavior.getClass, anySupport, methods.map(m => m.descriptor.getName -> m).toMap,
-      Some(_ => behavior)).create(new MockCreationContext())
-  }
+  def create(behavior: AnyRef, methods: ResolvedServiceMethod[_, _]*) =
+    new AnnotationBasedCrdtSupport(behavior.getClass,
+                                   anySupport,
+                                   methods.map(m => m.descriptor.getName -> m).toMap,
+                                   Some(_ => behavior)).create(new MockCreationContext())
 
-  def create(clazz: Class[_], crdt: Option[Crdt] = None) = {
+  def create(clazz: Class[_], crdt: Option[Crdt] = None) =
     new AnnotationBasedCrdtSupport(clazz, anySupport, Map.empty, None).create(new MockCreationContext(crdt))
-  }
 
-  def command(str: String) = {
+  def command(str: String) =
     ScalaPbAny.toJavaProto(ScalaPbAny(StringResolvedType.typeUrl, StringResolvedType.toByteString(str)))
-  }
 
   def decodeWrapped(any: JavaPbAny) = {
     any.getTypeUrl should ===(WrappedResolvedType.typeUrl)
@@ -88,7 +94,8 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
       }
 
       "there is an optional CRDT constructor and the CRDT is the wrong type" in {
-        an [IllegalStateException] should be thrownBy create(classOf[OptionalCrdtConstructorTest], Some(MockCreationContext.newGCounter()))
+        an[IllegalStateException] should be thrownBy create(classOf[OptionalCrdtConstructorTest],
+                                                            Some(MockCreationContext.newGCounter()))
       }
 
       "there is a CRDT constructor and the CRDT is non empty" in {
@@ -96,11 +103,12 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
       }
 
       "there is a CRDT constructor and the CRDT is empty" in {
-        an [IllegalStateException] should be thrownBy create(classOf[CrdtConstructorTest], None)
+        an[IllegalStateException] should be thrownBy create(classOf[CrdtConstructorTest], None)
       }
 
       "there is a CRDT constructor and the CRDT is the wrong type" in {
-        an [IllegalStateException] should be thrownBy create(classOf[CrdtConstructorTest], Some(MockCreationContext.newGCounter()))
+        an[IllegalStateException] should be thrownBy create(classOf[CrdtConstructorTest],
+                                                            Some(MockCreationContext.newGCounter()))
       }
 
     }
@@ -117,11 +125,10 @@ private class OptionalEmptyCrdtConstructorTest(crdt: Optional[Vote]) {
 @CrdtEntity
 private class OptionalCrdtConstructorTest(crdt: Optional[Vote]) {
   crdt.isPresent shouldBe true
-  crdt.get shouldBe a [Vote]
+  crdt.get shouldBe a[Vote]
 }
 
 @CrdtEntity
 private class CrdtConstructorTest(crdt: Vote) {
-  crdt shouldBe a [Vote]
+  crdt shouldBe a[Vote]
 }
-

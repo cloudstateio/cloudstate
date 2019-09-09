@@ -1,7 +1,7 @@
 package io.cloudstate.javasupport.impl.crdt
 
 import java.util
-import java.util.{Map, function}
+import java.util.{function, Map}
 
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import io.cloudstate.javasupport.crdt.{Crdt, CrdtFactory, ORMap}
@@ -12,25 +12,28 @@ import org.slf4j.LoggerFactory
 import scala.collection.JavaConverters._
 
 /**
-  * A few notes on implementation:
-  *
-  * - put, and any similar operations (such as Map.Entry.setValue) are not supported, because the only way to create
-  *   a CRDT is using a CrdtFactory, and we only make CrdtFactory's available in very specific contexts, such as in the
-  *   getOrCreate method. The getOrCreate method is the only way to insert something new into the map.
-  * - All mechanisms for removal are supported - eg, calling remove directly, calling remove on any of the derived sets
-  *   (entrySet, keySet, values), and calling remove on the entrySet iterator.
-  * - ju.AbstractMap is very useful, though bases most of its implementation on entrySet, so we need to take care to
-  *   efficiently implement operations that it implements in O(n) time that we can do in O(1) time, such as
-  *   get/remove/containsKey.
-  */
-private[crdt] final class ORMapImpl[K, V <: InternalCrdt](anySupport: AnySupport) extends util.AbstractMap[K, V] with InternalCrdt with ORMap[K, V] {
+ * A few notes on implementation:
+ *
+ * - put, and any similar operations (such as Map.Entry.setValue) are not supported, because the only way to create
+ *   a CRDT is using a CrdtFactory, and we only make CrdtFactory's available in very specific contexts, such as in the
+ *   getOrCreate method. The getOrCreate method is the only way to insert something new into the map.
+ * - All mechanisms for removal are supported - eg, calling remove directly, calling remove on any of the derived sets
+ *   (entrySet, keySet, values), and calling remove on the entrySet iterator.
+ * - ju.AbstractMap is very useful, though bases most of its implementation on entrySet, so we need to take care to
+ *   efficiently implement operations that it implements in O(n) time that we can do in O(1) time, such as
+ *   get/remove/containsKey.
+ */
+private[crdt] final class ORMapImpl[K, V <: InternalCrdt](anySupport: AnySupport)
+    extends util.AbstractMap[K, V]
+    with InternalCrdt
+    with ORMap[K, V] {
   override final val name = "ORMap"
   private val value = new util.HashMap[K, V]()
   private val added = new util.HashMap[K, (ScalaPbAny, V)]()
   private val removed = new util.HashSet[ScalaPbAny]()
   private var cleared = false
 
-  override def getOrCreate(key: K, create: function.Function[CrdtFactory, V]): V = {
+  override def getOrCreate(key: K, create: function.Function[CrdtFactory, V]): V =
     if (value.containsKey(key)) {
       value.get(key)
     } else {
@@ -40,7 +43,9 @@ private[crdt] final class ORMapImpl[K, V <: InternalCrdt](anySupport: AnySupport
         override protected def anySupport: AnySupport = ORMapImpl.this.anySupport
         override protected def newCrdt[C <: InternalCrdt](crdt: C): C = {
           if (internalCrdt != null) {
-            throw new IllegalStateException("getOrCreate creation callback must only be used to create one CRDT at a time")
+            throw new IllegalStateException(
+              "getOrCreate creation callback must only be used to create one CRDT at a time"
+            )
           }
           internalCrdt = crdt
           crdt
@@ -49,20 +54,22 @@ private[crdt] final class ORMapImpl[K, V <: InternalCrdt](anySupport: AnySupport
       if (crdt == null) {
         throw new IllegalArgumentException("getOrCreate creation callback must return a CRDT")
       } else if (crdt != internalCrdt) {
-        throw new IllegalArgumentException("CRDT returned by getOrCreate creation callback must have been created by the CrdtFactory passed to it")
+        throw new IllegalArgumentException(
+          "CRDT returned by getOrCreate creation callback must have been created by the CrdtFactory passed to it"
+        )
       }
 
       value.put(key, crdt)
       added.put(key, (encodedKey, crdt))
       crdt
     }
-  }
 
   override def containsKey(key: Any): Boolean = value.containsKey(key)
 
   override def get(key: Any): V = value.get(key)
 
-  override def put(key: K, value: V): V = throw new UnsupportedOperationException("Cannot put on an ORMap, use getOrCreate instead.")
+  override def put(key: K, value: V): V =
+    throw new UnsupportedOperationException("Cannot put on an ORMap, use getOrCreate instead.")
 
   override def remove(key: Any): V = {
     if (value.containsKey(key)) {
@@ -120,30 +127,34 @@ private[crdt] final class ORMapImpl[K, V <: InternalCrdt](anySupport: AnySupport
     added.clear()
   }
 
-  override def hasDelta: Boolean = {
+  override def hasDelta: Boolean =
     if (cleared || !added.isEmpty || !removed.isEmpty) {
       true
     } else {
       value.values().asScala.exists(_.hasDelta)
     }
-  }
 
-  override def delta: Option[CrdtDelta.Delta] = if (hasDelta) {
-    val updated = (value.asScala -- this.added.keySet().asScala).collect {
-      case (key, changed) if changed.hasDelta =>
-        ORMapEntryDelta(Some(anySupport.encodeScala(key)), changed.delta.map(CrdtDelta(_)))
-    }
-    val added = this.added.asScala.values.map {
-      case (key, crdt) => ORMapEntry(Some(key), Some(CrdtState(crdt.state)))
-    }
+  override def delta: Option[CrdtDelta.Delta] =
+    if (hasDelta) {
+      val updated = (value.asScala -- this.added.keySet().asScala).collect {
+        case (key, changed) if changed.hasDelta =>
+          ORMapEntryDelta(Some(anySupport.encodeScala(key)), changed.delta.map(CrdtDelta(_)))
+      }
+      val added = this.added.asScala.values.map {
+        case (key, crdt) => ORMapEntry(Some(key), Some(CrdtState(crdt.state)))
+      }
 
-    Some(CrdtDelta.Delta.Ormap(ORMapDelta(
-      cleared = cleared,
-      removed = removed.asScala.toVector,
-      updated = updated.toVector,
-      added = added.toVector
-    )))
-  } else None
+      Some(
+        CrdtDelta.Delta.Ormap(
+          ORMapDelta(
+            cleared = cleared,
+            removed = removed.asScala.toVector,
+            updated = updated.toVector,
+            added = added.toVector
+          )
+        )
+      )
+    } else None
 
   override def resetDelta(): Unit = {
     cleared = false
@@ -152,11 +163,14 @@ private[crdt] final class ORMapImpl[K, V <: InternalCrdt](anySupport: AnySupport
     value.values().asScala.foreach(_.resetDelta())
   }
 
-  override def state: CrdtState.State = CrdtState.State.Ormap(ORMapState(
-    value.asScala.map {
-      case (key, crdt) => ORMapEntry(Some(anySupport.encodeScala(key)), Some(CrdtState(crdt.state)))
-    }.toVector
-  ))
+  override def state: CrdtState.State =
+    CrdtState.State.Ormap(
+      ORMapState(
+        value.asScala.map {
+          case (key, crdt) => ORMapEntry(Some(anySupport.encodeScala(key)), Some(CrdtState(crdt.state)))
+        }.toVector
+      )
+    )
 
   override val applyDelta = {
     case CrdtDelta.Delta.Ormap(ORMapDelta(cleared, removed, updated, added)) =>
@@ -176,7 +190,7 @@ private[crdt] final class ORMapImpl[K, V <: InternalCrdt](anySupport: AnySupport
       added.foreach {
         case ORMapEntry(Some(key), Some(state)) =>
           value.put(anySupport.decode(key).asInstanceOf[K],
-            CrdtStateTransformer.create(state, anySupport).asInstanceOf[V])
+                    CrdtStateTransformer.create(state, anySupport).asInstanceOf[V])
       }
   }
 
@@ -186,7 +200,7 @@ private[crdt] final class ORMapImpl[K, V <: InternalCrdt](anySupport: AnySupport
       values.foreach {
         case ORMapEntry(Some(key), Some(state)) =>
           value.put(anySupport.decode(key).asInstanceOf[K],
-            CrdtStateTransformer.create(state, anySupport).asInstanceOf[V])
+                    CrdtStateTransformer.create(state, anySupport).asInstanceOf[V])
       }
   }
 

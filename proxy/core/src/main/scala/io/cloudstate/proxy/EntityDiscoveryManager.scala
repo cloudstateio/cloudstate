@@ -24,7 +24,12 @@ import akka.pattern.pipe
 import akka.stream.Materializer
 import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
-import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
+import akka.cluster.singleton.{
+  ClusterSingletonManager,
+  ClusterSingletonManagerSettings,
+  ClusterSingletonProxy,
+  ClusterSingletonProxySettings
+}
 import akka.grpc.GrpcClientSettings
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
@@ -35,50 +40,57 @@ import io.cloudstate.protocol.event_sourced.EventSourced
 import io.cloudstate.proxy.StatsCollector.StatsCollectorSettings
 import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
 import io.cloudstate.proxy.ConcurrencyEnforcer.ConcurrencyEnforcerSettings
-import io.cloudstate.proxy.autoscaler.{Autoscaler, AutoscalerSettings, ClusterMembershipFacadeImpl, KubernetesDeploymentScaler, NoAutoscaler, NoScaler}
+import io.cloudstate.proxy.autoscaler.{
+  Autoscaler,
+  AutoscalerSettings,
+  ClusterMembershipFacadeImpl,
+  KubernetesDeploymentScaler,
+  NoAutoscaler,
+  NoScaler
+}
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
 
 import scala.concurrent.duration._
 
 object EntityDiscoveryManager {
-  final case class Configuration (
-    devMode: Boolean,
-    httpInterface: String,
-    httpPort: Int,
-    userFunctionInterface: String,
-    userFunctionPort: Int,
-    relayTimeout: Timeout,
-    relayOutputBufferSize: Int,
-    gracefulTerminationTimeout: Timeout,
-    passivationTimeout: Timeout,
-    numberOfShards: Int,
-    proxyParallelism: Int,
-    concurrencySettings: ConcurrencyEnforcerSettings,
-    statsCollectorSettings: StatsCollectorSettings,
-    journalEnabled: Boolean
+  final case class Configuration(
+      devMode: Boolean,
+      httpInterface: String,
+      httpPort: Int,
+      userFunctionInterface: String,
+      userFunctionPort: Int,
+      relayTimeout: Timeout,
+      relayOutputBufferSize: Int,
+      gracefulTerminationTimeout: Timeout,
+      passivationTimeout: Timeout,
+      numberOfShards: Int,
+      proxyParallelism: Int,
+      concurrencySettings: ConcurrencyEnforcerSettings,
+      statsCollectorSettings: StatsCollectorSettings,
+      journalEnabled: Boolean
   ) {
     validate()
     def this(config: Config) = {
       this(
-        devMode                    = config.getBoolean("dev-mode-enabled"),
-        httpInterface              = config.getString("http-interface"),
-        httpPort                   = config.getInt("http-port"),
-        userFunctionInterface      = config.getString("user-function-interface"),
-        userFunctionPort           = config.getInt("user-function-port"),
-        relayTimeout               = Timeout(config.getDuration("relay-timeout").toMillis.millis),
-        relayOutputBufferSize      = config.getInt("relay-buffer-size"),
+        devMode = config.getBoolean("dev-mode-enabled"),
+        httpInterface = config.getString("http-interface"),
+        httpPort = config.getInt("http-port"),
+        userFunctionInterface = config.getString("user-function-interface"),
+        userFunctionPort = config.getInt("user-function-port"),
+        relayTimeout = Timeout(config.getDuration("relay-timeout").toMillis.millis),
+        relayOutputBufferSize = config.getInt("relay-buffer-size"),
         gracefulTerminationTimeout = Timeout(config.getDuration("graceful-termination-timeout").toMillis.millis),
-        passivationTimeout         = Timeout(config.getDuration("passivation-timeout").toMillis.millis),
-        numberOfShards             = config.getInt("number-of-shards"),
-        proxyParallelism           = config.getInt("proxy-parallelism"),
-        concurrencySettings        = ConcurrencyEnforcerSettings(
-          concurrency   = config.getInt("container-concurrency"),
+        passivationTimeout = Timeout(config.getDuration("passivation-timeout").toMillis.millis),
+        numberOfShards = config.getInt("number-of-shards"),
+        proxyParallelism = config.getInt("proxy-parallelism"),
+        concurrencySettings = ConcurrencyEnforcerSettings(
+          concurrency = config.getInt("container-concurrency"),
           actionTimeout = config.getDuration("action-timeout").toMillis.millis,
           cleanupPeriod = config.getDuration("action-timeout-poll-period").toMillis.millis
         ),
-        statsCollectorSettings     = new StatsCollectorSettings(config.getConfig("stats")),
-        journalEnabled             = config.getBoolean("journal-enabled")
+        statsCollectorSettings = new StatsCollectorSettings(config.getConfig("stats")),
+        journalEnabled = config.getBoolean("journal-enabled")
       )
     }
 
@@ -101,17 +113,22 @@ object EntityDiscoveryManager {
     supportedEntityTypes = supportedEntityTypes
   )
 
-  final case class ServableEntity(serviceName: String, serviceDescriptor: ServiceDescriptor, userFunctionTypeSupport: UserFunctionTypeSupport)
+  final case class ServableEntity(serviceName: String,
+                                  serviceDescriptor: ServiceDescriptor,
+                                  userFunctionTypeSupport: UserFunctionTypeSupport)
 }
 
-class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(implicit mat: Materializer) extends Actor with ActorLogging {
+class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(implicit mat: Materializer)
+    extends Actor
+    with ActorLogging {
   import context.system
   import context.dispatcher
   import EntityDiscoveryManager.Ready
 
-  private[this] final val clientSettings = GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
-  private[this] final val entityDiscoveryClient         = EntityDiscoveryClient(clientSettings)
-  private[this] final val autoscaler     = {
+  private[this] final val clientSettings =
+    GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
+  private[this] final val entityDiscoveryClient = EntityDiscoveryClient(clientSettings)
+  private[this] final val autoscaler = {
     val autoscalerSettings = AutoscalerSettings(system)
     if (autoscalerSettings.enabled) {
       val managerSettings = ClusterSingletonManagerSettings(system)
@@ -122,27 +139,44 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
         else factory.actorOf(KubernetesDeploymentScaler.props(autoscaler), "kubernetesDeploymentScaler")
       }
 
-      val singleton = context.actorOf(ClusterSingletonManager.props(Autoscaler.props(autoscalerSettings,
-        scalerFactory, new ClusterMembershipFacadeImpl(Cluster(context.system))),
-        terminationMessage = PoisonPill, managerSettings), "autoscaler")
+      val singleton = context.actorOf(
+        ClusterSingletonManager.props(
+          Autoscaler.props(autoscalerSettings, scalerFactory, new ClusterMembershipFacadeImpl(Cluster(context.system))),
+          terminationMessage = PoisonPill,
+          managerSettings
+        ),
+        "autoscaler"
+      )
 
-      context.actorOf(ClusterSingletonProxy.props(singleton.path.toStringWithoutAddress, proxySettings), "autoscalerProxy")
+      context.actorOf(ClusterSingletonProxy.props(singleton.path.toStringWithoutAddress, proxySettings),
+                      "autoscalerProxy")
     } else {
       context.actorOf(Props(new NoAutoscaler), "noAutoscaler")
     }
   }
-  private[this] final val statsCollector = context.actorOf(StatsCollector.props(config.statsCollectorSettings, autoscaler), "statsCollector")
-  private[this] final val concurrencyEnforcer = context.actorOf(ConcurrencyEnforcer.props(config.concurrencySettings, statsCollector), "concurrencyEnforcer")
+  private[this] final val statsCollector =
+    context.actorOf(StatsCollector.props(config.statsCollectorSettings, autoscaler), "statsCollector")
+  private[this] final val concurrencyEnforcer =
+    context.actorOf(ConcurrencyEnforcer.props(config.concurrencySettings, statsCollector), "concurrencyEnforcer")
 
   private val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
-    Crdt.name -> new CrdtSupportFactory(context.system, config, entityDiscoveryClient, clientSettings,
-      concurrencyEnforcer = concurrencyEnforcer, statsCollector = statsCollector)
-  ) ++ {
-    if (config.journalEnabled)
-      Map(EventSourced.name -> new EventSourcedSupportFactory(context.system, config, clientSettings,
-        concurrencyEnforcer = concurrencyEnforcer, statsCollector = statsCollector))
-    else Map.empty
-  }
+      Crdt.name -> new CrdtSupportFactory(context.system,
+                                          config,
+                                          entityDiscoveryClient,
+                                          clientSettings,
+                                          concurrencyEnforcer = concurrencyEnforcer,
+                                          statsCollector = statsCollector)
+    ) ++ {
+      if (config.journalEnabled)
+        Map(
+          EventSourced.name -> new EventSourcedSupportFactory(context.system,
+                                                              config,
+                                                              clientSettings,
+                                                              concurrencyEnforcer = concurrencyEnforcer,
+                                                              statsCollector = statsCollector)
+        )
+      else Map.empty
+    }
 
   entityDiscoveryClient.discover(EntityDiscoveryManager.proxyInfo(supportFactories.keys.toSeq)) pipeTo self
 
@@ -159,17 +193,24 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
         }
 
         val entities = spec.entities.map { entity =>
-
-          val serviceDescriptor = descriptors.collectFirst(Function.unlift(descriptor => extractService(entity.serviceName, descriptor)))
+          val serviceDescriptor = descriptors
+            .collectFirst(Function.unlift(descriptor => extractService(entity.serviceName, descriptor)))
             .getOrElse(throw EntityDiscoveryException(s"Service [${entity.serviceName}] not found in descriptors!"))
 
           supportFactories.get(entity.entityType) match {
-            case Some(factory) => EntityDiscoveryManager.ServableEntity(
-              entity.serviceName, serviceDescriptor, factory.build(entity, serviceDescriptor))
+            case Some(factory) =>
+              EntityDiscoveryManager.ServableEntity(entity.serviceName,
+                                                    serviceDescriptor,
+                                                    factory.build(entity, serviceDescriptor))
             case None if entity.entityType == EventSourced.name =>
-              throw EntityDiscoveryException(s"Service [${entity.serviceName}] has declared an event sourced entity, however, this proxy does not have a configured store, or is using a store that doesn't support event sourced journals. A store that supports journals must be configured in this stateful services resource if event sourcing is to be used.")
+              throw EntityDiscoveryException(
+                s"Service [${entity.serviceName}] has declared an event sourced entity, however, this proxy does not have a configured store, or is using a store that doesn't support event sourced journals. A store that supports journals must be configured in this stateful services resource if event sourcing is to be used."
+              )
             case None =>
-              throw EntityDiscoveryException(s"Service [${entity.serviceName}] has declared an unsupported entity type [${entity.entityType}]. Supported types are ${supportFactories.keys.mkString(",")}")
+              throw EntityDiscoveryException(
+                s"Service [${entity.serviceName}] has declared an unsupported entity type [${entity.entityType}]. Supported types are ${supportFactories.keys
+                  .mkString(",")}"
+              )
           }
         }
 
@@ -194,13 +235,11 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
 
         context.become(binding)
 
-
       } catch {
         case e @ EntityDiscoveryException(message) =>
           entityDiscoveryClient.reportError(UserFunctionError(message))
           throw e
       }
-
 
     case Ready => sender ! false
     case Status.Failure(cause) =>
@@ -247,9 +286,8 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
     case Ready => sender ! true
   }
 
-  override final def postStop(): Unit = {
+  override final def postStop(): Unit =
     entityDiscoveryClient.close()
-  }
 }
 
 case class EntityDiscoveryException(message: String) extends RuntimeException(message)

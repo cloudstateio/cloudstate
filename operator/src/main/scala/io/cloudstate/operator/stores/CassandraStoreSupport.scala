@@ -10,7 +10,7 @@ object CassandraStoreSupport extends StatefulStoreSupport {
 
   override def name: String = OperatorConstants.CassandraStatefulStoreType
 
-  override def validate(store: StatefulStore.Resource, client: KubernetesClient): Validated[ConfiguredStatefulStore] = {
+  override def validate(store: StatefulStore.Resource, client: KubernetesClient): Validated[ConfiguredStatefulStore] =
     store.spec.deployment match {
       case Some(`UnmanagedStatefulStoreDeployment`) =>
         store.spec.config.flatMap(c => (c \ "service").asOpt[String]) match {
@@ -18,36 +18,43 @@ object CassandraStoreSupport extends StatefulStoreSupport {
             Validated(new UnmanagedCassandra(serviceName))
 
           case None =>
-            Validated.error(StatefulStoreConditionType, "MissingServiceName",
-              "No service name declared in unmanaged Cassandra journal")
+            Validated.error(StatefulStoreConditionType,
+                            "MissingServiceName",
+                            "No service name declared in unmanaged Cassandra journal")
         }
 
       case Some(unknown) =>
-        Validated.error(StatefulStoreConditionType, "UnknownDeploymentType",
-          s"Unknown Cassandra deployment type: $unknown, supported types for Cassandra are: $UnmanagedStatefulStoreDeployment")
+        Validated.error(
+          StatefulStoreConditionType,
+          "UnknownDeploymentType",
+          s"Unknown Cassandra deployment type: $unknown, supported types for Cassandra are: $UnmanagedStatefulStoreDeployment"
+        )
 
       case None =>
-        Validated.error(StatefulStoreConditionType, "UnspecifiedDeploymentType",
-          s"Unspecified Cassandra deployment type, supported types for Cassandra are: $UnmanagedStatefulStoreDeployment")
+        Validated.error(
+          StatefulStoreConditionType,
+          "UnspecifiedDeploymentType",
+          s"Unspecified Cassandra deployment type, supported types for Cassandra are: $UnmanagedStatefulStoreDeployment"
+        )
 
     }
-  }
 
-
-  override def reconcile(store: Resource, client: KubernetesClient): Validated[ConfiguredStatefulStore] = validate(store, client)
+  override def reconcile(store: Resource, client: KubernetesClient): Validated[ConfiguredStatefulStore] =
+    validate(store, client)
 
   private class UnmanagedCassandra(service: String) extends ConfiguredStatefulStore {
     override def successfulConditions: List[Condition] = Nil
 
-    override def validateInstance(config: Option[JsValue], client: KubernetesClient): Validated[StatefulStoreUsageConfiguration] = {
+    override def validateInstance(config: Option[JsValue],
+                                  client: KubernetesClient): Validated[StatefulStoreUsageConfiguration] =
       config.flatMap(config => (config \ "keyspace").asOpt[String]) match {
         case Some(keyspace) =>
           Validated(new CassandraUsage(service, keyspace))
         case None =>
-          Validated.error(StatefulStoreConditionType, "MissingKeyspace",
-            "No keyspace declared for unmanaged Cassandra journal")
+          Validated.error(StatefulStoreConditionType,
+                          "MissingKeyspace",
+                          "No keyspace declared for unmanaged Cassandra journal")
       }
-    }
   }
 
   private class CassandraUsage(service: String, keyspace: String) extends StatefulStoreUsageConfiguration {

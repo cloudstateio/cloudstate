@@ -43,9 +43,7 @@ object StatefulStore {
     version = "v1alpha1",
     kind = "StatefulStore",
     shortNames = Nil,
-    subresources = Some(Subresources()
-      .withStatusSubresource
-    )
+    subresources = Some(Subresources().withStatusSubresource)
   )
 
   implicit val statusSubEnabled = CustomResource.statusMethodsEnabler[Resource]

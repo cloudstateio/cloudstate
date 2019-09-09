@@ -1,6 +1,16 @@
 package io.cloudstate.proxy.autoscaler
 
-import akka.actor.{Actor, ActorLogging, ActorRef, ActorRefFactory, ActorSystem, AddressFromURIString, DeadLetterSuppression, Props, Timers}
+import akka.actor.{
+  Actor,
+  ActorLogging,
+  ActorRef,
+  ActorRefFactory,
+  ActorSystem,
+  AddressFromURIString,
+  DeadLetterSuppression,
+  Props,
+  Timers
+}
 import akka.cluster.ddata.Replicator._
 import akka.cluster.ddata.{DistributedData, LWWRegister, LWWRegisterKey}
 import akka.cluster.{Cluster, Member, MemberStatus, UniqueAddress}
@@ -11,62 +21,50 @@ import scala.concurrent.duration._
 import io.cloudstate.proxy.autoscaler._
 
 final case class AutoscalerSettings(
-
-  /**
-    * Whether autoscaling is enabled.
-    */
-  enabled: Boolean,
-
-  /**
-    * Target concurrency on user functions.
-    */
-  targetUserFunctionConcurrency: Int,
-
-  /**
-    * Target concurrency for requests.
-    */
-  targetRequestConcurrency: Int,
-
-  /**
-    * The sliding window period used to calculate the current concurrency for all nodes.
-    */
-  targetConcurrencyWindow: FiniteDuration,
-
-  /**
-    * While scaling up, concurrency can spike due to the time it takes for new nodes to join the cluster,
-    * to warm up/jit, and rebalance etc. So we don't make any new decisions based on concurrency until this
-    * deadline is met.
-    */
-  scaleUpStableDeadline: FiniteDuration,
-
-  /**
-    * While scaling down, concurrency can spike due to rebalancing, so we don't make any new decisions based
-    * on concurrency until this deadline is met.
-    */
-  scaleDownStableDeadline: FiniteDuration,
-
-  /**
-    * During the scaling up/down stable deadline period, decisions to scale up further are made based on the
-    * request rate. If it increases by more than this factor, then we scale the number of nodes to handle that
-    * rate based on the original rate per node being handled before scale up/down.
-    */
-  requestRateThresholdFactor: Double,
-
-  /**
-    * The window used to determine whether the request rate has exceeded the threshold.
-    */
-  requestRateThresholdWindow: FiniteDuration,
-
-  maxScaleFactor: Double,
-
-  maxScaleAbsolute: Int,
-
-  maxMembers: Int,
-
-  /**
-    * Autoscale tick period.
-    */
-  tickPeriod: FiniteDuration
+    /**
+     * Whether autoscaling is enabled.
+     */
+    enabled: Boolean,
+    /**
+     * Target concurrency on user functions.
+     */
+    targetUserFunctionConcurrency: Int,
+    /**
+     * Target concurrency for requests.
+     */
+    targetRequestConcurrency: Int,
+    /**
+     * The sliding window period used to calculate the current concurrency for all nodes.
+     */
+    targetConcurrencyWindow: FiniteDuration,
+    /**
+     * While scaling up, concurrency can spike due to the time it takes for new nodes to join the cluster,
+     * to warm up/jit, and rebalance etc. So we don't make any new decisions based on concurrency until this
+     * deadline is met.
+     */
+    scaleUpStableDeadline: FiniteDuration,
+    /**
+     * While scaling down, concurrency can spike due to rebalancing, so we don't make any new decisions based
+     * on concurrency until this deadline is met.
+     */
+    scaleDownStableDeadline: FiniteDuration,
+    /**
+     * During the scaling up/down stable deadline period, decisions to scale up further are made based on the
+     * request rate. If it increases by more than this factor, then we scale the number of nodes to handle that
+     * rate based on the original rate per node being handled before scale up/down.
+     */
+    requestRateThresholdFactor: Double,
+    /**
+     * The window used to determine whether the request rate has exceeded the threshold.
+     */
+    requestRateThresholdWindow: FiniteDuration,
+    maxScaleFactor: Double,
+    maxScaleAbsolute: Int,
+    maxMembers: Int,
+    /**
+     * Autoscale tick period.
+     */
+    tickPeriod: FiniteDuration
 )
 
 object AutoscalerSettings {
@@ -97,19 +95,19 @@ object AutoscalerSettings {
 object Autoscaler {
 
   final case class Sample(
-    receivedNanos: Long,
-    metrics: AutoscalerMetrics
+      receivedNanos: Long,
+      metrics: AutoscalerMetrics
   )
 
   private final case class Summary(
-    clusterMembers: Int,
-    requestConcurrency: Double,
-    databaseConcurrency: Double,
-    userFunctionConcurrency: Double,
-    requestRate: Double,
-    requestTimeMillis: Double,
-    userFunctionTimeMillis: Double,
-    databaseTimeMillis: Double
+      clusterMembers: Int,
+      requestConcurrency: Double,
+      databaseConcurrency: Double,
+      userFunctionConcurrency: Double,
+      requestRate: Double,
+      requestTimeMillis: Double,
+      userFunctionTimeMillis: Double,
+      databaseTimeMillis: Double
   )
 
   final case class Deployment(name: String, ready: Int, scale: Int, upgrading: Boolean)
@@ -118,24 +116,30 @@ object Autoscaler {
   case object Tick extends DeadLetterSuppression
 
   /**
-    * This state is never gossipped, it's used as a placeholder for when we are waiting to have all
-    * the state we need to make decisions.
-    */
+   * This state is never gossipped, it's used as a placeholder for when we are waiting to have all
+   * the state we need to make decisions.
+   */
   case object WaitingForState extends AutoscalerState
 
   type ScalerFactory = (ActorRef, ActorRefFactory) => ActorRef
 
-  def props(settings: AutoscalerSettings, scalerFactory: ScalerFactory,
-    clusterMembershipFacade: ClusterMembershipFacade): Props = Props(new Autoscaler(settings, scalerFactory, clusterMembershipFacade))
+  def props(settings: AutoscalerSettings,
+            scalerFactory: ScalerFactory,
+            clusterMembershipFacade: ClusterMembershipFacade): Props =
+    Props(new Autoscaler(settings, scalerFactory, clusterMembershipFacade))
 }
 
 /**
-  * This state is gossipped via an LWW-Register CRDT. Most implementations are protobuf messages.
-  */
+ * This state is gossipped via an LWW-Register CRDT. Most implementations are protobuf messages.
+ */
 trait AutoscalerState
 
-class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerFactory,
-  clusterMembershipFacade: ClusterMembershipFacade) extends Actor with Timers with ActorLogging {
+class Autoscaler(settings: AutoscalerSettings,
+                 scalerFactory: Autoscaler.ScalerFactory,
+                 clusterMembershipFacade: ClusterMembershipFacade)
+    extends Actor
+    with Timers
+    with ActorLogging {
 
   import Autoscaler._
 
@@ -156,24 +160,23 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
 
   override def receive: Receive = waitingForState(WaitingForState)
 
-  private def become(handler: Receive): Unit = {
+  private def become(handler: Receive): Unit =
     context become (
       handleMetrics orElse handler orElse {
         case UpdateSuccess(_, _) =>
-          // Ignore
+        // Ignore
         case failure: UpdateFailure[_] =>
           log.warning("Failure updating autoscaler state CRDT {}", failure)
-          // It's no big deal, it just means a majority of nodes couldn't be updated in the given timeout.
-          // But this one was, and maybe several others were too, and worst case, the next cluster singleton
-          // to read it will get the wrong state, in which case it will make its own decision about its state
-          // soon enough.
+        // It's no big deal, it just means a majority of nodes couldn't be updated in the given timeout.
+        // But this one was, and maybe several others were too, and worst case, the next cluster singleton
+        // to read it will get the wrong state, in which case it will make its own decision about its state
+        // soon enough.
         case deploy: Deployment =>
           deployment = Some(deploy)
       }
     )
-  }
 
-  private def checkInit(state: AutoscalerState) = {
+  private def checkInit(state: AutoscalerState) =
     deployment match {
       case None =>
       case Some(deploy) =>
@@ -190,8 +193,11 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
               self ! Tick
 
             case ScalingUp(desired, lastStableRequestRatePerNode, wallClockDeadline) =>
-              become(scalingUp(desired, lastStableRequestRatePerNode,
-                Deadline.now + (wallClockDeadline - System.currentTimeMillis()).millis))
+              become(
+                scalingUp(desired,
+                          lastStableRequestRatePerNode,
+                          Deadline.now + (wallClockDeadline - System.currentTimeMillis()).millis)
+              )
               self ! Tick
 
             case ScalingDown(desired, wallClockDeadline) =>
@@ -204,7 +210,6 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
           }
         }
     }
-  }
 
   private def waitingForState(state: AutoscalerState): Receive = {
     case metrics: AutoscalerMetrics =>
@@ -235,8 +240,8 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
   }
 
   /**
-    * In this state, we are stable, the number of nodes is appropriate to keep the target concurrency
-    */
+   * In this state, we are stable, the number of nodes is appropriate to keep the target concurrency
+   */
   private def becomeStable(): Unit = {
     updateState(Stable())
     become(stable)
@@ -247,30 +252,53 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
       val summary = summarize()
 
       val adjustedRequestConcurrency = summary.requestConcurrency - summary.databaseConcurrency
-      val desiredForUserFunction = Math.max(1, Math.ceil((summary.userFunctionConcurrency * summary.clusterMembers) / settings.targetUserFunctionConcurrency).toInt)
-      val desiredForRequest = Math.max(1, Math.ceil((adjustedRequestConcurrency * summary.clusterMembers) / settings.targetRequestConcurrency).toInt)
+      val desiredForUserFunction = Math.max(
+        1,
+        Math
+          .ceil((summary.userFunctionConcurrency * summary.clusterMembers) / settings.targetUserFunctionConcurrency)
+          .toInt
+      )
+      val desiredForRequest = Math.max(
+        1,
+        Math.ceil((adjustedRequestConcurrency * summary.clusterMembers) / settings.targetRequestConcurrency).toInt
+      )
 
       if (summary.userFunctionConcurrency > settings.targetUserFunctionConcurrency) {
         val desired = capScaling(desiredForUserFunction, summary.clusterMembers)
 
-        log.info("Scaling up from {} to {} because user function concurrency {} exceeds target {}",
-          summary.clusterMembers, desired, summary.userFunctionConcurrency, settings.targetUserFunctionConcurrency)
+        log.info(
+          "Scaling up from {} to {} because user function concurrency {} exceeds target {}",
+          summary.clusterMembers,
+          desired,
+          summary.userFunctionConcurrency,
+          settings.targetUserFunctionConcurrency
+        )
 
         scaleUp(desired, summary.requestRate)
 
       } else if (adjustedRequestConcurrency > settings.targetRequestConcurrency) {
         val desired = capScaling(desiredForRequest, summary.clusterMembers)
 
-        log.info("Scaling up from {} to {} because adjusted request concurrency {} exceeds target {}",
-          summary.clusterMembers, desired, adjustedRequestConcurrency, settings.targetRequestConcurrency)
+        log.info(
+          "Scaling up from {} to {} because adjusted request concurrency {} exceeds target {}",
+          summary.clusterMembers,
+          desired,
+          adjustedRequestConcurrency,
+          settings.targetRequestConcurrency
+        )
 
         scaleUp(desired, summary.requestRate)
 
       } else if (desiredForUserFunction < summary.clusterMembers && desiredForRequest < summary.clusterMembers) {
         val desired = capScaling(Math.max(desiredForRequest, desiredForUserFunction), summary.clusterMembers)
 
-        log.info("Scaling down to {} because desired nodes for user function {} and desired nodes for request handling {} is below cluster members {}",
-          desired, desiredForUserFunction, desiredForRequest, summary.clusterMembers)
+        log.info(
+          "Scaling down to {} because desired nodes for user function {} and desired nodes for request handling {} is below cluster members {}",
+          desired,
+          desiredForUserFunction,
+          desiredForRequest,
+          summary.clusterMembers
+        )
 
         scaleDown(desired)
       } else if (deployment.exists(_.upgrading)) {
@@ -282,8 +310,8 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
   }
 
   /**
-    * Cap scaling to the max scaling settings
-    */
+   * Cap scaling to the max scaling settings
+   */
   private def capScaling(desired: Int, clusterMembers: Int): Int = {
     val changeInClusterMembers = Math.abs(desired - clusterMembers)
     val factorCappedChange = if (settings.maxScaleFactor > 0) {
@@ -300,22 +328,25 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
   }
 
   /**
-    * In this state, we are scaling up, and waiting for the scale up deadline to elapse before switching back to stable, or
-    * scaling up further. In addition, if observed request rate exceeds the last stable request rate by the request rate
-    * threshold, we may scale up more.
-    */
+   * In this state, we are scaling up, and waiting for the scale up deadline to elapse before switching back to stable, or
+   * scaling up further. In addition, if observed request rate exceeds the last stable request rate by the request rate
+   * threshold, we may scale up more.
+   */
   private def scaleUp(desired: Int, lastStableRequestRatePerNode: Double): Unit = {
     deployment.foreach { d =>
       scaler ! Scale(d.name, desired)
     }
-    updateState(ScalingUp(desired, lastStableRequestRatePerNode, System.currentTimeMillis() + settings.scaleUpStableDeadline.toMillis))
+    updateState(
+      ScalingUp(desired,
+                lastStableRequestRatePerNode,
+                System.currentTimeMillis() + settings.scaleUpStableDeadline.toMillis)
+    )
     become(scalingUp(desired, lastStableRequestRatePerNode, settings.scaleUpStableDeadline.fromNow))
   }
 
   private def scalingUp(desired: Int, lastStableRequestRatePerNode: Double, deadline: Deadline): Receive = {
 
     case Tick =>
-
       if (deadline.isOverdue()) {
         log.info("Scaling up to {} stable period over", desired)
         // Concurrency would have gone crazy during the scaling period, so expire most of the old data
@@ -334,7 +365,6 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
   private def scalingDown(desired: Int, deadline: Deadline): Receive = {
 
     case Tick =>
-
       if (deadline.isOverdue()) {
         log.info("Scaling down to {} stable period over", desired)
         // Concurrency would have gone crazy during the scaling period, so expire most of the old data
@@ -350,14 +380,22 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
     val summary = summarize()
 
     if (summary.requestRate > lastStableRequestRatePerNode * settings.requestRateThresholdFactor &&
-      (summary.userFunctionConcurrency > settings.targetUserFunctionConcurrency ||
+        (summary.userFunctionConcurrency > settings.targetUserFunctionConcurrency ||
         summary.requestConcurrency > settings.targetRequestConcurrency)) {
 
-      val newDesired = capScaling(Math.ceil(summary.requestRate * summary.clusterMembers / lastStableRequestRatePerNode).toInt, summary.clusterMembers)
+      val newDesired = capScaling(
+        Math.ceil(summary.requestRate * summary.clusterMembers / lastStableRequestRatePerNode).toInt,
+        summary.clusterMembers
+      )
 
       if (newDesired > currentDesired) {
-        log.info("Scaling up to {} because request rate {} has exceeded last stable request rate {} by configured factor {}",
-          newDesired, summary.requestRate, lastStableRequestRatePerNode, settings.requestRateThresholdFactor)
+        log.info(
+          "Scaling up to {} because request rate {} has exceeded last stable request rate {} by configured factor {}",
+          newDesired,
+          summary.requestRate,
+          lastStableRequestRatePerNode,
+          settings.requestRateThresholdFactor
+        )
         scaleUp(newDesired, lastStableRequestRatePerNode)
       }
       true
@@ -365,8 +403,8 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
   }
 
   /**
-    * Like scale up, except with a different configured deadline.
-    */
+   * Like scale up, except with a different configured deadline.
+   */
   private def scaleDown(desired: Int): Unit = {
     deployment.foreach { d =>
       scaler ! Scale(d.name, desired)
@@ -376,9 +414,9 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
   }
 
   /**
-    * When upgrading, due to the shutting down and starting of nodes, concurrency can go crazy. So, while upgrading,
-    * we scale based on request rate.
-    */
+   * When upgrading, due to the shutting down and starting of nodes, concurrency can go crazy. So, while upgrading,
+   * we scale based on request rate.
+   */
   private def becomeUpgrading(desired: Int, lastStableRequestRatePerNode: Double): Unit = {
     updateState(Upgrading(desired, lastStableRequestRatePerNode))
     become(upgrading(desired, lastStableRequestRatePerNode))
@@ -401,29 +439,28 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
       stats = stats.updated(uniqueAddress, stats(uniqueAddress).enqueue(Sample(System.nanoTime(), m)))
   }
 
-  private def updateState(state: AutoscalerState): Unit = {
+  private def updateState(state: AutoscalerState): Unit =
     // We write majority to ensure this immediately gets written to a majority of replicas. This mostly ensures
     // if we immediately after this leave the cluster, and a cluster singleton comes up somewhere else, when it
     // does a read majority, it should see the write.
     ddata.replicator ! Update(StateKey, EmptyState, WriteMajority(5.seconds))(_.withValueOf(state))
-  }
 
   private def summarize(): Summary = {
     val summaryTime = System.nanoTime()
     val concurrencyWindowNanos = settings.targetConcurrencyWindow.toNanos
     val requestRateWindowNanos = settings.requestRateThresholdWindow.toNanos
 
-    var totalConcurrencyNanos = 0l
+    var totalConcurrencyNanos = 0L
     var weightedRequestConcurrencySum = 0d
     var weightedDatabaseConcurrencySum = 0d
     var weightedUserFunctionConcurrencySum = 0d
 
     var requestCount = 0
-    var requestTimeNanos = 0l
+    var requestTimeNanos = 0L
     var userFunctionCount = 0
-    var userFunctionTimeNanos = 0l
+    var userFunctionTimeNanos = 0L
     var databaseCount = 0
-    var databaseTimeNanos = 0l
+    var databaseTimeNanos = 0L
 
     var requestRatePerSecond = 0
 
@@ -433,8 +470,7 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
 
     stats.foreach {
       case (_, samples) =>
-
-        var addressNanos = 0l
+        var addressNanos = 0L
         var addressRequestCount = 0
 
         // Now, accumulate sample values
@@ -458,7 +494,8 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
         }
 
         requestCount += addressRequestCount
-        val requestRate = if (addressNanos == 0) 0 else (addressRequestCount.toDouble / addressNanos * 1000000000l).toInt
+        val requestRate =
+          if (addressNanos == 0) 0 else (addressRequestCount.toDouble / addressNanos * 1000000000L).toInt
         requestRatePerSecond += requestRate
     }
 
@@ -466,7 +503,8 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
       Summary(clusterMembers, 0, 0, 0, 0, 0, 0, 0)
     } else {
       val requestTimeMillis = if (requestCount == 0) 0 else requestTimeNanos.toDouble / requestCount / 1000000
-      val userFunctionTimeMillis = if (userFunctionCount == 0) 0 else userFunctionTimeNanos.toDouble / userFunctionCount / 1000000
+      val userFunctionTimeMillis =
+        if (userFunctionCount == 0) 0 else userFunctionTimeNanos.toDouble / userFunctionCount / 1000000
       val databaseTimeMillis = if (databaseCount == 0) 0 else databaseTimeNanos.toDouble / databaseCount / 1000000
 
       Summary(
@@ -484,7 +522,7 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
     summary
   }
 
-  private def expireMetricsOlderThan(currentTimeNanos: Long, olderThanNanos: Long): Unit = {
+  private def expireMetricsOlderThan(currentTimeNanos: Long, olderThanNanos: Long): Unit =
     stats.foreach {
       case (address, samples) =>
         val currentSamples = samples.dropWhile(sample => currentTimeNanos - sample.receivedNanos > olderThanNanos)
@@ -494,27 +532,45 @@ class Autoscaler(settings: AutoscalerSettings, scalerFactory: Autoscaler.ScalerF
           stats += (address -> currentSamples)
         }
     }
-  }
 
-  private def logReport(summary: Summary): Unit = {
+  private def logReport(summary: Summary): Unit =
     if (log.isDebugEnabled) {
       reportHeaders += 1
       if (reportHeaders % 10 == 1) {
-        log.debug("%8s %8s %8s %8s %8s %8s %8s %8s %8s %8s".format("Members", "Scale", "Ready", "UF cncy", "UF lat", "Req cncy", "Req lat", "Req rate", "DB cncy", "DB lat"))
+        log.debug(
+          "%8s %8s %8s %8s %8s %8s %8s %8s %8s %8s".format("Members",
+                                                           "Scale",
+                                                           "Ready",
+                                                           "UF cncy",
+                                                           "UF lat",
+                                                           "Req cncy",
+                                                           "Req lat",
+                                                           "Req rate",
+                                                           "DB cncy",
+                                                           "DB lat")
+        )
       }
-      log.debug("%8d %8d %8d %8.2f %8.1f %8.2f %8.1f %8.1f %8.2f %8.1f".format(
-        summary.clusterMembers,
-        deployment.fold(0)(_.scale), deployment.fold(0)(_.ready),
-        summary.userFunctionConcurrency, summary.userFunctionTimeMillis, summary.requestConcurrency,
-        summary.requestTimeMillis, summary.requestRate, summary.databaseConcurrency, summary.databaseTimeMillis))
+      log.debug(
+        "%8d %8d %8d %8.2f %8.1f %8.2f %8.1f %8.1f %8.2f %8.1f".format(
+          summary.clusterMembers,
+          deployment.fold(0)(_.scale),
+          deployment.fold(0)(_.ready),
+          summary.userFunctionConcurrency,
+          summary.userFunctionTimeMillis,
+          summary.requestConcurrency,
+          summary.requestTimeMillis,
+          summary.requestRate,
+          summary.databaseConcurrency,
+          summary.databaseTimeMillis
+        )
+      )
     }
 
-  }
 }
 
 /**
-  * Facade over Akka cluster membership, so it can be substituted for unit testing purposes.
-  */
+ * Facade over Akka cluster membership, so it can be substituted for unit testing purposes.
+ */
 trait ClusterMembershipFacade {
   def upMembers: Iterable[UniqueAddress]
   def upMemberCount: Int = upMembers.size

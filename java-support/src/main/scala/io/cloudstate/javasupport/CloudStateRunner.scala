@@ -41,9 +41,9 @@ object CloudStateRunner {
     validate()
     def this(config: Config) = {
       this(
-        userFunctionInterface      = config.getString("user-function-interface"),
-        userFunctionPort           = config.getInt("user-function-port"),
-        snapshotEvery              = config.getInt("eventsourced.snapshot-every")
+        userFunctionInterface = config.getString("user-function-interface"),
+        userFunctionPort = config.getInt("user-function-port"),
+        snapshotEvery = config.getInt("eventsourced.snapshot-every")
       )
     }
 
@@ -61,11 +61,12 @@ object CloudStateRunner {
  *
  * CloudStateRunner can be seen as a low-level API for cases where [[io.cloudstate.javasupport.CloudState.start()]] isn't enough.
  */
-final class CloudStateRunner private[this](_system: ActorSystem, services: Map[String, StatefulService]) {
+final class CloudStateRunner private[this] (_system: ActorSystem, services: Map[String, StatefulService]) {
   private[this] implicit final val system = _system
   private[this] implicit final val materializer: Materializer = ActorMaterializer()
 
-  private[this] final val configuration = new CloudStateRunner.Configuration(system.settings.config.getConfig("cloudstate"))
+  private[this] final val configuration =
+    new CloudStateRunner.Configuration(system.settings.config.getConfig("cloudstate"))
 
   // TODO JavaDoc
   def this(services: java.util.Map[String, StatefulService]) {
@@ -85,27 +86,27 @@ final class CloudStateRunner private[this](_system: ActorSystem, services: Map[S
 
   private[this] def createRoutes(): PartialFunction[HttpRequest, Future[HttpResponse]] = {
 
-    val serviceRoutes = services.groupBy(_._2.getClass).foldLeft(PartialFunction.empty[HttpRequest, Future[HttpResponse]]) {
+    val serviceRoutes =
+      services.groupBy(_._2.getClass).foldLeft(PartialFunction.empty[HttpRequest, Future[HttpResponse]]) {
 
-      case (route, (serviceClass, eventSourcedServices: Map[String, EventSourcedStatefulService] @unchecked))
-        if serviceClass == classOf[EventSourcedStatefulService] =>
+        case (route, (serviceClass, eventSourcedServices: Map[String, EventSourcedStatefulService] @unchecked))
+            if serviceClass == classOf[EventSourcedStatefulService] =>
           val eventSourcedImpl = new EventSourcedImpl(system, eventSourcedServices, rootContext, configuration)
           route orElse EventSourcedHandler.partial(eventSourcedImpl)
 
-      case (route, (serviceClass, crdtServices: Map[String, CrdtStatefulService] @unchecked))
-        if serviceClass == classOf[CrdtStatefulService] =>
-        val crdtImpl = new CrdtImpl(system, crdtServices, rootContext)
-        route orElse CrdtHandler.partial(crdtImpl)
+        case (route, (serviceClass, crdtServices: Map[String, CrdtStatefulService] @unchecked))
+            if serviceClass == classOf[CrdtStatefulService] =>
+          val crdtImpl = new CrdtImpl(system, crdtServices, rootContext)
+          route orElse CrdtHandler.partial(crdtImpl)
 
-      case (_, (serviceClass, _)) =>
-        sys.error(s"Unknown StatefulService: $serviceClass")
-    }
+        case (_, (serviceClass, _)) =>
+          sys.error(s"Unknown StatefulService: $serviceClass")
+      }
 
     val entityDiscovery = EntityDiscoveryHandler.partial(new EntityDiscoveryImpl(system, services))
 
     serviceRoutes orElse
-    entityDiscovery orElse
-    { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }
+    entityDiscovery orElse { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }
   }
 
   /**
@@ -114,17 +115,19 @@ final class CloudStateRunner private[this](_system: ActorSystem, services: Map[S
    * @return a CompletionStage which will be completed when the server has shut down.
    */
   def run(): CompletionStage[Done] = {
-    val serverBindingFuture = Http.get(system).bindAndHandleAsync(
-        createRoutes(),
-        configuration.userFunctionInterface,
-        configuration.userFunctionPort,
-        HttpConnectionContext(UseHttp2.Always))
+    val serverBindingFuture = Http
+      .get(system)
+      .bindAndHandleAsync(createRoutes(),
+                          configuration.userFunctionInterface,
+                          configuration.userFunctionPort,
+                          HttpConnectionContext(UseHttp2.Always))
     // FIXME Register an onTerminate callback to unbind the Http server
-    FutureConverters.
-      toJava(serverBindingFuture).
-      thenCompose(
+    FutureConverters
+      .toJava(serverBindingFuture)
+      .thenCompose(
         binding => system.getWhenTerminated.thenCompose(_ => FutureConverters.toJava(binding.unbind()))
-      ).thenApply(_ => Done)
+      )
+      .thenApply(_ => Done)
   }
 
   /**
@@ -141,6 +144,7 @@ final class CloudStateRunner private[this](_system: ActorSystem, services: Map[S
  * to deploy.
  */
 trait StatefulService {
+
   /**
    * @return a Protobuf ServiceDescriptor of its externally accessible gRPC API
    */
@@ -160,4 +164,3 @@ trait StatefulService {
   // TODO JavaDoc
   def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]]
 }
-

@@ -23,7 +23,19 @@ import play.api.libs.json._
 import skuber.json.format._
 import skuber.ResourceSpecification.Subresources
 import skuber.apiextensions.CustomResourceDefinition
-import skuber.{Container, CustomResource, EnvFromSource, EnvVar, Lifecycle, ListResource, Probe, Resource, ResourceDefinition, SecurityContext, Volume}
+import skuber.{
+  Container,
+  CustomResource,
+  EnvFromSource,
+  EnvVar,
+  Lifecycle,
+  ListResource,
+  Probe,
+  Resource,
+  ResourceDefinition,
+  SecurityContext,
+  Volume
+}
 
 object KnativeRevision {
 
@@ -33,12 +45,12 @@ object KnativeRevision {
   type ResourceList = ListResource[Resource]
 
   case class Spec(
-    containers: List[Container],
-    volumes: Option[List[Volume]],
-    serviceAccountName: Option[String],
-    containerConcurrency: Option[Long],
-    timeoutSeconds: Option[Long],
-    deployer: Option[Deployer]
+      containers: List[Container],
+      volumes: Option[List[Volume]],
+      serviceAccountName: Option[String],
+      containerConcurrency: Option[Long],
+      timeoutSeconds: Option[Long],
+      deployer: Option[Deployer]
   )
 
   object Spec {
@@ -51,37 +63,40 @@ object KnativeRevision {
       // So we need to be a little special in how we deal with that.
       val imagePullPolicyReads = (
         (JsPath \ "image").read[String] and
-          (JsPath \ "imagePullPolicy").formatNullableEnum(Container.PullPolicy)
-        ) ((image, pullPolicy) => pullPolicy.getOrElse {
-        if (image.endsWith(":latest")) Container.PullPolicy.Always else Container.PullPolicy.IfNotPresent
-      })
-      val imagePullPolicyFormat = OFormat(imagePullPolicyReads, (JsPath \ "imagePullPolicy").formatEnum(Container.PullPolicy))
+        (JsPath \ "imagePullPolicy").formatNullableEnum(Container.PullPolicy)
+      )(
+        (image, pullPolicy) =>
+          pullPolicy.getOrElse {
+            if (image.endsWith(":latest")) Container.PullPolicy.Always else Container.PullPolicy.IfNotPresent
+          }
+      )
+      val imagePullPolicyFormat =
+        OFormat(imagePullPolicyReads, (JsPath \ "imagePullPolicy").formatEnum(Container.PullPolicy))
 
       (
         (JsPath \ "name").formatWithDefault[String]("") and
-          (JsPath \ "image").format[String] and
-          (JsPath \ "command").formatMaybeEmptyList[String] and
-          (JsPath \ "args").formatMaybeEmptyList[String] and
-          (JsPath \ "workingDir").formatNullable[String] and
-          (JsPath \ "ports").formatMaybeEmptyList[Container.Port] and
-          (JsPath \ "env").formatMaybeEmptyList[EnvVar] and
-          (JsPath \ "resources").formatNullable[Resource.Requirements] and
-          (JsPath \ "volumeMounts").formatMaybeEmptyList[Volume.Mount] and
-          (JsPath \ "livenessProbe").formatNullable[Probe] and
-          (JsPath \ "readinessProbe").formatNullable[Probe] and
-          (JsPath \ "lifecycle").formatNullable[Lifecycle] and
-          (JsPath \ "terminationMessagePath").formatNullable[String] and
-          (JsPath \ "terminationMessagePolicy").formatNullableEnum(Container.TerminationMessagePolicy) and
-          imagePullPolicyFormat and
-          (JsPath \ "securityContext").formatNullable[SecurityContext] and
-          (JsPath \ "envFrom").formatMaybeEmptyList[EnvFromSource] and
-          (JsPath \ "stdin").formatNullable[Boolean] and
-          (JsPath \ "stdinOnce").formatNullable[Boolean] and
-          (JsPath \ "tty").formatNullable[Boolean] and
-          (JsPath \ "volumeDevices").formatMaybeEmptyList[Volume.Device]
-        ) (Container.apply, unlift(Container.unapply))
+        (JsPath \ "image").format[String] and
+        (JsPath \ "command").formatMaybeEmptyList[String] and
+        (JsPath \ "args").formatMaybeEmptyList[String] and
+        (JsPath \ "workingDir").formatNullable[String] and
+        (JsPath \ "ports").formatMaybeEmptyList[Container.Port] and
+        (JsPath \ "env").formatMaybeEmptyList[EnvVar] and
+        (JsPath \ "resources").formatNullable[Resource.Requirements] and
+        (JsPath \ "volumeMounts").formatMaybeEmptyList[Volume.Mount] and
+        (JsPath \ "livenessProbe").formatNullable[Probe] and
+        (JsPath \ "readinessProbe").formatNullable[Probe] and
+        (JsPath \ "lifecycle").formatNullable[Lifecycle] and
+        (JsPath \ "terminationMessagePath").formatNullable[String] and
+        (JsPath \ "terminationMessagePolicy").formatNullableEnum(Container.TerminationMessagePolicy) and
+        imagePullPolicyFormat and
+        (JsPath \ "securityContext").formatNullable[SecurityContext] and
+        (JsPath \ "envFrom").formatMaybeEmptyList[EnvFromSource] and
+        (JsPath \ "stdin").formatNullable[Boolean] and
+        (JsPath \ "stdinOnce").formatNullable[Boolean] and
+        (JsPath \ "tty").formatNullable[Boolean] and
+        (JsPath \ "volumeDevices").formatMaybeEmptyList[Volume.Device]
+      )(Container.apply, unlift(Container.unapply))
     }
-
 
     implicit val format: Format[Spec] = Json.format
   }
@@ -96,28 +111,32 @@ object KnativeRevision {
         case OperatorConstants.CloudStateDeployerName =>
           configPath.read[CloudStateDeployer].map(identity)
         case other =>
-          configPath.readNullable[JsValue]
+          configPath
+            .readNullable[JsValue]
             .map(config => UnknownDeployer(other, config))
       }
     }
 
     implicit val writes: Writes[Deployer] = (
       (__ \ "name").write[String] and
-        (__ \ "config").writeNullable[JsValue]
-      )((dep: Deployer) => dep match {
-      case KnativeServingDeployer => (KnativeServingDeployerName, None)
-      case es: CloudStateDeployer =>
-        (OperatorConstants.CloudStateDeployerName, Some(Json.toJson(es)(CloudStateDeployer.format)))
-      case UnknownDeployer(name, config) => (name, config)
-    })
+      (__ \ "config").writeNullable[JsValue]
+    )(
+      (dep: Deployer) =>
+        dep match {
+          case KnativeServingDeployer => (KnativeServingDeployerName, None)
+          case es: CloudStateDeployer =>
+            (OperatorConstants.CloudStateDeployerName, Some(Json.toJson(es)(CloudStateDeployer.format)))
+          case UnknownDeployer(name, config) => (name, config)
+        }
+    )
   }
 
   case object KnativeServingDeployer extends Deployer
 
   case class CloudStateDeployer(
-    journal: Journal,
-    sidecarResources: Option[Resource.Requirements],
-    sidecarJvmMemory: Option[String]
+      journal: Journal,
+      sidecarResources: Option[Resource.Requirements],
+      sidecarJvmMemory: Option[String]
   ) extends Deployer
 
   object CloudStateDeployer {
@@ -127,8 +146,8 @@ object KnativeRevision {
   case class UnknownDeployer(name: String, config: Option[JsValue]) extends Deployer
 
   case class Journal(
-    name: String,
-    config: Option[JsObject]
+      name: String,
+      config: Option[JsObject]
   )
 
   object Journal {
@@ -136,35 +155,37 @@ object KnativeRevision {
   }
 
   case class Status(
-    observedGeneration: Option[Long],
-    conditions: List[Condition],
-    serviceName: Option[String],
-    logUrl: Option[String],
-    imageDigest: Option[String]
+      observedGeneration: Option[Long],
+      conditions: List[Condition],
+      serviceName: Option[String],
+      logUrl: Option[String],
+      imageDigest: Option[String]
   )
 
   object Status {
     implicit val format: Format[Status] = (
       (__ \ "observedGeneration").formatNullable[Long] and
-        (__ \ "conditions").formatNullable[List[Condition]]
-          .inmap[List[Condition]](_.getOrElse(Nil), Some(_)) and
-        (__ \ "serviceName").formatNullable[String] and
-        (__ \ "logUrl").formatNullable[String] and
-        (__ \ "imageDigest").formatNullable[String]
-      ) (Status.apply, unlift(Status.unapply))
+      (__ \ "conditions")
+        .formatNullable[List[Condition]]
+        .inmap[List[Condition]](_.getOrElse(Nil), Some(_)) and
+      (__ \ "serviceName").formatNullable[String] and
+      (__ \ "logUrl").formatNullable[String] and
+      (__ \ "imageDigest").formatNullable[String]
+    )(Status.apply, unlift(Status.unapply))
   }
 
   case class Condition(
-    `type`: String,
-    status: String,
-    severity: Option[String] = None,
-    lastTransitionTime: Option[ZonedDateTime] = None,
-    reason: Option[String] = None,
-    message: Option[String] = None
+      `type`: String,
+      status: String,
+      severity: Option[String] = None,
+      lastTransitionTime: Option[ZonedDateTime] = None,
+      reason: Option[String] = None,
+      message: Option[String] = None
   )
 
   object Condition {
-    private implicit val timeFormat: Format[ZonedDateTime] = Format(skuber.json.format.timeReads, skuber.json.format.timewWrites)
+    private implicit val timeFormat: Format[ZonedDateTime] =
+      Format(skuber.json.format.timeReads, skuber.json.format.timewWrites)
     implicit val format: Format[Condition] = Json.format
   }
 
@@ -173,9 +194,7 @@ object KnativeRevision {
     version = KnativeServingVersion,
     kind = RevisionKind,
     shortNames = List("rev"),
-    subresources = Some(Subresources()
-      .withStatusSubresource
-    )
+    subresources = Some(Subresources().withStatusSubresource)
   )
 
   implicit val statusSubEnabled = CustomResource.statusMethodsEnabler[Resource]

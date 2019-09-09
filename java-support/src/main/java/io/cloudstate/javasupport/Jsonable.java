@@ -7,11 +7,8 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/**
- * Indicates that this class can be serialized to/from JSON.
- */
+/** Indicates that this class can be serialized to/from JSON. */
 @CloudStateAnnotation
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.TYPE)
-public @interface Jsonable {
-}
+public @interface Jsonable {}

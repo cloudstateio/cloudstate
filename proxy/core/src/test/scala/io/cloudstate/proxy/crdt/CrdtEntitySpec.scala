@@ -7,7 +7,6 @@ import io.cloudstate.proxy.entity.UserFunctionReply
 
 import scala.concurrent.duration._
 
-
 class CrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   import AbstractCrdtEntitySpec._
@@ -25,9 +24,8 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.pncounter.value
 
-  def updateCounter(update: Long) = {
+  def updateCounter(update: Long) =
     CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Pncounter(PNCounterDelta(update))))
-  }
 
   "The CrdtEntity" should {
 
@@ -138,8 +136,12 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
       update(_ :+ 6)
       toUserFunction.expectNoMessage(200.millis)
 
-      fromUserFunction ! CrdtStreamOut(CrdtStreamOut.Message.StreamCancelledResponse(
-        CrdtStreamCancelledResponse(cid, stateAction = Some(CrdtStateAction(CrdtWriteConsistency.LOCAL, updateCounter(3))))))
+      fromUserFunction ! CrdtStreamOut(
+        CrdtStreamOut.Message.StreamCancelledResponse(
+          CrdtStreamCancelledResponse(cid,
+                                      stateAction = Some(CrdtStateAction(CrdtWriteConsistency.LOCAL, updateCounter(3))))
+        )
+      )
 
       expectDelta().change should be(8)
       eventually {
@@ -166,8 +168,9 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
       update(_ :+ 6)
       toUserFunction.expectNoMessage(200.millis)
 
-      fromUserFunction ! CrdtStreamOut(CrdtStreamOut.Message.StreamCancelledResponse(
-        CrdtStreamCancelledResponse(cid, stateAction = None)))
+      fromUserFunction ! CrdtStreamOut(
+        CrdtStreamOut.Message.StreamCancelledResponse(CrdtStreamCancelledResponse(cid, stateAction = None))
+      )
 
       expectDelta().change should be(8)
       eventually {

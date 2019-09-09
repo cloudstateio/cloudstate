@@ -21,7 +21,7 @@ import java.time.ZonedDateTime
 import play.api.libs.json.{Format, Json}
 
 case class GenericStatus(
-  conditions: Option[List[Condition]]
+    conditions: Option[List[Condition]]
 )
 
 object GenericStatus {
@@ -29,16 +29,17 @@ object GenericStatus {
 }
 
 case class Condition(
-  `type`: String,
-  status: String,
-  reason: Option[String] = None,
-  message: Option[String] = None,
-  severity: Option[String] = None,
-  lastUpdateTime: Option[ZonedDateTime] = None,
-  lastTransitionTime: Option[ZonedDateTime] = None
+    `type`: String,
+    status: String,
+    reason: Option[String] = None,
+    message: Option[String] = None,
+    severity: Option[String] = None,
+    lastUpdateTime: Option[ZonedDateTime] = None,
+    lastTransitionTime: Option[ZonedDateTime] = None
 )
 
 object Condition {
-  private implicit val timeFormat: Format[ZonedDateTime] = Format(skuber.json.format.timeReads, skuber.json.format.timewWrites)
+  private implicit val timeFormat: Format[ZonedDateTime] =
+    Format(skuber.json.format.timeReads, skuber.json.format.timewWrites)
   implicit val format: Format[Condition] = Json.format
 }

@@ -54,22 +54,26 @@ private[impl] trait AbstractClientActionContext extends ClientActionContext {
     if (forward.isDefined) {
       throw new IllegalStateException("This context has already forwarded.")
     }
-    forward = Some(Forward(
-      serviceName = to.ref().method().getService.getFullName,
-      commandName = to.ref().method().getName,
-      payload = Some(ScalaPbAny.fromJavaProto(to.message())),
-    ))
+    forward = Some(
+      Forward(
+        serviceName = to.ref().method().getService.getFullName,
+        commandName = to.ref().method().getName,
+        payload = Some(ScalaPbAny.fromJavaProto(to.message()))
+      )
+    )
   }
 
   final def hasError: Boolean = error.isDefined
 
-  final def createClientAction(reply: Optional[JavaPbAny], allowNoReply: Boolean): Option[ClientAction] = {
+  final def createClientAction(reply: Optional[JavaPbAny], allowNoReply: Boolean): Option[ClientAction] =
     error match {
       case Some(msg) => Some(ClientAction(ClientAction.Action.Failure(Failure(commandId, msg))))
       case None =>
         if (reply.isPresent) {
           if (forward.isDefined) {
-            throw new IllegalStateException("Both a reply was returned, and a forward message was sent, choose one or the other.")
+            throw new IllegalStateException(
+              "Both a reply was returned, and a forward message was sent, choose one or the other."
+            )
           }
           Some(ClientAction(ClientAction.Action.Reply(Reply(Some(ScalaPbAny.fromJavaProto(reply.get()))))))
         } else if (forward.isDefined) {
@@ -80,8 +84,8 @@ private[impl] trait AbstractClientActionContext extends ClientActionContext {
           throw new RuntimeException("No reply or forward returned by command handler!")
         }
     }
-  }
 }
 
-object FailInvoked extends Throwable with NoStackTrace { override def toString: String = "CommandContext.fail(…) invoked" }
-
+object FailInvoked extends Throwable with NoStackTrace {
+  override def toString: String = "CommandContext.fail(…) invoked"
+}

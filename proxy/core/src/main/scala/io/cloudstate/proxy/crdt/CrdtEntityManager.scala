@@ -56,8 +56,9 @@ final class CrdtEntityManager(entityProps: Props) extends Actor with ActorLoggin
 
         if (queue.nonEmpty) {
           val entity = startEntity(actor.path.name)
-          queue.foreach { case (command, initiator) =>
-            entity.tell(command, initiator)
+          queue.foreach {
+            case (command, initiator) =>
+              entity.tell(command, initiator)
           }
         }
       }
@@ -76,9 +77,8 @@ final class CrdtEntityManager(entityProps: Props) extends Actor with ActorLoggin
       }
   }
 
-  private def startEntity(entityId: String) = {
+  private def startEntity(entityId: String) =
     context.watch(context.actorOf(entityProps, entityId))
-  }
 
   private def stopping(reportStopped: ActorRef): Receive = {
     case Terminated(actor) =>
@@ -90,8 +90,9 @@ final class CrdtEntityManager(entityProps: Props) extends Actor with ActorLoggin
         if (queue.nonEmpty) {
           // Restart so we can process just these messages
           val entity = startEntity(actor.path.name)
-          queue.foreach { case (command, initiator) =>
-            entity.tell(command, initiator)
+          queue.foreach {
+            case (command, initiator) =>
+              entity.tell(command, initiator)
           }
           // And then stop again
           entity ! CrdtEntity.Stop
@@ -104,10 +105,10 @@ final class CrdtEntityManager(entityProps: Props) extends Actor with ActorLoggin
       }
 
     case Passivate =>
-      // Ignore, we've already told all entities to stop
+    // Ignore, we've already told all entities to stop
 
     case Shutdown =>
-      // Ignore, we're already shutting down
+    // Ignore, we're already shutting down
 
     case command: EntityCommand =>
       log.warning("Received command {} for {} while shutting down, dropping.", command.name, command.entityId)

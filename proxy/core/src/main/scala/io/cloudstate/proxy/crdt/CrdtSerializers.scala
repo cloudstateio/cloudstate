@@ -6,7 +6,9 @@ import akka.serialization.{BaseSerializer, SerializerWithStringManifest}
 import com.google.protobuf.UnsafeByteOperations
 import io.cloudstate.proxy.crdt.protobufs.{CrdtVote, CrdtVoteEntry}
 
-class CrdtSerializers(override val system: ExtendedActorSystem) extends SerializerWithStringManifest with BaseSerializer {
+class CrdtSerializers(override val system: ExtendedActorSystem)
+    extends SerializerWithStringManifest
+    with BaseSerializer {
   override def manifest(o: AnyRef): String = o match {
     case v: Vote => "V"
   }
@@ -21,9 +23,17 @@ class CrdtSerializers(override val system: ExtendedActorSystem) extends Serializ
   }
 
   override def fromBinary(bytes: Array[Byte], manifest: String): AnyRef = manifest match {
-    case "V" => Vote(CrdtVote.parseFrom(bytes).entries.map { entry =>
-      (UniqueAddress(AddressFromURIString(entry.address), entry.uid), BigInt(entry.value.toByteArray))
-    }.toMap, None)
+    case "V" =>
+      Vote(
+        CrdtVote
+          .parseFrom(bytes)
+          .entries
+          .map { entry =>
+            (UniqueAddress(AddressFromURIString(entry.address), entry.uid), BigInt(entry.value.toByteArray))
+          }
+          .toMap,
+        None
+      )
     case _ => throw new RuntimeException(s"Don't know how to deserialize manifest [$manifest]")
   }
 }

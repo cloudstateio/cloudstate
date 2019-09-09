@@ -12,44 +12,53 @@ object PostgresStoreSupport extends StatefulStoreSupport {
 
   override def name: String = "Postgres"
 
-  override def validate(store: Resource, client: KubernetesClient): Validated[ConfiguredStatefulStore] = {
+  override def validate(store: Resource, client: KubernetesClient): Validated[ConfiguredStatefulStore] =
     store.spec.deployment match {
       case Some(`UnmanagedStatefulStoreDeployment`) =>
         store.spec.config.map(_.validate[PostgresConfig]) match {
 
           case None =>
-            Validated.error(StatefulStoreConditionType, "BadConfiguration",
-              s"Missing configuration for unmanaged Postgres store")
+            Validated.error(StatefulStoreConditionType,
+                            "BadConfiguration",
+                            s"Missing configuration for unmanaged Postgres store")
 
           case Some(JsError(errors)) =>
-            Validated.error(StatefulStoreConditionType, "BadConfiguration",
-              s"Configuration error in postgres store at ${errors.head._1}: ${errors.head._2.head.message}")
+            Validated.error(
+              StatefulStoreConditionType,
+              "BadConfiguration",
+              s"Configuration error in postgres store at ${errors.head._1}: ${errors.head._2.head.message}"
+            )
 
           case Some(JsSuccess(config, _)) =>
-
             // todo validate that any referenced secrets exist
             Validated(new UnmanagedPostgres(config))
 
         }
 
       case Some(unknown) =>
-        Validated.error(StatefulStoreConditionType, "UnknownDeploymentType",
-          s"Unknown Postgres deployment type: $unknown, supported types for Postgres are: $UnmanagedStatefulStoreDeployment")
+        Validated.error(
+          StatefulStoreConditionType,
+          "UnknownDeploymentType",
+          s"Unknown Postgres deployment type: $unknown, supported types for Postgres are: $UnmanagedStatefulStoreDeployment"
+        )
 
       case None =>
-        Validated.error(StatefulStoreConditionType, "UnspecifiedDeploymentType",
-          s"Unspecified Postgres deployment type, supported types for Postgres are: $UnmanagedStatefulStoreDeployment")
+        Validated.error(
+          StatefulStoreConditionType,
+          "UnspecifiedDeploymentType",
+          s"Unspecified Postgres deployment type, supported types for Postgres are: $UnmanagedStatefulStoreDeployment"
+        )
 
     }
 
-  }
-
-  override def reconcile(store: Resource, client: KubernetesClient): Validated[ConfiguredStatefulStore] = validate(store, client)
+  override def reconcile(store: Resource, client: KubernetesClient): Validated[ConfiguredStatefulStore] =
+    validate(store, client)
 
   private class UnmanagedPostgres(config: PostgresConfig) extends ConfiguredStatefulStore {
     override def successfulConditions: List[Condition] = Nil
 
-    override def validateInstance(jsConfig: Option[JsValue], client: KubernetesClient): Validated[StatefulStoreUsageConfiguration] = {
+    override def validateInstance(jsConfig: Option[JsValue],
+                                  client: KubernetesClient): Validated[StatefulStoreUsageConfiguration] = {
       val instanceSchema = jsConfig.flatMap(c => (c \ "schema").asOpt[String]).map(Value)
       val instanceConfig = config.copy(schema = instanceSchema.orElse(config.schema))
       Validated(new PostgresUsage(instanceConfig))
@@ -61,24 +70,29 @@ object PostgresStoreSupport extends StatefulStoreSupport {
 
     override def proxyImage(config: ImageConfig): String = config.postgres
 
-    override def proxyContainerEnvVars: List[EnvVar] = List(
-      EnvVar("POSTGRES_SERVICE", config.service),
-      EnvVar("POSTGRES_DATABASE", config.database.toEnvVar),
-      EnvVar("POSTGRES_USERNAME", config.username.toEnvVar),
-      EnvVar("POSTGRES_PASSWORD", config.password.toEnvVar)
-    ) ++ config.port.map(port => EnvVar("POSTGRES_PORT", port.toString)) ++
+    override def proxyContainerEnvVars: List[EnvVar] =
+      List(
+        EnvVar("POSTGRES_SERVICE", config.service),
+        EnvVar("POSTGRES_DATABASE", config.database.toEnvVar),
+        EnvVar("POSTGRES_USERNAME", config.username.toEnvVar),
+        EnvVar("POSTGRES_PASSWORD", config.password.toEnvVar)
+      ) ++ config.port.map(port => EnvVar("POSTGRES_PORT", port.toString)) ++
       config.schema.map(schema => EnvVar("POSTGRES_SCHEMA", schema.toEnvVar))
   }
 
-  case class PostgresConfig(service: String, port: Option[Int], database: CredentialParam, username: CredentialParam, password: CredentialParam, schema: Option[CredentialParam])
+  case class PostgresConfig(service: String,
+                            port: Option[Int],
+                            database: CredentialParam,
+                            username: CredentialParam,
+                            password: CredentialParam,
+                            schema: Option[CredentialParam])
 
-  implicit def postgresCredentialsReads: Reads[PostgresConfig] = {
+  implicit def postgresCredentialsReads: Reads[PostgresConfig] =
     ((__ \ "service").read[String] and
-      (__ \ "port").readNullable[Int] and
-      readCredentialParam("database") and
-      readCredentialParam("username") and
-      readCredentialParam("password") and
-      readOptionalCredentialParam("schema"))(PostgresConfig)
-  }
+    (__ \ "port").readNullable[Int] and
+    readCredentialParam("database") and
+    readCredentialParam("username") and
+    readCredentialParam("password") and
+    readOptionalCredentialParam("schema"))(PostgresConfig)
 
 }

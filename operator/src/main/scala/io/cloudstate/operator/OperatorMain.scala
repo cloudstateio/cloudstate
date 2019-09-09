@@ -28,8 +28,8 @@ import scala.collection.concurrent.TrieMap
 
 object OperatorMain extends App {
 
-  private val operatorNamespace = sys.env.getOrElse("NAMESPACE",
-    sys.error("No NAMESPACE environment variable configured!"))
+  private val operatorNamespace =
+    sys.env.getOrElse("NAMESPACE", sys.error("No NAMESPACE environment variable configured!"))
   private val configMapName = sys.env.getOrElse("CONFIG_MAP", "cloudstate-operator-config")
 
   implicit val system = ActorSystem()
@@ -49,7 +49,8 @@ object OperatorMain extends App {
 
   def maybeRestart(configMap: ConfigMap): Unit = {
     val configString = configMap.data.getOrElse("config", "")
-    val config = ConfigFactory.parseString(configString)
+    val config = ConfigFactory
+      .parseString(configString)
       .withFallback(ConfigFactory.defaultReference())
     val opConfig = OperatorConfig(config)
     if (!currentConfig.contains(opConfig)) {
@@ -74,7 +75,9 @@ object OperatorMain extends App {
     }
   }
 
-  Watcher.watchSingle[ConfigMap](client.usingNamespace(operatorNamespace), configMapName,
+  Watcher.watchSingle[ConfigMap](
+    client.usingNamespace(operatorNamespace),
+    configMapName,
     Flow[WatchEvent[ConfigMap]].map {
       case WatchEvent(EventType.ADDED, map) =>
         maybeRestart(map)
@@ -86,7 +89,8 @@ object OperatorMain extends App {
         currentlyRunning = None
         currentConfig = None
       case _ =>
-    })
+    }
+  )
 
   def watchConfiguredNamespaces(config: OperatorConfig): AutoCloseable = {
     val killSwitches = for {
@@ -100,33 +104,38 @@ object OperatorMain extends App {
   def watchAllNamespaces(config: OperatorConfig): AutoCloseable = {
     val namespaces = TrieMap.empty[String, List[KillSwitch]]
 
-    def watch(namespace: Namespace): Unit = {
+    def watch(namespace: Namespace): Unit =
       namespaces.put(namespace.name, runners.map(_.start(namespace.name, config)))
-    }
 
-    def unwatch(namespace: Namespace): Unit = {
+    def unwatch(namespace: Namespace): Unit =
       namespaces.get(namespace.name).foreach { killSwitches =>
         killSwitches.foreach(_.shutdown())
         namespaces.remove(namespace.name)
       }
-    }
 
-    val killSwitch = Watcher.watch[Namespace](client, Flow[WatchEvent[Namespace]].map {
-      case WatchEvent(EventType.ADDED, namespace) if !isWatchingDisabled(namespace) =>
-        println(s"Watching new namespace ${namespace.name}")
-        watch(namespace)
-      case WatchEvent(EventType.MODIFIED, namespace) if isWatchingDisabled(namespace) && namespaces.contains(namespace.name) =>
-        println(s"Namespace ${namespace.name} has had io.cloudstate/watch=disabled annotation added to it, stopping watcher.")
-        unwatch(namespace)
-      case WatchEvent(EventType.MODIFIED, namespace) if !isWatchingDisabled(namespace) && !namespaces.contains(namespace.name) =>
-        println(s"Watching namespace ${namespace.name}")
-        watch(namespace)
-      case WatchEvent(EventType.DELETED, namespace) if namespaces.contains(namespace.name) =>
-        println(s"Namespace ${namespace.name} has been deleted, stopping watcher.")
-        unwatch(namespace)
-      case _ =>
-        ()
-    })
+    val killSwitch = Watcher.watch[Namespace](
+      client,
+      Flow[WatchEvent[Namespace]].map {
+        case WatchEvent(EventType.ADDED, namespace) if !isWatchingDisabled(namespace) =>
+          println(s"Watching new namespace ${namespace.name}")
+          watch(namespace)
+        case WatchEvent(EventType.MODIFIED, namespace)
+            if isWatchingDisabled(namespace) && namespaces.contains(namespace.name) =>
+          println(
+            s"Namespace ${namespace.name} has had io.cloudstate/watch=disabled annotation added to it, stopping watcher."
+          )
+          unwatch(namespace)
+        case WatchEvent(EventType.MODIFIED, namespace)
+            if !isWatchingDisabled(namespace) && !namespaces.contains(namespace.name) =>
+          println(s"Watching namespace ${namespace.name}")
+          watch(namespace)
+        case WatchEvent(EventType.DELETED, namespace) if namespaces.contains(namespace.name) =>
+          println(s"Namespace ${namespace.name} has been deleted, stopping watcher.")
+          unwatch(namespace)
+        case _ =>
+          ()
+      }
+    )
 
     () => {
       killSwitch.shutdown()
@@ -136,7 +145,6 @@ object OperatorMain extends App {
     }
   }
 
-  private def isWatchingDisabled(namespace: Namespace): Boolean = {
+  private def isWatchingDisabled(namespace: Namespace): Boolean =
     namespace.metadata.annotations.get("cloudstate.io/watch").contains("disabled")
-  }
 }

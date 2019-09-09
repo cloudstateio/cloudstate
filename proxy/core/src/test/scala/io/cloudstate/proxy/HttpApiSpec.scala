@@ -43,46 +43,53 @@ class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
     override def reportError(in: UserFunctionError): Future[Empty] = ???
   }
 
-  def assertConfigurationFailure(d: FileDescriptor, n: String, msg: String): Assertion = {
+  def assertConfigurationFailure(d: FileDescriptor, n: String, msg: String): Assertion =
     intercept[ConfigurationException] {
       val service = d.findServiceByName(n)
-      service must not be(null)
+      service must not be (null)
       val probe = TestProbe().ref
-      val entity = ServableEntity(service.getFullName, service, new UserFunctionTypeSupport {
-        override def handler(command: String): Flow[UserFunctionCommand, UserFunctionReply, NotUsed] =
-          Flow[UserFunctionCommand].mapAsync(1)(handleUnary)
-        override def handleUnary(command: UserFunctionCommand): Future[UserFunctionReply] =
-          (probe ? command).mapTo[UserFunctionReply]
-      })
+      val entity = ServableEntity(
+        service.getFullName,
+        service,
+        new UserFunctionTypeSupport {
+          override def handler(command: String): Flow[UserFunctionCommand, UserFunctionReply, NotUsed] =
+            Flow[UserFunctionCommand].mapAsync(1)(handleUnary)
+          override def handleUnary(command: UserFunctionCommand): Future[UserFunctionReply] =
+            (probe ? command).mapTo[UserFunctionReply]
+        }
+      )
       HttpApi.serve(new UserFunctionRouter(Seq(entity), mockEntityDiscovery), Seq(entity), mockEntityDiscovery)
     }.getMessage must equal(msg)
-  }
 
   "HTTP API" must {
     "not allow empty patterns" in {
       assertConfigurationFailure(
-        IllegalHttpConfig0.IllegalHttpConfig0Proto.javaDescriptor, "IllegalHttpConfig0",
+        IllegalHttpConfig0.IllegalHttpConfig0Proto.javaDescriptor,
+        "IllegalHttpConfig0",
         "HTTP API Config: Pattern missing for rule [HttpRule(,,,Vector(),Empty)]!"
       )
     }
 
     "not allow selectors which do not exist as service methods" in {
       assertConfigurationFailure(
-        IllegalHttpConfig1.IllegalHttpConfig1Proto.javaDescriptor, "IllegalHttpConfig1",
+        IllegalHttpConfig1.IllegalHttpConfig1Proto.javaDescriptor,
+        "IllegalHttpConfig1",
         "HTTP API Config: Rule selector [wrongSelector] must be empty or [cloudstate.proxy.test.IllegalHttpConfig1.fail]"
       )
     }
 
     "not allow patterns which do not start with slash" in {
       assertConfigurationFailure(
-        IllegalHttpConfig2.IllegalHttpConfig2Proto.javaDescriptor, "IllegalHttpConfig2",
+        IllegalHttpConfig2.IllegalHttpConfig2Proto.javaDescriptor,
+        "IllegalHttpConfig2",
         "HTTP API Config: Configured pattern [no/initial/slash] does not start with slash"
       )
     }
 
     "not allow path extractors which refer to repeated fields" in {
       assertConfigurationFailure(
-        IllegalHttpConfig3.IllegalHttpConfig3Proto.javaDescriptor, "IllegalHttpConfig3",
+        IllegalHttpConfig3.IllegalHttpConfig3Proto.javaDescriptor,
+        "IllegalHttpConfig3",
         "HTTP API Config: Repeated parameters [cloudstate.proxy.test.IllegalHttpConfig3Message.illegal_repeated] are not allowed as path variables"
       )
     }
@@ -91,42 +98,48 @@ class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
 
     "not allow path extractors to be duplicated in the same rule" in {
       assertConfigurationFailure(
-        IllegalHttpConfig4.IllegalHttpConfig4Proto.javaDescriptor, "IllegalHttpConfig4",
+        IllegalHttpConfig4.IllegalHttpConfig4Proto.javaDescriptor,
+        "IllegalHttpConfig4",
         "HTTP API Config: Path parameter [duplicated] occurs more than once"
       )
     }
 
     "not allow custom non-* custom kinds" in {
       assertConfigurationFailure(
-        IllegalHttpConfig5.IllegalHttpConfig5Proto.javaDescriptor, "IllegalHttpConfig5",
+        IllegalHttpConfig5.IllegalHttpConfig5Proto.javaDescriptor,
+        "IllegalHttpConfig5",
         "HTTP API Config: Only Custom patterns with [*] kind supported but [not currently supported] found!"
       )
     }
 
     "not allow fieldName body-selector which does not exist on request type" in {
       assertConfigurationFailure(
-        IllegalHttpConfig6.IllegalHttpConfig6Proto.javaDescriptor, "IllegalHttpConfig6",
+        IllegalHttpConfig6.IllegalHttpConfig6Proto.javaDescriptor,
+        "IllegalHttpConfig6",
         "HTTP API Config: Body configured to [not-available] but that field does not exist on input type."
       )
     }
 
     "not allow repeated fields in body-selector" in {
       assertConfigurationFailure(
-        IllegalHttpConfig7.IllegalHttpConfig7Proto.javaDescriptor, "IllegalHttpConfig7",
+        IllegalHttpConfig7.IllegalHttpConfig7Proto.javaDescriptor,
+        "IllegalHttpConfig7",
         "HTTP API Config: Body configured to [not_allowed] but that field does not exist on input type."
       )
     }
 
     "not allow fieldName responseBody-selector which does not exist on response type" in {
       assertConfigurationFailure(
-        IllegalHttpConfig8.IllegalHttpConfig8Proto.javaDescriptor, "IllegalHttpConfig8",
+        IllegalHttpConfig8.IllegalHttpConfig8Proto.javaDescriptor,
+        "IllegalHttpConfig8",
         "HTTP API Config: Response body field [not-available] does not exist on type [google.protobuf.Empty]"
       )
     }
 
     "not allow more than one level of additionalBindings" in {
       assertConfigurationFailure(
-        IllegalHttpConfig9.IllegalHttpConfig9Proto.javaDescriptor, "IllegalHttpConfig9",
+        IllegalHttpConfig9.IllegalHttpConfig9Proto.javaDescriptor,
+        "IllegalHttpConfig9",
         "HTTP API Config: Only one level of additionalBindings supported, but [HttpRule(,,,Vector(HttpRule(,,,Vector(HttpRule(,,,Vector(),Get(/baz))),Get(/bar))),Get(/foo))] has more than one!"
       )
     }

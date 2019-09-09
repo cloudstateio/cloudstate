@@ -10,32 +10,31 @@ import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
-class UserFunctionRouter(entities: Seq[ServableEntity], entityDiscovery: EntityDiscovery)(implicit mat: Materializer, ec: ExecutionContext) {
+class UserFunctionRouter(entities: Seq[ServableEntity], entityDiscovery: EntityDiscovery)(implicit mat: Materializer,
+                                                                                          ec: ExecutionContext) {
 
   private[this] final val entityCommands = entities.map {
     case ServableEntity(serviceName, serviceDescriptor, entitySupport) =>
-      serviceName -> EntityCommands(serviceName, entitySupport,
-        serviceDescriptor.getMethods.asScala.map(_.getName).toSet)
+      serviceName -> EntityCommands(serviceName,
+                                    entitySupport,
+                                    serviceDescriptor.getMethods.asScala.map(_.getName).toSet)
   }.toMap
 
-  def handle(serviceName: String): Flow[UserFunctionCommand, UserFunctionReply, NotUsed] = {
+  def handle(serviceName: String): Flow[UserFunctionCommand, UserFunctionReply, NotUsed] =
     Flow[UserFunctionCommand].flatMapConcat { command =>
       routeMessage(Nil, RouteReason.Initial, serviceName, command.name, command.payload, synchronous = true)
     }
-  }
 
-  def handleUnary(serviceName: String, command: UserFunctionCommand): Future[UserFunctionReply] = {
+  def handleUnary(serviceName: String, command: UserFunctionCommand): Future[UserFunctionReply] =
     routeMessageUnary(Nil, RouteReason.Initial, serviceName, command.name, command.payload)
-  }
 
-  private def route(trace: List[(RouteReason, String, String)]): Flow[UserFunctionReply, UserFunctionReply, NotUsed] = {
-
+  private def route(trace: List[(RouteReason, String, String)]): Flow[UserFunctionReply, UserFunctionReply, NotUsed] =
     Flow[UserFunctionReply].flatMapConcat { response =>
       val sideEffects = Source(response.sideEffects.toList)
-          .flatMapConcat {
-            case SideEffect(serviceName, commandName, payload, synchronous) =>
-              routeMessage(trace, RouteReason.SideEffect, serviceName, commandName, payload, synchronous)
-          }
+        .flatMapConcat {
+          case SideEffect(serviceName, commandName, payload, synchronous) =>
+            routeMessage(trace, RouteReason.SideEffect, serviceName, commandName, payload, synchronous)
+        }
 
       val nextAction = response.clientAction match {
         case Some(ClientAction(ClientAction.Action.Forward(Forward(serviceName, commandName, payload)))) =>
@@ -47,15 +46,20 @@ class UserFunctionRouter(entities: Seq[ServableEntity], entityDiscovery: EntityD
       }
 
       // First do the side effects, but ignore the response, then do the next action
-      sideEffects.filter(_ => false)
+      sideEffects
+        .filter(_ => false)
         .concat(nextAction)
     }
-  }
 
-  private def routeUnary(trace: List[(RouteReason, String, String)], response: UserFunctionReply): Future[UserFunctionReply] = {
+  private def routeUnary(trace: List[(RouteReason, String, String)],
+                         response: UserFunctionReply): Future[UserFunctionReply] = {
     val afterSideEffects = response.sideEffects.foldLeft(Future.successful[Any](())) { (future, sideEffect) =>
       future.flatMap { _ =>
-        val sideEffectFuture = routeMessageUnary(trace, RouteReason.SideEffect, sideEffect.serviceName, sideEffect.commandName, sideEffect.payload)
+        val sideEffectFuture = routeMessageUnary(trace,
+                                                 RouteReason.SideEffect,
+                                                 sideEffect.serviceName,
+                                                 sideEffect.commandName,
+                                                 sideEffect.payload)
         if (sideEffect.synchronous) {
           sideEffectFuture
         } else {
@@ -74,13 +78,18 @@ class UserFunctionRouter(entities: Seq[ServableEntity], entityDiscovery: EntityD
     }
   }
 
-  private def routeMessage(trace: List[(RouteReason, String, String)], routeReason: RouteReason, serviceName: String, commandName: String,
-    payload: Option[com.google.protobuf.any.Any], synchronous: Boolean): Source[UserFunctionReply, NotUsed] = {
+  private def routeMessage(trace: List[(RouteReason, String, String)],
+                           routeReason: RouteReason,
+                           serviceName: String,
+                           commandName: String,
+                           payload: Option[com.google.protobuf.any.Any],
+                           synchronous: Boolean): Source[UserFunctionReply, NotUsed] = {
 
     val source = entityCommands.get(serviceName) match {
       case Some(EntityCommands(_, entitySupport, commands)) =>
         if (commands(commandName)) {
-          Source.single(UserFunctionCommand(commandName, payload))
+          Source
+            .single(UserFunctionCommand(commandName, payload))
             .via(entitySupport.handler(commandName))
             .via(route((routeReason, serviceName, commandName) :: trace))
         } else {
@@ -101,9 +110,11 @@ class UserFunctionRouter(entities: Seq[ServableEntity], entityDiscovery: EntityD
     }
   }
 
-  private def routeMessageUnary(trace: List[(RouteReason, String, String)], routeReason: RouteReason, serviceName: String, commandName: String,
-    payload: Option[com.google.protobuf.any.Any]): Future[UserFunctionReply] = {
-
+  private def routeMessageUnary(trace: List[(RouteReason, String, String)],
+                                routeReason: RouteReason,
+                                serviceName: String,
+                                commandName: String,
+                                payload: Option[com.google.protobuf.any.Any]): Future[UserFunctionReply] =
     entityCommands.get(serviceName) match {
       case Some(EntityCommands(_, entitySupport, commands)) =>
         if (commands(commandName)) {
@@ -116,27 +127,32 @@ class UserFunctionRouter(entities: Seq[ServableEntity], entityDiscovery: EntityD
       case None =>
         reportErrorUnary(routeReason, trace, s"Service [$serviceName] unknown")
     }
-  }
 
-  private def reportError(routeReason: RouteReason, trace: List[(RouteReason, String, String)], error: String): Exception = {
+  private def reportError(routeReason: RouteReason,
+                          trace: List[(RouteReason, String, String)],
+                          error: String): Exception = {
     val firstReason = if (routeReason == RouteReason.Initial) "" else s"\n  ${routeReason.trace}"
 
-    val errorWithTrace = trace.map {
-      case (RouteReason.Initial, service, command) => s"$service.$command"
-      case (reason, service, command) => s"$service.$command\n  ${reason.trace} "
-    }.mkString(error + firstReason, "", "")
+    val errorWithTrace = trace
+      .map {
+        case (RouteReason.Initial, service, command) => s"$service.$command"
+        case (reason, service, command) => s"$service.$command\n  ${reason.trace} "
+      }
+      .mkString(error + firstReason, "", "")
 
     entityDiscovery.reportError(UserFunctionError(errorWithTrace))
     new Exception("Error")
   }
 
-  private def reportErrorSource(routeReason: RouteReason, trace: List[(RouteReason, String, String)], error: String): Source[Nothing, NotUsed] = {
+  private def reportErrorSource(routeReason: RouteReason,
+                                trace: List[(RouteReason, String, String)],
+                                error: String): Source[Nothing, NotUsed] =
     Source.failed(reportError(routeReason, trace, error))
-  }
 
-  private def reportErrorUnary(routeReason: RouteReason, trace: List[(RouteReason, String, String)], error: String): Future[Nothing] = {
+  private def reportErrorUnary(routeReason: RouteReason,
+                               trace: List[(RouteReason, String, String)],
+                               error: String): Future[Nothing] =
     Future.failed(reportError(routeReason, trace, error))
-  }
 
 }
 
@@ -156,4 +172,3 @@ private object RouteReason {
     override val trace = ""
   }
 }
-

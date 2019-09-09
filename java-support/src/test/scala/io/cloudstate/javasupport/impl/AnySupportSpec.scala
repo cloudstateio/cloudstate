@@ -12,8 +12,10 @@ import scala.beans.BeanProperty
 class AnySupportSpec extends WordSpec with Matchers with OptionValues {
 
   private val anySupport = new AnySupport(Array(Shoppingcart.getDescriptor, EventSourcedProto.javaDescriptor),
-    getClass.getClassLoader, "com.example")
-  private val addLineItem = Shoppingcart.AddLineItem.newBuilder()
+                                          getClass.getClassLoader,
+                                          "com.example")
+  private val addLineItem = Shoppingcart.AddLineItem
+    .newBuilder()
     .setName("item")
     .setProductId("id")
     .setQuantity(10)
@@ -35,8 +37,7 @@ class AnySupportSpec extends WordSpec with Matchers with OptionValues {
     }
 
     "support resolving a service descriptor" in {
-      val methods = anySupport.resolveServiceDescriptor(
-        Shoppingcart.getDescriptor.findServiceByName("ShoppingCart"))
+      val methods = anySupport.resolveServiceDescriptor(Shoppingcart.getDescriptor.findServiceByName("ShoppingCart"))
       methods should have size 3
       val method = methods("AddItem")
 
@@ -67,7 +68,7 @@ class AnySupportSpec extends WordSpec with Matchers with OptionValues {
 
     "support se/deserializing strings" in testPrimitive("string", "foo", "")
     "support se/deserializing ints" in testPrimitive("int32", 10, 0)
-    "support se/deserializing longs" in testPrimitive("int64", 10l, 0l)
+    "support se/deserializing longs" in testPrimitive("int64", 10L, 0L)
     "support se/deserializing floats" in testPrimitive("float", 0.5f, 0f)
     "support se/deserializing doubles" in testPrimitive("double", 0.5d, 0d)
     "support se/deserializing bytes" in testPrimitive("bytes", ByteString.copyFromUtf8("foo"), ByteString.EMPTY)

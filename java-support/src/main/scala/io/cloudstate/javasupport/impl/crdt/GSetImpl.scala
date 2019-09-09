@@ -10,7 +10,10 @@ import com.google.protobuf.any.{Any => ScalaPbAny}
 
 import scala.collection.JavaConverters._
 
-private[crdt] final class GSetImpl[T](anySupport: AnySupport) extends util.AbstractSet[T] with InternalCrdt with GSet[T] {
+private[crdt] final class GSetImpl[T](anySupport: AnySupport)
+    extends util.AbstractSet[T]
+    with InternalCrdt
+    with GSet[T] {
   override final val name = "GSet"
   private val value = new util.HashSet[T]()
   private val added = new util.HashSet[ScalaPbAny]()
@@ -21,12 +24,13 @@ private[crdt] final class GSetImpl[T](anySupport: AnySupport) extends util.Abstr
 
   override def contains(o: Any): Boolean = value.contains(o)
 
-  override def add(e: T): Boolean = if (value.contains(e)) {
-    false
-  } else {
-    added.add(anySupport.encodeScala(e))
-    value.add(e)
-  }
+  override def add(e: T): Boolean =
+    if (value.contains(e)) {
+      false
+    } else {
+      added.add(anySupport.encodeScala(e))
+      value.add(e)
+    }
 
   override def remove(o: Any): Boolean = throw new UnsupportedOperationException("Cannot remove elements from a GSet")
 
@@ -34,9 +38,10 @@ private[crdt] final class GSetImpl[T](anySupport: AnySupport) extends util.Abstr
 
   override def hasDelta: Boolean = !added.isEmpty
 
-  override def delta: Option[CrdtDelta.Delta] = if (hasDelta) {
-    Some(CrdtDelta.Delta.Gset(GSetDelta(added.asScala.toVector)))
-  } else None
+  override def delta: Option[CrdtDelta.Delta] =
+    if (hasDelta) {
+      Some(CrdtDelta.Delta.Gset(GSetDelta(added.asScala.toVector)))
+    } else None
 
   override def resetDelta(): Unit = added.clear()
 

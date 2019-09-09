@@ -26,7 +26,8 @@ import io.cloudstate.javasupport.{BuildInfo, StatefulService}
 class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, StatefulService]) extends EntityDiscovery {
 
   private val serviceInfo = ServiceInfo(
-    serviceRuntime = sys.props.getOrElse("java.runtime.name", "") + " " + sys.props.getOrElse("java.runtime.version", ""),
+    serviceRuntime = sys.props.getOrElse("java.runtime.name", "") + " " + sys.props.getOrElse("java.runtime.version",
+                                                                                              ""),
     supportLibraryName = BuildInfo.name,
     supportLibraryVersion = BuildInfo.version
   )
@@ -35,20 +36,26 @@ class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, StatefulSer
    * Discover what entities the user function wishes to serve.
    */
   override def discover(in: ProxyInfo): scala.concurrent.Future[EntitySpec] = {
-    system.log.info(s"Received discovery call from sidecar [${in.proxyName} ${in.proxyVersion}] supporting CloudState ${in.protocolMajorVersion}.${in.protocolMinorVersion}")
-    system.log.debug(s"Supported sidecar entity types: ${in.supportedEntityTypes.mkString("[",",","]")}")
+    system.log.info(
+      s"Received discovery call from sidecar [${in.proxyName} ${in.proxyVersion}] supporting CloudState ${in.protocolMajorVersion}.${in.protocolMinorVersion}"
+    )
+    system.log.debug(s"Supported sidecar entity types: ${in.supportedEntityTypes.mkString("[", ",", "]")}")
 
     val unsupportedServices = services.values.filterNot { service =>
       in.supportedEntityTypes.contains(service.entityType)
     }
 
     if (unsupportedServices.nonEmpty) {
-      system.log.error("Proxy doesn't support the entity types for the following services: " + unsupportedServices.map(s => s.descriptor.getFullName + ": " + s.entityType).mkString(", "))
+      system.log.error(
+        "Proxy doesn't support the entity types for the following services: " + unsupportedServices
+          .map(s => s.descriptor.getFullName + ": " + s.entityType)
+          .mkString(", ")
+      )
       // Don't fail though. The proxy may give us more information as to why it doesn't support them if we send back unsupported services.
       // eg, the proxy doesn't have a configured journal, and so can't support event sourcing.
     }
 
-    if ( false ) // TODO verify compatibility with in.protocolMajorVersion & in.protocolMinorVersion
+    if (false) // TODO verify compatibility with in.protocolMajorVersion & in.protocolMinorVersion
       Future.failed(new Exception("Proxy version not compatible with library protocol support version"))
     else {
       val allDescriptors = AnySupport.flattenDescriptors(services.values.map(_.descriptor.getFile).toSeq)
@@ -64,7 +71,7 @@ class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, StatefulSer
       Future.successful(EntitySpec(fileDescriptorSet, entities, Some(serviceInfo)))
     }
   }
-  
+
   /**
    * Report an error back to the user function. This will only be invoked to tell the user function
    * that it has done something wrong, eg, violated the protocol, tried to use an entity type that

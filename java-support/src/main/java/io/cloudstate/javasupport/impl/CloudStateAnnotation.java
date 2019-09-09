@@ -5,10 +5,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/**
- * Mark annotation for all CloudState annotations
- */
+/** Mark annotation for all CloudState annotations */
 @Target(ElementType.ANNOTATION_TYPE)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface CloudStateAnnotation {
-}
+public @interface CloudStateAnnotation {}

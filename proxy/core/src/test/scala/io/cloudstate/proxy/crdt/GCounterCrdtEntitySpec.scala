@@ -6,7 +6,6 @@ import io.cloudstate.protocol.entity.UserFunctionError
 
 import scala.concurrent.duration._
 
-
 class GCounterCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   import AbstractCrdtEntitySpec._
@@ -23,13 +22,11 @@ class GCounterCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.gcounter.value
 
-  def create(value: Long) = {
+  def create(value: Long) =
     CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Gcounter(GCounterState(value))))
-  }
 
-  def updateCounter(increment: Long) = {
+  def updateCounter(increment: Long) =
     CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Gcounter(GCounterDelta(increment))))
-  }
 
   "The GCounter CrdtEntity" should {
 

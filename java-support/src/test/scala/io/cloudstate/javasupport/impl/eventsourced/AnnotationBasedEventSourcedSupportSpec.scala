@@ -14,7 +14,8 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
 
   trait BaseContext extends Context {
     override def serviceCallFactory(): ServiceCallFactory = new ServiceCallFactory {
-      override def lookup[T](serviceName: String, methodName: String, messageType: Class[T]): ServiceCallRef[T] = throw new NoSuchElementException
+      override def lookup[T](serviceName: String, methodName: String, messageType: Class[T]): ServiceCallRef[T] =
+        throw new NoSuchElementException
     }
   }
 
@@ -55,22 +56,22 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
 
   case class Wrapped(value: String)
   val anySupport = new AnySupport(Array(Shoppingcart.getDescriptor), this.getClass.getClassLoader)
-  val descriptor = Shoppingcart.getDescriptor.findServiceByName("ShoppingCart")
+  val descriptor = Shoppingcart.getDescriptor
+    .findServiceByName("ShoppingCart")
     .findMethodByName("AddItem")
   val method = ResolvedServiceMethod(descriptor, StringResolvedType, WrappedResolvedType)
 
-  def create(behavior: AnyRef, methods: ResolvedServiceMethod[_, _]*) = {
-    new AnnotationBasedEventSourcedSupport(behavior.getClass, anySupport, methods.map(m => m.descriptor.getName -> m).toMap,
-      Some(_ => behavior)).create(MockContext)
-  }
+  def create(behavior: AnyRef, methods: ResolvedServiceMethod[_, _]*) =
+    new AnnotationBasedEventSourcedSupport(behavior.getClass,
+                                           anySupport,
+                                           methods.map(m => m.descriptor.getName -> m).toMap,
+                                           Some(_ => behavior)).create(MockContext)
 
-  def create(clazz: Class[_]) = {
+  def create(clazz: Class[_]) =
     new AnnotationBasedEventSourcedSupport(clazz, anySupport, Map.empty, None).create(MockContext)
-  }
 
-  def command(str: String) = {
+  def command(str: String) =
     ScalaPbAny.toJavaProto(ScalaPbAny(StringResolvedType.typeUrl, StringResolvedType.toByteString(str)))
-  }
 
   def decodeWrapped(any: JavaPbAny) = {
     any.getTypeUrl should ===(WrappedResolvedType.typeUrl)
@@ -134,7 +135,7 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
           @EventHandler
           def handle(@EntityId eid: String, event: String, ctx: EventContext) = {
             event should ===("my-event")
-            eid should===("foo")
+            eid should ===("foo")
             ctx.sequenceNumber() shouldBe 10
             invoked = true
           }
@@ -244,14 +245,17 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
       }
 
       "multi arg command handler" in {
-        val handler = create(new {
-          @CommandHandler
-          def addItem(msg: String, @EntityId eid: String, ctx: CommandContext) = {
-            eid should ===("foo")
-            ctx.commandName() should ===("AddItem")
-            Wrapped(msg)
-          }
-        }, method)
+        val handler = create(
+          new {
+            @CommandHandler
+            def addItem(msg: String, @EntityId eid: String, ctx: CommandContext) = {
+              eid should ===("foo")
+              ctx.commandName() should ===("AddItem")
+              Wrapped(msg)
+            }
+          },
+          method
+        )
         decodeWrapped(handler.handleCommand(command("blah"), new MockCommandContext).get) should ===(Wrapped("blah"))
       }
 
@@ -272,41 +276,36 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
       "fail if there's a bad context type" in {
         a[RuntimeException] should be thrownBy create(new {
           @CommandHandler
-          def addItem(msg: String, ctx: EventContext) = {
+          def addItem(msg: String, ctx: EventContext) =
             Wrapped(msg)
-          }
         }, method)
       }
 
       "fail if there's two command handlers for the same command" in {
         a[RuntimeException] should be thrownBy create(new {
           @CommandHandler
-          def addItem(msg: String, ctx: CommandContext) = {
+          def addItem(msg: String, ctx: CommandContext) =
             Wrapped(msg)
-          }
           @CommandHandler
-          def addItem(msg: String) = {
+          def addItem(msg: String) =
             Wrapped(msg)
-          }
         }, method)
       }
 
       "fail if there's no command with that name" in {
         a[RuntimeException] should be thrownBy create(new {
           @CommandHandler
-          def wrongName(msg: String) = {
+          def wrongName(msg: String) =
             Wrapped(msg)
-          }
         }, method)
       }
 
       "fail if there's a CRDT command handler" in {
         val ex = the[RuntimeException] thrownBy create(new {
-          @io.cloudstate.javasupport.crdt.CommandHandler
-          def addItem(msg: String) = {
-            Wrapped(msg)
-          }
-        }, method)
+            @io.cloudstate.javasupport.crdt.CommandHandler
+            def addItem(msg: String) =
+              Wrapped(msg)
+          }, method)
         ex.getMessage should include("Did you mean")
         ex.getMessage should include(classOf[CommandHandler].getName)
       }
@@ -316,7 +315,7 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
           @CommandHandler
           def addItem(): Wrapped = throw new RuntimeException("foo")
         }, method)
-        val ex = the [RuntimeException] thrownBy handler.handleCommand(command("nothing"), new MockCommandContext)
+        val ex = the[RuntimeException] thrownBy handler.handleCommand(command("nothing"), new MockCommandContext)
         ex.getMessage should ===("foo")
       }
 
@@ -477,5 +476,3 @@ private class MultiArgConstructorTest(ctx: EventSourcedContext, @EntityId entity
 
 @EventSourcedEntity
 private class UnsupportedConstructorParameter(foo: String)
-
-
