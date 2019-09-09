@@ -144,7 +144,7 @@ In [CRDTs](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type), _s
 
 In Key-Value, the _state out_ is the key and _state in_ the value.
 
-While most developers have worked with Key-Value stores, Event Sourcing and CRDTs might be a bit unfamiliar. What's interesting is that they fit an event-driven model vely well and while being on the opposite sides of the state consistency spectrum, with the former gives strong (ACID) consistency (through event logging) while the latter eventual/causal consistency. Together they give us a wide range of options for managing distributed state in a consistent fashion by allowing you to choose the optimal model for the specific use-case and data set[^7]. 
+While most developers have worked with Key-Value stores, Event Sourcing and CRDTs might be a bit unfamiliar. What's interesting is that they fit an event-driven model very well and while being on the opposite sides of the state consistency spectrum, with the former gives strong (ACID) consistency (through event logging) while the latter eventual/causal consistency. Together they give us a wide range of options for managing distributed state in a consistent fashion by allowing you to choose the optimal model for the specific use-case and data set[^7]. 
 
 ### High-level design
 
