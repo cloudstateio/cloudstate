@@ -76,7 +76,7 @@ Here's an example of a command handler that emits an event:
 
 @@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #add-item }
 
-This command handler also validates the command, ensuring the quantity items added is greater than zero. Invoking extref:[`fail`](jsdoc:EventSourced.EventSourcedCommandContext.html#fail) fails the command - this method throws so there's no need to explicitly throw an exception.
+This command handler also validates the command, ensuring the quantity items added is greater than zero. Invoking @extref:[`fail`](jsdoc:EventSourced.EventSourcedCommandContext.html#fail) fails the command - this method throws so there's no need to explicitly throw an exception.
 
 ### Event handlers
 
