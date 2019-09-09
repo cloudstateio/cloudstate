@@ -64,7 +64,7 @@ The following shows the implementation of the `GetCart` command handler. This co
 
 #### Emitting events
 
-Commands that modify the state may do so by emitting events.
+Commands that modify the state MUST do so by emitting events.
 
 @@@ warning
 The **only** way a command handler may modify its state is by emitting an event. Any modifications made directly to the state from the command handler will not be persisted, and will be lost as soon as the command handler finishes executing.
