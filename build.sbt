@@ -112,7 +112,8 @@ lazy val docs = (project in file("docs"))
         }
     },
     paradoxProperties in Compile ++= Map(
-      "javadoc.io.cloudstate.javasupport.base_url" -> ".../user/lang/java/api/index.html",
+      "canonical.base_url" -> "https://cloudstate.io/docs/",
+      "javadoc.io.cloudstate.javasupport.base_url" -> ".../user/lang/java/api/",
       "extref.jsdoc.base_url" -> ".../user/lang/javascript/api/module-cloudstate.%s",
       "cloudstate.java-support.version" -> "0.4.3", // hardcode, otherwise we'll end up with the wrong version in the docs
       "cloudstate.node-support.version" -> "0.0.1"
