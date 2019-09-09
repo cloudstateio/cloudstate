@@ -90,7 +90,7 @@ Multiple snapshot handlers may be defined to handle multiple different types of 
 
 ## Multiple behaviors
 
-In the examples above, our shopping cart entity only has one behavior, and that is declared through the annotations on the entity class. An entity may have different states, where command and event handling may differ according to the state it is currently in. While this could be implemented using if statements in the handlers, CloudState also provides multiple behavior support, so that an entity can change its behavior.
+In the examples above, our shopping cart entity only has one behavior, and that is declared through the annotations on the entity class. An entity may have different states, where command and event handling may differ according to the state it is currently in. While this could be implemented using if statements in the handlers, CloudState also provides multiple behavior support, so that an entity can change its behavior. This multiple behavior support allows implementing entities as finite state machines.
 
 Entity behavior can be changed when the entity is created, when it handles a snapshot, and when it handles an event, using the `become` method on their respective contexts. The become method accepts an array of objects. Each object declares event handlers and command handlers for that particular behavior, and the handlers on that object will be used going forward for all subsequent commands and events.
 
