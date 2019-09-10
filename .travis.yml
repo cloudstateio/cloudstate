@@ -36,7 +36,7 @@ jobs:
     - cd node-support && npm install && cd -
     - cd docs/src/test/js && npm install && cd -
     script:
-    - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' docs/paradox docs/test
+    - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' docs/paradoxValidateInternalLinks docs/test
     - cd docs/src/test/js && npm test && cd -
   
   - stage: TCK
