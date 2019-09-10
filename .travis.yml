@@ -8,6 +8,16 @@ env:
 
 jobs:
   include:
+  - stage: code format check
+    name: "Code format check (address by running `sbt scalafmtAll`)"
+    before_script: sbt update
+    script: sbt scalafmtCheckAll || { echo "[error] Code not formatted prior to commit. Run 'sbt scalafmtAll' then commit the reformatted code."; false; }
+
+  - stage: build format check
+    name: "Build code format check (address by running `sbt scalafmtSbt`)"
+    before_script: sbt update
+    script: sbt scalafmtSbtCheck || { echo "[error] Build definition code not formatted prior to commit. Run 'sbt scalafmtSbt' then commit the reformatted code."; false; }
+
   - stage: Unit tests
     name: npm tests
     before_script:
