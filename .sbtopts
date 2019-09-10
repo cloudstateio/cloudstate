@@ -1,6 +1,3 @@
 -Dsbt.classloader.close=false
--J-XX:ReservedCodeCacheSize=128M
--J-Xmx1512M
--J-Xss2M
 -J-XX:+UseCompressedOops
 -J-XX:+CMSClassUnloadingEnabled
