@@ -53,8 +53,8 @@ Join us in making this vision a reality!
 ### TL;DR
 
 *   The Serverless Developer Experience, from development to production, is revolutionary and will grow to dominate the future of Cloud Computing
-    *   FaaS is however— with its ephemeral, stateless, and short-lived functions—only the first step and implementation of the Serverless Developer Experience. 
-    *   FaaS is great for processing intensive, parallelizable workloads, moving data from A to B providing enrichment and transformation along the way. But it is quite limited and constrained in what use-cases it addresses well, which makes it very hard and inefficient to implement traditional application development and distributed systems protocols. 
+    *   FaaS is—with its ephemeral, stateless, and short-lived functions—merely the first step and implementation of the Serverless Developer Experience. 
+    *   FaaS is great for processing intensive, parallelizable workloads, moving data from A to B providing enrichment and transformation along the way. But it is quite limited and constrained in terms of the use-cases it addresses well, which makes it difficult and inefficient to carry out traditional application development and to implement distributed systems protocols. 
 *   What's needed is a next generation Serverless platform (Serverless 2.0) and programming model for  general-purpose application development (e.g. microservices, streaming pipelines, AI/ML, etc.). 
     *   One that lets us implement common use-cases such as: shopping carts, user sessions, transactions, ML models training, low-latency prediction serving, job scheduling, and much more.  
     *   What is missing is support for long-lived virtual stateful services, a way to manage distributed state in a scalable and available fashion, and options for choosing the right consistency model for the job. 
@@ -62,7 +62,7 @@ Join us in making this vision a reality!
 
 ### Limitations of current Serverless implementations 
 
-Serverless means different things to different people. Many people consider it the same as Function-as-a-Service (FaaS), but we see it as much more than that: a new category of PaaS, where the key point is the Developer Experience, supporting the full life-cycle of the application, not the programming API of its latest incarnation. 
+Serverless means different things to different people. Many people consider it the same as Function-as-a-Service (FaaS). We see it as much more than that: a new category of PaaS itself, where the focal point is the Developer Experience, as well as supporting the full life-cycle of the application, and not merely the programming API of its latest incarnation. 
 
 The definition from the paper[ 'Serverless computing: economic and architectural impact'](https://www.doc.ic.ac.uk/~rbc/papers/fse-serverless-17.pdf), by Adzic et al. paints a broader picture: 
 > _"'Serverless' refers to a new generation of platform-as-a-service offerings where the infrastructure provider takes responsibility for receiving client requests and responding to them, capacity planning, task scheduling, and operational monitoring. Developers need to worry only about the logic for processing client requests."_
@@ -71,11 +71,11 @@ Serverless today is a great platform for stateless services, focusing on scaling
 
 The current incarnation of Serverless, the so-called Function-as-as Service (FaaS), is a classic data-shipping architecture—we move data to the code, not the other way round. It is great for processing intensive—so-called [embarrassingly parallel](https://en.wikipedia.org/wiki/Embarrassingly_parallel)—workloads, moving data from A to B providing enrichment and transformation along the way. 
 
-We, however, believe that Serverless is more than FaaS (which is only the first step on the journey). It's not about a specific implementation but all about the Developer Experience—a new way of building and running applications, and it's about time that we expand on its scope and supported use-cases. 
+We, however, believe that Serverless is more than FaaS (which is only the first step along the journey). It's not about a specific implementation. Instead, it's all about the Developer Experience—a new way of building and running applications, and it is about time that we expand on its scope and supported use-cases. 
 
-One limitation of FaaS is that its functions are ephemeral, stateless, and short-lived[^1]. This makes it problematic to build general-purpose data-centric cloud-native applications since it is simply too costly — in terms of performance, latency, and throughput — to lose the computational context (locality of reference) and being forced to load and store the state from the backend storage over and over again. 
+* One limitation of FaaS is that its functions are ephemeral, stateless, and short-lived[^1]. This makes it problematic to build general-purpose data-centric cloud-native applications since it is simply too costly — in terms of performance, latency, and throughput — to lose the computational context (locality of reference) and being forced to load and store the state from the backend storage over and over again. 
 
-Another limitation is that often functions have no direct addressability, which means that they can't communicate directly with each other using point-to-point communication but always need to resort to publish-subscribe, passing all data over some slow and expensive storage medium. A model that can work well for event-driven use-cases but yields too high latency for addressing general-purpose distributed computing problems[^2].
+* Yet another limitation (of FaaS) is that, quite often, functions simply have no direct addressability, which means that they can't communicate directly with each other using point-to-point communication but always need to resort to publish-subscribe, passing all data over some slow and expensive storage medium. A model that can work well for event-driven use-cases but yields too high latency for addressing general-purpose distributed computing problems[^2].
 
 ### The need for Stateful Serverless Computing
 
@@ -132,7 +132,7 @@ The question we asked ourselves was: can we abstract over state in the same way?
 
 This would allow the framework to manage durable state on behalf of the function, to monitor and manage it holistically across the whole system, and make more intelligent decisions.  
 
-Unconstrained CRUD does not work in in this model since we can't pass the entire data set in and out of the function. What we need are data storage patterns that have constrained input/output protocols. Patterns that fall into this category are Key-Value, Event Sourcing, and CRDTs. 
+Unconstrained CRUD does not work in this model since we can't pass the entire data set in and out of the function. What we need are data storage patterns that have constrained input/output protocols. Patterns that fall into this category are Key-Value, Event Sourcing, and CRDTs. 
 
 In [Event Sourcing](https://martinfowler.com/eaaDev/EventSourcing.html), _state in_ is the event log while _state out_ is any newly persisted events as a result of handling a command. 
 
@@ -144,7 +144,7 @@ In [CRDTs](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type), _s
 
 In Key-Value, the _state out_ is the key and _state in_ the value.
 
-While most developers have worked with Key-Value stores, Event Sourcing and CRDTs might be a bit unfamiliar. What's interesting is that they fit an event-driven model very well and while being on the opposite sides of the state consistency spectrum, with the former gives strong (ACID) consistency (through event logging) while the latter eventual/causal consistency. Together they give us a wide range of options for managing distributed state in a consistent fashion by allowing you to choose the optimal model for the specific use-case and data set[^7]. 
+While most developers have worked with Key-Value stores, Event Sourcing and CRDTs might be a bit unfamiliar. What's interesting is that they fit an event-driven model very well while being on opposite sides of the state consistency spectrum, with the former providing strong (ACID) consistency (through event logging) and the latter providing eventual/causal consistency. Taken together, they give us a truly wide range of options for managing distributed state in a consistent fashion by allowing you to choose the optimal model for your specific use-case and data set[^7]. 
 
 ### High-level design
 
@@ -180,7 +180,7 @@ As Adzic et al. write in their paper ['Serverless computing: economic and archit
 
 However, implementing traditional application development, microservices, stateful data pipelines, and general-purpose distributed system problems using stateless functions (FaaS) is very hard to do in a low-latency, performant, reliable way. 
 
-CloudState is designed to extend the model and making it straightforward to implement use-cases such as: 
+CloudState is designed to extend the model and make it straightforward to implement use-cases such as: 
 
 *   **Training and Serving of Machine Learning Models**
     *   Any use-case that needs to build up, and provide low latency serving of, dynamic models 
@@ -197,7 +197,7 @@ CloudState is designed to extend the model and making it straightforward to impl
 *   **Leader Election, and other distributed systems protocols for coordination**
     *   Trivial to implement with Akka Cluster/Distributed Data, while always coordinating over a distributed storage (such as DynamoDB in the case of Lambda) is too costly, slow, and can become a single point of failure.
 
-The goal of CloudState is giving a way to implement these use-cases in a scalable and available way, working in concert with the application itself, while providing end-to-end correctness, consistency, and safety.
+The goal of CloudState is to provide a way for implementing these use-cases in a scalable and available way, working in concert with the application itself, all the while providing end-to-end correctness, consistency, and safety.
 
 ---
 ## Design and architecture
@@ -213,15 +213,17 @@ A CloudState service looks like this:
 * **Ingress** - This can be Istio, Knative, or just regular ClusterIP service communication in Kubernetes. Whatever service approach is used, CloudState expects traffic to be load balanced across its pods randomly and evenly.
 * **Akka Sidecar** - This sidecar is injected by the CloudState operator. All requests go through it. The sidecars of a single CloudState service form a cluster, communicating directly with each other using Akka remoting. This cluster, and the communication links between the sidecars, allows for sharding and replication of state, along with addressed P2P messaging between pods.
 * **Code** - This is the function implemented by the developer. It can be written in any language that supports gRPC. The Akka sidecars communicate with the user functions using a predefined gRPC protocol. This protocol carries both incoming requests and outgoing responses, as well as messages conveying the current state of the system. Typically, CloudState will provide support libraries for each language that adapt the gRPC protocol to an idiomatic API for that language.
-* **Distributed Datastore** - When a service needs to persist state, such as when implementing Event Sourced entities, this state will be persisted to a distributed datastore. It is important to note, the user code does not interact directly with the datastore - it interacts with the Akka sidecars, and the Akka sidecars communicate with the datastore. This way, all database communication can be directly managed and monitored by the Akka sidecar, and because this is done so through the provision of high level patterns, assumptions can be made that allow the sidecars to safely cache, shard and replicate data across the cluster.
+* **Distributed Datastore** - When a service needs to persist state (such as when implementing Event Sourced entities), this state will be persisted to a distributed datastore. It is important to note, the user code does not interact directly with the datastore - it interacts with the Akka sidecars, and the Akka sidecars communicate with the datastore. This way, all database communication can be directly managed and monitored by the Akka sidecar. And since this is done through the provision of high level patterns, assumptions can be made that allow the sidecars to safely cache, shard, and replicate data across the cluster.
 
 ### Common Intermediate Representation
 
 The gRPC protocol spoken between the Akka sidecar and the user code is a Common Intermediate Representation (IR) as defined by Hellerstein et. al. in [Serverless Computing: One Step Forward, Two Steps Back](http://cidrdb.org/cidr2019/papers/p119-hellerstein-cidr19.pdf). This is used to allow user functions to take advantage of the features afforded by distributed systems technologies such as Akka, without needing to be written in the same language as those technologies. The protocol also allows the sidecar to be implemented using any technology, not just Akka. CloudState's Akka based implementation is provided as a reference implementation.
 
-There are two parts to the IR. The first is discovery. This is where a user function declares what services it wishes to expose, and what stateful features it needs those services to be enriched with. This is done by the sidecar making a call on the user function, using the IR protocol, to request a descriptor that describes it. This descriptor contains a serialized protobuf definition of the services that the user function wishes to expose. Each service is declared to have a particular entity type, supported types include Event Sourcing and CRDTs.
+* There are two parts to the IR.
 
-The second part of the IR is a pluggable entity type protocol. Each entity type defines its own gRPC protocol for communicating between the sidecar and the user function. Here is a snippet of the event sourcing protocol:
+* The first is **discovery:** This is where a user function declares what services it wishes to expose, and what stateful features it needs those services to be enriched with. This is done by the sidecar making a call on the user function, using the IR protocol, to request a descriptor that describes it. This descriptor contains a serialized protobuf definition of the services that the user function wishes to expose. Each service is declared to have a particular entity type, supported types include Event Sourcing and CRDTs.
+
+* The second part of the IR is **a pluggable entity type protocol:** Each entity type defines its own gRPC protocol for communicating between the sidecar and the user function. Here is a snippet of the event sourcing protocol:
 
 ```proto
 service EventSourced {
@@ -295,7 +297,11 @@ For these reasons, we have implemented our own autoscaler. For simplicity, this 
 * Average database concurrency per pod - this is the number of simultaneous operations being performed on the database at any one time. This is typically subtracted from request concurrency so that database performance does not impact decisions made based on request concurrency.
 * Request rate - this is the rate at which incoming requests are arriving.
 
-In general, scaling decisions are made when user function concurrency and request concurrency exceed or drop below configurable thresholds. The reason for using two metrics is that in sharding situations, request concurrency is highly dependent on the number of nodes. When there is only one node, no requests are forwarded to other nodes, which means latency stays very low, which means request concurrency stays very low. When there are two nodes, on average 50% of requests are forwarded to other nodes, when there are many nodes, this number increases. For this reason, request concurrency is not a good metric to base scaling decisions on when the number of nodes is low, so user function concurrency is used. However, request concurrency is still an important metric because the impact of cluster sharding on the load being handled is non zero, and indeed, if it performs badly compared to the user function, then user function concurrency will stay low, while requests back up in cluster sharding buffers. Hence, request concurrency is used as scaling metric, but set to something high that would never be triggered when there's only one node, but is more likely to be triggered when load is higher.
+In general, scaling decisions are made when user function concurrency and request concurrency exceed or drop below configurable thresholds. The reason for using two metrics is that in sharding situations, request concurrency is highly dependent on the number of nodes. 
+* When there is only one node, no requests are forwarded to other nodes, which means latency stays very low, which means request concurrency stays very low. 
+* When there are two nodes, on average 50% of requests are forwarded to other nodes, when there are many nodes, this number increases. 
+* For this reason, request concurrency is not a good metric to base scaling decisions on when the number of nodes is low, so user function concurrency is used. However, request concurrency is still an important metric because the impact of cluster sharding on the load being handled is non zero, and indeed, if it performs badly compared to the user function, then user function concurrency will stay low, while requests back up in cluster sharding buffers.
+* Hence, request concurrency is used as scaling metric, but set to something high that would never be triggered when there's only one node, but is more likely to be triggered when load is higher.
 
 After a scaling decision has been made, the autoscaler enters a configurable stable waiting period. During this period, no concurrency based scaling decisions will be made - since it can take time for a new node to start and warm up, and therefore it will take time for concurrency to stabilise. Without the stable waiting period, a sudden increase in load will cause concurrency to increase linearly, and the autoscaler will start more and more nodes to handle this increasing concurrency. The new nodes will initially cause performance to degrade, as they warm up and have shards rebalanced to them, causing further scaling, which causes a feedback loop that sees nodes scaled to impractical numbers.
 
@@ -338,7 +344,7 @@ The sample application implemenents a simple chat application, and currently the
 
 The application has two components, a presence stateful function, which uses a vote CRDT to store whether a user is currently online or not, and a gateway, which is an express/ws application, that serves a UI.
 
-The UI is designed to allow connecting as multiple users in one browser window, this is for demonstration purposes, to make it straight forward to see real time interactions, serverside pushes etc, without needing to open many browser tabs.
+The UI is designed to allow connecting as multiple users in one browser window, this is for demonstration purposes, to make it straightforward to see real time interactions, serverside pushes etc, without needing to open many browser tabs.
 
 Check out the samples project here, with instructions how to run them on Kubernetes: 
 - [JavaScript sample](https://github.com/cloudstateio/samples-js-chat)
@@ -448,11 +454,11 @@ Option 1 may feel more natural from the developers perspective (they don't care 
 
 #### Custom sidecar injection
 
-TODO: I've made an assumption that Knative is using `Deployments` for this, maybe it's not, maybe it's using `ReplicaSets`, or maybe it's using something else.
+TODO: We've made an assumption that Knative is using `Deployments` for this. But maybe it's not; maybe it's using `ReplicaSets`; or maybe it's using something else altogether.
 
-The Knative operator is responsible translating `Revisions` into `Deployments`. As part of this, it injects the Knative sidecar into the template spec. This translation needs to be disabled, and Stateful Serverless needs to provide its own operator that watches `Revisions`, and translates the ones that it is responsible for to `Deployments`, including the injection of its own side car.
+The Knative operator is responsible for translating `Revisions` into `Deployments`. As part of this, it injects the Knative sidecar into the template spec. This translation needs to be disabled, and Stateful Serverless needs to provide its own operator that watches `Revisions`, and translates the ones that it is responsible for into `Deployments`, including the injection of its own sidecar.
 
-To support this, an annotation could used as the flag to disable it, but as discussed in [Custom configuration](##custom-configuration), this is not ideal. An alternative solution is to add a new configuration parameter to the `Service`, `Configuration` and `Revision` specs. This could be called `moduleName`, which could default to `knative` and would indicate that `knative` is going to do the translation. Any value other than `knative` will indicate that Knative should not do the translation. If following the suggestion of using a `module` property for the custom configuration, then the custom configuration could be made to live under a property that is equal to the `moduleName`.
+To support this, an annotation could be used (as the flag to disable it), but as discussed in [Custom configuration](##custom-configuration), this is not ideal. An alternative solution is to add a new configuration parameter to the `Service`, `Configuration` and `Revision` specs. This could be called `moduleName`, which could default to `knative` and would indicate that `knative` is going to do the translation. Any value other than `knative` will indicate that Knative should not do the translation. If following the suggestion of using a `module` property for the custom configuration, then the custom configuration could be made to live under a property that is equal to the `moduleName`.
 
 ### Additional notes
 
@@ -462,7 +468,7 @@ Knative Build has not yet been taken into consideration, and I haven't even look
 
 #### Routing, updates, and canary deployments
 
-Stateful Serverless deployments will form a cluster with all pods for the service, this includes across revisions. This is necessary, for example, event sourcing requires that each entity live on at most one node to ensure strong consistency of command handling on that node. As such, when a new revision is deployed, and an update is underway, new nodes for the new revision need to join the cluster of existing nodes from the old revision, otherwise entities could be started in both clusters.
+Stateful Serverless deployments will form a cluster involving all pods for the service. This applies across revisions. This is necessary: For example, event sourcing requires that each entity live on at most one node to ensure strong consistency of command-handling on that node. As such, when a new revision is deployed, and an update is underway, new nodes for the new revision need to join the cluster of existing nodes (from the old revision). Otherwise, entities could be started in both clusters.
 
 This presents an interesting conflict with canary deployments and routing. For cluster sharded entities, Akka will by default attempt to distribute load evenly across all nodes in the cluster. So if there are two existing nodes, and an update is done, using a canary deployment that initially routes 5% of the traffic to the new node, Akka's cluster sharding will make that 5% irrelevant, and one third of the traffic will end up being handled by the new node. Furthermore, the 5% of traffic that is routed to the new node may or may not end up being handled by that node.
 
@@ -516,14 +522,14 @@ Substituting `publishLocal` for `publish` will push the docker images to a remot
 
 The docker image can be run by running `docker run cloudstate-proxy-dev-mode`. However, by itself this won't be useful because the container won't be able to locate the user function from its container. If running the user function locally and your platform is Linux, then this can be enabled simply by passing the `--network=host` flag to use the hosts network namespace.
 
-For all other platforms, the simplest way is to run the user function in a docker container, and share the network namespaces between the two containers. The `js-shopping-cart` sample app docker image can be build by running `npm run dockerbuild` from the `samples/js-shopping-cart` directory. Now, to start the images, this should be done in separate windows, or replace `-it` with `-d` to detach:
+For all other platforms, the simplest way is to run the user function in a docker container, and share the network namespaces between the two containers. The `js-shopping-cart` sample app docker image can be built by running `npm run dockerbuild` from the `samples/js-shopping-cart` directory. Now, to start the images, this should be done in separate windows, or replace `-it` with `-d` to detach:
 
 ```bash
 docker run -it --rm --name cloudstate -p 9000:9000 cloudstate-proxy-dev-mode
 docker run -it --rm --network container:cloudstate --name shopping-cart -e "DEBUG=cloudstate*" js-shopping-cart
 ```
 
-Initially the cloudstate container may show errors as it attempts to connect to the shopping-cart user function before it's started. Once running, you can connect to the proxy on port 9000.
+Initially, the CloudState container may show errors as it attempts to connect to the shopping-cart user function before it's started. Once running, you can connect to the proxy on port 9000.
 
 ### Building the native image outside of a container
 
@@ -603,7 +609,7 @@ cloudstate/proxy/cassandra/target/graalvm-native-image/./cloudstate-proxy-cassan
 
 ### Compliance Testing
 
-The [TCK](tck/src/test/resources/application.conf) makes it possible to verify that combinations of backends and frontends behaves as expected. In order to make a frontend eligible for testing in the TCK a sample application implementing a simple [Shopping Cart](samples/js-shopping-cart) (here showcased with the Node.js frontend) is required.
+The [TCK](tck/src/test/resources/application.conf) makes it possible to verify that combinations of backends and frontends behaves as expected. In order to make a frontend eligible for testing in the TCK a sample application, implementing a simple [Shopping Cart](samples/js-shopping-cart) (here showcased with the Node.js frontend) is required.
 
 In order to make sure that each individual component performs its duties, and when combined has the expected outcome, the following categories need to be considered.
 
