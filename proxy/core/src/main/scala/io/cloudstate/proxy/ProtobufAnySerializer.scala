@@ -15,19 +15,30 @@
  */
 package io.cloudstate.proxy
 
-import akka.serialization.BaseSerializer
+import akka.serialization.{BaseSerializer, SerializerWithStringManifest}
 import akka.actor.ExtendedActorSystem
+import com.google.protobuf.ByteString
 import com.google.protobuf.any.{Any => pbAny}
 
-final class ProtobufAnySerializer(override val system: ExtendedActorSystem) extends BaseSerializer {
-  final override def toBinary(o: AnyRef): Array[Byte] = o match {
-    case any: pbAny => any.toByteArray
+final class ProtobufAnySerializer(override val system: ExtendedActorSystem)
+    extends SerializerWithStringManifest
+    with BaseSerializer {
+
+  final override def manifest(o: AnyRef): String = o match {
+    case any: pbAny => any.typeUrl
     case _ =>
       throw new IllegalArgumentException(s"$this only supports com.google.protobuf.any.Any, not ${o.getClass.getName}!")
   }
-  final override def includeManifest: Boolean = false
-  final override def fromBinary(bytes: Array[Byte], manifest: Option[Class[_]]): AnyRef = {
-    val any = pbAny.parseFrom(bytes)
-    any
+
+  final override def toBinary(o: AnyRef): Array[Byte] = o match {
+    case any: pbAny => any.value.toByteArray
+    case _ =>
+      throw new IllegalArgumentException(s"$this only supports com.google.protobuf.any.Any, not ${o.getClass.getName}!")
+  }
+
+  final override def fromBinary(bytes: Array[Byte], manifest: String): AnyRef = manifest match {
+    case null =>
+      throw new IllegalArgumentException("null manifest detected instead of valid com.google.protobuf.any.Any.typeUrl")
+    case typeUrl => pbAny(typeUrl, ByteString.copyFrom(bytes))
   }
 }
