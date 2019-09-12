@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package io.cloudstate.proxy
+package io.cloudstate.proxy
 
 import akka.serialization.BaseSerializer
 import akka.actor.ExtendedActorSystem
