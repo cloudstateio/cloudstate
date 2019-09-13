@@ -25,6 +25,8 @@ import (
 	"io/ioutil"
 )
 
+const protoAnyBase = "type.googleapis.com"
+
 func unpackFile(gz []byte) (*filedescr.FileDescriptorProto, error) {
 	r, err := gzip.NewReader(bytes.NewReader(gz))
 	if err != nil {

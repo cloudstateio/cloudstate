@@ -27,7 +27,6 @@ import (
 	"reflect"
 	"strings"
 	"sync"
-	"time"
 )
 
 // Entity
@@ -40,7 +39,7 @@ type EntityInitializer interface {
 	New() interface{}
 }
 
-type EventSourcedEntityInstance struct {
+type EntityInstance struct {
 	EventSourcedEntity *EventSourcedEntity
 	Instance           interface{}
 }
@@ -76,7 +75,7 @@ func (e *EventSourcedEntity) initZeroValue() error {
 	return nil
 }
 
-// A EventSourcedEntityContext represents a event sourced entity together with its
+// A EntityInstanceContext represents a event sourced entity together with its
 // associated service
 //
 // a command is dispatched through this context
@@ -84,12 +83,13 @@ func (e *EventSourcedEntity) initZeroValue() error {
 // - its entity id
 // - its snapshots ?
 // - the entity itself
-type EventSourcedEntityContext struct {
-	EventSourcedEntityInstance EventSourcedEntityInstance
+type EntityInstanceContext struct {
+	EntityInstance EntityInstance
 }
 
-func (ec *EventSourcedEntityContext) ServiceName() string {
-	return ec.EventSourcedEntityInstance.EventSourcedEntity.ServiceName
+// ServiceName returns the contexts service name
+func (ec *EntityInstanceContext) ServiceName() string {
+	return ec.EntityInstance.EventSourcedEntity.ServiceName
 }
 
 // EventSourcedHandler is the implementation of the EventSourcedHandler server API for EventSourced service.
@@ -98,16 +98,16 @@ type EventSourcedHandler struct {
 	entities map[string]*EventSourcedEntity
 	// entity instance contexts for all
 	// event sourced entities indexed by their entity ids
-	contexts map[string]*EventSourcedEntityContext
+	contexts map[string]*EntityInstanceContext
 	// method cache
-	mcache map[string]reflect.Method
+	methodCache map[string]reflect.Method
 }
 
 func NewEventSourcedHandler() *EventSourcedHandler {
 	return &EventSourcedHandler{
-		entities: make(map[string]*EventSourcedEntity),
-		contexts: make(map[string]*EventSourcedEntityContext),
-		mcache:   make(map[string]reflect.Method),
+		entities:    make(map[string]*EventSourcedEntity),
+		contexts:    make(map[string]*EntityInstanceContext),
+		methodCache: make(map[string]reflect.Method),
 	}
 }
 
@@ -141,31 +141,28 @@ func (esh *EventSourcedHandler) Handle(server protocol.EventSourced_HandleServer
 }
 
 func (esh *EventSourcedHandler) handleInit(init *protocol.EventSourcedInit, server protocol.EventSourced_HandleServer) {
-	log.Printf("received init: %v", init)
 	eid := init.GetEntityId()
-	log.Printf("register init with entityId: %v", eid)
 	if _, present := esh.contexts[eid]; present {
 		if err := server.Send(&protocol.EventSourcedStreamOut{
 			Message: &protocol.EventSourcedStreamOut_Failure{
 				Failure: &protocol.Failure{
 					Description: "entity already initialized",
-				}}});
-			err != nil {
+				}}}); err != nil {
 			log.Fatalf("unable to server.Send")
 		}
-	} else {
-		entity := esh.entities[init.GetServiceName()]
-		if initializer, ok := entity.Entity.(EntityInitializer); ok {
-			instance := initializer.New()
-			esh.contexts[eid] = &EventSourcedEntityContext{
-				EventSourcedEntityInstance: EventSourcedEntityInstance{
-					Instance:           instance,
-					EventSourcedEntity: entity,
-				},
-			}
-		} else {
-			log.Fatalf("unable to handle init entity.Entity does not implement EntityInitializer")
+		return
+	}
+	entity := esh.entities[init.GetServiceName()]
+	if initializer, ok := entity.Entity.(EntityInitializer); ok {
+		instance := initializer.New()
+		esh.contexts[eid] = &EntityInstanceContext{
+			EntityInstance: EntityInstance{
+				Instance:           instance,
+				EventSourcedEntity: entity,
+			},
 		}
+	} else {
+		log.Fatalf("unable to handle init entity.Entity does not implement EntityInitializer")
 	}
 }
 
@@ -221,136 +218,13 @@ after  Call took 440ns
 */
 
 // handleCommand
-func (esh *EventSourcedHandler) handleCommandOld(cmd *protocol.Command, server protocol.EventSourced_HandleServer) {
-	entityContext := esh.contexts[cmd.GetEntityId()]
-	entity := esh.entities[entityContext.ServiceName()]
-
-	start := time.Now()
-	// entities implement the proxied grpc service
-	// we try to find the method we're called by name with the
-	// received command.
-	entityValue := reflect.ValueOf(entityContext.EventSourcedEntityInstance.Instance)
-	methodByName := entityValue.MethodByName(cmd.Name)
-	if !methodByName.IsValid() {
-		log.Fatalf("no method named: %s found for: %v", cmd.Name, entity)
-		// FIXME: make this a failure
-	}
-
-	// gRPC services are unary rpc methods, always.
-	// They have one message in and one message out.
-	if methodByName.Type().NumIn() != 2 {
-		failure := &protocol.Failure{
-			Description: fmt.Sprintf("method %s of entity: %v ", methodByName.String(), entityValue.String()),
-			// FIXME give a better error message
-		}
-		if err := sendFailure(failure, server); err != nil {
-			log.Fatalf("unable to send a failure message")
-		}
-		return
-	}
-
-	// The first argument in the gRPC implementation
-	// is always a context.Context.
-	methodArg0Type := methodByName.Type().In(0)
-	if !reflect.TypeOf(server.Context()).Implements(methodArg0Type) {
-		log.Fatalf( // TODO: should we really fatal here? what to do?
-			"first argument for method: %s is not of type: %s",
-			methodByName.String(), reflect.TypeOf(server.Context()).Name(),
-		)
-	}
-
-	// build the input arguments for the method we're about to call
-	inputs := make([]reflect.Value, methodByName.Type().NumIn())[:]
-	inputs[0] = reflect.ValueOf(server.Context())
-
-	// create a zero-value for the type of the
-	// message we call the method with
-	arg1 := methodByName.Type().In(1)
-	ptr := false
-	for arg1.Kind() == reflect.Ptr {
-		ptr = true
-		arg1 = arg1.Elem()
-	}
-	var msg proto.Message
-	if ptr {
-		msg = reflect.New(arg1).Interface().(proto.Message)
-	} else {
-		msg = reflect.Zero(arg1).Interface().(proto.Message)
-	}
-	if proto.Unmarshal(cmd.GetPayload().GetValue(), msg) != nil {
-		log.Fatalf("failed to unmarshal") // FIXME
-	}
-
-	inputs[1] = reflect.ValueOf(msg)
-	// call it
-	fmt.Printf("prepare Call took %s\n", time.Since(start))
-	start = time.Now()
-	called := methodByName.Call(inputs)
-	fmt.Printf("doing Call took %s\n", time.Since(start))
-	start = time.Now()
-	// The gRPC implementation returns the rpc return method
-	// and an error as a second return value.
-	errReturned := called[1]
-	if errReturned.Interface() != nil && errReturned.Type().Name() == "error" { // FIXME: looks ugly
-		// TCK says: FIXME Expects entity.Failure, but gets lientAction.Action.Failure(Failure(commandId, msg)))
-		failure := &protocol.Failure{
-			CommandId:   cmd.GetId(),
-			Description: errReturned.Interface().(error).Error(),
-		}
-		failedToSend := sendClientActionFailure(failure, server)
-		if failedToSend != nil {
-			panic(failedToSend) // TODO: don't panic
-		}
-		return
-	}
-	// the reply
-	callReply, ok := called[0].Interface().(proto.Message)
-	if !ok {
-		log.Fatalf("called return value at index 0 is no proto.Message")
-	}
-	fmt.Printf("after  Call took %s\n", time.Since(start))
-	typeUrl := fmt.Sprintf("type.googleapis.com/%s", proto.MessageName(callReply))
-	marshal, err := proto.Marshal(callReply)
-	if err != nil {
-		log.Fatalf("unable to Marshal command reply")
-	}
-
-	// emitted events
-	events := esh.collectEvents(entityValue)
-	// handle events
-	esh.handleEvents(entityValue, events)
-	replyWith := &protocol.EventSourcedStreamOut{
-		Message: &protocol.EventSourcedStreamOut_Reply{
-			Reply: &protocol.EventSourcedReply{
-				CommandId: cmd.GetId(),
-				ClientAction: &protocol.ClientAction{
-					Action: &protocol.ClientAction_Reply{
-						Reply: &protocol.Reply{
-							Payload: &any.Any{
-								TypeUrl: typeUrl,
-								Value:   marshal,
-							},
-						},
-					},
-				},
-				Events: events,
-			},
-		},
-	}
-	// send reply
-	if server.Send(replyWith) != nil {
-		log.Fatalf("unable to server.Send")
-	}
-}
-
-// handleCommand
 func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server protocol.EventSourced_HandleServer) {
 	entityContext := esh.contexts[cmd.GetEntityId()]
 	entity := esh.entities[entityContext.ServiceName()]
 
 	cacheKey := entityContext.ServiceName() + cmd.Name
-	method, hit := esh.mcache[cacheKey]
-	entityValue := reflect.ValueOf(entityContext.EventSourcedEntityInstance.Instance)
+	method, hit := esh.methodCache[cacheKey]
+	entityValue := reflect.ValueOf(entityContext.EntityInstance.Instance)
 	if !hit {
 		// entities implement the proxied grpc service
 		// we try to find the method we're called by name with the
@@ -383,8 +257,8 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 				methodByName.String(), reflect.TypeOf(server.Context()).Name(),
 			)
 		}
-		method, _ = reflect.TypeOf(entityContext.EventSourcedEntityInstance.Instance).MethodByName(cmd.Name)
-		esh.mcache[cacheKey] = method
+		method, _ = reflect.TypeOf(entityContext.EntityInstance.Instance).MethodByName(cmd.Name)
+		esh.methodCache[cacheKey] = method
 	}
 
 	// build the input arguments for the method we're about to call
@@ -433,7 +307,7 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 	if !ok {
 		log.Fatalf("called return value at index 0 is no proto.Message")
 	}
-	typeUrl := fmt.Sprintf("type.googleapis.com/%s", proto.MessageName(callReply))
+	typeUrl := fmt.Sprintf("%s/%s", protoAnyBase, proto.MessageName(callReply))
 	marshal, err := proto.Marshal(callReply)
 	if err != nil {
 		log.Fatalf("unable to Marshal command reply")
@@ -441,29 +315,23 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 
 	// emitted events
 	events := esh.collectEvents(entityValue)
-	// handle events
 	esh.handleEvents(entityValue, events)
-	replyWith := &protocol.EventSourcedStreamOut{
-		Message: &protocol.EventSourcedStreamOut_Reply{
-			Reply: &protocol.EventSourcedReply{
-				CommandId: cmd.GetId(),
-				ClientAction: &protocol.ClientAction{
-					Action: &protocol.ClientAction_Reply{
-						Reply: &protocol.Reply{
-							Payload: &any.Any{
-								TypeUrl: typeUrl,
-								Value:   marshal,
-							},
-						},
+	err = esh.sendEventSourcedReply(&protocol.EventSourcedReply{
+		CommandId: cmd.GetId(),
+		ClientAction: &protocol.ClientAction{
+			Action: &protocol.ClientAction_Reply{
+				Reply: &protocol.Reply{
+					Payload: &any.Any{
+						TypeUrl: typeUrl,
+						Value:   marshal,
 					},
 				},
-				Events: events,
 			},
 		},
-	}
-	// send reply
-	if server.Send(replyWith) != nil {
-		log.Fatalf("unable to server.Send")
+		Events: events,
+	}, server)
+	if err != nil {
+		log.Fatalf("unable to send")
 	}
 }
 
@@ -481,7 +349,7 @@ func (esh *EventSourcedHandler) collectEvents(entityValue reflect.Value) []*any.
 			}
 			events = append(events,
 				&any.Any{
-					TypeUrl: fmt.Sprintf("type.googleapis.com/%s", proto.MessageName(message)),
+					TypeUrl: fmt.Sprintf("%s/%s", protoAnyBase, proto.MessageName(message)),
 					Value:   marshal,
 				},
 			)
@@ -491,35 +359,30 @@ func (esh *EventSourcedHandler) collectEvents(entityValue reflect.Value) []*any.
 	return events
 }
 
-// handleEvents handles a list of events encoded as protobuf Any messages
-// using a
+// handleEvents handles a list of events encoded as protobuf Any messages.
 func (esh *EventSourcedHandler) handleEvents(entityValue reflect.Value, events []*any.Any) {
-	if eventHandler, ok := entityValue.Interface().(EventHandler); ok {
-		for _, event := range events {
-			msgName := strings.Replace(event.GetTypeUrl(), "type.googleapis.com/", "", 1)
-			messageType := proto.MessageType(msgName)
-			if messageType.Kind() == reflect.Ptr {
-				if message, ok := reflect.New(messageType.Elem()).Interface().(proto.Message); ok {
-					err := proto.Unmarshal(event.Value, message)
+	eventHandler, ok := entityValue.Interface().(EventHandler)
+	if !ok {
+		panic("no handler found") // FIXME: we might fail as the proxy can't get not-consumed events
+	}
+	for _, event := range events {
+		msgName := strings.TrimPrefix(event.GetTypeUrl(), protoAnyBase+"/")
+		messageType := proto.MessageType(msgName)
+		if messageType.Kind() == reflect.Ptr {
+			if message, ok := reflect.New(messageType.Elem()).Interface().(proto.Message); ok {
+				err := proto.Unmarshal(event.Value, message)
+				if err != nil {
+					log.Fatalf("%v\n", err)
+				} else {
+					handled, err := eventHandler.Handle(message)
 					if err != nil {
 						log.Fatalf("%v\n", err)
-					} else {
-						handled, err := eventHandler.Handle(message)
-						if err != nil {
-							log.Fatalf("%v\n", err)
-						}
-						if !handled {
-							// now, how get we the handler function
-						}
+					}
+					if !handled {
+						// now, how get we the handler function
 					}
 				}
-			} else {
-				value := reflect.Zero(messageType).Interface()
-				log.Printf("value is: %v", value)
 			}
 		}
-	} else {
-		// FIXME: we might fail as the proxy can't get not-consumed events
-		panic("no handler found")
 	}
 }
