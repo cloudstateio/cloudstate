@@ -14,7 +14,6 @@
 // limitations under the License.
 
 // Package main implements an event sourced entity shopping cart example
-
 package main
 
 import (
@@ -57,7 +56,7 @@ type ShoppingCart struct {
 
 // New implements EntityInitializer and returns a new
 // and initialized instance of the ShoppingCart entity.
-func (s ShoppingCart) New() interface{} {
+func (sc ShoppingCart) New() interface{} {
 	return NewShoppingCart()
 }
 
@@ -71,11 +70,11 @@ func NewShoppingCart() *ShoppingCart {
 }
 
 // ItemAdded is a event handler function for the ItemAdded event.
-func (s *ShoppingCart) ItemAdded(added domain.ItemAdded) error {
-	if item, _ := s.find(added.Item.ProductId); item != nil {
+func (sc *ShoppingCart) ItemAdded(added domain.ItemAdded) error {
+	if item, _ := sc.find(added.Item.ProductId); item != nil {
 		item.Quantity += added.Item.Quantity
 	} else {
-		s.cart = append(s.cart, &domain.LineItem{
+		sc.cart = append(sc.cart, &domain.LineItem{
 			ProductId: added.Item.ProductId,
 			Name:      added.Item.Name,
 			Quantity:  added.Item.Quantity,
@@ -85,8 +84,8 @@ func (s *ShoppingCart) ItemAdded(added domain.ItemAdded) error {
 }
 
 // ItemRemoved is a event handler function for the ItemRemoved event.
-func (s *ShoppingCart) ItemRemoved(removed domain.ItemRemoved) error {
-	if !s.remove(removed.ProductId) {
+func (sc *ShoppingCart) ItemRemoved(removed domain.ItemRemoved) error {
+	if !sc.remove(removed.ProductId) {
 		// this should never happen
 		return errors.New("unable to remove product")
 	}
@@ -95,25 +94,25 @@ func (s *ShoppingCart) ItemRemoved(removed domain.ItemRemoved) error {
 
 // Handle lets us handle events by ourselves.
 //
-// returned is if we have handled the event and any
-// error that happened during the handling
-func (s *ShoppingCart) Handle(event interface{}) (handled bool, err error) {
+// returns handle set to true if we have handled the event
+// and any error that happened during the handling
+func (sc *ShoppingCart) Handle(event interface{}) (handled bool, err error) {
 	switch e := event.(type) {
 	case *domain.ItemAdded:
-		return true, s.ItemAdded(*e)
+		return true, sc.ItemAdded(*e)
 	case *domain.ItemRemoved:
-		return true, s.ItemRemoved(*e)
+		return true, sc.ItemRemoved(*e)
 	default:
 		return false, nil
 	}
 }
 
 // AddItem implements the AddItem command handling of the shopping cart service.
-func (s *ShoppingCart) AddItem(c context.Context, li *shoppingcart.AddLineItem) (*empty.Empty, error) {
+func (sc *ShoppingCart) AddItem(c context.Context, li *shoppingcart.AddLineItem) (*empty.Empty, error) {
 	if li.GetQuantity() <= 0 {
 		return nil, fmt.Errorf("cannot add negative quantity of to item %s", li.GetProductId())
 	}
-	s.Emit(&domain.ItemAdded{Item: &domain.LineItem{
+	sc.Emit(&domain.ItemAdded{Item: &domain.LineItem{
 		ProductId: li.ProductId,
 		Name:      li.Name,
 		Quantity:  li.Quantity,
@@ -122,18 +121,18 @@ func (s *ShoppingCart) AddItem(c context.Context, li *shoppingcart.AddLineItem) 
 }
 
 // RemoveItem implements the RemoveItem command handling of the shopping cart service.
-func (s *ShoppingCart) RemoveItem(c context.Context, li *shoppingcart.RemoveLineItem) (*empty.Empty, error) {
-	if item, _ := s.find(li.GetProductId()); item == nil {
+func (sc *ShoppingCart) RemoveItem(c context.Context, li *shoppingcart.RemoveLineItem) (*empty.Empty, error) {
+	if item, _ := sc.find(li.GetProductId()); item == nil {
 		return nil, fmt.Errorf("cannot remove item %s because it is not in the cart", li.GetProductId())
 	}
-	s.Emit(&domain.ItemRemoved{ProductId: li.ProductId})
+	sc.Emit(&domain.ItemRemoved{ProductId: li.ProductId})
 	return &empty.Empty{}, nil
 }
 
 // GetCart implements the GetCart command handling of the shopping cart service.
-func (s *ShoppingCart) GetCart(c context.Context, sc *shoppingcart.GetShoppingCart) (*shoppingcart.Cart, error) {
+func (sc *ShoppingCart) GetCart(c context.Context, _ *shoppingcart.GetShoppingCart) (*shoppingcart.Cart, error) {
 	cart := &shoppingcart.Cart{}
-	for _, item := range s.cart {
+	for _, item := range sc.cart {
 		cart.Items = append(cart.Items, &shoppingcart.LineItem{
 			ProductId: item.ProductId,
 			Name:      item.Name,
@@ -144,8 +143,8 @@ func (s *ShoppingCart) GetCart(c context.Context, sc *shoppingcart.GetShoppingCa
 }
 
 // find finds a product in the shopping cart by productId and returns it as a LineItem.
-func (s *ShoppingCart) find(productId string) (item *domain.LineItem, index int) {
-	for i, item := range s.cart {
+func (sc *ShoppingCart) find(productId string) (item *domain.LineItem, index int) {
+	for i, item := range sc.cart {
 		if productId == item.ProductId {
 			return item, i
 		}
@@ -156,11 +155,11 @@ func (s *ShoppingCart) find(productId string) (item *domain.LineItem, index int)
 // remove removes a product from the shopping cart.
 //
 // A ok flag is returned to indicate that the product was present and removed.
-func (s *ShoppingCart) remove(productId string) (ok bool) {
-	if item, i := s.find(productId); item != nil {
+func (sc *ShoppingCart) remove(productId string) (ok bool) {
+	if item, i := sc.find(productId); item != nil {
 		// remove and re-slice
-		copy(s.cart[i:], s.cart[i+1:])
-		s.cart = s.cart[:len(s.cart)-1]
+		copy(sc.cart[i:], sc.cart[i+1:])
+		sc.cart = sc.cart[:len(sc.cart)-1]
 		return true
 	} else {
 		return false
