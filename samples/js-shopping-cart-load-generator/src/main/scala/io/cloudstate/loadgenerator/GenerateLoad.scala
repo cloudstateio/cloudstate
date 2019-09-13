@@ -1,6 +1,6 @@
 package io.cloudstate.loadgenerator
 
-import java.time.{Instant, ZonedDateTime}
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 import akka.Done
@@ -9,7 +9,7 @@ import akka.grpc.GrpcClientSettings
 import akka.pattern.{BackoffOpts, BackoffSupervisor}
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
-import com.example.shoppingcart._
+import com.example.shoppingcart.shoppingcart._
 import com.google.protobuf.empty.Empty
 
 import scala.concurrent.duration._
