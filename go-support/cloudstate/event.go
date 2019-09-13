@@ -16,8 +16,6 @@
 // Package cloudstate implements the CloudState event sourced and entity discovery protocol.
 package cloudstate
 
-import "log"
-
 type EventEmitter interface {
 	Emit(event interface{})
 	Events() []interface{}
@@ -35,7 +33,6 @@ type eventEmitter struct {
 }
 
 func (e *eventEmitter) Emit(event interface{}) {
-	log.Printf("emitted event: %v", event)
 	e.events = append(e.events, event)
 }
 
