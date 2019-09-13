@@ -33,9 +33,8 @@ import (
 )
 
 const (
-	SupportLibraryVersion = "0.0.1"
+	SupportLibraryVersion = "0.4.19"
 	SupportLibraryName    = "cloudstate-go-support"
-	ServiceVersion        = "0.0.1"
 )
 
 type CloudState struct {
@@ -154,8 +153,6 @@ func (r *EntityDiscoveryResponder) reset() {
 	r.entitySpec = &protocol.EntitySpec{
 		Entities: make([]*protocol.Entity, 0)[:],
 		ServiceInfo: &protocol.ServiceInfo{
-			ServiceName:           "shopping-chart",
-			ServiceVersion:        ServiceVersion,
 			ServiceRuntime:        runtime.Version(),
 			SupportLibraryName:    SupportLibraryName,
 			SupportLibraryVersion: SupportLibraryVersion,
@@ -192,11 +189,11 @@ func (r *EntityDiscoveryResponder) registerEntity(e *EventSourcedEntity) error {
 	return r.updateSpec()
 }
 
-func (r *EntityDiscoveryResponder) registerFiledescriptorProto(filename string) (err error) {
-	if descriptorProto, e := unpackFile(proto.FileDescriptor(filename)); e != nil {
-		return e
-	} else {
-		r.fileDescriptorSet.File = append(r.fileDescriptorSet.File, descriptorProto)
-		return r.updateSpec()
+func (r *EntityDiscoveryResponder) registerFiledescriptorProto(filename string) error {
+	descriptorProto, err := unpackFile(proto.FileDescriptor(filename))
+	if err != nil {
+		return err
 	}
+	r.fileDescriptorSet.File = append(r.fileDescriptorSet.File, descriptorProto)
+	return r.updateSpec()
 }
