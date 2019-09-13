@@ -581,7 +581,7 @@ func init() {
 }
 
 func init() {
-	proto.RegisterFile("protocols/proxy/grpc/reflection/v1alpha/reflection.proto", fileDescriptor_449fb2c8edff6f39)
+	proto.RegisterFile("protos/proxy/grpc/reflection/v1alpha/reflection.proto", fileDescriptor_449fb2c8edff6f39)
 }
 
 var fileDescriptor_449fb2c8edff6f39 = []byte{

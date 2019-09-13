@@ -12,13 +12,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
 
+// Shopping Cart implements the shopping cart example of the CloudState project.
+//
+// This variation is/was the first PoC used to start with a protocol first implementation
+// to get run against the TCK 100% green.
+//
+// It is replaced by a user friendly implementation which provides a Go Client API for CloudState.
 package main
 
 import (
 	"bytes"
 	"cloudstate.io/gosupport/cloudstate/protocol"
+	"cloudstate.io/gosupport/shoppingcart"
 	"compress/gzip"
 	"context"
 	"errors"
@@ -48,6 +54,7 @@ func (edr *EntityDiscoveryResponder) Discover(c context.Context, pi *protocol.Pr
 		pi.ProtocolMajorVersion,
 		pi.ProtocolMinorVersion,
 	)
+
 	es := protocol.EntitySpec{
 		Proto:    nil,
 		Entities: make([]*protocol.Entity, 0),
@@ -62,7 +69,7 @@ func (edr *EntityDiscoveryResponder) Discover(c context.Context, pi *protocol.Pr
 	set := filedescr.FileDescriptorSet{
 		File: make([]*filedescr.FileDescriptorProto, 0),
 	}
-	appendTypeTo(&Cart{}, &es, &set)
+	appendTypeTo(&shoppingcart.Cart{}, &es, &set)
 	// TODO: resolve dependent proto files by the message itself
 	unpackAndAdd("google/protobuf/empty.proto", &set)
 	unpackAndAdd("google/protobuf/any.proto", &set)
@@ -90,7 +97,7 @@ func (edr *EntityDiscoveryResponder) ReportError(c context.Context, ufe *protoco
 func appendTypeTo(msg descriptor.Message, es *protocol.EntitySpec, set *filedescr.FileDescriptorSet) error {
 	fd, md := descriptor.ForMessage(msg)
 	es.Entities = append(es.Entities, &protocol.Entity{
-		ServiceName:   "com.example.shoppingcart.ShoppingCart", //fmt.Sprintf("%s.%s", fd.Package, fd.Service[0].Name),
+		ServiceName:   "com.example.shoppingcart.ShoppingCart",
 		EntityType:    "cloudstate.eventsourced.EventSourced",
 		PersistenceId: "ShoppingCartEntity"})
 	log.Printf("%v", md)
@@ -134,18 +141,18 @@ func unpackAndAdd(filename string, set *filedescr.FileDescriptorSet) {
 }
 
 type ShoppingCart struct {
-	Cart
+	shoppingcart.Cart
 }
 
 func NewShoppingCart() *ShoppingCart {
 	return &ShoppingCart{
-		Cart: Cart{
-			Items: make([]*LineItem, 0)[:],
+		Cart: shoppingcart.Cart{
+			Items: make([]*shoppingcart.LineItem, 0)[:],
 		},
 	}
 }
 
-func (s *ShoppingCart) find(productId string) (item *LineItem, index int) {
+func (s *ShoppingCart) find(productId string) (item *shoppingcart.LineItem, index int) {
 	for i, item := range s.Items {
 		if productId == item.GetProductId() {
 			return item, i
@@ -165,16 +172,16 @@ func (s *ShoppingCart) remove(productId string) (ok bool) {
 	}
 }
 
-func (s *ShoppingCart) AddItem(c context.Context, li *AddLineItem) (*empty.Empty, error) {
+func (s *ShoppingCart) AddItem(c context.Context, li *shoppingcart.AddLineItem) (*empty.Empty, error) {
 	log.Printf("  AddItem: %v\n", li)
 	if li.GetQuantity() <= 0 {
-		return nil, errors.New(fmt.Sprintf("Cannot add negative quantity of to item %s", li.GetProductId()))
+		return nil, fmt.Errorf("Cannot add negative quantity of to item %s", li.GetProductId())
 	}
 
 	if item, _ := s.find(li.GetProductId()); item != nil {
 		item.Quantity += li.GetQuantity()
 	} else {
-		s.Items = append(s.Items, &LineItem{
+		s.Items = append(s.Items, &shoppingcart.LineItem{
 			ProductId: li.GetProductId(),
 			Name:      li.GetName(),
 			Quantity:  li.GetQuantity(),
@@ -183,17 +190,17 @@ func (s *ShoppingCart) AddItem(c context.Context, li *AddLineItem) (*empty.Empty
 	return &empty.Empty{}, nil
 }
 
-func (s *ShoppingCart) RemoveItem(c context.Context, li *RemoveLineItem) (*empty.Empty, error) {
+func (s *ShoppingCart) RemoveItem(c context.Context, li *shoppingcart.RemoveLineItem) (*empty.Empty, error) {
 	log.Printf("  RemoveItem: %v\n", li)
 	if removed := s.remove(li.GetProductId()); !removed {
-		return nil, errors.New(fmt.Sprintf("Cannot remove item %s because it is not in the cart.", li.GetProductId()))
+		return nil, fmt.Errorf("Cannot remove item %s because it is not in the cart.", li.GetProductId())
 	}
 	return &empty.Empty{}, nil
 }
 
-func (s *ShoppingCart) GetCart(c context.Context, sc *GetShoppingCart) (*Cart, error) {
+func (s *ShoppingCart) GetCart(c context.Context, sc *shoppingcart.GetShoppingCart) (*shoppingcart.Cart, error) {
 	log.Printf("GetCart: %v\n", sc)
-	cart := &Cart{}
+	cart := &shoppingcart.Cart{}
 	for _, item := range s.Items {
 		cart.Items = append(cart.Items, item)
 	}
@@ -247,7 +254,7 @@ func (esh *EventSourcedHandler) Handle(server protocol.EventSourced_HandleServer
 			// we are instructed to call <serviceMethodName> from the service <serviceName> using the
 			// serviceMethodName's payload, in this case
 			if cmd.GetName() == "RemoveItem" {
-				removeLineItem := RemoveLineItem{}
+				removeLineItem := shoppingcart.RemoveLineItem{}
 				if proto.Unmarshal(cmd.GetPayload().GetValue(), &removeLineItem) != nil {
 					log.Fatalf("failed to unmarshal AddLineItem")
 				}
@@ -326,7 +333,7 @@ func (esh *EventSourcedHandler) Handle(server protocol.EventSourced_HandleServer
 				}
 			}
 			if cmd.GetName() == "AddItem" {
-				addLineItem := AddLineItem{}
+				addLineItem := shoppingcart.AddLineItem{}
 				if proto.Unmarshal(cmd.GetPayload().GetValue(), &addLineItem) != nil {
 					log.Fatalf("failed to unmarshal AddLineItem")
 				}
@@ -393,7 +400,7 @@ func (esh *EventSourcedHandler) Handle(server protocol.EventSourced_HandleServer
 				_ = server.Send(send)
 			}
 			if cmd.GetName() == "GetCart" {
-				getShoppingCart := GetShoppingCart{}
+				getShoppingCart := shoppingcart.GetShoppingCart{}
 				if proto.Unmarshal(cmd.GetPayload().GetValue(), &getShoppingCart) != nil {
 					log.Fatalf("failed to unmarshal GetShoppingCart")
 				}
