@@ -754,7 +754,7 @@ buildGoTCKShoppingCart := {
   var cmd = ""
   var os_arch = ""
   if (sys.props("os.name").contains("Linux")) {
-    os_arch = "windows amd64"
+    os_arch = "linux amd64"
     cmd = "./go-support/build/run_tck_shopping_cart_build.sh %s".format(os_arch)
   } else if (sys.props("os.name").contains("Mac OS X")) {
     os_arch = "darwin amd64"
