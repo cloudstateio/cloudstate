@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cloudstate implements the CloudState event sourced and entity discovery protocol.
 package cloudstate
 
 import (

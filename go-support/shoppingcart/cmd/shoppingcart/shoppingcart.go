@@ -34,20 +34,23 @@ func main() {
 		ServiceName:    "shopping-cart",
 		ServiceVersion: "0.0.1",
 	})
-	err := cloudState.Register(&cloudstate.EventSourcedEntity{
-		Entity:      (*ShoppingCart)(nil),
-		ServiceName: "com.example.shoppingcart.ShoppingCart",
-	})
-	if err == nil {
-		cloudState.Run()
-	} else {
+	err := cloudState.Register(
+		&cloudstate.EventSourcedEntity{
+			Entity:      (*ShoppingCart)(nil),
+			ServiceName: "com.example.shoppingcart.ShoppingCart",
+		},
+		cloudstate.DescriptorConfig{
+			Service: "shoppingcart/shoppingcart.proto",
+		}.AddDomainDescriptor("shoppingcart/persistence/domain.proto"),
+	)
+	if err != nil {
 		log.Fatal(err)
 	}
+	cloudState.Run()
 }
 
 // A CloudState event sourced entity.
 type ShoppingCart struct {
-	shoppingcart.Cart
 	// our domain object
 	cart []*domain.LineItem
 	// as an Emitter we can emit events
@@ -64,7 +67,7 @@ func (sc ShoppingCart) New() interface{} {
 // instance of the ShoppingCart entity.
 func NewShoppingCart() *ShoppingCart {
 	return &ShoppingCart{
-		cart:         make([]*domain.LineItem, 0)[:],
+		cart:         make([]*domain.LineItem, 0),
 		EventEmitter: cloudstate.NewEmitter(),
 	}
 }
@@ -96,7 +99,7 @@ func (sc *ShoppingCart) ItemRemoved(removed domain.ItemRemoved) error {
 //
 // returns handle set to true if we have handled the event
 // and any error that happened during the handling
-func (sc *ShoppingCart) Handle(event interface{}) (handled bool, err error) {
+func (sc *ShoppingCart) HandleEvent(event interface{}) (handled bool, err error) {
 	switch e := event.(type) {
 	case *domain.ItemAdded:
 		return true, sc.ItemAdded(*e)
@@ -112,11 +115,12 @@ func (sc *ShoppingCart) AddItem(c context.Context, li *shoppingcart.AddLineItem)
 	if li.GetQuantity() <= 0 {
 		return nil, fmt.Errorf("cannot add negative quantity of to item %s", li.GetProductId())
 	}
-	sc.Emit(&domain.ItemAdded{Item: &domain.LineItem{
-		ProductId: li.ProductId,
-		Name:      li.Name,
-		Quantity:  li.Quantity,
-	}})
+	sc.Emit(&domain.ItemAdded{
+		Item: &domain.LineItem{
+			ProductId: li.ProductId,
+			Name:      li.Name,
+			Quantity:  li.Quantity,
+		}})
 	return &empty.Empty{}, nil
 }
 
@@ -140,6 +144,24 @@ func (sc *ShoppingCart) GetCart(c context.Context, _ *shoppingcart.GetShoppingCa
 		})
 	}
 	return cart, nil
+}
+
+func (sc *ShoppingCart) Snapshot() (snapshot interface{}, err error) {
+	cart := domain.Cart{
+		Items: make([]*domain.LineItem, 0),
+	}
+	cart.Items = append(cart.Items, sc.cart...)
+	return cart, nil
+}
+
+func (sc *ShoppingCart) HandleSnapshot(snapshot interface{}) (handled bool, err error) {
+	switch value := snapshot.(type) {
+	case domain.Cart:
+		sc.cart = append(sc.cart, value.Items...)
+		return true, nil
+	default:
+		return false, nil
+	}
 }
 
 // find finds a product in the shopping cart by productId and returns it as a LineItem.

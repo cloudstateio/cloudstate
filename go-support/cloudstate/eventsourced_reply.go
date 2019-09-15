@@ -13,12 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cloudstate implements the CloudState event sourced and entity discovery protocol.
 package cloudstate
 
 import "cloudstate.io/gosupport/cloudstate/protocol"
 
-func (esh *EventSourcedHandler) sendEventSourcedReply(reply *protocol.EventSourcedReply, server protocol.EventSourced_HandleServer) error {
+func sendEventSourcedReply(reply *protocol.EventSourcedReply, server protocol.EventSourced_HandleServer) error {
 	return server.Send(&protocol.EventSourcedStreamOut{
 		Message: &protocol.EventSourcedStreamOut_Reply{
 			Reply: reply,

@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cloudstate implements the CloudState event sourced and entity discovery protocol.
 package cloudstate
 
 import (
@@ -49,8 +48,23 @@ type EventSourcedEntity struct {
 	// to the entity to be event sourced. It has to
 	// implement the EntityInitializer interface
 	// so that CloudState can create new entity instances
-	Entity      Entity
+	Entity Entity
+	// ServiceName is used to…
+	// Setting it is optional.
 	ServiceName string
+	// PersistenceID is used to namespace events in the journal, useful for
+	// when you share the same database between multiple entities. It defaults to
+	// the simple name for the entity type.
+	// It’s good practice to select one explicitly, this means your database
+	// isn’t depend on type names in your code.
+	// Setting it is optional.
+	PersistenceID string
+	// The snapshotEvery parameter controls how often snapshots are taken,
+	// so that the entity doesn't need to be recovered from the whole journal
+	// each time it’s loaded. If left unset, it defaults to 100.
+	// Setting it to a negative number will result in snapshots never being taken.
+	SnapshotEvery int
+
 	// internal
 	entityName string
 	once       sync.Once
@@ -76,18 +90,13 @@ func (e *EventSourcedEntity) initZeroValue() error {
 }
 
 // A EntityInstanceContext represents a event sourced entity together with its
-// associated service
-//
-// a command is dispatched through this context
-// - service
-// - its entity id
-// - its snapshots ?
-// - the entity itself
+// associated service.
+// Commands are dispatched through this context.
 type EntityInstanceContext struct {
 	EntityInstance EntityInstance
 }
 
-// ServiceName returns the contexts service name
+// ServiceName returns the contexts service name.
 func (ec *EntityInstanceContext) ServiceName() string {
 	return ec.EntityInstance.EventSourcedEntity.ServiceName
 }
@@ -103,6 +112,7 @@ type EventSourcedHandler struct {
 	methodCache map[string]reflect.Method
 }
 
+// NewEventSourcedHandler returns an initialized EventSourcedHandler
 func NewEventSourcedHandler() *EventSourcedHandler {
 	return &EventSourcedHandler{
 		entities:    make(map[string]*EventSourcedEntity),
@@ -221,10 +231,10 @@ after  Call took 440ns
 func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server protocol.EventSourced_HandleServer) {
 	entityContext := esh.contexts[cmd.GetEntityId()]
 	entity := esh.entities[entityContext.ServiceName()]
+	entityValue := reflect.ValueOf(entityContext.EntityInstance.Instance)
 
 	cacheKey := entityContext.ServiceName() + cmd.Name
 	method, hit := esh.methodCache[cacheKey]
-	entityValue := reflect.ValueOf(entityContext.EntityInstance.Instance)
 	if !hit {
 		// entities implement the proxied grpc service
 		// we try to find the method we're called by name with the
@@ -234,7 +244,6 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 			log.Fatalf("no method named: %s found for: %v", cmd.Name, entity)
 			// FIXME: make this a failure
 		}
-
 		// gRPC services are unary rpc methods, always.
 		// They have one message in and one message out.
 		if methodByName.Type().NumIn() != 2 {
@@ -247,7 +256,6 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 			}
 			return
 		}
-
 		// The first argument in the gRPC implementation
 		// is always a context.Context.
 		methodArg0Type := methodByName.Type().In(0)
@@ -262,7 +270,7 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 	}
 
 	// build the input arguments for the method we're about to call
-	inputs := make([]reflect.Value, method.Type.NumIn())[:]
+	inputs := make([]reflect.Value, method.Type.NumIn())
 	inputs[0] = entityValue
 	inputs[1] = reflect.ValueOf(server.Context())
 
@@ -316,7 +324,7 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 	// emitted events
 	events := esh.collectEvents(entityValue)
 	esh.handleEvents(entityValue, events)
-	err = esh.sendEventSourcedReply(&protocol.EventSourcedReply{
+	err = sendEventSourcedReply(&protocol.EventSourcedReply{
 		CommandId: cmd.GetId(),
 		ClientAction: &protocol.ClientAction{
 			Action: &protocol.ClientAction_Reply{
@@ -336,9 +344,10 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 }
 
 func (esh *EventSourcedHandler) collectEvents(entityValue reflect.Value) []*any.Any {
-	events := make([]*any.Any, 0)[:]
+	events := make([]*any.Any, 0)
 	if emitter, ok := entityValue.Interface().(EventEmitter); ok {
 		for _, evt := range emitter.Events() {
+			// TODO: protobufs are expected here, but CloudState supports other formats
 			message, ok := evt.(proto.Message)
 			if !ok {
 				log.Fatalf("got a non-proto message as event")
@@ -360,12 +369,20 @@ func (esh *EventSourcedHandler) collectEvents(entityValue reflect.Value) []*any.
 }
 
 // handleEvents handles a list of events encoded as protobuf Any messages.
+//
+// Event sourced entities persist events and snapshots, and these need to be
+// serialized when persisted. The most straight forward way to persist events
+// and snapshots is to use protobufs. CloudState will automatically detect if
+// an emitted event is a protobuf, and serialize it as such. For other
+// serialization options, including JSON, see Serialization.
 func (esh *EventSourcedHandler) handleEvents(entityValue reflect.Value, events []*any.Any) {
 	eventHandler, ok := entityValue.Interface().(EventHandler)
 	if !ok {
 		panic("no handler found") // FIXME: we might fail as the proxy can't get not-consumed events
 	}
+
 	for _, event := range events {
+		// TODO: here's the point where events can be protobufs, serialized as json or other formats
 		msgName := strings.TrimPrefix(event.GetTypeUrl(), protoAnyBase+"/")
 		messageType := proto.MessageType(msgName)
 		if messageType.Kind() == reflect.Ptr {
@@ -374,7 +391,7 @@ func (esh *EventSourcedHandler) handleEvents(entityValue reflect.Value, events [
 				if err != nil {
 					log.Fatalf("%v\n", err)
 				} else {
-					handled, err := eventHandler.Handle(message)
+					handled, err := eventHandler.HandleEvent(message)
 					if err != nil {
 						log.Fatalf("%v\n", err)
 					}

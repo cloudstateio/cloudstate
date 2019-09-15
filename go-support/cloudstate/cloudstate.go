@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cloudstate implements the CloudState event sourced and entity discovery protocol.
 package cloudstate
 
 import (
@@ -37,6 +36,7 @@ const (
 	SupportLibraryName    = "cloudstate-go-support"
 )
 
+// CloudState is an instance of a CloudState User Function
 type CloudState struct {
 	server                   *grpc.Server
 	entityDiscoveryResponder *EntityDiscoveryResponder
@@ -50,7 +50,6 @@ func NewCloudState(options *Options) *CloudState {
 		entityDiscoveryResponder: NewEntityDiscoveryResponder(options),
 		eventSourcedHandler:      NewEventSourcedHandler(),
 	}
-
 	protocol.RegisterEntityDiscoveryServer(cs.server, cs.entityDiscoveryResponder)
 	log.Println("RegisterEntityDiscoveryServer")
 	protocol.RegisterEventSourcedServer(cs.server, cs.eventSourcedHandler)
@@ -66,8 +65,26 @@ type Options struct {
 
 var NoOptions = Options{}
 
+// DescriptorConfig configures service and dependent descriptors.
+type DescriptorConfig struct {
+	Service        string
+	ServiceMsg     descriptor.Message
+	Domain         []string
+	DomainMessages []descriptor.Message
+}
+
+func (dc DescriptorConfig) AddDomainMessage(m descriptor.Message) DescriptorConfig {
+	dc.DomainMessages = append(dc.DomainMessages, m)
+	return dc
+}
+
+func (dc DescriptorConfig) AddDomainDescriptor(filename string) DescriptorConfig {
+	dc.Domain = append(dc.Domain, filename)
+	return dc
+}
+
 // Register registers an event sourced entity for CloudState.
-func (cs *CloudState) Register(ese *EventSourcedEntity) (err error) {
+func (cs *CloudState) Register(ese *EventSourcedEntity, config DescriptorConfig) (err error) {
 	ese.once.Do(func() {
 		if err = ese.initZeroValue(); err != nil {
 			return
@@ -75,7 +92,7 @@ func (cs *CloudState) Register(ese *EventSourcedEntity) (err error) {
 		if err = cs.eventSourcedHandler.registerEntity(ese); err != nil {
 			return
 		}
-		if err = cs.entityDiscoveryResponder.registerEntity(ese); err != nil {
+		if err = cs.entityDiscoveryResponder.registerEntity(ese, config); err != nil {
 			return
 		}
 	})
@@ -112,9 +129,19 @@ type EntityDiscoveryResponder struct {
 // NewEntityDiscoveryResponder returns a new and initialized EntityDiscoveryResponder.
 func NewEntityDiscoveryResponder(options *Options) *EntityDiscoveryResponder {
 	responder := &EntityDiscoveryResponder{}
-	responder.reset()
-	responder.entitySpec.ServiceInfo.ServiceName = options.ServiceName
-	responder.entitySpec.ServiceInfo.ServiceVersion = options.ServiceVersion
+	responder.entitySpec = &protocol.EntitySpec{
+		Entities: make([]*protocol.Entity, 0),
+		ServiceInfo: &protocol.ServiceInfo{
+			ServiceName:           options.ServiceName,
+			ServiceVersion:        options.ServiceVersion,
+			ServiceRuntime:        fmt.Sprintf("%s %s/%s", runtime.Version(), runtime.GOOS, runtime.GOARCH),
+			SupportLibraryName:    SupportLibraryName,
+			SupportLibraryVersion: SupportLibraryVersion,
+		},
+	}
+	responder.fileDescriptorSet = &filedescr.FileDescriptorSet{
+		File: make([]*filedescr.FileDescriptorProto, 0),
+	}
 	return responder
 }
 
@@ -136,7 +163,7 @@ func (r *EntityDiscoveryResponder) Discover(c context.Context, pi *protocol.Prox
 		"cloudstate/entity.proto",
 		"cloudstate/entity_key.proto",
 	} {
-		if err := r.registerFiledescriptorProto(filename); err != nil {
+		if err := r.registerFileDescriptorProto(filename); err != nil {
 			return nil, err
 		}
 	}
@@ -144,56 +171,74 @@ func (r *EntityDiscoveryResponder) Discover(c context.Context, pi *protocol.Prox
 	return r.entitySpec, nil
 }
 
-func (r *EntityDiscoveryResponder) ReportError(c context.Context, ufe *protocol.UserFunctionError) (*empty.Empty, error) {
-	log.Printf("ReportError: %v\n", ufe)
+func (r *EntityDiscoveryResponder) ReportError(c context.Context, fe *protocol.UserFunctionError) (*empty.Empty, error) {
+	log.Printf("ReportError: %v\n", fe)
 	return &empty.Empty{}, nil
 }
 
-func (r *EntityDiscoveryResponder) reset() {
-	r.entitySpec = &protocol.EntitySpec{
-		Entities: make([]*protocol.Entity, 0)[:],
-		ServiceInfo: &protocol.ServiceInfo{
-			ServiceRuntime:        runtime.Version(),
-			SupportLibraryName:    SupportLibraryName,
-			SupportLibraryVersion: SupportLibraryVersion,
-		},
-	}
-	r.fileDescriptorSet = &filedescr.FileDescriptorSet{
-		File: make([]*filedescr.FileDescriptorProto, 0)[:],
-	}
-}
-
 func (r *EntityDiscoveryResponder) updateSpec() (err error) {
-	if protoBytes, e := proto.Marshal(r.fileDescriptorSet); e == nil {
-		r.entitySpec.Proto = protoBytes
-		return nil
-	} else {
+	protoBytes, err := proto.Marshal(r.fileDescriptorSet)
+	if err == nil {
 		return errors.New("unable to Marshal FileDescriptorSet")
 	}
+	r.entitySpec.Proto = protoBytes
+	return nil
 }
 
-func (r *EntityDiscoveryResponder) registerEntity(e *EventSourcedEntity) error {
-	message, ok := e.Entity.(descriptor.Message)
-	if !ok {
-		return errors.New("entity is no descriptor.Message")
+func (r *EntityDiscoveryResponder) resolveFileDescriptors(dc DescriptorConfig) error {
+	// service
+	if dc.Service != "" {
+		if err := r.registerFileDescriptorProto(dc.Service); err != nil {
+			return err
+		}
+	} else {
+		if dc.ServiceMsg != nil {
+			if err := r.registerFileDescriptor(dc.ServiceMsg); err != nil {
+				return err
+			}
+		}
+	}
+	// and dependent domain descriptors
+	for _, dp := range dc.Domain {
+		if err := r.registerFileDescriptorProto(dp); err != nil {
+			return err
+		}
+	}
+	for _, dm := range dc.DomainMessages {
+		if err := r.registerFileDescriptor(dm); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *EntityDiscoveryResponder) registerEntity(e *EventSourcedEntity, config DescriptorConfig) error {
+	if err := r.resolveFileDescriptors(config); err != nil {
+		return fmt.Errorf("failed to resolveFileDescriptor for DescriptorConfig: %+v: %w", config, err)
+	}
+	persistenceID := e.entityName
+	if e.PersistenceID != "" {
+		persistenceID = e.PersistenceID
 	}
 	r.entitySpec.Entities = append(r.entitySpec.Entities, &protocol.Entity{
 		EntityType:    EventSourced,
 		ServiceName:   e.ServiceName,
-		PersistenceId: e.entityName,
+		PersistenceId: persistenceID,
 	})
-
-	// TODO: how about adding fd.Dependency along this call
-	fd, _ := descriptor.ForMessage(message)
-	r.fileDescriptorSet.File = append(r.fileDescriptorSet.File, fd)
 	return r.updateSpec()
 }
 
-func (r *EntityDiscoveryResponder) registerFiledescriptorProto(filename string) error {
+func (r *EntityDiscoveryResponder) registerFileDescriptorProto(filename string) error {
 	descriptorProto, err := unpackFile(proto.FileDescriptor(filename))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to registerFileDescriptorProto for filename: %s: %w", filename, err)
 	}
 	r.fileDescriptorSet.File = append(r.fileDescriptorSet.File, descriptorProto)
 	return r.updateSpec()
+}
+
+func (r *EntityDiscoveryResponder) registerFileDescriptor(msg descriptor.Message) error {
+	fd, _ := descriptor.ForMessage(msg) // this can panic, so we do here
+	r.fileDescriptorSet.File = append(r.fileDescriptorSet.File, fd)
+	return nil
 }

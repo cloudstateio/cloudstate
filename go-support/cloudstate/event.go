@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package cloudstate implements the CloudState event sourced and entity discovery protocol.
 package cloudstate
 
 type EventEmitter interface {
@@ -24,7 +23,7 @@ type EventEmitter interface {
 
 func NewEmitter() *eventEmitter {
 	return &eventEmitter{
-		events: make([]interface{}, 0)[:],
+		events: make([]interface{}, 0),
 	}
 }
 
@@ -32,6 +31,10 @@ type eventEmitter struct {
 	events []interface{}
 }
 
+// Emit will immediately invoke the associated event handler for that event -
+// this both validates that the event can be applied to the current state, as well as
+// updates the state so that subsequent processing in the command handler can use it.
+// FIXME: we don't do that right now
 func (e *eventEmitter) Emit(event interface{}) {
 	e.events = append(e.events, event)
 }
@@ -41,9 +44,17 @@ func (e *eventEmitter) Events() []interface{} {
 }
 
 func (e *eventEmitter) Clear() {
-	e.events = make([]interface{}, 0)[:]
+	e.events = make([]interface{}, 0)
 }
 
 type EventHandler interface {
-	Handle(event interface{}) (handled bool, err error)
+	HandleEvent(event interface{}) (handled bool, err error)
+}
+
+type Snapshotter interface {
+	Snapshot() (snapshot interface{}, err error)
+}
+
+type SnapshotHandler interface {
+	HandleSnapshot(snapshot interface{}) (handled bool, err error)
 }
