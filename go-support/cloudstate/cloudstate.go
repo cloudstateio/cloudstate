@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	SupportLibraryVersion = "0.4.19"
+	SupportLibraryVersion = "0.4.4"
 	SupportLibraryName    = "cloudstate-go-support"
 )
 
@@ -171,6 +171,7 @@ func (r *EntityDiscoveryResponder) Discover(c context.Context, pi *protocol.Prox
 	return r.entitySpec, nil
 }
 
+// ReportError logs
 func (r *EntityDiscoveryResponder) ReportError(c context.Context, fe *protocol.UserFunctionError) (*empty.Empty, error) {
 	log.Printf("ReportError: %v\n", fe)
 	return &empty.Empty{}, nil
@@ -178,7 +179,7 @@ func (r *EntityDiscoveryResponder) ReportError(c context.Context, fe *protocol.U
 
 func (r *EntityDiscoveryResponder) updateSpec() (err error) {
 	protoBytes, err := proto.Marshal(r.fileDescriptorSet)
-	if err == nil {
+	if err != nil {
 		return errors.New("unable to Marshal FileDescriptorSet")
 	}
 	r.entitySpec.Proto = protoBytes
