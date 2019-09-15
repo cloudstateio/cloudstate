@@ -4,6 +4,7 @@ import java.util.Date
 import com.typesafe.sbt.packager.docker.DockerChmodType
 import sbt.Keys.{developers, scmInfo}
 import sbt.url
+import scala.sys.process._
 
 inThisBuild(
   Seq(
@@ -746,3 +747,34 @@ def doCompileK8sDescriptors(dir: File,
   streams.log.info("Generated YAML descriptor in " + target)
   target
 }
+
+lazy val buildGoTCKShoppingCart = taskKey[Unit]("build go-shopping-cart for the TCK")
+
+buildGoTCKShoppingCart := {
+  var cmd = ""
+  var os_arch = ""
+  if (sys.props("os.name").contains("Linux")) {
+    os_arch = "windows amd64"
+    cmd = "./go-support/build/run_tck_shopping_cart_build.sh %s".format(os_arch)
+  } else if (sys.props("os.name").contains("Mac OS X")) {
+    os_arch = "darwin amd64"
+    cmd = "./go-support/build/run_tck_shopping_cart_build.sh %s".format(os_arch)
+  } else if (sys.props("os.name").contains("Windows")) {
+    os_arch = "windows amd64"
+    // FIXME: someone with windows has to test that
+    cmd = "& .\\go-support\\build\\run_tck_shopping_cart_build.ps1 %s".format(os_arch)
+  } else {
+    val msg = "unable to find a valid OS/ARCH combination"
+    // FIXME: the sbt linter seems to be unhappy with the use of streams here
+    streams.value.log.error(msg)
+    throw new IllegalStateException(msg)
+  }
+
+  if ((cmd !) == 0) {
+    streams.value.log.success("build go-shopping-cart for the TCK for: %s: successfully!".format(os_arch))
+  } else {
+    streams.value.log.error("build go-shopping-cart for the TCK: failed")
+  }
+}
+// TODO: this has to run on compile time or when the TCK is built
+// (run in Compile) <<= (run in Compile).dependsOn(something)
