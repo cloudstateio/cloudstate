@@ -26,11 +26,18 @@ jobs:
     script:
     - cd node-support && npm test && cd -
     - cd samples/js-shopping-cart && npm test && cd -
-  
+
   - name: sbt tests
     before_script: sbt update
     script: sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' test
-  
+
+  - name: go tests
+    before_script:
+      - go version
+    script:
+      - eval "$(gimme 1.13)" && go env
+      - cd go-support/ && go test -count=1 ./... && cd -
+
   - name: docs tests
     before_script:
     - cd node-support && npm install && cd -
@@ -38,17 +45,17 @@ jobs:
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' docs/paradoxValidateInternalLinks docs/test
     - cd docs/src/test/js && npm test && cd -
-  
+
   - stage: TCK
     name: Run TCK against reference implementation
     before_script:
     - sbt update
     - cd node-support && npm install && cd -
     - cd samples/js-shopping-cart && npm install && cd -
-    - cd go-support/shoppingcart && go build && cd -
+    - eval "$(gimme 1.13)" && cd go-support/shoppingcart/cmd/shoppingcart && CGO_ENABLED=0 go build -o tck_shoppingcart && cd -
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
-  
+
   - stage: Deploy
     name: Deploy documentation to cloudstate.io
     if: branch = master AND type = push
@@ -66,13 +73,13 @@ jobs:
       name: CloudState Deployment Bot
       on:
         branch: master
-  
+
   - name: Publish docker images
     if: tag =~ /^v*/
     script:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
     - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish
-  
+
   - name: Upload CloudState descriptor
     if: tag =~ /^v*/
     script: sbt operator/compileK8sDescriptor
