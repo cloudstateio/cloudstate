@@ -72,8 +72,8 @@ func NewShoppingCart() *ShoppingCart {
 	}
 }
 
-// ItemAdded is a event handler function for the ItemAdded event.
-func (sc *ShoppingCart) ItemAdded(added domain.ItemAdded) error {
+func (sc *ShoppingCart) ItemAdded(added *domain.ItemAdded) error { // TODO: enable handling for values
+	// ItemAdded is a event handler function for the ItemAdded event.
 	if item, _ := sc.find(added.Item.ProductId); item != nil {
 		item.Quantity += added.Item.Quantity
 	} else {
@@ -87,7 +87,7 @@ func (sc *ShoppingCart) ItemAdded(added domain.ItemAdded) error {
 }
 
 // ItemRemoved is a event handler function for the ItemRemoved event.
-func (sc *ShoppingCart) ItemRemoved(removed domain.ItemRemoved) error {
+func (sc *ShoppingCart) ItemRemoved(removed *domain.ItemRemoved) error {
 	if !sc.remove(removed.ProductId) {
 		// this should never happen
 		return errors.New("unable to remove product")
@@ -102,9 +102,9 @@ func (sc *ShoppingCart) ItemRemoved(removed domain.ItemRemoved) error {
 func (sc *ShoppingCart) HandleEvent(event interface{}) (handled bool, err error) {
 	switch e := event.(type) {
 	case *domain.ItemAdded:
-		return true, sc.ItemAdded(*e)
-	case *domain.ItemRemoved:
-		return true, sc.ItemRemoved(*e)
+		return true, sc.ItemAdded(e)
+	//case *domain.ItemRemoved:
+	//	*domain.ItemRemoved is handled by reflection
 	default:
 		return false, nil
 	}

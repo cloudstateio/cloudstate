@@ -34,7 +34,7 @@ type eventEmitter struct {
 // Emit will immediately invoke the associated event handler for that event -
 // this both validates that the event can be applied to the current state, as well as
 // updates the state so that subsequent processing in the command handler can use it.
-// FIXME: we don't do that right now
+// FIXME: we don't do that right now on every call of Emit but after one command is handled
 func (e *eventEmitter) Emit(event interface{}) {
 	e.events = append(e.events, event)
 }

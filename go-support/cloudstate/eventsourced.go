@@ -121,8 +121,8 @@ func NewEventSourcedHandler() *EventSourcedHandler {
 	}
 }
 
-func (esh *EventSourcedHandler) registerEntity(e *EventSourcedEntity) error {
-	esh.entities[e.ServiceName] = e
+func (esh *EventSourcedHandler) registerEntity(ese *EventSourcedEntity) error {
+	esh.entities[ese.ServiceName] = ese
 	return nil
 }
 
@@ -182,7 +182,7 @@ func (esh *EventSourcedHandler) handleInit(init *protocol.EventSourcedInit, serv
 // gets a single response back, just like a normal function call." are supported right now.
 //
 // to handle a command we need
-// - the entity id, which identifies the entity (its instance) uniquely(?) for this node
+// - the entity id, which identifies the entity (its instance) uniquely(?) for this user function instance
 // - the service name, like "com.example.shoppingcart.ShoppingCart"
 // - a command id
 // - a command name, which is one of the gRPC service rpcs defined by this entities service
@@ -194,40 +194,10 @@ func (esh *EventSourcedHandler) handleInit(init *protocol.EventSourcedInit, serv
 //
 // Events:
 // Beside calling the service method, we have to collect "events" the service might emit.
-// (TODO)
-//  These events afterwards have to be handled by a EventHandler to update the state of the
+// These events afterwards have to be handled by a EventHandler to update the state of the
 // entity. The CloudState proxy can re-play these events at any time
 // (TODO: check sequencing of the events)
-// (TODO: when has this to be happen? right after a command was handled?, most probably)
-//
-// EntityType => Entity => EntityContext(with one Entity) for Init, Commands and Events, also snapshots?
-//
-
-/*
-
-17.6+9.6+0.7 = 27.9
-vs
-4.4+9.5+0.44 = 14.3
-
-not cached:
-prepare Call took 16.502µs
-doing Call took 9.774µs
-after  Call took 608ns
-prepare Call took 17.665µs
-doing Call took 9.604µs
-after  Call took 730ns
-
-cached:
-prepare Call took 3.853µs
-doing Call took 14.683µs
-after  Call took 336ns
-prepare Call took 4.457µs
-doing Call took 9.564µs
-after  Call took 440ns
-
-*/
-
-// handleCommand
+// (TODO: when has this to be happen? right after a command was handled?, most probably) => for every single call of Emit.
 func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server protocol.EventSourced_HandleServer) {
 	entityContext := esh.contexts[cmd.GetEntityId()]
 	entity := esh.entities[entityContext.ServiceName()]
@@ -322,7 +292,7 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 	}
 
 	// emitted events
-	events := esh.collectEvents(entityValue)
+	events := esh.marshalEventsTo(entityValue)
 	esh.handleEvents(entityValue, events)
 	err = sendEventSourcedReply(&protocol.EventSourcedReply{
 		CommandId: cmd.GetId(),
@@ -343,7 +313,9 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 	}
 }
 
-func (esh *EventSourcedHandler) collectEvents(entityValue reflect.Value) []*any.Any {
+// marshalEventsTo receives the events emitted through the handling of a command
+// and marshals them to the event serialized form.
+func (esh *EventSourcedHandler) marshalEventsTo(entityValue reflect.Value) []*any.Any {
 	events := make([]*any.Any, 0)
 	if emitter, ok := entityValue.Interface().(EventEmitter); ok {
 		for _, evt := range emitter.Events() {
@@ -376,30 +348,53 @@ func (esh *EventSourcedHandler) collectEvents(entityValue reflect.Value) []*any.
 // an emitted event is a protobuf, and serialize it as such. For other
 // serialization options, including JSON, see Serialization.
 func (esh *EventSourcedHandler) handleEvents(entityValue reflect.Value, events []*any.Any) {
-	eventHandler, ok := entityValue.Interface().(EventHandler)
-	if !ok {
-		panic("no handler found") // FIXME: we might fail as the proxy can't get not-consumed events
-	}
-
+	eventHandler, implementsEventHandler := entityValue.Interface().(EventHandler)
 	for _, event := range events {
 		// TODO: here's the point where events can be protobufs, serialized as json or other formats
 		msgName := strings.TrimPrefix(event.GetTypeUrl(), protoAnyBase+"/")
 		messageType := proto.MessageType(msgName)
+
+		// messageType would be: domain.ItemAdded
 		if messageType.Kind() == reflect.Ptr {
+			// get a zero-ed message of this type
 			if message, ok := reflect.New(messageType.Elem()).Interface().(proto.Message); ok {
+				// and marshal onto it what we got as an any.Any onto it
 				err := proto.Unmarshal(event.Value, message)
 				if err != nil {
 					log.Fatalf("%v\n", err)
 				} else {
-					handled, err := eventHandler.HandleEvent(message)
-					if err != nil {
-						log.Fatalf("%v\n", err)
+					// we're ready to handle the proto message
+					// and we might have a handler
+					handled := false
+					if implementsEventHandler {
+						handled, err = eventHandler.HandleEvent(message)
+						if err != nil {
+							log.Fatalf("%v\n", err)
+						}
 					}
+					// if not, we try to find one
+					// currently we support a method that has one argument that equals
+					// to the type of the message received.
 					if !handled {
-						// now, how get we the handler function
+						// find a concrete handling method
+						entityType := entityValue.Type()
+						for tmi := 0; tmi < entityType.NumMethod(); tmi++ {
+							method := entityType.Method(tmi)
+							// we expect one argument for now, the domain message
+							// the first argument is the receiver itself
+							if method.Func.Type().NumIn() == 2 {
+								argumentType := method.Func.Type().In(1)
+								if argumentType.AssignableTo(messageType) {
+									entityValue.MethodByName(method.Name).Call([]reflect.Value{reflect.ValueOf(message)})
+								}
+							} else {
+								// we have not found a one-argument method maching the
+								// TODO: what to do here? we might support mor variations of possible handlers we can detect
+							}
+						}
 					}
 				}
 			}
-		}
+		} // TODO: what do we do if we havent handled the events?
 	}
 }
