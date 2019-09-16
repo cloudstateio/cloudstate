@@ -36,3 +36,4 @@ target-sbt
 node_modules
 .idea/
 .nyc_output
+go-support/shoppingcart/cmd/shoppingcart/tck_shoppingcart
