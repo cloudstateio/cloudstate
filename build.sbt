@@ -659,6 +659,30 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
     }
   )
 
+lazy val `go-support` = (project in file("go-support"))
+  .settings(
+    name := "go-support",
+    (compile in Compile) := {
+      // FIXME only recompile if any of the files in the project has changed
+      import scala.util.Properties.{isLinux, isMac, isWin}
+      val (os_arch, cmd) =
+        if (isLinux) ("linux on amd64", "./go-support/build/run_tck_shopping_cart_build.sh linux amd64")
+        else if (isMac) ("darwin on amd64", "./go-support/build/run_tck_shopping_cart_build.sh darwin amd64")
+        else if (isWin) ("windows on amd64", "& .\\go-support\\build\\run_tck_shopping_cart_build.ps1 windows amd64") // FIXME IMPLEMENT
+        else throw new IllegalStateException("Running on an unsupported OS/ARCH combination: " + sys.props("os.name"))
+
+      val SuccessMessage = "go-support compiled successfully: " + os_arch + "\n"
+
+      (cmd !!) match {
+        case SuccessMessage =>
+          streams.value.log.success("go-support compilation succeeded")
+          (compile in Compile).value // TODO should we produce our own compilation result instead perhaps?
+        case err =>
+          throw new IllegalStateException("go-support compilation failed: " + err)
+      }
+    }
+  )
+
 lazy val `akka-client` = (project in file("samples/akka-client"))
   .enablePlugins(AkkaGrpcPlugin)
   .settings(
@@ -720,7 +744,7 @@ lazy val `tck` = (project in file("tck"))
     fork in test := true,
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
-        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly)
+        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly, `go-support` / Compile / compile)
         .value
   )
 
@@ -750,34 +774,3 @@ def doCompileK8sDescriptors(dir: File,
   streams.log.info("Generated YAML descriptor in " + target)
   target
 }
-
-lazy val buildGoTCKShoppingCart = taskKey[Unit]("build go-shopping-cart for the TCK")
-
-buildGoTCKShoppingCart := {
-  var cmd = ""
-  var os_arch = ""
-  if (sys.props("os.name").contains("Linux")) {
-    os_arch = "linux amd64"
-    cmd = "./go-support/build/run_tck_shopping_cart_build.sh %s".format(os_arch)
-  } else if (sys.props("os.name").contains("Mac OS X")) {
-    os_arch = "darwin amd64"
-    cmd = "./go-support/build/run_tck_shopping_cart_build.sh %s".format(os_arch)
-  } else if (sys.props("os.name").contains("Windows")) {
-    os_arch = "windows amd64"
-    // FIXME: someone with windows has to test that
-    cmd = "& .\\go-support\\build\\run_tck_shopping_cart_build.ps1 %s".format(os_arch)
-  } else {
-    val msg = "unable to find a valid OS/ARCH combination"
-    // FIXME: the sbt linter seems to be unhappy with the use of streams here
-    streams.value.log.error(msg)
-    throw new IllegalStateException(msg)
-  }
-
-  if ((cmd !) == 0) {
-    streams.value.log.success("build go-shopping-cart for the TCK for: %s: successfully!".format(os_arch))
-  } else {
-    streams.value.log.error("build go-shopping-cart for the TCK: failed")
-  }
-}
-// TODO: this has to run on compile time or when the TCK is built
-// (run in Compile) <<= (run in Compile).dependsOn(something)
