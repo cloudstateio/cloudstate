@@ -5,6 +5,8 @@ import "google/protobuf/empty.proto";
 
 package com.example.crdts;
 
+option go_package = "shoppingcart";
+
 message UpdateCounter {
     string key = 1 [(.cloudstate.entity_key) = true];
     int64 value = 2;
