@@ -36,7 +36,7 @@ jobs:
       - go version
     script:
       - eval "$(gimme 1.13)" && go env
-      - cd go-support/ && go test -count=1 ./... && cd -
+      - cd go-support/ && ./build/compile_protobufs.sh && go test -count=1 ./... && cd -
 
   - name: docs tests
     before_script:
@@ -52,7 +52,7 @@ jobs:
     - sbt update
     - cd node-support && npm install && cd -
     - cd samples/js-shopping-cart && npm install && cd -
-    - eval "$(gimme 1.13)" && cd go-support/shoppingcart/cmd/shoppingcart && CGO_ENABLED=0 go build -o tck_shoppingcart && cd -
+    - eval "$(gimme 1.13)" && pushd . && cd go-support && ./build/compile_protobufs.sh && cd shoppingcart/cmd/shoppingcart && CGO_ENABLED=0 go build -o tck_shoppingcart && popd
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
 
