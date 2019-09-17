@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-cp -a ../protocols proto
+cp -a ../protocols protos
 
 protoc --go_out=plugins=grpc:. --proto_path=./protos/frontend/ --proto_path=./protos/protocol/ --proto_path=./protos/proxy/ --proto_path=./protos/example/ protos/protocol/cloudstate/entity.proto
 protoc --go_out=plugins=grpc,paths=source_relative:. --proto_path=./protos/frontend/ --proto_path=./protos/protocol/ --proto_path=./protos/proxy/ --proto_path=./protos/example/ protos/frontend/cloudstate/entity_key.proto
