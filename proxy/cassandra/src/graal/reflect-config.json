@@ -1526,6 +1526,10 @@
   "methods":[{"name":"<init>","parameterTypes":["akka.actor.ActorSystem"] }]
 },
 {
+  "name":"io.cloudstate.proxy.ProtobufAnySerializer",
+  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"]}]
+},
+{
   "name":"io.cloudstate.proxy.crdt.CrdtSerializers",
   "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"]}]
 },
