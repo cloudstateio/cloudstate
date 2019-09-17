@@ -65,7 +65,7 @@ jobs:
     - unzip /tmp/protoc-3.9.1-linux-x86_64.zip -d "$HOME"/protoc
     - eval "$(gimme 1.13)" && go env
     - go get -u github.com/golang/protobuf/protoc-gen-go
-    - pushd . && cd go-support && PATH=$HOME/protoc/bin:$PATH ./build/compile_protobufs.sh && cd shoppingcart/cmd/shoppingcart && CGO_ENABLED=0 go build -o tck_shoppingcart &&
+    - pushd . && cd go-support && PATH=$HOME/protoc/bin:$PATH ./build/compile_protobufs.sh && cd shoppingcart/cmd/shoppingcart && CGO_ENABLED=0 go build -o tck_shoppingcart && popd
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
 
