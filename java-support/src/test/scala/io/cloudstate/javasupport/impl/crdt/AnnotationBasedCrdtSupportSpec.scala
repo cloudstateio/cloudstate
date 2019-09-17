@@ -103,7 +103,7 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
       }
 
       "there is a CRDT constructor and the CRDT is empty" in {
-        an[IllegalStateException] should be thrownBy create(classOf[CrdtConstructorTest], None)
+        create(classOf[CrdtConstructorTest], None)
       }
 
       "there is a CRDT constructor and the CRDT is the wrong type" in {

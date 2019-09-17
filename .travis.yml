@@ -8,13 +8,12 @@ env:
 
 jobs:
   include:
-  - stage: code format check
+  - stage: Format checks
     name: "Code format check (address by running `sbt scalafmtAll`)"
     before_script: sbt update
     script: sbt scalafmtCheckAll || { echo "[error] Code not formatted prior to commit. Run 'sbt scalafmtAll' then commit the reformatted code."; false; }
 
-  - stage: build format check
-    name: "Build code format check (address by running `sbt scalafmtSbt`)"
+  - name: "Build code format check (address by running `sbt scalafmtSbt`)"
     before_script: sbt update
     script: sbt scalafmtSbtCheck || { echo "[error] Build definition code not formatted prior to commit. Run 'sbt scalafmtSbt' then commit the reformatted code."; false; }
 
@@ -36,7 +35,7 @@ jobs:
     - cd node-support && npm install && cd -
     - cd docs/src/test/js && npm install && cd -
     script:
-    - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' docs/paradoxValidateInternalLinks docs/test
+    - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' docs/paradox docs/test
     - cd docs/src/test/js && npm test && cd -
   
   - stage: TCK

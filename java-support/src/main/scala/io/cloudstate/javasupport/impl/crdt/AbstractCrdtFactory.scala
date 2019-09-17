@@ -33,7 +33,9 @@ trait AbstractCrdtFactory extends CrdtFactory {
   // TODO JavaDoc
   override def newLWWRegister[T](value: T): LWWRegister[T] = {
     val register = newCrdt(new LWWRegisterImpl[T](anySupport))
-    register.set(value)
+    if (value != null) {
+      register.set(value)
+    }
     register
   }
   // TODO JavaDoc

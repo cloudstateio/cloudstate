@@ -15,6 +15,7 @@ import io.cloudstate.javasupport.crdt.{
   CrdtEntity,
   CrdtEntityFactory,
   CrdtEntityHandler,
+  CrdtFactory,
   Flag,
   GCounter,
   GSet,
@@ -88,12 +89,12 @@ private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_],
         (ReflectionHelper.ensureAccessible(method), serviceMethod)
       }
 
-    def getHandlers[C <: CrdtContext: ClassTag](streamed: Boolean) =
+    def getHandlers[C <: CrdtContext with CrdtFactory: ClassTag](streamed: Boolean) =
       handlers
         .filter(_._2.outputStreamed == streamed)
         .map {
           case (method, serviceMethod) =>
-            new CommandHandlerInvoker[C](method, serviceMethod, CrdtAnnotationHelper.crdtParameterHandlers)
+            new CommandHandlerInvoker[C](method, serviceMethod, CrdtAnnotationHelper.crdtParameterHandlers[C])
         }
         .groupBy(_.serviceMethod.name)
         .map {
@@ -155,37 +156,67 @@ private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_],
 }
 
 private object CrdtAnnotationHelper {
-  val crdtParameterHandlers: PartialFunction[MethodParameter, ParameterHandler[CrdtContext]] = {
-    case crdt if classOf[Crdt].isAssignableFrom(crdt.parameterType) =>
-      new CrdtParameterHandler(crdt.parameterType.asInstanceOf[Class[_ <: Crdt]], crdt.method)
+  private case class CrdtInjector[C <: Crdt, T](crdtClass: Class[C], create: CrdtFactory => T, wrap: C => T)
+  private def simple[C <: Crdt: ClassTag](create: CrdtFactory => C)() = {
+    val clazz = implicitly[ClassTag[C]].runtimeClass.asInstanceOf[Class[C]]
+    clazz -> CrdtInjector[C, C](clazz, create, identity).asInstanceOf[CrdtInjector[Crdt, AnyRef]]
+  }
+  private def orMapWrapper[W: ClassTag, C <: Crdt](wrap: ORMap[AnyRef, C] => W) =
+    implicitly[ClassTag[W]].runtimeClass
+      .asInstanceOf[Class[C]] -> CrdtInjector(classOf[ORMap[AnyRef, C]], f => wrap(f.newORMap()), wrap)
+      .asInstanceOf[CrdtInjector[Crdt, AnyRef]]
+
+  private val injectorMap: Map[Class[_], CrdtInjector[Crdt, AnyRef]] = Map(
+    simple(_.newGCounter()),
+    simple(_.newPNCounter()),
+    simple(_.newGSet()),
+    simple(_.newORSet()),
+    simple(_.newFlag()),
+    simple(_.newLWWRegister()),
+    simple(_.newORMap()),
+    simple(_.newVote()),
+    orMapWrapper[LWWRegisterMap[AnyRef, AnyRef], LWWRegister[AnyRef]](new LWWRegisterMap(_)),
+    orMapWrapper[PNCounterMap[AnyRef], PNCounter](new PNCounterMap(_))
+  )
+
+  private def injector[C <: Crdt, T](clazz: Class[T]): CrdtInjector[C, T] =
+    injectorMap.get(clazz) match {
+      case Some(injector: CrdtInjector[C, T]) => injector
+      case None => throw new RuntimeException(s"Don't know how to inject CRDT of type $clazz")
+    }
+
+  def crdtParameterHandlers[C <: CrdtContext with CrdtFactory]
+      : PartialFunction[MethodParameter, ParameterHandler[C]] = {
+    case crdt if injectorMap.contains(crdt.parameterType) =>
+      new CrdtParameterHandler[C, Crdt, AnyRef](injectorMap(crdt.parameterType), crdt.method)
     case crdt
         if crdt.parameterType == classOf[Optional[_]] &&
-        classOf[Crdt].isAssignableFrom(ReflectionHelper.getFirstParameter(crdt.genericParameterType)) =>
+        injectorMap.contains(ReflectionHelper.getFirstParameter(crdt.genericParameterType)) =>
       new OptionalCrdtParameterHandler(
-        ReflectionHelper.getFirstParameter(crdt.genericParameterType).asInstanceOf[Class[_ <: Crdt]],
+        injectorMap(ReflectionHelper.getFirstParameter(crdt.genericParameterType)),
         crdt.method
       )
   }
 
-  private class CrdtParameterHandler(crdtClass: Class[_ <: Crdt], method: Executable)
-      extends ParameterHandler[CrdtContext] {
-    override def apply(ctx: InvocationContext[CrdtContext]): AnyRef = {
-      val state = ctx.context.state(crdtClass)
+  private class CrdtParameterHandler[C <: CrdtContext with CrdtFactory, D <: Crdt, T](injector: CrdtInjector[D, T],
+                                                                                      method: Executable)
+      extends ParameterHandler[C] {
+    override def apply(ctx: InvocationContext[C]): AnyRef = {
+      val state = ctx.context.state(injector.crdtClass)
       if (state.isPresent) {
-        state.get()
+        injector.wrap(state.get()).asInstanceOf[AnyRef]
       } else {
-        throw new IllegalStateException(
-          s"${method.getDeclaringClass.getName}.${method.getName} requires a CRDT " +
-          s"of type ${crdtClass.getName}, but this entity has no CRDT created for it yet."
-        )
+        injector.create(ctx.context).asInstanceOf[AnyRef]
       }
     }
   }
 
-  private class OptionalCrdtParameterHandler(crdtClass: Class[_ <: Crdt], method: Executable)
+  private class OptionalCrdtParameterHandler[C <: Crdt, T](injector: CrdtInjector[C, T], method: Executable)
       extends ParameterHandler[CrdtContext] {
+
+    import scala.compat.java8.OptionConverters._
     override def apply(ctx: InvocationContext[CrdtContext]): AnyRef =
-      ctx.context.state(crdtClass)
+      ctx.context.state(injector.crdtClass).asScala.map(injector.wrap).asJava
   }
 
 }
