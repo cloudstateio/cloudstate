@@ -441,13 +441,21 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
       final def createCrdtAction(): Option[CrdtStateAction] = crdt match {
         case Some(c) =>
           if (crdtIsNew) {
-            crdtIsNew = false
-            if (deleted) {
+            if (c.hasDelta) {
+              crdtIsNew = false
+              if (deleted) {
+                crdt = None
+                None
+              } else {
+                c.resetDelta()
+                Some(CrdtStateAction(action = CrdtStateAction.Action.Create(CrdtState(c.state))))
+              }
+            } else if (deleted) {
+              crdtIsNew = false
               crdt = None
               None
             } else {
-              c.resetDelta()
-              Some(CrdtStateAction(action = CrdtStateAction.Action.Create(CrdtState(c.state))))
+              None
             }
           } else if (deleted) {
             Some(CrdtStateAction(action = CrdtStateAction.Action.Delete(CrdtDelete())))

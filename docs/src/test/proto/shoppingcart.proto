@@ -11,6 +11,7 @@ service ShoppingCartService {
     rpc AddItem(AddLineItem) returns (google.protobuf.Empty);
     rpc RemoveItem(RemoveLineItem) returns (google.protobuf.Empty);
     rpc GetCart(GetShoppingCart) returns (Cart);
+    rpc WatchCart(GetShoppingCart) returns (stream Cart);
 }
 
 message AddLineItem {
