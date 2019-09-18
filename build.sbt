@@ -668,7 +668,8 @@ lazy val `go-support` = (project in file("go-support"))
       val (os_arch, cmd) =
         if (isLinux) ("linux on amd64", "./go-support/build/run_tck_shopping_cart_build.sh linux amd64")
         else if (isMac) ("darwin on amd64", "./go-support/build/run_tck_shopping_cart_build.sh darwin amd64")
-        else if (isWin) ("windows on amd64", "& .\\go-support\\build\\run_tck_shopping_cart_build.ps1 windows amd64") // FIXME IMPLEMENT
+        else if (isWin)
+          ("windows on amd64", "& .\\go-support\\build\\run_tck_shopping_cart_build.ps1 windows amd64") // FIXME IMPLEMENT
         else throw new IllegalStateException("Running on an unsupported OS/ARCH combination: " + sys.props("os.name"))
 
       val SuccessMessage = "go-support compiled successfully: " + os_arch + "\n"
