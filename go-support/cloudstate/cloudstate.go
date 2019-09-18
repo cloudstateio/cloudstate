@@ -226,6 +226,7 @@ func (r *EntityDiscoveryResponder) registerEntity(e *EventSourcedEntity, config 
 		ServiceName:   e.ServiceName,
 		PersistenceId: persistenceID,
 	})
+	// TODO: e.SnapshotEvery
 	return r.updateSpec()
 }
 

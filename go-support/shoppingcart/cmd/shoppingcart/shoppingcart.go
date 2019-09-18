@@ -68,12 +68,12 @@ func (sc ShoppingCart) New() interface{} {
 func NewShoppingCart() *ShoppingCart {
 	return &ShoppingCart{
 		cart:         make([]*domain.LineItem, 0),
-		EventEmitter: cloudstate.NewEmitter(),
+		EventEmitter: cloudstate.NewEmitter(), // TODO: the EventEmitter could be provided by the event sourced handler
 	}
 }
 
+// ItemAdded is a event handler function for the ItemAdded event.
 func (sc *ShoppingCart) ItemAdded(added *domain.ItemAdded) error { // TODO: enable handling for values
-	// ItemAdded is a event handler function for the ItemAdded event.
 	if item, _ := sc.find(added.Item.ProductId); item != nil {
 		item.Quantity += added.Item.Quantity
 	} else {
