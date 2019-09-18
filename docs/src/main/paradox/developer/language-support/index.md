@@ -24,3 +24,9 @@ sbt tck/it:test
 ```
 
 The output of that indicates if the combination of Proxy and User Support libraries yield the expected results.
+
+@@@ index
+
+* [Serialization](serialization.md)
+
+@@@
