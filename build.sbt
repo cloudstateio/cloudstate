@@ -128,7 +128,9 @@ lazy val docs = (project in file("docs"))
         "javadoc.link_style" -> "direct",
         "extref.jsdoc.base_url" -> ".../user/lang/javascript/api/module-cloudstate.%s",
         "cloudstate.java-support.version" -> "0.4.3", // hardcode, otherwise we'll end up with the wrong version in the docs
-        "cloudstate.node-support.version" -> "0.0.1"
+        "cloudstate.node-support.version" -> "0.0.1",
+        "cloudstate.go-support.version" -> "0.0.1",
+        "cloudstate.go.version" -> "1.13"
       ),
     inConfig(Test)(
       sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(

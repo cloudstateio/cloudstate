@@ -43,6 +43,7 @@ type EntityInstance struct {
 	Instance           interface{}
 }
 
+// #event-sourced-entity-type
 type EventSourcedEntity struct {
 	// Entity is a nil or Zero-Initialized reference
 	// to the entity to be event sourced. It has to
@@ -69,6 +70,7 @@ type EventSourcedEntity struct {
 	entityName string
 	once       sync.Once
 }
+// #event-sourced-entity-type
 
 // initZeroValue get its Entity type and Zero-Value it to
 // something we can use as an initializer.
