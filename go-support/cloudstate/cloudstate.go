@@ -100,23 +100,24 @@ func (cs *CloudState) Register(ese *EventSourcedEntity, config DescriptorConfig)
 }
 
 // Run runs the CloudState instance.
-func (cs *CloudState) Run() {
+func (cs *CloudState) Run() error {
 	host, ok := os.LookupEnv("HOST")
 	if !ok {
-		log.Fatalf("unable to get environment variable \"HOST\"")
+		return fmt.Errorf("unable to get environment variable \"HOST\"")
 	}
 	port, ok := os.LookupEnv("PORT")
 	if !ok {
-		log.Fatalf("unable to get environment variable \"PORT\"")
+		return fmt.Errorf("unable to get environment variable \"PORT\"")
 	}
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%s", host, port))
 	if err != nil {
-		log.Fatalf("failed to listen: %v\n", err)
+		return fmt.Errorf("failed to listen: %v\n", err)
 	}
 	log.Printf("starting grpcServer at: %s:%s", host, port)
 	if e := cs.server.Serve(lis); e != nil {
-		log.Fatalf("failed to grpcServer.Serve for: %v", lis)
+		return fmt.Errorf("failed to grpcServer.Serve for: %v", lis)
 	}
+	return nil
 }
 
 // EntityDiscoveryResponder implements the CloudState discovery protocol.
@@ -240,7 +241,10 @@ func (r *EntityDiscoveryResponder) registerFileDescriptorProto(filename string) 
 }
 
 func (r *EntityDiscoveryResponder) registerFileDescriptor(msg descriptor.Message) error {
-	fd, _ := descriptor.ForMessage(msg) // this can panic, so we do here
+	fd, _ := descriptor.ForMessage(msg) // this can panic
+	if r := recover(); r != nil {
+		return fmt.Errorf("descriptor.ForMessage panicked (%v) for: %+v", r, msg)
+	}
 	r.fileDescriptorSet.File = append(r.fileDescriptorSet.File, fd)
 	return nil
 }

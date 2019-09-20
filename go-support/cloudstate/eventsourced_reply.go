@@ -15,7 +15,14 @@
 
 package cloudstate
 
-import "cloudstate.io/gosupport/cloudstate/protocol"
+import (
+	"cloudstate.io/gosupport/cloudstate/protocol"
+	"errors"
+)
+
+var ErrSendFailure = errors.New("unable to send a failure message")
+var ErrSend = errors.New("unable to send a message")
+var ErrMarshal = errors.New("unable to marshal a message")
 
 func sendEventSourcedReply(reply *protocol.EventSourcedReply, server protocol.EventSourced_HandleServer) error {
 	return server.Send(&protocol.EventSourcedStreamOut{

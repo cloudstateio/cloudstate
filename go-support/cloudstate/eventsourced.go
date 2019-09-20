@@ -137,20 +137,24 @@ func (esh *EventSourcedHandler) Handle(server protocol.EventSourced_HandleServer
 			return err
 		}
 		if cmd := msg.GetCommand(); cmd != nil {
-			esh.handleCommand(cmd, server)
-			continue
+			if err := esh.handleCommand(cmd, server); err != nil {
+				if errors.Is(err, ErrSendFailure) {
+				}
+				return err
+			}
 		}
 		if event := msg.GetEvent(); event != nil {
 			log.Fatalf("event handling is not implemented yet")
 		}
 		if init := msg.GetInit(); init != nil {
-			esh.handleInit(init, server)
-			continue
+			if err := esh.handleInit(init, server); err != nil { // TODO: unwrap the error and see if its a server.Send error
+				return err
+			}
 		}
 	}
 }
 
-func (esh *EventSourcedHandler) handleInit(init *protocol.EventSourcedInit, server protocol.EventSourced_HandleServer) {
+func (esh *EventSourcedHandler) handleInit(init *protocol.EventSourcedInit, server protocol.EventSourced_HandleServer) error {
 	eid := init.GetEntityId()
 	if _, present := esh.contexts[eid]; present {
 		if err := server.Send(&protocol.EventSourcedStreamOut{
@@ -158,9 +162,9 @@ func (esh *EventSourcedHandler) handleInit(init *protocol.EventSourcedInit, serv
 				Failure: &protocol.Failure{
 					Description: "entity already initialized",
 				}}}); err != nil {
-			log.Fatalf("unable to server.Send")
+			return fmt.Errorf("unable to server.Send, %w", err)
 		}
-		return
+		return nil
 	}
 	entity := esh.entities[init.GetServiceName()]
 	if initializer, ok := entity.Entity.(EntityInitializer); ok {
@@ -172,12 +176,14 @@ func (esh *EventSourcedHandler) handleInit(init *protocol.EventSourcedInit, serv
 			},
 		}
 	} else {
-		log.Fatalf("unable to handle init entity.Entity does not implement EntityInitializer")
+		return fmt.Errorf("unable to handle init entity.Entity does not implement EntityInitializer")
 	}
+	return nil
 }
 
 // handleCommand handles a command received from the CloudState proxy.
 //
+// TODO: remove these following lines of comment
 // "Unary RPCs where the client sends a single request to the server and
 // gets a single response back, just like a normal function call." are supported right now.
 //
@@ -187,7 +193,7 @@ func (esh *EventSourcedHandler) handleInit(init *protocol.EventSourcedInit, serv
 // - a command id
 // - a command name, which is one of the gRPC service rpcs defined by this entities service
 // - the command payload, which is the message sent for the command as a protobuf.Any blob
-// - a streamed flag, (FIXME: for what?)
+// - a streamed flag, (TODO: for what?)
 //
 // together, these properties allow to call a method of the entities registered service and
 // return its response as a reply to the CloudState proxy.
@@ -197,40 +203,42 @@ func (esh *EventSourcedHandler) handleInit(init *protocol.EventSourcedInit, serv
 // These events afterwards have to be handled by a EventHandler to update the state of the
 // entity. The CloudState proxy can re-play these events at any time
 // (TODO: check sequencing of the events)
-// (TODO: when has this to be happen? right after a command was handled?, most probably) => for every single call of Emit.
-func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server protocol.EventSourced_HandleServer) {
+// (TODO: when has this to be happen? right after a command was handled?, most probably => for every single call of Emit => FIXME)
+func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server protocol.EventSourced_HandleServer) error {
 	entityContext := esh.contexts[cmd.GetEntityId()]
 	entity := esh.entities[entityContext.ServiceName()]
 	entityValue := reflect.ValueOf(entityContext.EntityInstance.Instance)
 
 	cacheKey := entityContext.ServiceName() + cmd.Name
 	method, hit := esh.methodCache[cacheKey]
+	// as measured this cache saves us about 75% of a call
+	// to be prepared with 4.4µs vs. 17.6µs where a typical
+	// call by reflection like GetCart() with Func.Call()
+	// takes ~10µs and to get return values processed somewhere 0.7µs.
 	if !hit {
 		// entities implement the proxied grpc service
 		// we try to find the method we're called by name with the
 		// received command.
 		methodByName := entityValue.MethodByName(cmd.Name)
 		if !methodByName.IsValid() {
-			log.Fatalf("no method named: %s found for: %v", cmd.Name, entity)
-			// FIXME: make this a failure
+			return fmt.Errorf("no method named: %s found for: %v", cmd.Name, entity)
 		}
 		// gRPC services are unary rpc methods, always.
 		// They have one message in and one message out.
 		if methodByName.Type().NumIn() != 2 {
+			// this should never happen
 			failure := &protocol.Failure{
-				Description: fmt.Sprintf("method %s of entity: %v ", methodByName.String(), entityValue.String()),
-				// FIXME give a better error message
+				Description: fmt.Sprintf("non-unary method %s of entity: %v found", methodByName.String(), entityValue.String()),
 			}
 			if err := sendFailure(failure, server); err != nil {
-				log.Fatalf("unable to send a failure message")
+				return ErrSendFailure
 			}
-			return
 		}
 		// The first argument in the gRPC implementation
 		// is always a context.Context.
 		methodArg0Type := methodByName.Type().In(0)
 		if !reflect.TypeOf(server.Context()).Implements(methodArg0Type) {
-			log.Fatalf( // TODO: should we really fatal here? what to do?
+			return fmt.Errorf(
 				"first argument for method: %s is not of type: %s",
 				methodByName.String(), reflect.TypeOf(server.Context()).Name(),
 			)
@@ -258,8 +266,8 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 	} else {
 		msg = reflect.Zero(arg1).Interface().(proto.Message)
 	}
-	if proto.Unmarshal(cmd.GetPayload().GetValue(), msg) != nil {
-		log.Fatalf("failed to unmarshal") // FIXME
+	if err := proto.Unmarshal(cmd.GetPayload().GetValue(), msg); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
 	}
 
 	inputs[2] = reflect.ValueOf(msg)
@@ -274,25 +282,27 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 			CommandId:   cmd.GetId(),
 			Description: errReturned.Interface().(error).Error(),
 		}
-		failedToSend := sendClientActionFailure(failure, server)
-		if failedToSend != nil {
-			panic(failedToSend) // TODO: don't panic
+		if err := sendClientActionFailure(failure, server); err != nil {
+			return ErrSendFailure
 		}
-		return
 	}
 	// the reply
 	callReply, ok := called[0].Interface().(proto.Message)
 	if !ok {
-		log.Fatalf("called return value at index 0 is no proto.Message")
+		// this should never happen
+		return fmt.Errorf("called return value at index 0 is no proto.Message")
 	}
 	typeUrl := fmt.Sprintf("%s/%s", protoAnyBase, proto.MessageName(callReply))
 	marshal, err := proto.Marshal(callReply)
 	if err != nil {
-		log.Fatalf("unable to Marshal command reply")
+		return fmt.Errorf("unable to Marshal command reply: %w", ErrMarshal)
 	}
 
 	// emitted events
-	events := esh.marshalEventsTo(entityValue)
+	events, err := esh.marshalEventsTo(entityValue)
+	if err != nil {
+		return err
+	}
 	esh.handleEvents(entityValue, events)
 	err = sendEventSourcedReply(&protocol.EventSourcedReply{
 		CommandId: cmd.GetId(),
@@ -309,24 +319,25 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 		Events: events,
 	}, server)
 	if err != nil {
-		log.Fatalf("unable to send")
+		return fmt.Errorf("%s, %w", err, ErrSend)
 	}
+	return nil
 }
 
 // marshalEventsTo receives the events emitted through the handling of a command
 // and marshals them to the event serialized form.
-func (esh *EventSourcedHandler) marshalEventsTo(entityValue reflect.Value) []*any.Any {
+func (esh *EventSourcedHandler) marshalEventsTo(entityValue reflect.Value) ([]*any.Any, error) {
 	events := make([]*any.Any, 0)
 	if emitter, ok := entityValue.Interface().(EventEmitter); ok {
 		for _, evt := range emitter.Events() {
 			// TODO: protobufs are expected here, but CloudState supports other formats
 			message, ok := evt.(proto.Message)
 			if !ok {
-				log.Fatalf("got a non-proto message as event")
+				return nil, fmt.Errorf("got a non-proto message as event")
 			}
 			marshal, err := proto.Marshal(message)
 			if err != nil {
-				log.Fatalf("unable to Marshal")
+				return nil, fmt.Errorf("%s, %w", err, ErrMarshal)
 			}
 			events = append(events,
 				&any.Any{
@@ -337,7 +348,7 @@ func (esh *EventSourcedHandler) marshalEventsTo(entityValue reflect.Value) []*an
 		}
 		emitter.Clear()
 	}
-	return events
+	return events, nil
 }
 
 // handleEvents handles a list of events encoded as protobuf Any messages.
@@ -347,7 +358,7 @@ func (esh *EventSourcedHandler) marshalEventsTo(entityValue reflect.Value) []*an
 // and snapshots is to use protobufs. CloudState will automatically detect if
 // an emitted event is a protobuf, and serialize it as such. For other
 // serialization options, including JSON, see Serialization.
-func (esh *EventSourcedHandler) handleEvents(entityValue reflect.Value, events []*any.Any) {
+func (esh *EventSourcedHandler) handleEvents(entityValue reflect.Value, events []*any.Any) error {
 	eventHandler, implementsEventHandler := entityValue.Interface().(EventHandler)
 	for _, event := range events {
 		// TODO: here's the point where events can be protobufs, serialized as json or other formats
@@ -361,7 +372,7 @@ func (esh *EventSourcedHandler) handleEvents(entityValue reflect.Value, events [
 				// and marshal onto it what we got as an any.Any onto it
 				err := proto.Unmarshal(event.Value, message)
 				if err != nil {
-					log.Fatalf("%v\n", err)
+					return fmt.Errorf("%s, %w", err, ErrMarshal)
 				} else {
 					// we're ready to handle the proto message
 					// and we might have a handler
@@ -369,7 +380,7 @@ func (esh *EventSourcedHandler) handleEvents(entityValue reflect.Value, events [
 					if implementsEventHandler {
 						handled, err = eventHandler.HandleEvent(message)
 						if err != nil {
-							log.Fatalf("%v\n", err)
+							return err
 						}
 					}
 					// if not, we try to find one
@@ -389,12 +400,13 @@ func (esh *EventSourcedHandler) handleEvents(entityValue reflect.Value, events [
 								}
 							} else {
 								// we have not found a one-argument method maching the
-								// TODO: what to do here? we might support mor variations of possible handlers we can detect
+								// TODO: what to do here? we might support more variations of possible handlers we can detect
 							}
 						}
 					}
 				}
 			}
-		} // TODO: what do we do if we havent handled the events?
+		} // TODO: what do we do if we haven't handled the events?
 	}
+	return nil
 }

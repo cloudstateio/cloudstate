@@ -46,7 +46,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	cloudState.Run()
+	if err := cloudState.Run(); err != nil {
+		log.Fatalf("CloudState failed to run: %v", err)
+	}
 }
 
 // A CloudState event sourced entity.
@@ -147,11 +149,9 @@ func (sc *ShoppingCart) GetCart(c context.Context, _ *shoppingcart.GetShoppingCa
 }
 
 func (sc *ShoppingCart) Snapshot() (snapshot interface{}, err error) {
-	cart := domain.Cart{
-		Items: make([]*domain.LineItem, 0),
-	}
-	cart.Items = append(cart.Items, sc.cart...)
-	return cart, nil
+	return domain.Cart{
+		Items: append(make([]*domain.LineItem, len(sc.cart)), sc.cart...),
+	}, nil
 }
 
 func (sc *ShoppingCart) HandleSnapshot(snapshot interface{}) (handled bool, err error) {
