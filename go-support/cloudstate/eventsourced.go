@@ -285,6 +285,7 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 		if err := sendClientActionFailure(failure, server); err != nil {
 			return ErrSendFailure
 		}
+		return nil
 	}
 	// the reply
 	callReply, ok := called[0].Interface().(proto.Message)
@@ -303,7 +304,10 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 	if err != nil {
 		return err
 	}
-	esh.handleEvents(entityValue, events)
+	err = esh.handleEvents(entityValue, events)
+	if err != nil {
+		return fmt.Errorf("unable to handle Events, %w", ErrSend)
+	}
 	err = sendEventSourcedReply(&protocol.EventSourcedReply{
 		CommandId: cmd.GetId(),
 		ClientAction: &protocol.ClientAction{

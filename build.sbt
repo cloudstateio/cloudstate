@@ -674,9 +674,9 @@ lazy val `go-support` = (project in file("go-support"))
 
       val SuccessMessage = "go-support compiled successfully: " + os_arch + "\n"
 
-      (cmd !!) match {
-        case SuccessMessage =>
-          streams.value.log.success("go-support compilation succeeded")
+      (cmd !) match {
+        case 0 =>
+          streams.value.log.success(SuccessMessage)
           (compile in Compile).value // TODO should we produce our own compilation result instead perhaps?
         case err =>
           throw new IllegalStateException("go-support compilation failed: " + err)

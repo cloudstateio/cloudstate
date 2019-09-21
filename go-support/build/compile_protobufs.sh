@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+set -o nounset
+set -o errexit
+set -o pipefail
+
 cp -a ../protocols protos
 
 protoc --go_out=plugins=grpc:. --proto_path=./protos/frontend/ --proto_path=./protos/protocol/ --proto_path=./protos/proxy/ --proto_path=./protos/example/ protos/protocol/cloudstate/entity.proto

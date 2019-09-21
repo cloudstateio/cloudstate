@@ -31,17 +31,10 @@ jobs:
     script: sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' test
 
   - name: go tests
-    install:
-      - curl -L https://github.com/google/protobuf/releases/download/v3.9.1/protoc-3.9.1-linux-x86_64.zip -o /tmp/protoc-3.9.1-linux-x86_64.zip
-      - unzip /tmp/protoc-3.9.1-linux-x86_64.zip -d "$HOME"/protoc
-      - eval "$(gimme 1.13)" && go env
-      - go get -u github.com/golang/protobuf/protoc-gen-go
-    env:
-      - PATH=$HOME/protoc/bin:$PATH
     before_script:
-      - go version
+      - ./go-support/build/prebuild_go-support_in_docker.sh
     script:
-      - cd go-support/ && ./build/compile_protobufs.sh && go test -count=1 ./... && cd -
+      - cd go-support && ./build/run_go_test_in_docker.sh && cd -
 
   - name: docs tests
     before_script:
@@ -57,14 +50,7 @@ jobs:
     - sbt update
     - cd node-support && npm install && cd -
     - cd samples/js-shopping-cart && npm install && cd -
-    # these lines will be removed once revised task of
-    # buildGoTCKShoppingCart by @viktorklang will be merged (5b9df7c20b1da194d209f7a44b2bc29bdc601cd0)
-    # and the go build is done by the Go Docker container
-    - curl -L https://github.com/google/protobuf/releases/download/v3.9.1/protoc-3.9.1-linux-x86_64.zip -o /tmp/protoc-3.9.1-linux-x86_64.zip
-    - unzip /tmp/protoc-3.9.1-linux-x86_64.zip -d "$HOME"/protoc
-    - eval "$(gimme 1.13)" && go env
-    - go get -u github.com/golang/protobuf/protoc-gen-go
-    - pushd . && cd go-support && PATH=$HOME/protoc/bin:$PATH ./build/compile_protobufs.sh && cd shoppingcart/cmd/shoppingcart && CGO_ENABLED=0 go build -o tck_shoppingcart && popd
+    - sbt go-support/compile
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
 
