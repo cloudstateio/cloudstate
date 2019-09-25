@@ -130,6 +130,7 @@ lazy val docs = (project in file("docs"))
         "cloudstate.java-support.version" -> "0.4.3",
         "cloudstate.node-support.version" -> "0.0.1"
       ),
+    paradoxNavigationDepth := 3,
     inConfig(Test)(
       sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
         PB.protoSources += sourceDirectory.value / "proto",
