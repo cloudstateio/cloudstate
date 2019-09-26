@@ -276,7 +276,7 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 	// The gRPC implementation returns the rpc return method
 	// and an error as a second return value.
 	errReturned := called[1]
-	if errReturned.Interface() != nil && errReturned.Type().Name() == "error" { // FIXME: looks ugly
+	if errReturned.CanInterface() && errReturned.Interface() != nil && errReturned.Type().Name() == "error" { // FIXME: looks ugly
 		// TCK says: FIXME Expects entity.Failure, but gets lientAction.Action.Failure(Failure(commandId, msg)))
 		failure := &protocol.Failure{
 			CommandId:   cmd.GetId(),

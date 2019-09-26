@@ -17,6 +17,10 @@
 package cloudstate
 
 import (
+	"cloudstate.io/gosupport/cloudstate/protocol"
+	"context"
+	_ "google.golang.org/genproto/googleapis/api/annotations"
+	"strings"
 	"testing"
 )
 
@@ -25,5 +29,52 @@ func TestNewCloudState(t *testing.T) {
 	si := cloudState.server.GetServiceInfo()
 	if si == nil {
 		t.Fail()
+	}
+}
+
+func TestEntityDiscoveryResponderDiscover(t *testing.T) {
+	responder := NewEntityDiscoveryResponder(&Options{
+		ServiceName:    "service.one",
+		ServiceVersion: "0.0.1",
+	})
+	info := &protocol.ProxyInfo{
+		ProtocolMajorVersion: 0,
+		ProtocolMinorVersion: 0,
+		ProxyName:            "test-proxy",
+		ProxyVersion:         "9.8.7",
+		SupportedEntityTypes: nil,
+	}
+	spec, err := responder.Discover(context.Background(), info)
+	if err != nil {
+		t.Errorf("responder.Discover returned err: %v", err)
+	}
+	if spec == nil {
+		t.Errorf("no EntitySpec returned by responder.Discover")
+	}
+
+	if spec.ServiceInfo.ServiceName != "service.one" {
+		t.Errorf("spec.ServiceInfo.ServiceName != 'service.one' but is: %s", spec.ServiceInfo.ServiceName)
+	}
+	if spec.ServiceInfo.ServiceVersion != "0.0.1" {
+		t.Errorf("spec.ServiceInfo.ServiceVersion != '0.0.1' but is: %s", spec.ServiceInfo.ServiceVersion)
+	}
+	if !strings.HasPrefix(spec.ServiceInfo.ServiceRuntime, "go") {
+		t.Errorf("spec.ServiceInfo.ServiceRuntime does not start with prefix: go")
+	}
+	if spec.ServiceInfo.SupportLibraryName != "cloudstate-go-support" {
+		t.Errorf("spec.ServiceInfo.SupportLibraryName != 'cloudstate-go-support'")
+	}
+}
+
+func TestEntityDiscoveryResponderReportError(t *testing.T) {
+	responder := NewEntityDiscoveryResponder(&Options{
+		ServiceName:    "service.one",
+		ServiceVersion: "0.0.1",
+	})
+	empty, err := responder.ReportError(context.Background(), &protocol.UserFunctionError{
+		Message: "unable to do XYZ",
+	})
+	if err != nil || empty == nil {
+		t.Errorf("responder.ReportError failed with err: %v, empty: %v", err, empty)
 	}
 }
