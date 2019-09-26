@@ -7,7 +7,6 @@ metadata:
   name: postgres
 spec:
 
-  foo: bar
   # The type of store - valid values would come from an enum of supported databases.
   type: Postgres
 
