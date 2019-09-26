@@ -15,32 +15,43 @@
 
 package cloudstate
 
+type subscription func(event interface{}) error
+
 type EventEmitter interface {
 	Emit(event interface{})
+	Subscribe(subscription)
 	Events() []interface{}
 	Clear()
 }
 
 func NewEmitter() *eventEmitter {
 	return &eventEmitter{
-		events: make([]interface{}, 0),
+		events:        make([]interface{}, 0),
+		subscriptions: make([]subscription, 0),
 	}
 }
 
 type eventEmitter struct {
-	events []interface{}
+	events        []interface{}
+	subscriptions []subscription
 }
 
 // Emit will immediately invoke the associated event handler for that event -
 // this both validates that the event can be applied to the current state, as well as
 // updates the state so that subsequent processing in the command handler can use it.
-// FIXME: we don't do that right now on every call of Emit but after one command is handled
 func (e *eventEmitter) Emit(event interface{}) {
 	e.events = append(e.events, event)
+	for _, subs := range e.subscriptions {
+		_ = subs(event) // TODO: what to do with the error
+	}
 }
 
 func (e *eventEmitter) Events() []interface{} {
 	return e.events
+}
+
+func (e *eventEmitter) Subscribe(subs subscription) {
+	e.subscriptions = append(e.subscriptions[:0], subs) // TODO: support more than
 }
 
 func (e *eventEmitter) Clear() {

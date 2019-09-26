@@ -202,8 +202,7 @@ func (esh *EventSourcedHandler) handleInit(init *protocol.EventSourcedInit, serv
 // Beside calling the service method, we have to collect "events" the service might emit.
 // These events afterwards have to be handled by a EventHandler to update the state of the
 // entity. The CloudState proxy can re-play these events at any time
-// (TODO: check sequencing of the events)
-// (TODO: when has this to be happen? right after a command was handled?, most probably => for every single call of Emit => FIXME)
+// TODO: split it up
 func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server protocol.EventSourced_HandleServer) error {
 	entityContext := esh.contexts[cmd.GetEntityId()]
 	entity := esh.entities[entityContext.ServiceName()]
@@ -270,6 +269,17 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 		return fmt.Errorf("failed to unmarshal: %w", err)
 	}
 
+	// subscribe to events
+	if emitter, ok := entityValue.Interface().(EventEmitter); ok {
+		emitter.Subscribe(func(event interface{}) error {
+			anyEvent, err := esh.marshalEvent(event)
+			if err != nil {
+				return err
+			}
+			return esh.handleEvents(entityValue, anyEvent)
+		})
+	}
+
 	inputs[2] = reflect.ValueOf(msg)
 	// call it
 	called := method.Func.Call(inputs)
@@ -304,10 +314,6 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 	if err != nil {
 		return err
 	}
-	err = esh.handleEvents(entityValue, events)
-	if err != nil {
-		return fmt.Errorf("unable to handle Events, %w", ErrSend)
-	}
 	err = sendEventSourcedReply(&protocol.EventSourcedReply{
 		CommandId: cmd.GetId(),
 		ClientAction: &protocol.ClientAction{
@@ -326,6 +332,22 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 		return fmt.Errorf("%s, %w", err, ErrSend)
 	}
 	return nil
+}
+
+func (esh *EventSourcedHandler) marshalEvent(evt interface{}) (*any.Any, error) {
+	// TODO: protobufs are expected here, but CloudState supports other formats
+	message, ok := evt.(proto.Message)
+	if !ok {
+		return nil, fmt.Errorf("got a non-proto message as event")
+	}
+	marshal, err := proto.Marshal(message)
+	if err != nil {
+		return nil, fmt.Errorf("%s, %w", err, ErrMarshal)
+	}
+	return &any.Any{
+		TypeUrl: fmt.Sprintf("%s/%s", protoAnyBase, proto.MessageName(message)),
+		Value:   marshal,
+	}, nil
 }
 
 // marshalEventsTo receives the events emitted through the handling of a command
@@ -362,14 +384,12 @@ func (esh *EventSourcedHandler) marshalEventsTo(entityValue reflect.Value) ([]*a
 // and snapshots is to use protobufs. CloudState will automatically detect if
 // an emitted event is a protobuf, and serialize it as such. For other
 // serialization options, including JSON, see Serialization.
-func (esh *EventSourcedHandler) handleEvents(entityValue reflect.Value, events []*any.Any) error {
+func (esh *EventSourcedHandler) handleEvents(entityValue reflect.Value, events ...*any.Any) error {
 	eventHandler, implementsEventHandler := entityValue.Interface().(EventHandler)
 	for _, event := range events {
 		// TODO: here's the point where events can be protobufs, serialized as json or other formats
 		msgName := strings.TrimPrefix(event.GetTypeUrl(), protoAnyBase+"/")
 		messageType := proto.MessageType(msgName)
-
-		// messageType would be: domain.ItemAdded
 		if messageType.Kind() == reflect.Ptr {
 			// get a zero-ed message of this type
 			if message, ok := reflect.New(messageType.Elem()).Interface().(proto.Message); ok {
