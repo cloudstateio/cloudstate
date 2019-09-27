@@ -108,11 +108,10 @@ lazy val protocols = (project in file("protocols"))
     common,
     name := "protocols",
     libraryDependencies ++= Seq(
-        "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
-        "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion
+        "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf"
       ),
     PB.protocOptions in Compile := Seq(
-        "--doc_opt=html,index.html"
+        "--doc_opt=markdown,index.md"
       ),
     PB.includePaths in Compile ++= Seq(), // Not used, for now
     PB.targets in Compile := Seq(

@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// gRPC interface for Event Sourced Entity user functions.
-
 syntax = "proto3";
 
 package cloudstate;
@@ -169,23 +167,37 @@ message UserFunctionError {
     string message = 1;
 }
 
+/*
+*/
 message ProxyInfo {
-    int32 protocol_major_version = 1;
-    int32 protocol_minor_version = 2;
-    string proxy_name = 3;
-    string proxy_version = 4;
-    repeated string supported_entity_types = 5;
+        int32 protocol_major_version = 1;
+        int32 protocol_minor_version = 2;
+        string proxy_name = 3;
+        string proxy_version = 4;
+        repeated string supported_entity_types = 5;
 }
 
-// Entity discovery service.
+//The *EntityDiscovery* Service is the entrypoint for CloudState Proxies
+//
+//---
+//
+//`Specification`:
+//
+//  - A `User Function` MUST implement EntityDiscovery
+//  - `discover`
+//    - *MUST* be invoked with a *valid* `ProxyInfo`
+//    - *MUST* be *idempotent*
+//    - *MAY* be called any number of times by its CloudState Proxy
+//    - *MUST* yield a failure if the provided `ProxyInfo` is not deemed compatible with the User Function
+//  - `reportError`
+//    - *MUST* only be invoked to inform a User Function about violations of the CloudState Specification
+//    - *MUST* only receive failures not originating from invoking `reportError`, since that would cause a crash-loop.
+//    - implementations are *RECOMMENDED* to log the received errors, for debugging purposes.
 service EntityDiscovery {
 
-    // Discover what entities the user function wishes to serve.
+    // Lets a CloudState Proxy discover which `service` and `entities` a User Function implements.
     rpc discover(ProxyInfo) returns (EntitySpec) {}
 
-    // Report an error back to the user function. This will only be invoked to tell the user function
-    // that it has done something wrong, eg, violated the protocol, tried to use an entity type that
-    // isn't supported, or attempted to forward to an entity that doesn't exist, etc. These messages
-    // should be logged clearly for debugging purposes.
+    // Lets a CloudState Proxy inform a User Function about specification violations.
     rpc reportError(UserFunctionError) returns (google.protobuf.Empty) {}
 }
