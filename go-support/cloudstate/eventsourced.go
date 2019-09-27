@@ -277,7 +277,7 @@ func (esh *EventSourcedHandler) handleCommand(cmd *protocol.Command, server prot
 				return err
 			}
 			return esh.handleEvents(entityValue, anyEvent)
-		})
+		}, func(err error) {})
 	}
 
 	inputs[2] = reflect.ValueOf(msg)

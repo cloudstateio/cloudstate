@@ -17,9 +17,12 @@
 package cloudstate
 
 import (
+	"bytes"
 	"cloudstate.io/gosupport/cloudstate/protocol"
 	"context"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
+	"log"
+	"os"
 	"strings"
 	"testing"
 )
@@ -66,15 +69,28 @@ func TestEntityDiscoveryResponderDiscover(t *testing.T) {
 	}
 }
 
+func captureOutput(f func()) string {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+	f()
+	return buf.String()
+}
+
 func TestEntityDiscoveryResponderReportError(t *testing.T) {
 	responder := NewEntityDiscoveryResponder(&Options{
 		ServiceName:    "service.one",
 		ServiceVersion: "0.0.1",
 	})
-	empty, err := responder.ReportError(context.Background(), &protocol.UserFunctionError{
-		Message: "unable to do XYZ",
+	output := captureOutput(func() {
+		empty, err := responder.ReportError(context.Background(), &protocol.UserFunctionError{
+			Message: "unable to do XYZ",
+		})
+		if err != nil || empty == nil {
+			t.Errorf("responder.ReportError failed with err: %v, empty: %v", err, empty)
+		}
 	})
-	if err != nil || empty == nil {
-		t.Errorf("responder.ReportError failed with err: %v, empty: %v", err, empty)
+	if !strings.Contains(output, "unable to do XYZ") {
+		t.Errorf("'unable to do XYZ' not found in output: %s", output)
 	}
 }

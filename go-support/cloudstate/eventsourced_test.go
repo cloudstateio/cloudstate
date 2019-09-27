@@ -66,6 +66,10 @@ func resetTestEntity() {
 }
 
 func (te *TestEntity) New() interface{} {
+	testEntity.Subscribe(func(event interface{}) error {
+		fmt.Printf("event is: %+v", event)
+		return nil
+	}, func(err error) {})
 	testEntity.Value = 0
 	return testEntity
 }
@@ -266,3 +270,75 @@ func TestEventSourcedHandlerHandlesCommandAndEvents(t *testing.T) {
 		t.Errorf("testEntity.Value != incrementedTo")
 	}
 }
+
+//type IncrementTwiceByCommand struct {
+//	Amount int64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+//}
+//
+//func (inc IncrementTwiceByCommand) String() string {
+//	return proto.CompactTextString(inc)
+//}
+//
+//func (inc IncrementTwiceByCommand) ProtoMessage() {
+//}
+//
+//func (inc IncrementTwiceByCommand) Reset() {
+//}
+//
+//type IncrementTwiceByEvent struct {
+//	Value int64 `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+//}
+//
+//func (inc IncrementTwiceByEvent) String() string {
+//	return proto.CompactTextString(inc)
+//}
+//
+//func (inc IncrementTwiceByEvent) ProtoMessage() {
+//}
+//
+//func (inc IncrementTwiceByEvent) Reset() {
+//}
+//
+//func TestEventSourcedHandlerEventsAreAppliedForEveryEmit(t *testing.T) {
+//	handler := newHandler(t)
+//	initHandler(handler, t)
+//	incrementedTo := int64(7)
+//	cmd, err := marshal(&IncrementTwiceByCommand{Amount: incrementedTo}, t)
+//	incrCommand := protocol.Command{
+//		EntityId: "entity-0",
+//		Id:       1,
+//		Name:     "IncrementTwiceByCommand",
+//		Payload: &any.Any{
+//			TypeUrl: "type.googleapis.com/IncrementTwiceByCommand",
+//			Value:   cmd,
+//		},
+//	}
+//	err = handler.handleCommand(&incrCommand, TestEventSourcedHandleServer{})
+//	if err != nil {
+//		t.Errorf("%v", err)
+//	}
+//	if testEntity.Value != incrementedTo {
+//		t.Errorf("testEntity.Value != incrementedTo")
+//	}
+//
+//	decrCmdValue, err := proto.Marshal(&DecrementByCommand{Amount: incrementedTo})
+//	if err != nil {
+//		t.Errorf("%v", err)
+//	}
+//	decrCommand := protocol.Command{
+//		EntityId: "entity-0",
+//		Id:       1,
+//		Name:     "DecrementByCommand",
+//		Payload: &any.Any{
+//			TypeUrl: "type.googleapis.com/DecrementByCommand",
+//			Value:   decrCmdValue,
+//		},
+//	}
+//	err = handler.handleCommand(&decrCommand, TestEventSourcedHandleServer{})
+//	if err != nil {
+//		t.Errorf("%v", err)
+//	}
+//	if testEntity.Value != 0 {
+//		t.Errorf("testEntity.Value != incrementedTo")
+//	}
+//}

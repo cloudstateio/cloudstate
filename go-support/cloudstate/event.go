@@ -15,11 +15,16 @@
 
 package cloudstate
 
-type subscription func(event interface{}) error
+type OnNext func(event interface{}) error
+type OnErr func(err error)
+type Subscription struct {
+	OnNext
+	OnErr
+}
 
 type EventEmitter interface {
 	Emit(event interface{})
-	Subscribe(subscription)
+	Subscribe(OnNext, OnErr)
 	Events() []interface{}
 	Clear()
 }
@@ -27,31 +32,34 @@ type EventEmitter interface {
 func NewEmitter() *eventEmitter {
 	return &eventEmitter{
 		events:        make([]interface{}, 0),
-		subscriptions: make([]subscription, 0),
+		subscriptions: make([]Subscription, 0),
 	}
 }
 
 type eventEmitter struct {
 	events        []interface{}
-	subscriptions []subscription
+	subscriptions []Subscription
 }
 
 // Emit will immediately invoke the associated event handler for that event -
 // this both validates that the event can be applied to the current state, as well as
 // updates the state so that subsequent processing in the command handler can use it.
 func (e *eventEmitter) Emit(event interface{}) {
-	e.events = append(e.events, event)
 	for _, subs := range e.subscriptions {
-		_ = subs(event) // TODO: what to do with the error
+		err := subs.OnNext(event)
+		if err != nil && subs.OnErr != nil {
+			subs.OnErr(err)
+		}
 	}
+	e.events = append(e.events, event)
 }
 
 func (e *eventEmitter) Events() []interface{} {
 	return e.events
 }
 
-func (e *eventEmitter) Subscribe(subs subscription) {
-	e.subscriptions = append(e.subscriptions[:0], subs) // TODO: support more than
+func (e *eventEmitter) Subscribe(onNext OnNext, onErr OnErr) {
+	e.subscriptions = append(e.subscriptions[:0], Subscription{onNext, onErr}) // TODO: support more than
 }
 
 func (e *eventEmitter) Clear() {
