@@ -647,33 +647,33 @@ lazy val `scala-support` = (project in file("scala-support"))
     // but since we have java files depending on Scala files, we need to include ourselves on the classpath.
     dependencyClasspath in (Compile, doc) := (fullClasspath in Compile).value,
     javacOptions in (Compile, doc) ++= Seq(
-      "-overview",
-      ((javaSource in Compile).value / "overview.html").getAbsolutePath,
-      "-notimestamp",
-      "-doctitle",
-      "CloudState Scala Support"
-    ),
+        "-overview",
+        ((javaSource in Compile).value / "overview.html").getAbsolutePath,
+        "-notimestamp",
+        "-doctitle",
+        "CloudState Scala Support"
+      ),
     libraryDependencies ++= Seq(
-      // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
-      "io.grpc" % "grpc-core" % GrpcJavaVersion,
-      "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
-      "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-      "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-      "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
-      "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
-      "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
-      "com.typesafe.akka" %% "akka-http-core" % AkkaHttpVersion,
-      "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
-      "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
-      "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
-      "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
-      "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
-      "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
-      "com.typesafe.akka" %% "akka-http-testkit" % AkkaHttpVersion % Test,
-      "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
-      "org.slf4j" % "slf4j-simple" % "1.7.26",
-      "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9.3"
-    ),
+        // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
+        "io.grpc" % "grpc-core" % GrpcJavaVersion,
+        "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
+        "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
+        "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
+        "com.typesafe.akka" %% "akka-http-core" % AkkaHttpVersion,
+        "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
+        "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
+        "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
+        "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
+        "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
+        "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
+        "com.typesafe.akka" %% "akka-http-testkit" % AkkaHttpVersion % Test,
+        "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
+        "org.slf4j" % "slf4j-simple" % "1.7.26",
+        "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9.3"
+      ),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
     akkaGrpcGeneratedSources in Compile := Seq(AkkaGrpc.Server),
     akkaGrpcGeneratedLanguages in Compile := Seq(AkkaGrpc.Scala), // FIXME should be Java, but here be dragons
@@ -720,7 +720,6 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
     }
   )
 
-
 lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart"))
   .dependsOn(`scala-support`)
   .enablePlugins(AkkaGrpcPlugin)
@@ -730,7 +729,7 @@ lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart")
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "frontend", baseDir / "example")
-    },
+    }
   )
 lazy val `akka-client` = (project in file("samples/akka-client"))
   .enablePlugins(AkkaGrpcPlugin)
@@ -753,7 +752,7 @@ lazy val `akka-client` = (project in file("samples/akka-client"))
       ),
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "frontend", baseDir / "example" )
+      Seq(baseDir / "frontend", baseDir / "example")
     }
   )
 
