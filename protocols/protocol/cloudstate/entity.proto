@@ -61,10 +61,10 @@ message Forward {
 message ClientAction {
     oneof action { // TODO
 
-        // Send a reply
+        // Send a reply.
         Reply reply = 1;
 
-        // Forward to another entity
+        // Forward to another entity.
         Forward forward = 2;
 
         // Send a failure to the client
@@ -116,7 +116,8 @@ message Command {
     string entity_id = 1;
 
     // A command id.
-    int64 id = 2; // @exclude FIXME rename to command_id
+    // @exclude FIXME rename to command_id
+    int64 id = 2;
 
     // Command name.
     string name = 3;
@@ -143,7 +144,8 @@ message StreamCancelled {
     string entity_id = 1;
 
     // The command id.
-    int64 id = 2; // @exclude FIXME Rename to command_id
+    // @exclude FIXME Rename to command_id
+    int64 id = 2;
 }
 
 //Failure represents a Command processing failure reply.
