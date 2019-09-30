@@ -1,22 +1,26 @@
 package io.cloudstate.samples.shoppingcart
 
-import com.example.shoppingcart.{Cart => SCart}
-import com.example.shoppingcart.{LineItem => SLineItem}
-import com.example.shoppingcart.{RemoveLineItem => SRemoveLineItem}
-import com.example.shoppingcart.{AddLineItem => SAddLineItem}
-import com.example.shoppingcart.persistence.{Cart => DCart}
-import com.example.shoppingcart.persistence.{ItemAdded => DItemAdded}
-import com.example.shoppingcart.persistence.{LineItem => DLineItem}
-import com.example.shoppingcart.persistence.{ItemRemoved => DItemRemoved}
+import com.example.shoppingcart.persistence.{
+  Cart => DCart,
+  ItemAdded => DItemAdded,
+  ItemRemoved => DItemRemoved,
+  LineItem => DLineItem
+}
+import com.example.shoppingcart.{
+  AddLineItem => SAddLineItem,
+  Cart => SCart,
+  LineItem => SLineItem,
+  RemoveLineItem => SRemoveLineItem
+}
 import com.google.protobuf.Empty
+import io.cloudstate.javasupport.EntityId
 import io.cloudstate.javasupport.eventsourced._
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 /** An event sourced entity. */
 @EventSourcedEntity
-class ShoppingCartEntity(val entityId: String) {
+class ShoppingCartEntity(@EntityId val entityId: String) {
 
   private val cart = mutable.Map.empty[String, SLineItem]
 

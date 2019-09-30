@@ -21,7 +21,8 @@ import io.cloudstate.protocol.entity._
 import scala.concurrent.Future
 import akka.actor.ActorSystem
 import com.google.protobuf.DescriptorProtos
-import io.cloudstate.javasupport.{BuildInfo, StatefulService}
+import io.cloudstate.javasupport.StatefulService
+import io.cloudstate.scalasupport.BuildInfo
 
 class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, StatefulService]) extends EntityDiscovery {
 
