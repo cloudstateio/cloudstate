@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// gRPC definitions for Entity Discovery.
 syntax = "proto3";
 
 package cloudstate;

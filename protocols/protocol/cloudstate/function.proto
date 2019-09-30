@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// gRPC interface for Stateless user functions.
-
+// gRPC definitions for Stateless user functions.
 syntax = "proto3";
 
 package cloudstate.function;
