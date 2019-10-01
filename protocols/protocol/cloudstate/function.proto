@@ -66,13 +66,13 @@ message FunctionCommand {
 //      - `forward` TODO
 //    - `side_effects` TODO
 message FunctionReply {
-
+    // TODO
     oneof response {
         // @exclude FIXME add Failure? Why no ordinal 1?
         Reply reply = 2;
         Forward forward = 3;
     }
-
+    // TODO
     repeated SideEffect side_effects = 4;
 }
 
