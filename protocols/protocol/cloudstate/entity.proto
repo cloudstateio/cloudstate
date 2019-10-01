@@ -18,6 +18,14 @@
 //
 //`Interaction Specification`:
 //
+// - CloudState Proxy
+//   - initiates a gRPC connection to the configured `user-function` hostname and port.
+//   - invokes the User Function's `cloudstate.EntityDiscovery.discover` endpoint via the gRPC connection
+//     - User Function's `cloudstate.EntityDiscovery.discover` implementation
+//       - inspects the passed `ProxyInfo`
+//       - TODO
+//       - replies with a *valid* `EntitySpec`
+//   - TODO
 //  - TODO
 syntax = "proto3";
 
