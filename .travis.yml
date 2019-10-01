@@ -1,4 +1,9 @@
 language: scala
+dist: xenial
+jdk:
+  - openjdk11
+scala:
+  - 2.12.9
 env:
   global:
   # GitHub personal access token
@@ -89,7 +94,10 @@ cache:
   - "$HOME/.npm"
   - "$HOME/.coursier"
 before_cache:
-- rm -fv $HOME/.ivy2/.sbt.ivy.lock
-- find $HOME/.ivy2/cache -name "ivydata-*.properties" -print -delete
-- find $HOME/.sbt        -name "*.lock"               -print -delete
-- find $HOME/.coursier   -name "*.lock"               -print -delete
+  - du -h -d 1 $HOME/.ivy2/
+  - du -h -d 2 $HOME/.sbt/
+  - du -h -d 4 $HOME/.coursier/
+  - rm -fv $HOME/.ivy2/.sbt.ivy.lock
+  - find $HOME/.ivy2/cache -name "ivydata-*.properties" -print -delete
+  - find $HOME/.sbt        -name "*.lock"               -print -delete
+  - find $HOME/.coursier   -name "*.lock"               -print -delete
