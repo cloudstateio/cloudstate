@@ -13,6 +13,12 @@
 // limitations under the License.
 
 // gRPC definitions for Stateless user functions.
+//
+//---
+//
+//`Interaction Specification`:
+//
+//  - TODO
 syntax = "proto3";
 
 package cloudstate.function;

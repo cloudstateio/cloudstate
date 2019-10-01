@@ -12,7 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// gRPC definitions for Entity Discovery.
+// gRPC definitions for Entity Discovery
+//
+//---
+//
+//`Interaction Specification`:
+//
+//  - TODO
 syntax = "proto3";
 
 package cloudstate;
