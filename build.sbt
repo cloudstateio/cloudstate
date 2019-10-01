@@ -86,6 +86,8 @@ headerSources in Compile ++= {
 }
 
 lazy val root = (project in file("."))
+// Don't forget to add your sbt module here!
+// A missing module here can lead to failing Travis test results
   .aggregate(`proxy-core`,
              `proxy-cassandra`,
              `proxy-postgres`,
@@ -730,8 +732,20 @@ lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart")
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "frontend", baseDir / "example")
+    },
+    mainClass in assembly := Some("io.cloudstate.samples.shoppingcart.Main"),
+    assemblyJarName in assembly := "scala-shopping-cart.jar",
+    test in assembly := {},
+    // logLevel in assembly := Level.Debug,
+    assemblyMergeStrategy in assembly := {
+      /*ADD CUSTOMIZATIONS HERE*/
+      //case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
     }
   )
+
 lazy val `akka-client` = (project in file("samples/akka-client"))
   .enablePlugins(AkkaGrpcPlugin)
   .settings(
@@ -793,7 +807,7 @@ lazy val `tck` = (project in file("tck"))
     fork in test := true,
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
-        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly)
+        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly, `scala-shopping-cart` / assembly)
         .value
   )
 
