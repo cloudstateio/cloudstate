@@ -90,6 +90,7 @@ lazy val root = (project in file("."))
              `proxy-cassandra`,
              `proxy-postgres`,
              `java-support`,
+             `scala-support`,
              `java-shopping-cart`,
              `akka-client`,
              operator,
