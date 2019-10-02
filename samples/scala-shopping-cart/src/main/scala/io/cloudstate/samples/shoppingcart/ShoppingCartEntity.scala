@@ -12,7 +12,7 @@ import scala.collection.mutable
 @EventSourcedEntity
 class ShoppingCartEntity(@EntityId val entityId: String) {
 
-  private val cart = mutable.Map.empty[String, SLineItem]
+  private val cart = mutable.LinkedHashMap.empty[String, SLineItem]
 
   @Snapshot
   def snapshot: DCart =
