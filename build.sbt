@@ -129,9 +129,11 @@ lazy val docs = (project in file("docs"))
         "javadoc.io.cloudstate.javasupport.base_url" -> ".../user/lang/java/api/",
         "javadoc.link_style" -> "direct",
         "extref.jsdoc.base_url" -> ".../user/lang/javascript/api/module-cloudstate.%s",
-        "cloudstate.java-support.version" -> "0.4.3", // hardcode, otherwise we'll end up with the wrong version in the docs
+        "cloudstate.version" -> "0.4.3", // hardcode, otherwise we'll end up with the wrong version in the docs
+        "cloudstate.java-support.version" -> "0.4.3",
         "cloudstate.node-support.version" -> "0.0.1"
       ),
+    paradoxNavigationDepth := 3,
     inConfig(Test)(
       sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
         PB.protoSources += sourceDirectory.value / "proto",
@@ -161,11 +163,12 @@ def dockerSettings: Seq[Setting[_]] = Seq(
   dockerAliases := {
     val old = dockerAliases.value
     val single = dockerAlias.value
-    // Just publish latest if it's a snapshot, otherwise, publish both latest and the version
-    if (!isSnapshot.value) {
-      old
-    } else {
-      Seq(single.withTag(Some("latest")))
+    // If a tag is explicitly configured, publish that, otherwise if it's a snapshot, just publish latest, otherwise,
+    // publish both latest and the version
+    sys.props.get("docker.tag") match {
+      case some @ Some(_) => Seq(single.withTag(some))
+      case _ if isSnapshot.value => Seq(single.withTag(Some("latest")))
+      case _ => old
     }
   }
 )
@@ -546,7 +549,7 @@ lazy val operator = (project in file("operator"))
         baseDirectory.value,
         dockerRepository.value,
         dockerUsername.value,
-        if (isSnapshot.value) "latest" else tag,
+        sys.props.get("docker.tag").getOrElse { if (isSnapshot.value) "latest" else tag },
         streams.value
       )
     }
