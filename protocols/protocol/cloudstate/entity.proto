@@ -151,7 +151,7 @@ message Command {
 //
 //`Specification`:
 //
-//  - An `StreamCancelled` is considered to be valid iff:
+//  - A `StreamCancelled` is considered to be valid iff:
 //    - `entity_id` TODO
 //    - `id` TODO
 message StreamCancelled {
