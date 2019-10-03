@@ -1,7 +1,17 @@
 package io.cloudstate.samples.shoppingcart
 
-import com.example.shoppingcart.persistence.{Cart => DCart, ItemAdded => DItemAdded, ItemRemoved => DItemRemoved, LineItem => DLineItem}
-import com.example.shoppingcart.{AddLineItem => SAddLineItem, Cart => SCart, LineItem => SLineItem, RemoveLineItem => SRemoveLineItem}
+import com.example.shoppingcart.persistence.{
+  Cart => DCart,
+  ItemAdded => DItemAdded,
+  ItemRemoved => DItemRemoved,
+  LineItem => DLineItem
+}
+import com.example.shoppingcart.{
+  AddLineItem => SAddLineItem,
+  Cart => SCart,
+  LineItem => SLineItem,
+  RemoveLineItem => SRemoveLineItem
+}
 import com.google.protobuf.Empty
 import io.cloudstate.javasupport.EntityId
 import io.cloudstate.javasupport.eventsourced._
@@ -30,8 +40,9 @@ class ShoppingCartEntity(@EntityId val entityId: String) {
   def itemAdded(itemAdded: DItemAdded): Unit = {
     val item = cart
       .get(itemAdded.getItem.productId)
-      .map(item => item.copy(quantity = item.quantity + itemAdded.item.map(_.quantity).getOrElse(0)))
-      .getOrElse(convert(itemAdded.getItem))
+      .fold(convert(itemAdded.getItem))(
+        item => item.copy(quantity = item.quantity + itemAdded.item.fold(0)(_.quantity))
+      )
     cart.put(item.productId, item)
   }
 
