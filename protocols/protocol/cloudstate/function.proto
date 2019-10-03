@@ -37,7 +37,7 @@ option go_package = "cloudstate/protocol";
 //
 //`Specification`:
 //
-//  - An `FunctionCommand` is considered to be valid iff:
+//  - A `FunctionCommand` is considered to be valid iff:
 //    - `service_name` TODO
 //    - `name` TODO
 //    - `payload` TODO
@@ -60,7 +60,7 @@ message FunctionCommand {
 //
 //`Specification`:
 //
-//  - An `FunctionReply` is considered to be valid iff:
+//  - A `FunctionReply` is considered to be valid iff:
 //    - `response` TODO
 //      - `reply` TODO
 //      - `forward` TODO

@@ -81,7 +81,7 @@ service Crdt {
 //
 //`Specification`:
 //
-//  - An `CrdtStreamIn` is considered to be valid iff:
+//  - A `CrdtStreamIn` is considered to be valid iff:
 //    - `message` TODO
 //      - `init` TODO
 //      - `state` TODO
@@ -124,7 +124,7 @@ message CrdtStreamIn {
 //
 //`Specification`:
 //
-//  - An `CrdtStreamOut` is considered to be valid iff:
+//  - A `CrdtStreamOut` is considered to be valid iff:
 //    - `message` TODO
 //      - `reply` TODO
 //      - `streamed_message` TODO
@@ -154,7 +154,7 @@ message CrdtStreamOut {
 //
 //`Specification`:
 //
-//  - An `CrdtState` is considered to be valid iff:
+//  - A `CrdtState` is considered to be valid iff:
 //    - `state` TODO
 //      - `gcounter` TODO
 //      - `pncounter` TODO
@@ -203,7 +203,7 @@ message CrdtState {
 //
 //`Specification`:
 //
-//  - An `GCounterState` is considered to be valid iff:
+//  - A `GCounterState` is considered to be valid iff:
 //    - `value` TODO
 message GCounterState {
 
@@ -221,7 +221,7 @@ message GCounterState {
 //
 //`Specification`:
 //
-//  - An `PNCounterState` is considered to be valid iff:
+//  - A `PNCounterState` is considered to be valid iff:
 //    - `value` TODO
 message PNCounterState {
 
@@ -239,7 +239,7 @@ message PNCounterState {
 //
 //`Specification`:
 //
-//  - An `GSetState` is considered to be valid iff:
+//  - A `GSetState` is considered to be valid iff:
 //    - `items` TODO
 message GSetState {
 
@@ -278,7 +278,7 @@ message ORSetState {
 //
 //`Specification`:
 //
-//  - An `LWWRegisterState` is considered to be valid iff:
+//  - A `LWWRegisterState` is considered to be valid iff:
 //    - `value` TODO
 //    - `clock` TODO
 //    - `custom_clock_value` TODO
@@ -302,7 +302,7 @@ message LWWRegisterState {
 //
 //`Specification`:
 //
-//  - An `FlagState` is considered to be valid iff:
+//  - A `FlagState` is considered to be valid iff:
 //    - `value` TODO
 message FlagState {
 
@@ -356,7 +356,7 @@ message ORMapEntry {
 //
 //`Specification`:
 //
-//  - An `VoteState` is considered to be valid iff:
+//  - A `VoteState` is considered to be valid iff:
 //    - `votes_for` TODO
 //    - `total_voters` TODO
 //    - `self_vote` TODO
@@ -378,7 +378,7 @@ message VoteState {
 //
 //`Specification`:
 //
-//  - An `CrdtDelta` is considered to be valid iff:
+//  - A `CrdtDelta` is considered to be valid iff:
 //    - `delta` TODO
 //      - `gcounter` TODO
 //      - `pncounter` TODO
@@ -416,7 +416,7 @@ message CrdtDelta {
 //
 //`Specification`:
 //
-//  - An `GCounterDelta` is considered to be valid iff:
+//  - A `GCounterDelta` is considered to be valid iff:
 //    - `increment` TODO
 message GCounterDelta {
     uint64 increment = 1;
@@ -428,7 +428,7 @@ message GCounterDelta {
 //
 //`Specification`:
 //
-//  - An `PNCounterDelta` is considered to be valid iff:
+//  - A `PNCounterDelta` is considered to be valid iff:
 //    - `change` TODO
 message PNCounterDelta {
     sint64 change = 1;
@@ -440,7 +440,7 @@ message PNCounterDelta {
 //
 //`Specification`:
 //
-//  - An `GSetDelta` is considered to be valid iff:
+//  - A `GSetDelta` is considered to be valid iff:
 //    - `added` TODO
 message GSetDelta {
     repeated google.protobuf.Any added = 1;
@@ -471,7 +471,7 @@ message ORSetDelta {
 //
 //`Specification`:
 //
-//  - An `LWWRegisterDelta` is considered to be valid iff:
+//  - A `LWWRegisterDelta` is considered to be valid iff:
 //    - `value` TODO
 //    - `clock` TODO
 //    - `custom_clock_value` TODO
@@ -490,7 +490,7 @@ message LWWRegisterDelta {
 //
 //`Specification`:
 //
-//  - An `FlagDelta` is considered to be valid iff:
+//  - A `FlagDelta` is considered to be valid iff:
 //    - `value` TODO
 message FlagDelta {
     // TODO
@@ -541,7 +541,7 @@ message ORMapEntryDelta {
 //
 //`Specification`:
 //
-//  - An `VoteDelta` is considered to be valid iff:
+//  - A `VoteDelta` is considered to be valid iff:
 //    - `self_vote` TODO
 //    - `votes_for` TODO
 //    - `total_voters` TODO
@@ -560,7 +560,7 @@ message VoteDelta {
 //
 //`Specification`:
 //
-//  - An `CrdtInit` is considered to be valid iff:
+//  - A `CrdtInit` is considered to be valid iff:
 //    - `service_name` TODO
 //    - `entity_id` TODO
 //    - `state` TODO
@@ -579,7 +579,7 @@ message CrdtInit {
 //
 //`Specification`:
 //
-//  - An `CrdtDelete` is considered to be valid iff:
+//  - A `CrdtDelete` is considered to be valid iff:
 //    - TODO
 message CrdtDelete {
 }
@@ -591,7 +591,7 @@ message CrdtDelete {
 //
 //`Specification`:
 //
-//  - An `CrdtReply` is considered to be valid iff:
+//  - A `CrdtReply` is considered to be valid iff:
 //    - `command_id` TODO
 //    - `client_action` TODO
 //    - `side_effects` TODO
@@ -620,7 +620,7 @@ message CrdtReply {
 //
 //`Specification`:
 //
-//  - An `CrdtStateAction` is considered to be valid iff:
+//  - A `CrdtStateAction` is considered to be valid iff:
 //    - `action` TODO
 //      - `create` TODO
 //      - `update` TODO
@@ -650,7 +650,7 @@ message CrdtStateAction {
 //
 //`Specification`:
 //
-//  - An `CrdtStreamedMessage` is considered to be valid iff:
+//  - A `CrdtStreamedMessage` is considered to be valid iff:
 //    - `command_id` TODO
 //    - `client_action` TODO
 //    - `side_effects` TODO
@@ -673,7 +673,7 @@ message CrdtStreamedMessage {
 //
 //`Specification`:
 //
-//  - An `CrdtStreamCancelledResponse` is considered to be valid iff:
+//  - A `CrdtStreamCancelledResponse` is considered to be valid iff:
 //    - `command_id` TODO
 //    - `side_effects` TODO
 //    - `state_action` TODO

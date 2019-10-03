@@ -45,14 +45,23 @@ option go_package = "cloudstate/protocol";
 //
 //`Specification`:
 //
-//  - An `Reply` is considered to be valid iff:
+//  - A `Reply` is considered to be valid iff:
 //    - `payload` TODO
 message Reply {
     // The reply payload.
     google.protobuf.Any payload = 1;
 }
 
-// Forwards handling of this request to another entity.
+//Forwards handling of this request to another entity.
+//
+//---
+//
+//`Specification`:
+//
+//  - A `Forward` is considered to be valid iff:
+//    - `service_name` TODO
+//    - `command_name` TODO
+//    - `payload` TODO
 message Forward {
     // The name of the service to forward to.
     string service_name = 1;
@@ -68,7 +77,7 @@ message Forward {
 //
 //`Specification`:
 //
-//  - An `ClientAction` is considered to be valid iff:
+//  - A `ClientAction` is considered to be valid iff:
 //    - `action` TODO
 //      - `reply` TODO
 //      - `forward` TODO
@@ -94,7 +103,7 @@ message ClientAction {
 //
 //`Specification`:
 //
-//  - An `SideEffect` is considered to be valid iff:
+//  - A `SideEffect` is considered to be valid iff:
 //    - `service_name` TODO
 //    - `command_name` TODO
 //    - `payload` TODO
@@ -120,7 +129,7 @@ message SideEffect {
 //
 //`Specification`:
 //
-//  - An `Command` is considered to be valid iff:
+//  - A `Command` is considered to be valid iff:
 //    - `entity_id` TODO
 //    - `id` TODO
 //    - `name` TODO
@@ -171,7 +180,7 @@ message StreamCancelled {
 //
 //`Specification`:
 //
-//  - An `Failure` is considered to be valid iff:
+//  - A `Failure` is considered to be valid iff:
 //    - `command_id` TODO
 //    - `description` TODO
 message Failure {
@@ -211,7 +220,7 @@ message EntitySpec {
 //
 //`Specification`:
 //
-//  - An `ServiceInfo` is considered to be valid iff:
+//  - A `ServiceInfo` is considered to be valid iff:
 //    - `service_name` TODO
 //    - `service_version` TODO
 //    - `service_runtime` TODO
