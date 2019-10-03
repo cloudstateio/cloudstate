@@ -382,7 +382,7 @@ You are now ready to install an event sourced function. We have a shopping cart 
 1. Configure a Cassandra store. If you called your Cassandra deployment `cassandra` and deployed it to the default namespace, this can be installed by running:
 
     ```
-    kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/master/samples/js-shopping-cart/journal-cassandra.yaml
+    kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/blob/master/samples/js-shopping-cart/cassandra-store.yaml
     ```
     
     Otherwise, download the above file and update the `service` parameter to match the first node of your Cassandra stateful set.
