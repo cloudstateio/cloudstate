@@ -39,7 +39,7 @@ option go_package = "cloudstate/protocol";
 //
 //  - A `FunctionCommand` is considered to be valid iff:
 //    - `service_name` TODO
-//    - `name` TODO
+//    - `name` TODO FIXME rename to `command_name`?
 //    - `payload` TODO
 message FunctionCommand {
     // The name of the service this function is on.
@@ -47,7 +47,6 @@ message FunctionCommand {
     string service_name = 2;
 
     // Command name.
-    // @exclude FIXME rename to command_name?
     string name = 3;
 
     // The command payload.

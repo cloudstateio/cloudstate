@@ -79,12 +79,11 @@ message EventSourcedSnapshot {
 //`Specification`:
 //
 //  - An `EventSourcedEvent` is considered to be valid iff:
-//    - `sequence` TODO
+//    - `sequence` TODO FIXME rename to sequence_number?
 //    - `payload` TODO
 message EventSourcedEvent {
 
     // The sequence number of the event.
-    // @exclude FIXME rename to sequence_number?
     int64 sequence = 1;
 
     // The event payload.

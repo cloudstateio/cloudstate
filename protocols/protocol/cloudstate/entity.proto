@@ -47,7 +47,7 @@ option go_package = "cloudstate/protocol";
 //`Specification`:
 //
 //  - A `Reply` is considered to be valid iff:
-//    - `payload` TODO
+//    - `payload` TODO FIXME rename to `response`?
 message Reply {
     // The reply payload.
     google.protobuf.Any payload = 1;
@@ -62,7 +62,7 @@ message Reply {
 //  - A `Forward` is considered to be valid iff:
 //    - `service_name` TODO
 //    - `command_name` TODO
-//    - `payload` TODO
+//    - `payload` TODO FIXME rename to `parameter_value`?
 message Forward {
     // The name of the service to forward to.
     string service_name = 1;
@@ -106,7 +106,7 @@ message ClientAction {
 //  - A `SideEffect` is considered to be valid iff:
 //    - `service_name` TODO
 //    - `command_name` TODO
-//    - `payload` TODO
+//    - `payload` TODO FIXME rename to `parameter_value`?
 //    - `synchronous` TODO
 message SideEffect {
 
@@ -131,9 +131,9 @@ message SideEffect {
 //
 //  - A `Command` is considered to be valid iff:
 //    - `entity_id` TODO
-//    - `id` TODO
+//    - `id` TODO FIXME rename to `command_id`?
 //    - `name` TODO
-//    - `payload` TODO
+//    - `payload` TODO FIXME rename to `parameter_value`?
 //    - `streamed` TODO
 message Command {
 
@@ -141,7 +141,6 @@ message Command {
     string entity_id = 1;
 
     // A command id.
-    // @exclude FIXME rename to command_id
     int64 id = 2;
 
     // Command name.
@@ -162,14 +161,13 @@ message Command {
 //
 //  - A `StreamCancelled` is considered to be valid iff:
 //    - `entity_id` TODO
-//    - `id` TODO
+//    - `id` TODO FIXME rename to `command_id`?
 message StreamCancelled {
 
     // The ID of the entity.
     string entity_id = 1;
 
     // The command id.
-    // @exclude FIXME Rename to command_id
     int64 id = 2;
 }
 
