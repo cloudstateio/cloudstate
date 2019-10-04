@@ -20,6 +20,7 @@
 //
 // - CloudState Proxy
 //   - initiates a gRPC connection to the configured `user-function` hostname and port.
+//     - TODO describe connection expectations (failure modes and interpretations thereof)
 //   - invokes the User Function's `cloudstate.EntityDiscovery.discover` endpoint via the gRPC connection
 //     - User Function's `cloudstate.EntityDiscovery.discover` implementation
 //       - inspects the passed `ProxyInfo`
@@ -67,7 +68,7 @@ message Forward {
     string service_name = 1;
     // The name of the command.
     string command_name = 2;
-    // The payload.
+    // The payload is the parameter value to the command.
     google.protobuf.Any payload = 3;
 }
 
@@ -78,12 +79,12 @@ message Forward {
 //`Specification`:
 //
 //  - A `ClientAction` is considered to be valid iff:
-//    - `action` TODO
-//      - `reply` TODO
-//      - `forward` TODO
-//      - `failure` TODO
+//    - `action` MUST be one of the following:
+//      - `reply` MUST be a valid Reply containing a `payload` of the expected type.
+//      - `forward` MUST be a valid Forward to a service whose command produces a ClientAction of the expected type.
+//      - `failure` MUST be a valid Failure.
 message ClientAction {
-    // TODO
+    // The type of action this ClientAction represents.
     oneof action {
 
         // Send a reply.
