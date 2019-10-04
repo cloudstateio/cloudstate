@@ -84,7 +84,6 @@ message Forward {
 //      - `forward` MUST be a valid Forward to a service whose command produces a ClientAction of the expected type.
 //      - `failure` MUST be a valid Failure.
 message ClientAction {
-    // The type of action this ClientAction represents.
     oneof action {
 
         // Send a reply.

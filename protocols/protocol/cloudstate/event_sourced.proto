@@ -137,7 +137,6 @@ message EventSourcedReply {
 //      - `command` TODO
 message EventSourcedStreamIn {
 
-    // TODO
     oneof message {
         // TODO
         EventSourcedInit init = 1;
@@ -160,7 +159,6 @@ message EventSourcedStreamIn {
 //      - `failure` TODO
 message EventSourcedStreamOut {
 
-    // TODO
     oneof message {
         // TODO
         EventSourcedReply reply = 1;

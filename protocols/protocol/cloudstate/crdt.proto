@@ -90,7 +90,7 @@ service Crdt {
 //      - `command` TODO
 //      - `stream_cancelled` TODO
 message CrdtStreamIn {
-    // TODO
+
     oneof message {
 
         // Always sent first, and only once.
@@ -131,7 +131,7 @@ message CrdtStreamIn {
 //      - `stream_cancelled_response` TODO
 //      - `failure` TODO
 message CrdtStreamOut {
-    // TODO
+
     oneof message {
         // A reply to an incoming command. Either one reply, or one failure, must be sent in response to each command.
         CrdtReply reply = 1;
@@ -165,7 +165,7 @@ message CrdtStreamOut {
 //      - `ormap` TODO
 //      - `vote` TODO
 message CrdtState {
-    // TODO
+
     oneof state {
         // A Grow-only Counter.
         GCounterState gcounter = 1;
@@ -389,7 +389,7 @@ message VoteState {
 //      - `ormap` TODO
 //      - `vote` TODO
 message CrdtDelta {
-    // TODO
+
     oneof delta {
         // TODO
         GCounterDelta gcounter = 1;
@@ -629,7 +629,7 @@ message CrdtReply {
 //
 // FIXME set the ordinals to start at 1?
 message CrdtStateAction {
-    // TODO
+
     oneof action {
         // TODO
         CrdtState create = 5;
