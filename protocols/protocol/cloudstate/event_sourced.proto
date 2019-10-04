@@ -131,7 +131,7 @@ message EventSourcedReply {
 //`Specification`:
 //
 //  - An `EventSourcedStreamIn` is considered to be valid iff:
-//    - `message` TODO
+//    - `message` MUST be one of the following:
 //      - `init` TODO
 //      - `event` TODO
 //      - `command` TODO
@@ -154,7 +154,7 @@ message EventSourcedStreamIn {
 //`Specification`:
 //
 //  - An `EventSourcedStreamOut` is considered to be valid iff:
-//    - `message` TODO
+//    - `message` MUST be one of the following:
 //      - `reply` TODO
 //      - `failure` TODO
 message EventSourcedStreamOut {

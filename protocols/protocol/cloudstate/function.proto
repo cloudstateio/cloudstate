@@ -61,7 +61,7 @@ message FunctionCommand {
 //`Specification`:
 //
 //  - A `FunctionReply` is considered to be valid iff:
-//    - `response` TODO
+//    - `response` MUST be one of the following:
 //      - `reply` TODO
 //      - `forward` TODO
 //    - `side_effects` TODO

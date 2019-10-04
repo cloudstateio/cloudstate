@@ -82,7 +82,7 @@ service Crdt {
 //`Specification`:
 //
 //  - A `CrdtStreamIn` is considered to be valid iff:
-//    - `message` TODO
+//    - `message` MUST be one of the following:
 //      - `init` TODO
 //      - `state` TODO
 //      - `changed` TODO
@@ -125,7 +125,7 @@ message CrdtStreamIn {
 //`Specification`:
 //
 //  - A `CrdtStreamOut` is considered to be valid iff:
-//    - `message` TODO
+//    - `message` MUST be one of the following:
 //      - `reply` TODO
 //      - `streamed_message` TODO
 //      - `stream_cancelled_response` TODO
@@ -155,7 +155,7 @@ message CrdtStreamOut {
 //`Specification`:
 //
 //  - A `CrdtState` is considered to be valid iff:
-//    - `state` TODO
+//    - `state` MUST be one of the following:
 //      - `gcounter` TODO
 //      - `pncounter` TODO
 //      - `gset` TODO
@@ -379,7 +379,7 @@ message VoteState {
 //`Specification`:
 //
 //  - A `CrdtDelta` is considered to be valid iff:
-//    - `delta` TODO
+//    - `delta` MUST be one of the following:
 //      - `gcounter` TODO
 //      - `pncounter` TODO
 //      - `gset` TODO
@@ -621,7 +621,7 @@ message CrdtReply {
 //`Specification`:
 //
 //  - A `CrdtStateAction` is considered to be valid iff:
-//    - `action` TODO
+//    - `action` MUST be one of the following:
 //      - `create` TODO
 //      - `update` TODO
 //      - `delete` TODO
