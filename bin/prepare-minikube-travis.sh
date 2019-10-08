@@ -18,6 +18,6 @@ touch $HOME/.kube/config
 # We use sudo because that allows us to run minikube directly in Docker without a VM, using the none
 # driver, which is much lighter weight. See https://minikube.sigs.k8s.io/docs/reference/drivers/none/
 # TODO: run against the minimum version of Kubernetes that we support
-sudo minikube start --vm-driver=none --kubernetes-version=v1.15.0
+sudo minikube start --vm-driver=none --kubernetes-version=v1.12.0
 sudo chown -R travis: /home/travis/.minikube/
 
