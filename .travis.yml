@@ -77,31 +77,13 @@ jobs:
     script:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
     - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish operator/compileK8sDescriptors
-    deploy:
-      provider: releases
-      api_key: "$GITHUB_TOKEN"
-      file: "operator/cloudstate-${TRAVIS_TAG:1}.yaml"
-      skip_cleanup: true
-      on:
-        tags: true
   
   - name: Publish latest builds
     if: branch = master AND type = push
     script:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
     - sbt -Duse.native.builds=false -Ddocker.tag=latest "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish operator/compileK8sDescriptors
-    before_deploy:
-      - git config --local user.name "CloudState Deployment Bot"
-      - git config --local user.email "deploy@cloudstate.io"
-      - export TRAVIS_TAG=latest
-      - git tag -d $TRAVIS_TAG
-      - git tag $TRAVIS_TAG
-    deploy:
-      provider: releases
-      api_key: "$GITHUB_TOKEN"
-      file: "operator/cloudstate.yaml"
-      skip_cleanup: true
-      overwrite: true
+    - curl "https://uploads.github.com/repos/cloudstateio/cloudstate/releases/20572045/assets?name=cloudstate.yaml" -H "Authorization: token $GITHUB_TOKEN" -H "Content-Type: application/yaml" -d @operator/cloudstate.yaml
 
 cache:
   directories:
