@@ -76,7 +76,7 @@ jobs:
     if: tag =~ /^v*/
     script:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
-    - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish operator/compileK8sDescriptor
+    - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish operator/compileK8sDescriptors
     deploy:
       provider: releases
       api_key: "$GITHUB_TOKEN"
@@ -89,7 +89,7 @@ jobs:
     if: branch = master AND type = push
     script:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
-    - sbt -Duse.native.builds=false -Ddocker.tag=latest "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish operator/compileK8sDescriptor
+    - sbt -Duse.native.builds=false -Ddocker.tag=latest "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish operator/compileK8sDescriptors
     before_deploy:
       - git config --local user.name "CloudState Deployment Bot"
       - git config --local user.email "deploy@cloudstate.io"
