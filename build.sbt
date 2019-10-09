@@ -149,7 +149,7 @@ def dockerSettings: Seq[Setting[_]] = Seq(
   proxyDockerBuild := None,
   dockerUpdateLatest := true,
   dockerRepository := sys.props.get("docker.registry"),
-  dockerUsername := sys.props.get("docker.username").orElse(Some("cloudstateio")),
+  dockerUsername := sys.props.get("docker.username").orElse(Some("cloudstateio")).filter(_ != ""),
   dockerAlias := {
     val old = dockerAlias.value
     proxyDockerBuild.value match {
@@ -167,7 +167,9 @@ def dockerSettings: Seq[Setting[_]] = Seq(
       case _ if isSnapshot.value => Seq(single.withTag(Some("latest")))
       case _ => old
     }
-  }
+  },
+  // For projects that we publish using Docker, disable the generation of java/scaladocs
+  publishArtifact in (Compile, packageDoc) := false
 )
 
 def buildProxyHelp(commandName: String, name: String) =
@@ -219,11 +221,11 @@ commands ++= Seq(
   buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, false),
   Command.single("dockerBuildAllNonNative", buildProxyHelp("dockerBuildAllNonNative", "all non native")) {
     (state, command) =>
-      List("DevMode", "NoJournal", "InMemory", "Cassandra", "Postgres")
+      List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres")
         .map(c => s"dockerBuild$c $command") ::: state
   },
   Command.single("dockerBuildAllNative", buildProxyHelp("dockerBuildAllNative", "all native")) { (state, command) =>
-    List("DevMode", "NoJournal", "InMemory", "Cassandra", "Postgres")
+    List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres")
       .map(c => s"dockerBuildNative$c $command") ::: state
   }
 )
@@ -600,6 +602,7 @@ lazy val `java-support` = (project in file("java-support"))
         "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9.3"
       ),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
+    javacOptions in (Compile, compile) ++= Seq("-source", "1.8", "-target", "1.8"),
     akkaGrpcGeneratedSources in Compile := Seq(AkkaGrpc.Server),
     akkaGrpcGeneratedLanguages in Compile := Seq(AkkaGrpc.Scala), // FIXME should be Java, but here be dragons
 
@@ -632,9 +635,11 @@ lazy val `java-support` = (project in file("java-support"))
 
 lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
   .dependsOn(`java-support`)
-  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin)
+  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin)
   .settings(
     name := "java-shopping-cart",
+    dockerSettings,
+    dockerBaseImage := "adoptopenjdk/openjdk8",
     mainClass in Compile := Some("io.cloudstate.samples.shoppingcart.Main"),
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
@@ -645,7 +650,7 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
     PB.targets in Compile := Seq(
         PB.gens.java -> (sourceManaged in Compile).value
       ),
-    javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8"),
     mainClass in assembly := (mainClass in Compile).value,
     assemblyJarName in assembly := "java-shopping-cart.jar",
     test in assembly := {},
@@ -733,18 +738,20 @@ def doCompileK8sDescriptors(dir: File,
 
   val targetFileName = if (tag != "latest") s"cloudstate-$tag.yaml" else "cloudstate.yaml"
   val target = targetDir / targetFileName
+  val useNativeBuilds = sys.props.get("use.native.builds").forall(_ == "true")
 
   val files = ((dir / "crds") * "*.yaml").get ++
     (dir * "*.yaml").get.sortBy(_.getName)
 
   val fullDescriptor = files.map(IO.read(_)).mkString("\n---\n")
 
-  val user = username.getOrElse("cloudstateio")
-  val registryAndUsername = registry.fold(user)(r => s"$r/$user")
-  val substitutedDescriptor = fullDescriptor.replaceAll(
-    "cloudstateio/(cloudstate-.*):latest",
-    s"$registryAndUsername/$$1:$tag"
-  )
+  val registryAndUsername = (registry.toSeq ++ username :+ "").mkString("/")
+  val substitutedDescriptor = "cloudstateio/(cloudstate-.*):latest".r.replaceAllIn(fullDescriptor, m => {
+    val artifact =
+      if (useNativeBuilds) m.group(1)
+      else m.group(1).replace("-native", "")
+    s"$registryAndUsername$artifact:$tag"
+  })
 
   IO.write(target, substitutedDescriptor)
   streams.log.info("Generated YAML descriptor in " + target)

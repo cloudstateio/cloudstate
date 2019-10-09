@@ -38,8 +38,8 @@ jobs:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' docs/paradox docs/test
     - cd docs/src/test/js && npm test && cd -
   
-  - stage: TCK
-    name: Run TCK against reference implementation
+  - stage: Integration tests
+    name: TCK
     before_script:
     - sbt update
     - cd node-support && npm install && cd -
@@ -47,6 +47,13 @@ jobs:
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
   
+  - name: Minikube smoke test 
+    before_script:
+    - bin/prepare-minikube-travis.sh
+    script:
+    - bin/deploy-to-minikube.sh
+    - bin/run-test-java-shopping-cart-minikube.sh
+
   - stage: Deploy
     name: Deploy documentation to cloudstate.io
     if: branch = master AND type = push
