@@ -86,10 +86,13 @@ headerSources in Compile ++= {
 }
 
 lazy val root = (project in file("."))
+// Don't forget to add your sbt module here!
+// A missing module here can lead to failing Travis test results
   .aggregate(`proxy-core`,
              `proxy-cassandra`,
              `proxy-postgres`,
              `java-support`,
+             `scala-support`,
              `java-shopping-cart`,
              `akka-client`,
              operator,
@@ -633,6 +636,70 @@ lazy val `java-support` = (project in file("java-support"))
     )
   )
 
+lazy val `scala-support` = (project in file("scala-support"))
+  .enablePlugins(AkkaGrpcPlugin, BuildInfoPlugin)
+  .settings(
+    name := "cloudstate-scala-support",
+    common,
+    crossPaths := false,
+    publishMavenStyle := true,
+    publishTo := sonatypePublishTo.value,
+    buildInfoKeys := Seq[BuildInfoKey](name, version),
+    buildInfoPackage := "io.cloudstate.scalasupport",
+    // Generate javadocs by just including non generated Java sources
+    sourceDirectories in (Compile, doc) := Seq((javaSource in Compile).value),
+    sources in (Compile, doc) := {
+      val javaSourceDir = (javaSource in Compile).value.getAbsolutePath
+      (sources in (Compile, doc)).value.filter(_.getAbsolutePath.startsWith(javaSourceDir))
+    },
+    // javadoc (I think java 9 onwards) refuses to compile javadocs if it can't compile the entire source path.
+    // but since we have java files depending on Scala files, we need to include ourselves on the classpath.
+    dependencyClasspath in (Compile, doc) := (fullClasspath in Compile).value,
+    javacOptions in (Compile, doc) ++= Seq(
+        "-overview",
+        ((javaSource in Compile).value / "overview.html").getAbsolutePath,
+        "-notimestamp",
+        "-doctitle",
+        "CloudState Scala Support"
+      ),
+    libraryDependencies ++= Seq(
+        // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
+        "io.grpc" % "grpc-core" % GrpcJavaVersion,
+        "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
+        "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
+        "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
+        "com.typesafe.akka" %% "akka-http-core" % AkkaHttpVersion,
+        "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
+        "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
+        "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
+        "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
+        "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
+        "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
+        "com.typesafe.akka" %% "akka-http-testkit" % AkkaHttpVersion % Test,
+        "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
+        "org.slf4j" % "slf4j-simple" % "1.7.26",
+        "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9.3"
+      ),
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
+    akkaGrpcGeneratedSources in Compile := Seq(AkkaGrpc.Server),
+    akkaGrpcGeneratedLanguages in Compile := Seq(AkkaGrpc.Scala), // FIXME should be Java, but here be dragons
+
+    // Work around for https://github.com/akka/akka-grpc/pull/673
+    (PB.targets in Compile) := {
+      val old = (PB.targets in Compile).value
+      val ct = crossTarget.value
+
+      old.map(_.copy(outputPath = ct / "akka-grpc" / "main"))
+    },
+    PB.protoSources in Compile ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "protocol", baseDir / "frontend")
+    }
+  )
+
 lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
   .dependsOn(`java-support`)
   .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin)
@@ -653,6 +720,29 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
     javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8"),
     mainClass in assembly := (mainClass in Compile).value,
     assemblyJarName in assembly := "java-shopping-cart.jar",
+    test in assembly := {},
+    // logLevel in assembly := Level.Debug,
+    assemblyMergeStrategy in assembly := {
+      /*ADD CUSTOMIZATIONS HERE*/
+      //case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    }
+  )
+
+lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart"))
+  .dependsOn(`scala-support`)
+  .enablePlugins(AkkaGrpcPlugin)
+  .settings(
+    name := "scala-shopping-cart",
+    PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`scala-support`, Compile)).value,
+    PB.protoSources in Compile ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "frontend", baseDir / "example")
+    },
+    mainClass in assembly := Some("io.cloudstate.samples.shoppingcart.Main"),
+    assemblyJarName in assembly := "scala-shopping-cart.jar",
     test in assembly := {},
     // logLevel in assembly := Level.Debug,
     assemblyMergeStrategy in assembly := {
@@ -725,7 +815,7 @@ lazy val `tck` = (project in file("tck"))
     fork in test := true,
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
-        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly)
+        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly, `scala-shopping-cart` / assembly)
         .value
   )
 
