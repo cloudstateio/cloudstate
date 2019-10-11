@@ -8,6 +8,8 @@ import "google/api/http.proto";
 
 package com.example.shoppingcart;
 
+option go_package = "tck/shoppingcart";
+
 message AddLineItem {
     string user_id = 1 [(.cloudstate.entity_key) = true];
     string product_id = 2;
