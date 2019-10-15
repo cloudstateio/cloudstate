@@ -4,6 +4,8 @@ import java.lang.reflect.{Constructor, Executable, InvocationTargetException}
 import java.util.{function, Optional}
 import java.util.function.Consumer
 
+import scala.annotation.unchecked
+
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 import io.cloudstate.javasupport.{Context, ServiceCall, ServiceCallFactory}
 import io.cloudstate.javasupport.crdt.{
@@ -181,7 +183,7 @@ private object CrdtAnnotationHelper {
 
   private def injector[C <: Crdt, T](clazz: Class[T]): CrdtInjector[C, T] =
     injectorMap.get(clazz) match {
-      case Some(injector: CrdtInjector[C, T]) => injector
+      case Some(injector: CrdtInjector[C, T] @unchecked) => injector
       case None => throw new RuntimeException(s"Don't know how to inject CRDT of type $clazz")
     }
 
