@@ -31,7 +31,7 @@ import (
 // as a event sourced entity.
 //#shopping-cart-main
 func main() {
-	cloudState := cloudstate.NewCloudState(&cloudstate.Options{
+	cloudState := cloudstate.New(cloudstate.Options{
 		ServiceName:    "shopping-cart",
 		ServiceVersion: "0.1.0",
 	})
