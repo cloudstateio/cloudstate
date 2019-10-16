@@ -102,7 +102,7 @@ lazy val docs = (project in file("docs"))
   .dependsOn(`java-support` % Test)
   .settings(
     common,
-    name := "CloudState Documentation",
+    name := "Cloudstate Documentation",
     paradoxTheme := Some(builtinParadoxTheme("generic")),
     mappings in (Compile, paradox) ++= {
       val javaApiDocs = (doc in (`java-support`, Compile)).value
@@ -576,7 +576,7 @@ lazy val `java-support` = (project in file("java-support"))
         ((javaSource in Compile).value / "overview.html").getAbsolutePath,
         "-notimestamp",
         "-doctitle",
-        "CloudState Java Support"
+        "Cloudstate Java Support"
       ),
     libraryDependencies ++= Seq(
         // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that

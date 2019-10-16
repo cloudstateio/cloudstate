@@ -7,11 +7,11 @@
 
 ## Installation requirements
 
-Installing CloudState requires cluster admin, so that the necessary Custom Resource Definitions (CRD) can be installed, and the necessary roles and role bindings can be created.
+Installing Cloudstate requires cluster admin, so that the necessary Custom Resource Definitions (CRD) can be installed, and the necessary roles and role bindings can be created.
 
 ## Operator requirements
 
-The CloudState operator typically gets deployed to its own namespace, for the rest of this guide we will assume that is called `cloudstate`, and needs permissions to manage deployments, services, roles and role bindings in every namespace that it manages CloudState services in. CloudState provides a single deployment descriptor, available from the [CloudState GitHub release page](https://github.com/cloudstateio/cloudstate/releases).
+The Cloudstate operator typically gets deployed to its own namespace, for the rest of this guide we will assume that is called `cloudstate`, and needs permissions to manage deployments, services, roles and role bindings in every namespace that it manages Cloudstate services in. Cloudstate provides a single deployment descriptor, available from the [Cloudstate GitHub release page](https://github.com/cloudstateio/cloudstate/releases).
 
 The deployment descriptor is built from the descriptors found in the [operator `deploy` directory](https://github.com/cloudstateio/cloudstate/blob/master/operator/deploy/), and can be modified accordingly if, for example, more fine grained access controls wish to be granted.
 
@@ -25,7 +25,7 @@ To edit the operator configuration, once deployed, run:
 kubectl edit -n cloudstate configmap/cloudstate-operator-config
 ```
 
-Changes to the config map will be picked up immediately by the operator, and if necessary, will be applied to all CloudState stateful service deployments immediately.
+Changes to the config map will be picked up immediately by the operator, and if necessary, will be applied to all Cloudstate stateful service deployments immediately.
 
 ### Configuring namespaces to watch
 
@@ -37,7 +37,7 @@ cloudstate.operator.watch.namespaces = ["my-namespace-1", "my-namespace-2"]
 
 ### Configuring proxy images
 
-CloudState selects a proxy image based on what type of store is being used, if any. To customize the image used for a particular store, for example, to use a custom build, or a different version, these can be modified using `cloudstate.operator.proxy.image.<store-name>`. For example, to use the non-native build of the Cassandra proxy:
+Cloudstate selects a proxy image based on what type of store is being used, if any. To customize the image used for a particular store, for example, to use a custom build, or a different version, these can be modified using `cloudstate.operator.proxy.image.<store-name>`. For example, to use the non-native build of the Cassandra proxy:
 
 @@@vars
 ```hocon
@@ -53,7 +53,7 @@ To install the operator, first create the namespace it is to be deployed to:
 kubectl create namespace cloudstate
 ```
 
-Now install CloudState into that namespace:
+Now install Cloudstate into that namespace:
 
 @@@vars
 ```
@@ -61,4 +61,4 @@ kubectl apply -n cloudstate -f https://github.com/cloudstateio/cloudstate/releas
 ```
 @@@
 
-You should now be ready to start using CloudState.
+You should now be ready to start using Cloudstate.

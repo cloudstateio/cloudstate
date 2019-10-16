@@ -61,7 +61,7 @@ jobs:
       skip_cleanup: true
       keep_history: true
       email: deploy@cloudstate.io
-      name: CloudState Deployment Bot
+      name: Cloudstate Deployment Bot
       on:
         branch: master
   
@@ -71,7 +71,7 @@ jobs:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
     - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish
   
-  - name: Upload CloudState descriptor
+  - name: Upload Cloudstate descriptor
     if: tag =~ /^v*/
     script: sbt operator/compileK8sDescriptor
     deploy:

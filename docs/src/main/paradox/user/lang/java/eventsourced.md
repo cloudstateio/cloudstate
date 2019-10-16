@@ -1,6 +1,6 @@
 # Event sourcing
 
-This page documents how to implement CloudState event sourced entities in Java. For information on what CloudState event sourced entities are, please read the general @ref[Event sourcing](../../features/eventsourced.md) documentation first.
+This page documents how to implement Cloudstate event sourced entities in Java. For information on what Cloudstate event sourced entities are, please read the general @ref[Event sourcing](../../features/eventsourced.md) documentation first.
 
 An event sourced entity can be created by annotating it with the @javadoc[`@EventSourcedEntity`](io.cloudstate.javasupport.eventsourced.EventSourcedEntity) annotation.
 
@@ -12,7 +12,7 @@ The `snapshotEvery` parameter controls how often snapshots are taken, so that th
 
 ## Persistence types and serialization
 
-Event sourced entities persist events and snapshots, and these need to be serialized when persisted. The most straight forward way to persist events and snapshots is to use protobufs. CloudState will automatically detect if an emitted event is a protobuf, and serialize it as such. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
+Event sourced entities persist events and snapshots, and these need to be serialized when persisted. The most straight forward way to persist events and snapshots is to use protobufs. Cloudstate will automatically detect if an emitted event is a protobuf, and serialize it as such. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
 
 While protobufs are the recommended format for persisting events, it is recommended that you do not persist your services protobuf messages, rather, you should create new messages, even if they are identical to the services. While this may introduce some overhead in needing to convert from one type to the other, the reason for doing this is that it will allow the services public interface to evolve independently from its data storage format, which should be private.
 
@@ -70,7 +70,7 @@ Event handlers are declared by annotating a method with @javadoc[`@EventHandler`
 
 Event handlers are differentiated by the type of event they handle. By default, the type of event an event handler handles will be determined by looking for a single non context parameter that the event handler takes. If for any reason this needs to be overridden, or if the event handler method doesn't take any non context parameter (because the event type may be all that needs to be known to handle the event), the type of event the handler handles can be specified using the `eventClass` parameter on the `@EventHandler` annotation.
 
-Event handlers may be declared for a superclass or interface of the types they handle, for example an event handler that declares an `Object` parameter will handle all events. In the case where multiple event handlers match, CloudState will match the most specific event handler, which is decided by walking up the superclass tree, and matching all interfaces along the way.
+Event handlers may be declared for a superclass or interface of the types they handle, for example an event handler that declares an `Object` parameter will handle all events. In the case where multiple event handlers match, Cloudstate will match the most specific event handler, which is decided by walking up the superclass tree, and matching all interfaces along the way.
 
 Here's an example event handler for the `ItemAdded` event. A utility method, `convert` is also defined to assist it.
 
@@ -90,7 +90,7 @@ Multiple snapshot handlers may be defined to handle multiple different types of 
 
 ## Multiple behaviors
 
-In the examples above, our shopping cart entity only has one behavior, and that is declared through the annotations on the entity class. An entity may have different states, where command and event handling may differ according to the state it is currently in. While this could be implemented using if statements in the handlers, CloudState also provides multiple behavior support, so that an entity can change its behavior. This multiple behavior support allows implementing entities as finite state machines.
+In the examples above, our shopping cart entity only has one behavior, and that is declared through the annotations on the entity class. An entity may have different states, where command and event handling may differ according to the state it is currently in. While this could be implemented using if statements in the handlers, Cloudstate also provides multiple behavior support, so that an entity can change its behavior. This multiple behavior support allows implementing entities as finite state machines.
 
 Entity behavior can be changed when the entity is created, when it handles a snapshot, and when it handles an event, using the `become` method on their respective contexts. The become method accepts an array of objects. Each object declares event handlers and command handlers for that particular behavior, and the handlers on that object will be used going forward for all subsequent commands and events.
 

@@ -1,4 +1,4 @@
-# CloudState - Next Generation Serverless
+# Cloudstate - Next Generation Serverless
 
 _"We predict that serverless computing will grow to dominate the future of cloud computing."_
 
@@ -10,22 +10,22 @@ The Serverless movement today is very focused on the automation of the underlyin
 
 Stateless functions is a great tool that has its place in the cloud computing toolkit, but for Serverless to reach the grand vision that the industry is demanding of a Serverless world while allowing us to build modern data-centric real-time applications, we can't continue to ignore the hardest problem in distributed systems: managing state—your data. 
 
-The [CloudState](https://cloudstate.io) project takes on this challenge and paves the way for Serverless 2.0. It consists of two things: 
+The [Cloudstate](https://cloudstate.io) project takes on this challenge and paves the way for Serverless 2.0. It consists of two things: 
 
 1. **A standards effort** — defining a specification, protocol between the user functions and the backend, and a TCK.
 2. **A reference implementation** — implementing the backend and a set of client API libraries in different languages.
 
-CloudState's reference implementation is leveraging [Knative](https://cloud.google.com/knative/), [gRPC](https://grpc.io/), [Akka Cluster](https://doc.akka.io/docs/akka/current/index-cluster.html), and [GraalVM](https://www.graalvm.org/) running on [Kubernetes](https://kubernetes.io/), allowing applications to not only scale efficiently, but to manage distributed state reliably at scale while maintaining its global or local level of data consistency, opening up for a whole range of new addressable use-cases.
+Cloudstate's reference implementation is leveraging [Knative](https://cloud.google.com/knative/), [gRPC](https://grpc.io/), [Akka Cluster](https://doc.akka.io/docs/akka/current/index-cluster.html), and [GraalVM](https://www.graalvm.org/) running on [Kubernetes](https://kubernetes.io/), allowing applications to not only scale efficiently, but to manage distributed state reliably at scale while maintaining its global or local level of data consistency, opening up for a whole range of new addressable use-cases.
 
 Join us in making this vision a reality!
 
 ---
 ## Table of Contents
 
-- [Why CloudState?](#why-cloudstate)
+- [Why Cloudstate?](#why-cloudstate)
     + [Limitations of current Serverless implementations](#limitations-of-current-serverless-implementations)
     + [The need for Stateful Serverless Computing](#the-need-for-stateful-serverless-computing)
-    + [Enter CloudState - Serverless 2.0](#enter-cloudstate)
+    + [Enter Cloudstate - Serverless 2.0](#enter-cloudstate)
     + [Stateful functions are incompatible with CRUD](#stateful-functions-are-incompatible-with-crud)
     + [Abstracting over state](#abstracting-over-state)
     + [High-Level design](#high-level-design)
@@ -41,14 +41,14 @@ Join us in making this vision a reality!
 - [Client API](#client-api)
     + [JavaScript API](#javascript-api)
     + [Java API](#java-api)
-- [Run CloudState](#run-cloudstate)
+- [Run Cloudstate](#run-cloudstate)
 - [Knative Integration](#knative-integration)
 - [GraalVM Integration](#graal-integration)
 - [Testing Strategy](#testing-strategy)
 - [Get involved](#get-involved)
 
 ---
-## Why CloudState?
+## Why Cloudstate?
 
 ### TL;DR
 
@@ -95,11 +95,11 @@ What we need support for is:
 
 End-to-end correctness, consistency, and safety mean different things for different services. It's totally dependent on the use-case, and can't be outsourced completely to the infrastructure. The next generation serverless implementations need to provide programming models and a holistic Developer Experience working in concert with the underlying infrastructure maintaining these properties, without continuing to ignore the hardest, and most important problem: how to manage your data in the cloud—reliably at scale.
 
-### Enter CloudState
+### Enter Cloudstate
 
-[CloudState](https://cloudstate.io) is a standards effort defining a specification, protocol, and reference implementation, aiming to extend the promise of Serverless and its Developer Experience to general-purpose application development. 
+[Cloudstate](https://cloudstate.io) is a standards effort defining a specification, protocol, and reference implementation, aiming to extend the promise of Serverless and its Developer Experience to general-purpose application development. 
 
-CloudState builds on and extends the traditional stateless FaaS model, by adding support for long-lived addressable stateful services and a way of accessing mapped well-formed data via [gRPC](https://grpc.io/), while allowing for a range of different consistency model—from strong to eventual consistency—based on the nature of the data and how it should be processed, managed, and stored. 
+Cloudstate builds on and extends the traditional stateless FaaS model, by adding support for long-lived addressable stateful services and a way of accessing mapped well-formed data via [gRPC](https://grpc.io/), while allowing for a range of different consistency model—from strong to eventual consistency—based on the nature of the data and how it should be processed, managed, and stored. 
 
 You define your data model, choose its consistency mode and resolution method, and access both your data, data-centric operations, streaming pipelines, and events via a well-formed protocol of gRPC command and read channels.
 
@@ -148,7 +148,7 @@ While most developers have worked with Key-Value stores, Event Sourcing and CRDT
 
 ### High-level design
 
-The CloudState reference implementation is built on top of Kubernetes, [Knative](https://cloud.google.com/knative), [Graal VM](https://www.graalvm.org), [gRPC](https://grpc.io), and [Akka](https://akka.io), with a growing set of client API libraries for different languages. Inbound and outbound communication is always going through the sidecars over gRPC channel[^6] using a constrained and well-defined protocol, in which the user defines commands in, events in, command replies out, and events out. Communicating over a gRPC allows the user code to be implemented in different languages (JavaScript, Java, Go, Scala, Python, etc.).
+The Cloudstate reference implementation is built on top of Kubernetes, [Knative](https://cloud.google.com/knative), [Graal VM](https://www.graalvm.org), [gRPC](https://grpc.io), and [Akka](https://akka.io), with a growing set of client API libraries for different languages. Inbound and outbound communication is always going through the sidecars over gRPC channel[^6] using a constrained and well-defined protocol, in which the user defines commands in, events in, command replies out, and events out. Communicating over a gRPC allows the user code to be implemented in different languages (JavaScript, Java, Go, Scala, Python, etc.).
 
 ![Serving of polyglot stateful functions](images/serving_stateful_functions.png)
 
@@ -176,11 +176,11 @@ As Adzic et al. write in their paper ['Serverless computing: economic and archit
 
 > _"… serverless platforms today are useful for important (but not five-nines mission critical) tasks, where high-throughput is key, rather than very low latency, and where individual requests can be completed in a relatively short time window. The economics of hosting such tasks in a serverless environment make it a compelling way to reduce hosting costs significantly, and to speed up time to market for delivery of new features."_
 
-#### New use-Cases that CloudState enables
+#### New use-Cases that Cloudstate enables
 
 However, implementing traditional application development, microservices, stateful data pipelines, and general-purpose distributed system problems using stateless functions (FaaS) is very hard to do in a low-latency, performant, reliable way. 
 
-CloudState is designed to extend the model and make it straightforward to implement use-cases such as: 
+Cloudstate is designed to extend the model and make it straightforward to implement use-cases such as: 
 
 *   **Training and Serving of Machine Learning Models**
     *   Any use-case that needs to build up, and provide low latency serving of, dynamic models 
@@ -197,7 +197,7 @@ CloudState is designed to extend the model and make it straightforward to implem
 *   **Leader Election, and other distributed systems protocols for coordination**
     *   Trivial to implement with Akka Cluster/Distributed Data, while always coordinating over a distributed storage (such as DynamoDB in the case of Lambda) is too costly, slow, and can become a single point of failure.
 
-The goal of CloudState is to provide a way for implementing these use-cases in a scalable and available way, working in concert with the application itself, all the while providing end-to-end correctness, consistency, and safety.
+The goal of Cloudstate is to provide a way for implementing these use-cases in a scalable and available way, working in concert with the application itself, all the while providing end-to-end correctness, consistency, and safety.
 
 ---
 ## Design and architecture
@@ -206,18 +206,18 @@ Note: The design will most likely change as the project evolves.
 
 ### High level overview
 
-A CloudState service looks like this:
+A Cloudstate service looks like this:
 
 ![High-level design](images/high-level-design.svg)
 
-* **Ingress** - This can be Istio, Knative, or just regular ClusterIP service communication in Kubernetes. Whatever service approach is used, CloudState expects traffic to be load balanced across its pods randomly and evenly.
-* **Akka Sidecar** - This sidecar is injected by the CloudState operator. All requests go through it. The sidecars of a single CloudState service form a cluster, communicating directly with each other using Akka remoting. This cluster, and the communication links between the sidecars, allows for sharding and replication of state, along with addressed P2P messaging between pods.
-* **Code** - This is the function implemented by the developer. It can be written in any language that supports gRPC. The Akka sidecars communicate with the user functions using a predefined gRPC protocol. This protocol carries both incoming requests and outgoing responses, as well as messages conveying the current state of the system. Typically, CloudState will provide support libraries for each language that adapt the gRPC protocol to an idiomatic API for that language.
+* **Ingress** - This can be Istio, Knative, or just regular ClusterIP service communication in Kubernetes. Whatever service approach is used, Cloudstate expects traffic to be load balanced across its pods randomly and evenly.
+* **Akka Sidecar** - This sidecar is injected by the Cloudstate operator. All requests go through it. The sidecars of a single Cloudstate service form a cluster, communicating directly with each other using Akka remoting. This cluster, and the communication links between the sidecars, allows for sharding and replication of state, along with addressed P2P messaging between pods.
+* **Code** - This is the function implemented by the developer. It can be written in any language that supports gRPC. The Akka sidecars communicate with the user functions using a predefined gRPC protocol. This protocol carries both incoming requests and outgoing responses, as well as messages conveying the current state of the system. Typically, Cloudstate will provide support libraries for each language that adapt the gRPC protocol to an idiomatic API for that language.
 * **Distributed Datastore** - When a service needs to persist state (such as when implementing Event Sourced entities), this state will be persisted to a distributed datastore. It is important to note, the user code does not interact directly with the datastore - it interacts with the Akka sidecars, and the Akka sidecars communicate with the datastore. This way, all database communication can be directly managed and monitored by the Akka sidecar. And since this is done through the provision of high level patterns, assumptions can be made that allow the sidecars to safely cache, shard, and replicate data across the cluster.
 
 ### Common Intermediate Representation
 
-The gRPC protocol spoken between the Akka sidecar and the user code is a Common Intermediate Representation (IR) as defined by Hellerstein et. al. in [Serverless Computing: One Step Forward, Two Steps Back](http://cidrdb.org/cidr2019/papers/p119-hellerstein-cidr19.pdf). This is used to allow user functions to take advantage of the features afforded by distributed systems technologies such as Akka, without needing to be written in the same language as those technologies. The protocol also allows the sidecar to be implemented using any technology, not just Akka. CloudState's Akka based implementation is provided as a reference implementation.
+The gRPC protocol spoken between the Akka sidecar and the user code is a Common Intermediate Representation (IR) as defined by Hellerstein et. al. in [Serverless Computing: One Step Forward, Two Steps Back](http://cidrdb.org/cidr2019/papers/p119-hellerstein-cidr19.pdf). This is used to allow user functions to take advantage of the features afforded by distributed systems technologies such as Akka, without needing to be written in the same language as those technologies. The protocol also allows the sidecar to be implemented using any technology, not just Akka. Cloudstate's Akka based implementation is provided as a reference implementation.
 
 * There are two parts to the IR.
 
@@ -276,9 +276,9 @@ message AddLineItem {
 
 ### Kubernetes Operator
 
-Deployment of CloudState entities is designed to work either in a stand alone fashion, or integrating with Knative. The design allows for integrations with other serverless technologies to be implemented in future.
+Deployment of Cloudstate entities is designed to work either in a stand alone fashion, or integrating with Knative. The design allows for integrations with other serverless technologies to be implemented in future.
 
-An operator is provided that transforms either the CloudState entity CRD, or the Knative Revision, into a kubernetes Deployment, which is configured with the Akka sidecar container injected, and the necessary RBAC permissions are created to allow cluster discovery, bootstrapping and formation, along with autoscaling.
+An operator is provided that transforms either the Cloudstate entity CRD, or the Knative Revision, into a kubernetes Deployment, which is configured with the Akka sidecar container injected, and the necessary RBAC permissions are created to allow cluster discovery, bootstrapping and formation, along with autoscaling.
 
 Integration with Knative currently requires a fork of Knative that makes deployers pluggable. The changes necessary can be found in [this pull request](https://github.com/knative/serving/pull/4152).
 
@@ -319,16 +319,16 @@ The Akka sidecar supports serving the gRPC user functions services both as gRPC,
 
 ### Database support
 
-The CloudState Proxy Reference Implementation supports a number of databases. The table below indicates the range of support, the columns are explained as follows:
+The Cloudstate Proxy Reference Implementation supports a number of databases. The table below indicates the range of support, the columns are explained as follows:
 
 Journal
 : Whether event sourced journals are supported with this databases. The RI event sourcing support is built using [Akka Persistence](https://doc.akka.io/docs/akka/current/persistence.html) for the durable storage, which has support for a [wide range](https://index.scala-lang.org/search?topics=akka-persistence) of NoSQL and SQL databases.
 
 Key-Value
-: Whether Key-Value support is implemented for this database. Key-Value support is not yet provided by the CloudState proxy, but will be in future.
+: Whether Key-Value support is implemented for this database. Key-Value support is not yet provided by the Cloudstate proxy, but will be in future.
 
 Native Image
-: Whether a GraalVM Native Image build is available for the CloudState Proxy for this database. It can be a considerable amount of effort getting a GraalVM native image working for any library, so not all proxies support it.
+: Whether a GraalVM Native Image build is available for the Cloudstate Proxy for this database. It can be a considerable amount of effort getting a GraalVM native image working for any library, so not all proxies support it.
 
 | Database   | Journal            | Key-Value | Native image       |
 |------------|--------------------|-----------|--------------------|
@@ -365,13 +365,13 @@ TODO: add general docs
 TODO: add general docs
 
 ---
-## Run CloudState
+## Run Cloudstate
 
 ### Run on GKE
 
 1. Create a GKE cluster. We recommend at least 6 vCPUs (ie, a node pool of 3 `n1-standard-2` nodes). Also ensure that the current user is a cluster admin. Detailed instructions for creating the GKE cluster can be found in the [Knative documentation](https://github.com/knative/docs/blob/master/docs/install/Knative-with-GKE.md), follow all the steps up to (but not including) installing Knative.
 2. If using an event sourced entity, install Cassandra. This can be done from the Google Marketplace, by visiting the [Cassandra Cluster](https://console.cloud.google.com/marketplace/details/google/cassandra), selecting configure, selecting your GCloud project, and then installing it in the Kubernetes cluster you just created. The defaults should be good enough, in our examples we called the app instance name `cassandra`. Note there is an option to use an in memory store if you just want to test it out, of course, as soon as your pods shut down (or if they are rebalanced), your store will be lost.
-3. Install the CloudState operator:
+3. Install the Cloudstate operator:
 
     ```
     kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/master/operator/cloudstate.yaml
@@ -412,7 +412,7 @@ Next we'll take a look at the Akka proxy, which can be found in [`proxy/core`](p
 
 * [`Serve.scala`](proxy/core/src/main/scala/io/cloudstate/proxy/Serve.scala) - This provides the dynamically implemented gRPC interface as specified by the user function. Requests are forwarded as commands to the cluster sharded persistent entities.
 * [`EventSourcedEntity.scala`](proxy/core/src/main/scala/io/cloudstate/proxy/eventsourced/EventSourcedEntity.scala) - This is an Akka persistent actor that talks to the user function via the event sourcing gRPC protocol.
-* [`CloudStateProxyMain.scala`](proxy/core/src/main/scala/io/cloudstate/proxy/CloudStateProxyMain.scala) - This pulls everything together, starting the Akka gRPC server, cluster sharding, and persistence.
+* [`CloudstateProxyMain.scala`](proxy/core/src/main/scala/io/cloudstate/proxy/CloudstateProxyMain.scala) - This pulls everything together, starting the Akka gRPC server, cluster sharding, and persistence.
 * [`HttpApi.scala`](proxy/core/src/main/scala/io/cloudstate/proxy/HttpApi.scala) - This reads [google.api.HttpRule](protocols/frontend/google/api/http.proto) annotations to generate HTTP/1.1 + JSON endpoints for the gRPC service methods.
 
 ---
@@ -529,7 +529,7 @@ docker run -it --rm --name cloudstate -p 9000:9000 cloudstate-proxy-dev-mode
 docker run -it --rm --network container:cloudstate --name shopping-cart -e "DEBUG=cloudstate*" js-shopping-cart
 ```
 
-Initially, the CloudState container may show errors as it attempts to connect to the shopping-cart user function before it's started. Once running, you can connect to the proxy on port 9000.
+Initially, the Cloudstate container may show errors as it attempts to connect to the shopping-cart user function before it's started. Once running, you can connect to the proxy on port 9000.
 
 ### Building the native image outside of a container
 
@@ -698,7 +698,7 @@ Implementation details:
 Are you interested in helping out making this vision a reality? We would love to have you! 
 All contributions are welcome: ideas, criticism, praise, code, bug fixes, docs, buzz, etc. 
 
-Our [Mailing List](https://groups.google.com/forum/#!forum/cloudstate) is a good place to start with open ended discussions about CloudState, or you can also join the discussion on our [Gitter Channel](https://gitter.im/CloudState-IO/community).
+Our [Mailing List](https://groups.google.com/forum/#!forum/cloudstate) is a good place to start with open ended discussions about Cloudstate, or you can also join the discussion on our [Gitter Channel](https://gitter.im/Cloudstate-IO/community).
 
 The [GitHub Issue Tracker](https://github.com/cloudstateio/cloudstate/issues) is a good place to raise issues, including bug reports and feature requests.
 
