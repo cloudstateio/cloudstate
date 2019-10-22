@@ -13,6 +13,8 @@ inThisBuild(
     scalaVersion := "2.12.9",
     // Needed for our fork of skuber
     resolvers += Resolver.bintrayRepo("jroper", "maven"), // TODO: Remove once skuber has the required functionality
+    // Needed for the fixed HTTP/2 connection cleanup version of akka-http
+    resolvers += Resolver.bintrayRepo("akka", "snapshots"), // TODO: Remove once we're switching to akka-http 10.1.11
     organizationName := "Lightbend Inc.",
     organizationHomepage := Some(url("https://lightbend.com")),
     startYear := Some(2019),
@@ -50,7 +52,7 @@ name := "cloudstate"
 val GrpcJavaVersion = "1.22.1"
 val GraalAkkaVersion = "0.4.1"
 val AkkaVersion = "2.5.25"
-val AkkaHttpVersion = "10.1.9"
+val AkkaHttpVersion = "10.1.10+124-779795c4" // TODO: Remove once we're switching to akka-http 10.1.11
 val AkkaManagementVersion = "1.0.1"
 val AkkaPersistenceCassandraVersion = "0.96"
 val PrometheusClientVersion = "0.6.0"
