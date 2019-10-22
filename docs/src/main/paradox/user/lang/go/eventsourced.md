@@ -1,12 +1,12 @@
 # Event sourcing
 
-This page documents how to implement CloudState event sourced entities in Go. For information on what CloudState event sourced entities are, please read the general @ref[Event sourcing](../../features/eventsourced.md) documentation first.
+This page documents how to implement Cloudstate event sourced entities in Go. For information on what Cloudstate event sourced entities are, please read the general @ref[Event sourcing](../../features/eventsourced.md) documentation first.
 
 An event sourced entity can be created by embedding the `cloudstate.EventEmitter` type and also implementing the `cloudstate.EntityInitializer` interface.
 
 @@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #entity-type }
 
-Then by composing the CloudState entity with an `cloudstate.EventSourcedEntity` and register it with `cloudState.Register()`, your entity gets configured to be an event sourced entity and handled by the CloudState instance for now on.
+Then by composing the Cloudstate entity with an `cloudstate.EventSourcedEntity` and register it with `cloudState.Register()`, your entity gets configured to be an event sourced entity and handled by the Cloudstate instance for now on.
 
 @@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/eventsourced.go) { #event-sourced-entity-type }
 
@@ -16,7 +16,7 @@ The `SnapshotEvery` parameter controls how often snapshots are taken, so that th
 
 ## Persistence types and serialization
 
-Event sourced entities persist events and snapshots, and these need to be serialized when persisted. The most straight forward way to persist events and snapshots is to use protobufs. CloudState will automatically detect if an emitted event is a protobuf, and serialize it as such. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
+Event sourced entities persist events and snapshots, and these need to be serialized when persisted. The most straight forward way to persist events and snapshots is to use protobufs. Cloudstate will automatically detect if an emitted event is a protobuf, and serialize it as such. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
 
 While protobufs are the recommended format for persisting events, it is recommended that you do not persist your services protobuf messages, rather, you should create new messages, even if they are identical to the services. While this may introduce some overhead in needing to convert from one type to the other, the reason for doing this is that it will allow the services public interface to evolve independently from its data storage format, which should be private.
 
@@ -32,7 +32,7 @@ Each entity should store its state locally in a mutable variable, either a mutab
 
 ## Constructing
 
-The CloudState Go Support Library needs to know how to construct and initialize entities. For this, an entity has to implement the `cloudstate.EntityInitializer` interface.
+The Cloudstate Go Support Library needs to know how to construct and initialize entities. For this, an entity has to implement the `cloudstate.EntityInitializer` interface.
 
 (TODO: provide: The constructor below shows having the entity id injected)
 
@@ -40,7 +40,7 @@ The CloudState Go Support Library needs to know how to construct and initialize 
 
 ## Handling commands
 
-Command handlers are declared by implementing the gRPC ShoppingCartServer interface which is generated from the protobuf definitions. The CloudState Go Support library together with the registered ServiceName in the `cloudstate.EventSourcedEntity` is then able to dispatch commands it gets from the CloudState proxy.
+Command handlers are declared by implementing the gRPC ShoppingCartServer interface which is generated from the protobuf definitions. The Cloudstate Go Support library together with the registered ServiceName in the `cloudstate.EventSourcedEntity` is then able to dispatch commands it gets from the Cloudstate proxy.
 
 The return type of the command handler is by definition of the service interface, the output type for the gRPC service call, this will be sent as the reply.
 
@@ -86,7 +86,7 @@ Multiple behaviors are not supported yet by the Go support library.
 
 ## Registering the entity
 
-Once you've created your entity, you can register it with the `cloudstate.CloudState` server, by invoking the `Register` method of an CloudState instance. In addition to passing your entity type and service name, you also need to pass any descriptors that you use for persisting events, for example, the `domain.proto` descriptor.
+Once you've created your entity, you can register it with the `cloudstate.Cloudstate` server, by invoking the `Register` method of an Cloudstate instance. In addition to passing your entity type and service name, you also need to pass any descriptors that you use for persisting events, for example, the `domain.proto` descriptor.
 
 During registration the oprtional ServiceName and the ServiceVersion can be configured as Options.
 

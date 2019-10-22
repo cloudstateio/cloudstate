@@ -27,7 +27,7 @@ import (
 	"log"
 )
 
-// main creates a CloudState instance and registers the ShoppingCart
+// main creates a Cloudstate instance and registers the ShoppingCart
 // as a event sourced entity.
 //#shopping-cart-main
 func main() {
@@ -47,16 +47,16 @@ func main() {
 	)
 //#register
 	if err != nil {
-		log.Fatalf("CloudState failed to register entity: %v", err)
+		log.Fatalf("Cloudstate failed to register entity: %v", err)
 	}
 	err = cloudState.Run()
 	if err != nil {
-		log.Fatalf("CloudState failed to run: %v", err)
+		log.Fatalf("Cloudstate failed to run: %v", err)
 	}
 }
 //#shopping-cart-main
 
-// A CloudState event sourced entity.
+// A Cloudstate event sourced entity.
 //#entity-type
 //#compose-entity
 type ShoppingCart struct {

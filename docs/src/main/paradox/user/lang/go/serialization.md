@@ -1,15 +1,15 @@
 # Serialization
 
-CloudState functions serve gRPC interfaces, and naturally the input messages and output messages are protobuf messages that get serialized to the protobuf wire format. However, in addition to these messages, there are a number of places where CloudState needs to serialize other objects, for persistence and replication. This includes:
+Cloudstate functions serve gRPC interfaces, and naturally the input messages and output messages are protobuf messages that get serialized to the protobuf wire format. However, in addition to these messages, there are a number of places where Cloudstate needs to serialize other objects, for persistence and replication. This includes:
 
 * Event sourced @ref[events and snapshots](eventsourced.md#persistence-types-and-serialization).
 * CRDT @ref[map keys and set elements](crdt.md), and @ref[LWWRegister values](crdt.md).
 
-CloudState supports a number of types and serialization options for these values.
+Cloudstate supports a number of types and serialization options for these values.
 
 ## Primitive types
 
-CloudState supports serializing the following primitive types:
+Cloudstate supports serializing the following primitive types:
 
 | Protobuf type | Go type     |
 |---------------|-------------|
@@ -24,12 +24,12 @@ CloudState supports serializing the following primitive types:
 The details of how these are serialized can be found @ref[here](../../../developer/language-support/serialization.md#primitive-values).
 
 @@@ note { title=Important }
-Go has a set of [predeclared numeric](https://golang.org/ref/spec#Numeric_types) types with implementation-specific sizes. One of them is `int` which would be an int64 on 64-bit systems CPU architectures. CloudState does not support implicit conversion between an `int` and the corresponding `int64` as an input type for the serialization. The main reason not to support it is, that an `int` is not the same type as an `int64` and therefore a de-serialized value would have to be converted back to an `int` as it is of type `int64` during its serialized state.    
+Go has a set of [predeclared numeric](https://golang.org/ref/spec#Numeric_types) types with implementation-specific sizes. One of them is `int` which would be an int64 on 64-bit systems CPU architectures. Cloudstate does not support implicit conversion between an `int` and the corresponding `int64` as an input type for the serialization. The main reason not to support it is, that an `int` is not the same type as an `int64` and therefore a de-serialized value would have to be converted back to an `int` as it is of type `int64` during its serialized state.    
 @@@
 
 ## JSON
 
-CloudState uses the standard library package [`encoding/json`](https://golang.org/pkg/encoding/json/) to serialize JSON. Any type that has a field declared with a string literal tag ``json:"fieldname"`` will be serialized to and from JSON using the [Marshaller and Unmarshaller](https://golang.org/pkg/encoding/json/#Marshal) from the Go standard library package `encoding/json`.
+Cloudstate uses the standard library package [`encoding/json`](https://golang.org/pkg/encoding/json/) to serialize JSON. Any type that has a field declared with a string literal tag ``json:"fieldname"`` will be serialized to and from JSON using the [Marshaller and Unmarshaller](https://golang.org/pkg/encoding/json/#Marshal) from the Go standard library package `encoding/json`.
 
 The details of how these are serialized can be found @ref[here](../../../developer/language-support/serialization.md#json-values).
 
