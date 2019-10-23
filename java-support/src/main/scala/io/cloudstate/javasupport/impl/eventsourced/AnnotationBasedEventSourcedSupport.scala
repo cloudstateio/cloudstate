@@ -52,101 +52,59 @@ private[impl] class AnnotationBasedEventSourcedSupport(
   }
 
   private class EntityHandler(context: EventSourcedContext) extends EventSourcedEntityHandler {
-    private var currentBehaviors = {
-      var explicitlySetBehaviors: Option[Seq[AnyRef]] = None
-      var active = true
-      val ctx = new DelegatingEventSourcedContext(context) with EventSourcedEntityCreationContext {
-        override def become(behaviors: AnyRef*): Unit = {
-          if (!active) throw new IllegalStateException("Context is not active!")
-          explicitlySetBehaviors = Some(validateBehaviors(behaviors))
-        }
+    private val entity = {
+      constructor(new DelegatingEventSourcedContext(context) with EventSourcedEntityCreationContext {
         override def entityId(): String = context.entityId()
-      }
-
-      val entity = constructor(ctx)
-      active = false
-      explicitlySetBehaviors match {
-        case Some(behaviors) => behaviors
-        case None => Seq(entity)
-      }
+      })
     }
 
     override def handleEvent(anyEvent: JavaPbAny, context: EventContext): Unit = unwrap {
       val event = anySupport.decode(anyEvent).asInstanceOf[AnyRef]
 
-      if (!currentBehaviors.exists { behavior =>
-            getCachedBehaviorReflection(behavior).getCachedEventHandlerForClass(event.getClass) match {
-              case Some(handler) =>
-                var active = true
-                val ctx = new DelegatingEventSourcedContext(context) with EventBehaviorContext {
-                  override def become(behavior: AnyRef*): Unit = {
-                    if (!active) throw new IllegalStateException("Context is not active!")
-                    currentBehaviors = validateBehaviors(behavior)
-                  }
-                  override def sequenceNumber(): Long = context.sequenceNumber()
-                }
-                handler.invoke(behavior, event, ctx)
-                active = false
-                true
-              case None =>
-                false
-            }
-          }) {
-        throw new RuntimeException(
-          s"No event handler found for event ${event.getClass} on any of the current behaviors: $behaviorsString"
-        )
+      getCachedBehaviorReflection(entity).getCachedEventHandlerForClass(event.getClass) match {
+        case Some(handler) =>
+          val ctx = new DelegatingEventSourcedContext(context) with EventContext {
+            override def sequenceNumber(): Long = context.sequenceNumber()
+          }
+          handler.invoke(entity, event, ctx)
+        case None =>
+          throw new RuntimeException(
+            s"No event handler found for event ${event.getClass} on $behaviorsString"
+          )
       }
     }
 
     override def handleCommand(command: JavaPbAny, context: CommandContext): Optional[JavaPbAny] = unwrap {
-      val maybeResult = currentBehaviors.collectFirst(Function.unlift { behavior =>
-        getCachedBehaviorReflection(behavior).commandHandlers.get(context.commandName()).map { handler =>
-          handler.invoke(behavior, command, context)
-        }
-      })
-
-      maybeResult.getOrElse {
+      getCachedBehaviorReflection(entity).commandHandlers.get(context.commandName()).map { handler =>
+        handler.invoke(entity, command, context)
+      } getOrElse {
         throw new RuntimeException(
-          s"No command handler found for command [${context.commandName()}] on any of the current behaviors: $behaviorsString"
+          s"No command handler found for command [${context.commandName()}] on $behaviorsString"
         )
       }
     }
 
     override def handleSnapshot(anySnapshot: JavaPbAny, context: SnapshotContext): Unit = unwrap {
       val snapshot = anySupport.decode(anySnapshot).asInstanceOf[AnyRef]
-      if (!currentBehaviors.exists { behavior =>
-            getCachedBehaviorReflection(behavior).getCachedSnapshotHandlerForClass(snapshot.getClass) match {
-              case Some(handler) =>
-                var active = true
-                val ctx = new DelegatingEventSourcedContext(context) with SnapshotBehaviorContext {
-                  override def become(behavior: AnyRef*): Unit = {
-                    if (!active) throw new IllegalStateException("Context is not active!")
-                    currentBehaviors = validateBehaviors(behavior)
-                  }
-                  override def sequenceNumber(): Long = context.sequenceNumber()
-                }
-                handler.invoke(behavior, snapshot, ctx)
-                active = false
-                true
 
-              case None =>
-                false
-            }
-          }) {
-        throw new RuntimeException(
-          s"No snapshot handler found for snapshot ${snapshot.getClass} on any of the current behaviors $behaviorsString"
-        )
+      getCachedBehaviorReflection(entity).getCachedSnapshotHandlerForClass(snapshot.getClass) match {
+        case Some(handler) =>
+          val ctx = new DelegatingEventSourcedContext(context) with SnapshotContext {
+            override def sequenceNumber(): Long = context.sequenceNumber()
+          }
+          handler.invoke(entity, snapshot, ctx)
+        case None =>
+          throw new RuntimeException(
+            s"No snapshot handler found for snapshot ${snapshot.getClass} on $behaviorsString"
+          )
       }
     }
 
     override def snapshot(context: SnapshotContext): Optional[JavaPbAny] = unwrap {
-      currentBehaviors.collectFirst(Function.unlift { behavior =>
-        getCachedBehaviorReflection(behavior).snapshotInvoker.map { invoker =>
-          invoker.invoke(behavior, context)
-        }
-      }) match {
-        case Some(invoker) =>
-          Optional.ofNullable(anySupport.encodeJava(invoker))
+      getCachedBehaviorReflection(entity).snapshotInvoker.map { invoker =>
+        invoker.invoke(entity, context)
+      } match {
+        case Some(invoker) => Optional.ofNullable(anySupport.encodeJava(invoker))
         case None => Optional.empty()
       }
     }
@@ -159,7 +117,7 @@ private[impl] class AnnotationBasedEventSourcedSupport(
           throw ite.getCause
       }
 
-    private def behaviorsString = currentBehaviors.map(_.getClass).mkString(", ")
+    private def behaviorsString = entity.getClass.toString
   }
 
   private abstract class DelegatingEventSourcedContext(delegate: EventSourcedContext) extends EventSourcedContext {
@@ -303,7 +261,7 @@ private class EventHandlerInvoker(val method: Method) {
 
   private val annotation = method.getAnnotation(classOf[EventHandler])
 
-  private val parameters = ReflectionHelper.getParameterHandlers[EventBehaviorContext](method)()
+  private val parameters = ReflectionHelper.getParameterHandlers[EventContext](method)()
 
   private def annotationEventClass = annotation.eventClass() match {
     case obj if obj == classOf[Object] => None
@@ -332,7 +290,7 @@ private class EventHandlerInvoker(val method: Method) {
       )
   }
 
-  def invoke(obj: AnyRef, event: AnyRef, context: EventBehaviorContext): Unit = {
+  def invoke(obj: AnyRef, event: AnyRef, context: EventContext): Unit = {
     val ctx = InvocationContext(event, context)
     method.invoke(obj, parameters.map(_.apply(ctx)): _*)
   }
@@ -341,7 +299,7 @@ private class EventHandlerInvoker(val method: Method) {
 private class SnapshotHandlerInvoker(val method: Method) {
   private val annotation = method.getAnnotation(classOf[SnapshotHandler])
 
-  private val parameters = ReflectionHelper.getParameterHandlers[SnapshotBehaviorContext](method)()
+  private val parameters = ReflectionHelper.getParameterHandlers[SnapshotContext](method)()
 
   // Verify that there is at most one event handler
   val snapshotClass: Class[_] = parameters.collect {
@@ -355,7 +313,7 @@ private class SnapshotHandlerInvoker(val method: Method) {
       )
   }
 
-  def invoke(obj: AnyRef, snapshot: AnyRef, context: SnapshotBehaviorContext): Unit = {
+  def invoke(obj: AnyRef, snapshot: AnyRef, context: SnapshotContext): Unit = {
     val ctx = InvocationContext(snapshot, context)
     method.invoke(obj, parameters.map(_.apply(ctx)): _*)
   }
