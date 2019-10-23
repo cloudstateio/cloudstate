@@ -25,9 +25,7 @@ private[impl] class AnnotationBasedEventSourcedSupport(
   def this(entityClass: Class[_], anySupport: AnySupport, serviceDescriptor: Descriptors.ServiceDescriptor) =
     this(entityClass, anySupport, anySupport.resolveServiceDescriptor(serviceDescriptor))
 
-  private val behaviorReflectionCache = TrieMap.empty[Class[_], EventBehaviorReflection]
-  // Eagerly reflect over/validate the entity class
-  behaviorReflectionCache.put(entityClass, EventBehaviorReflection(entityClass, resolvedMethods))
+  private val behavior = EventBehaviorReflection(entityClass, resolvedMethods)
 
   override def create(context: EventSourcedContext): EventSourcedEntityHandler =
     new EntityHandler(context)
@@ -41,16 +39,6 @@ private[impl] class AnnotationBasedEventSourcedSupport(
     }
   }
 
-  private def getCachedBehaviorReflection(behavior: AnyRef) =
-    behaviorReflectionCache.getOrElseUpdate(behavior.getClass,
-                                            EventBehaviorReflection(behavior.getClass, resolvedMethods))
-
-  private def validateBehaviors(behaviors: Seq[AnyRef]): Seq[AnyRef] = {
-    behaviors.foreach(getCachedBehaviorReflection)
-    // todo maybe validate that every command is served?
-    behaviors
-  }
-
   private class EntityHandler(context: EventSourcedContext) extends EventSourcedEntityHandler {
     private val entity = {
       constructor(new DelegatingEventSourcedContext(context) with EventSourcedEntityCreationContext {
@@ -61,7 +49,7 @@ private[impl] class AnnotationBasedEventSourcedSupport(
     override def handleEvent(anyEvent: JavaPbAny, context: EventContext): Unit = unwrap {
       val event = anySupport.decode(anyEvent).asInstanceOf[AnyRef]
 
-      getCachedBehaviorReflection(entity).getCachedEventHandlerForClass(event.getClass) match {
+      behavior.getCachedEventHandlerForClass(event.getClass) match {
         case Some(handler) =>
           val ctx = new DelegatingEventSourcedContext(context) with EventContext {
             override def sequenceNumber(): Long = context.sequenceNumber()
@@ -75,7 +63,7 @@ private[impl] class AnnotationBasedEventSourcedSupport(
     }
 
     override def handleCommand(command: JavaPbAny, context: CommandContext): Optional[JavaPbAny] = unwrap {
-      getCachedBehaviorReflection(entity).commandHandlers.get(context.commandName()).map { handler =>
+      behavior.commandHandlers.get(context.commandName()).map { handler =>
         handler.invoke(entity, command, context)
       } getOrElse {
         throw new RuntimeException(
@@ -87,7 +75,7 @@ private[impl] class AnnotationBasedEventSourcedSupport(
     override def handleSnapshot(anySnapshot: JavaPbAny, context: SnapshotContext): Unit = unwrap {
       val snapshot = anySupport.decode(anySnapshot).asInstanceOf[AnyRef]
 
-      getCachedBehaviorReflection(entity).getCachedSnapshotHandlerForClass(snapshot.getClass) match {
+      behavior.getCachedSnapshotHandlerForClass(snapshot.getClass) match {
         case Some(handler) =>
           val ctx = new DelegatingEventSourcedContext(context) with SnapshotContext {
             override def sequenceNumber(): Long = context.sequenceNumber()
@@ -101,7 +89,7 @@ private[impl] class AnnotationBasedEventSourcedSupport(
     }
 
     override def snapshot(context: SnapshotContext): Optional[JavaPbAny] = unwrap {
-      getCachedBehaviorReflection(entity).snapshotInvoker.map { invoker =>
+      behavior.snapshotInvoker.map { invoker =>
         invoker.invoke(entity, context)
       } match {
         case Some(invoker) => Optional.ofNullable(anySupport.encodeJava(invoker))
