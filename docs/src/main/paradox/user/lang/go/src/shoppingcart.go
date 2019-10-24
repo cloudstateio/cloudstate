@@ -32,7 +32,7 @@ import (
 // as a event sourced entity.
 //#shopping-cart-main
 func main() {
-	server, err := cloudstate.New(cloudstate.Options{
+	server, err := cloudstate.New(cloudstate.Config{
 		ServiceName:    "shopping-cart",
 		ServiceVersion: "0.1.0",
 	})
