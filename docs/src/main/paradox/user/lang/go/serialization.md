@@ -33,4 +33,5 @@ Cloudstate uses the standard library package [`encoding/json`](https://golang.or
 
 The details of how these are serialized can be found @ref[here](../../../developer/language-support/serialization.md#json-values).
 
-Note that if you are using JSON values in CRDT sets or maps, the serialization of these values **must** be stable. This means you must not use maps or sets in your value, and you should define an explicit ordering for the fields in your objects. **(TODO: mention the ordering of fields here by the Go standard library implementation).**
+Note that if you are using JSON values in CRDT sets or maps, the serialization of these values **must** be stable. This means you must not use maps or sets in your value, and you should define an explicit ordering for the fields in your objects.
+**(TODO: mention the ordering of fields here by the Go standard library implementation).**

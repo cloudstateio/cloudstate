@@ -2,17 +2,21 @@
 
 This page documents how to implement Cloudstate event sourced entities in Go. For information on what Cloudstate event sourced entities are, please read the general @ref[Event sourcing](../../features/eventsourced.md) documentation first.
 
-An event sourced entity can be created by embedding the `cloudstate.EventEmitter` type and also implementing the `cloudstate.EntityInitializer` interface.
+An event sourced entity can be created by embedding the `cloudstate.EventEmitter` type and also implementing the `cloudstate.Entity` interface.
 
 @@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #entity-type }
 
-Then by composing the Cloudstate entity with an `cloudstate.EventSourcedEntity` and register it with `cloudState.Register()`, your entity gets configured to be an event sourced entity and handled by the Cloudstate instance for now on.
+Then by composing the Cloudstate entity with an `cloudstate.EventSourcedEntity` and register it with `CloudState.Register()`, your entity gets configured to be an event sourced entity and handled by the Cloudstate instance for now on.
 
 @@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/eventsourced.go) { #event-sourced-entity-type }
 
-The `PersistenceID` is used to namespace events in the journal, useful for when you share the same database between multiple entities. It defaults to the simple name for the entity type (in this case, `ShoppingCart`), it's good practice to select one explicitly, this means your database isn't depend on type names in your code.
+The `ServiceName` is the fully qualified name of the gRPC service that implements this entities interface. Setting it is mandatory.
+
+The `PersistenceID` is used to namespace events in the journal, useful for when you share the same database between multiple entities. It is recommended to be the name for the entity type (in this case, `ShoppingCart`) and is set to be mandatory.
 
 The `SnapshotEvery` parameter controls how often snapshots are taken, so that the entity doesn't need to be recovered from the whole journal each time it's loaded. If left unset, it defaults to 100. Setting it to a negative number will result in snapshots never being taken.
+
+The `EntityFunc` is a factory method which generates a new Entity whenever Cloudstate has to initialize a new entity. 
 
 ## Persistence types and serialization
 
@@ -32,15 +36,21 @@ Each entity should store its state locally in a mutable variable, either a mutab
 
 ## Constructing
 
-The Cloudstate Go Support Library needs to know how to construct and initialize entities. For this, an entity has to implement the `cloudstate.EntityInitializer` interface.
+The Cloudstate Go Support Library needs to know how to construct and initialize entities. For this, an entity has to provide a factory function, `EntityFunc`, which is set during registration of the event sourced entity.
 
-(TODO: provide: The constructor below shows having the entity id injected)
+@@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #register }
+
+The entity factory function returns a `cloudstate.Entity` which is composed of two interfaces to handle commands and events.
 
 @@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #constructing }
 
 ## Handling commands
 
-Command handlers are declared by implementing the gRPC ShoppingCartServer interface which is generated from the protobuf definitions. The Cloudstate Go Support library together with the registered ServiceName in the `cloudstate.EventSourcedEntity` is then able to dispatch commands it gets from the Cloudstate proxy.
+An event sourced entity implements the composed `cloudstate.Entity` interface. `cloudstate.Entity` embeds the `cloudstate.EventHandler` interface and therefore entities implementing it get commands from Cloudstate through the event handlers `HandleCommand` method.
+
+The command types received by an event sourced entity are declared by the gRPC Server interface which is generated from the protobuf definitions. The Cloudstate Go Support library together with the registered `cloudstate.EventSourcedEntity` is then able to dispatch commands it gets from the Cloudstate proxy to the event sourced entity.
+
+@@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #handle-command } 
 
 The return type of the command handler is by definition of the service interface, the output type for the gRPC service call, this will be sent as the reply.
 
@@ -68,26 +78,41 @@ This command handler also validates the command, ensuring the quantity items add
 
 Event handlers are invoked at two points, when restoring entities from the journal, before any commands are handled, and each time a new event is emitted. An event handlers responsibility is to update the state of the entity according to the event. Event handlers are the only place where its safe to mutate the state of the entity at all.
 
-Event handlers are declared by either implementing the `cloudstate.EventHandler` interface
+Event handlers are declared by implementing the `cloudstate.EventHandler` interface.
 
 @@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/event.go) { #event-handler }
 
-or implementing an unary method that matches the type of the event to be handled. Event handlers are differentiated by the type of event they handle. By default, the type of event an event handler handles will be determined by looking for a single argument that the event handler takes. If for any reason this needs to be overridden, or if the event handler method doesn't exists at all, the event is handed over to the `cloudstate.EventHandler` `Handle` method when the entity implements that interface. The by implementing the `HandleEvent(event interface{}) (handled bool, err error)` method, a event handler indicates if he handled the event or if any occurred, returns an error. The returned error has precedent and the handled flag would not be considered.  
+Emitted events by command handlers get dispatched to the implemented event handler which then decides how to proceed with the event. 
 
-Here's an example event handler for the `ItemAdded` event.
+@@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #handle-event } 
+
+Here's an example of a concrete event handler for the `ItemAdded` event.
 
 @@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #item-added }
 
 ## Producing and handling snapshots
 
-## Multiple behaviors
+Snapshots are an important optimisation for event sourced entities that may contain many events, to ensure that they can be loaded quickly even when they have very long journals. To produce a snapshot, the `cloudstate.Snapshotter` interface has to be implemented that must return a snapshot of the current state in serializable form. 
 
-Multiple behaviors are not supported yet by the Go support library. 
+@@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/event.go) { #snapshotter }
+
+Here is an example of the TCK shopping cart example creating snapshots for the current `domain.Cart` state of the shopping cart.
+
+@@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #snapshotter }
+
+When the entity is loaded again, the snapshot will first be loaded before any other events are received, and passed to a snapshot handler. Snapshot handlers are declared by implementing the `cloudstate.SnapshotHandler` interface.
+
+@@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/event.go) { #snapshot-handler }
+
+A snapshot handler then can type-switch over types the corresponding `cloudstate.Snapshotter` interface has implemented.  
+
+@@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #handle-snapshot }
 
 ## Registering the entity
 
 Once you've created your entity, you can register it with the `cloudstate.Cloudstate` server, by invoking the `Register` method of an Cloudstate instance. In addition to passing your entity type and service name, you also need to pass any descriptors that you use for persisting events, for example, the `domain.proto` descriptor.
 
-During registration the oprtional ServiceName and the ServiceVersion can be configured as Options.
+During registration the optional ServiceName and the ServiceVersion can be configured.
+(TODO: give an example on how to pick values for these after the spec defines semantics )
 
 @@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #register }

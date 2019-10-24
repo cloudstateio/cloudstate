@@ -15,7 +15,10 @@
 
 package cloudstate
 
-import "fmt"
+import (
+	"context"
+	"fmt"
+)
 
 type OnNext func(event interface{}) error
 type OnErr func(err error)
@@ -89,10 +92,20 @@ type EventHandler interface {
 }
 //#event-handler
 
+//#command-handler
+type CommandHandler interface {
+	HandleCommand(ctx context.Context, command interface{}) (handled bool, reply interface{}, err error)
+}
+//#command-handler
+
+//#snapshotter
 type Snapshotter interface {
 	Snapshot() (snapshot interface{}, err error)
 }
+//#snapshotter
 
+//#snapshot-handler
 type SnapshotHandler interface {
 	HandleSnapshot(snapshot interface{}) (handled bool, err error)
 }
+//#snapshot-handler

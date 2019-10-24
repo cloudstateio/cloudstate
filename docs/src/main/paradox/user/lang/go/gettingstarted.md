@@ -14,21 +14,21 @@ protoc
 docker
 : Cloudstate runs in Kubernetes with [Docker](https://www.docker.com), hence you will need Docker to build a container that you can deploy to Kubernetes. Most popular build tools have plugins that assist in building Docker images.
 
-In addition to the above, you will need to install the Cloudstate Go support library by issuing `go get -u github.com/cloudstateio/go-support` or with Go module support let the dependency be downloaded by `go [build|run|test]`. 
+In addition to the above, you will need to install the Cloudstate Go support library by issuing `go get -u github.com/cloudstateio/go-support/cloudstate` or with Go module support let the dependency be downloaded by `go [build|run|test]`. 
 
 By using the Go module support your go.mod file will reference the latest version of the support library or you can define which version you like to use.
 
 go get
 : @@@vars
 ```text
-go get -u github.com/cloudstateio/go-support
+go get -u github.com/cloudstateio/go-support/cloudstate
 ```
 @@@
 
 import path
 : @@@vars
 ```text
-import "github.com/cloudstateio/go-support"
+import "github.com/cloudstateio/go-support/cloudstate"
 ```
 @@@
 
@@ -57,11 +57,9 @@ option go_package = "example/shoppingcart";
 
 Now if you place your protobuf files under protobuf/ and run `protoc --go_out=. --proto_path=protobuf ./protobuf/*.proto`, you'll find your generated protobuf files in `example/shoppingcart`.
 
-## Creating and starting a server
-
 ## Creating a main package
 
-Your main package will be responsible for creating the Cloudstate gRPC server, registering the entities for it to serve, and starting it. To do this, you can use the Cloudstate server type, for example:
+Your main package will be responsible for creating the Cloudstate gRPC server, registering the entities for it to serve, and starting it. To do this, you can use the CloudState server type, for example:
 
 @@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #shopping-cart-main }
 
@@ -73,6 +71,8 @@ Cloudstate entities in Go work by implementing interfaces and composing types.
 
 To get support for the Cloudstate event emission the Cloudstate entity should embed the `cloudstate.EventEmitter` type. The EventEmitter allows the entity to emit events during the handling of commands.
 
-Second, by implementing the `cloudstate.EntityInitializer` interface with its `New()` method, a Cloudstate instance gets to know how to create and initialize an event sourced entity.
+Second, during registration of the entity, an entity factory function has to be provided so Cloudstate gets to know how to create and initialize an event sourced entity. 
 
-@@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #compose-entity }
+@@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/eventsourced.go) { #event-sourced-entity-func }
+
+This entity factory function returns an `cloudstate.Entity` which itself is a composite interface of a `cloudstate.CommandHandler` and a `cloudstate.EventHandler`. Every event sourced entity has to implement these two interfaces.
