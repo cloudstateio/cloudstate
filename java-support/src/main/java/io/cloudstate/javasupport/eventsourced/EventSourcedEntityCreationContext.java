@@ -5,4 +5,4 @@ package io.cloudstate.javasupport.eventsourced;
  *
  * <p>This may be accepted as an argument to the constructor of an event sourced entity.
  */
-public interface EventSourcedEntityCreationContext extends EventSourcedContext, BehaviorContext {}
+public interface EventSourcedEntityCreationContext extends EventSourcedContext {}

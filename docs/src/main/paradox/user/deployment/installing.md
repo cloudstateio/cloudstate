@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-* Kubernetes 1.12 or later. Earlier versions of Kubernetes may work but have not been tested.
+* Kubernetes 1.11 or later.
 * (Optional) Istio 1.2.0 or later.
 
 ## Installation requirements

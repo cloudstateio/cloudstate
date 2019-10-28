@@ -82,25 +82,11 @@ Snapshots are an important optimisation for event sourced entities that may cont
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #snapshot }
 
-When the entity is loaded again, the snapshot will first be loaded before any other events are received, and passed to a snapshot handler. Snapshot handlers are declare by annotating a method with @javadoc[`@SnapshotHandler`](io.cloudstate.javasupport.eventsourced.SnapshotHandler), and it can take a context class of type @javadoc[`SnapshotBehaviorContext`](io.cloudstate.javasupport.eventsourced.SnapshotBehaviorContext).
+When the entity is loaded again, the snapshot will first be loaded before any other events are received, and passed to a snapshot handler. Snapshot handlers are declare by annotating a method with @javadoc[`@SnapshotHandler`](io.cloudstate.javasupport.eventsourced.SnapshotHandler), and it can take a context class of type @javadoc[`SnapshotContext`](io.cloudstate.javasupport.eventsourced.SnapshotContext).
 
 Multiple snapshot handlers may be defined to handle multiple different types of snapshots, the type matching is done in the same way as for events.
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #handle-snapshot }
-
-## Multiple behaviors
-
-In the examples above, our shopping cart entity only has one behavior, and that is declared through the annotations on the entity class. An entity may have different states, where command and event handling may differ according to the state it is currently in. While this could be implemented using if statements in the handlers, Cloudstate also provides multiple behavior support, so that an entity can change its behavior. This multiple behavior support allows implementing entities as finite state machines.
-
-Entity behavior can be changed when the entity is created, when it handles a snapshot, and when it handles an event, using the `become` method on their respective contexts. The become method accepts an array of objects. Each object declares event handlers and command handlers for that particular behavior, and the handlers on that object will be used going forward for all subsequent commands and events.
-
-Behaviors can also be composed by supplying multiple behavior objects to the `become` method. Behavior objects are checked in order for a behavior, the first behavior that has a matching command or event handler will be invoked.
-
-Typically, behaviors will be implemented as inner classes of the entity, so that they can access the entities state. Alternatively, they can be implemented independently, and can in fact even hold the state immutably themselves - such that behaviors can be used to update the state of the entity.
-
-In the example below, we show a shopping cart that also has a checkout command. Once checked out, the shopping cart no longer accepts any commands to add or remove items, its behavior changes. Handlers that are shared between behaviors are declared on the entity itself, and it is passed as one of the behaviors on each call to change the behavior:
-
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/behavior/ShoppingCartEntity.java) { #content }
 
 ## Registering the entity
 

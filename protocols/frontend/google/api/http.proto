@@ -17,6 +17,7 @@ syntax = "proto3";
 
 package google.api;
 
+option csharp_namespace = "Google.Protobuf";
 option cc_enable_arenas = true;
 option go_package = "google.golang.org/genproto/googleapis/api/annotations;annotations";
 option java_multiple_files = true;
