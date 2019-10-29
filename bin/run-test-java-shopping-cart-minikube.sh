@@ -51,7 +51,7 @@ then
 fi
 
 # Expose it
-kubectl expose deployment shopping-cart-deployment --port=8013 --type=NodePort
+kubectl --namespace=cloudstate expose deployment shopping-cart-deployment --port=8013 --type=NodePort
 
 # Get the URL to it
 URL=$(minikube service shopping-cart-deployment --url)

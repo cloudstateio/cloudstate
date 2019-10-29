@@ -140,7 +140,7 @@ spec:
 The CloudState operator should now create the necessary deployment for the shopping cart. There are a few ways it can be accessed, one is to port forward into the pod, but perhaps the simpler way is to create a `NodePort` service for it, by running:
 
 ```
-kubectl expose deployment shopping-cart-deployment --port=8013 --type=NodePort
+kubectl --namespace=cloudstate expose deployment shopping-cart-deployment --port=8013 --type=NodePort
 ```
 
 Now, you can see the hostname/port to access it on by running:
