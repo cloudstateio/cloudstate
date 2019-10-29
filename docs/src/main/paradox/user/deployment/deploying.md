@@ -1,6 +1,6 @@
 # Deploying a stateful service
 
-CloudState services are deployed to Kubernetes using the `StatefulService` resource. Here is a minimal example:
+Cloudstate services are deployed to Kubernetes using the `StatefulService` resource. Here is a minimal example:
 
 ```yaml
 apiVersion: cloudstate.io/v1alpha1
@@ -12,11 +12,11 @@ spec:
   - image: my-docker-hub-username/shopping-cart:latest
 ```
 
-Upon deploying this, the CloudState operator will create a Kubernetes `Deployment` that contains the container configured in the descriptor, along with a sidecar container for the CloudState proxy. The operator will also deploy a Kubernetes `Service` to allow other services to consume the CloudState service.
+Upon deploying this, the Cloudstate operator will create a Kubernetes `Deployment` that contains the container configured in the descriptor, along with a sidecar container for the Cloudstate proxy. The operator will also deploy a Kubernetes `Service` to allow other services to consume the Cloudstate service.
 
 ## Customizing the container
 
-The container specification is modeled off the container specification in the `Pod` resource. CloudState will inject some additional configuration:
+The container specification is modeled off the container specification in the `Pod` resource. Cloudstate will inject some additional configuration:
 
 * If no ports are specified, in the container, a port of `8080` will be created, otherwise, the first declared port will be taken and assumed to be the port that the proxy should use to communicate with the user function.
 * The port that the user function should use will be available in the environment variable `PORT`.

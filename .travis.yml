@@ -68,7 +68,7 @@ jobs:
       skip_cleanup: true
       keep_history: true
       email: deploy@cloudstate.io
-      name: CloudState Deployment Bot
+      name: Cloudstate Deployment Bot
       on:
         branch: master
   
