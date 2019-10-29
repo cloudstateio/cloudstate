@@ -352,7 +352,7 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     cmd.id must not be commandId
   }
 
-  ("The TCK for" + config.name) must {
+  ("The TCK for " + config.name) must {
     implicit val scheduler = system.scheduler
 
     "verify that the user function process responds" in {

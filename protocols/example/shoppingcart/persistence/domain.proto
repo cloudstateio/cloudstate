@@ -3,6 +3,8 @@ syntax = "proto3";
 
 package com.example.shoppingcart.persistence;
 
+option go_package = "persistence";
+
 message LineItem {
     string productId = 1;
     string name = 2;

@@ -8,5 +8,6 @@ CloudState user functions can be implemented in any language that supports gRPC.
 
 * [JavaScript](javascript/index.md)
 * [Java](java/index.md)
+* [Go](go/index.md)
 
 @@@
