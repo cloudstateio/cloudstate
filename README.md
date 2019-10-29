@@ -414,7 +414,7 @@ Next we'll take a look at the Akka proxy, which can be found in [`proxy/core`](p
 
 * [`Serve.scala`](proxy/core/src/main/scala/io/cloudstate/proxy/Serve.scala) - This provides the dynamically implemented gRPC interface as specified by the user function. Requests are forwarded as commands to the cluster sharded persistent entities.
 * [`EventSourcedEntity.scala`](proxy/core/src/main/scala/io/cloudstate/proxy/eventsourced/EventSourcedEntity.scala) - This is an Akka persistent actor that talks to the user function via the event sourcing gRPC protocol.
-* [`CloudstateProxyMain.scala`](proxy/core/src/main/scala/io/cloudstate/proxy/CloudstateProxyMain.scala) - This pulls everything together, starting the Akka gRPC server, cluster sharding, and persistence.
+* [`CloudStateProxyMain.scala`](proxy/core/src/main/scala/io/cloudstate/proxy/CloudStateProxyMain.scala) - This pulls everything together, starting the Akka gRPC server, cluster sharding, and persistence.
 * [`HttpApi.scala`](proxy/core/src/main/scala/io/cloudstate/proxy/HttpApi.scala) - This reads [google.api.HttpRule](protocols/frontend/google/api/http.proto) annotations to generate HTTP/1.1 + JSON endpoints for the gRPC service methods.
 
 ---
