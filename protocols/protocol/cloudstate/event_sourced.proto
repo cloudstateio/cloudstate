@@ -31,7 +31,7 @@ import "cloudstate/entity.proto";
 option java_package = "io.cloudstate.protocol";
 option go_package = "cloudstate/protocol";
 
-//EventSourcedInit TODO
+//*EventSourcedInit* TODO
 //
 //The init message. This will always be the first message sent to the entity when it is loaded.
 //
@@ -54,7 +54,7 @@ message EventSourcedInit {
     EventSourcedSnapshot snapshot = 3;
 }
 
-//EventSourcedSnapshot TODO
+//*EventSourcedSnapshot* TODO
 //
 //---
 //
@@ -72,7 +72,7 @@ message EventSourcedSnapshot {
     google.protobuf.Any snapshot = 2;
 }
 
-//EventSourcedEvent TODO
+//*EventSourcedEvent* TODO
 //
 //---
 //
@@ -90,7 +90,7 @@ message EventSourcedEvent {
     google.protobuf.Any payload = 2;
 }
 
-//EventSourcedReply TODO
+//*EventSourcedReply* TODO
 //
 //---
 //
@@ -123,7 +123,7 @@ message EventSourcedReply {
     google.protobuf.Any snapshot = 5;
 }
 
-//EventSourcedStreamIn TODO
+//*EventSourcedStreamIn* TODO
 //
 //---
 //
@@ -146,7 +146,7 @@ message EventSourcedStreamIn {
     }
 }
 
-//EventSourcedStreamOut TODO
+//*EventSourcedStreamOut* TODO
 //
 //---
 //

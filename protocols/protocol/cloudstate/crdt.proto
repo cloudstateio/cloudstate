@@ -75,7 +75,7 @@ service Crdt {
     rpc handle(stream CrdtStreamIn) returns (stream CrdtStreamOut);
 }
 
-// CrdtStreamIn TODO
+//*CrdtStreamIn* TODO
 //
 //---
 //
@@ -118,7 +118,7 @@ message CrdtStreamIn {
     }
 }
 
-// CrdtStreamOut TODO
+//*CrdtStreamOut* TODO
 //
 //---
 //
@@ -144,7 +144,7 @@ message CrdtStreamOut {
     }
 }
 
-// CrdtState TODO
+//*CrdtState* TODO
 //
 // The CRDT state. This represents the full state of a CRDT. When received, a user function should replace the current
 // state with this, not apply it as a delta. This includes both for the top level CRDT, and embedded CRDTs, such as
@@ -193,7 +193,7 @@ message CrdtState {
     }
 }
 
-// GCounterState TODO
+//*GCounterState* TODO
 //
 // A Grow-only counter
 //
@@ -211,7 +211,7 @@ message GCounterState {
     uint64 value = 1;
 }
 
-// PNCounterState TODO
+//*PNCounterState* TODO
 //
 // A Positve-Negative Counter
 //
@@ -229,7 +229,7 @@ message PNCounterState {
     int64 value = 1;
 }
 
-// GSetState TODO
+//*GSetState* TODO
 //
 // A Grow-only Set
 //
@@ -247,7 +247,7 @@ message GSetState {
     repeated google.protobuf.Any items = 1;
 }
 
-// ORSetState TODO
+//*ORSetState* TODO
 //
 // An Observed-Removed Set
 //
@@ -266,7 +266,7 @@ message ORSetState {
     repeated google.protobuf.Any items = 1;
 }
 
-// LWWRegisterState TODO
+//*LWWRegisterState* TODO
 //
 // A Last-Write-Wins Register
 //
@@ -294,7 +294,7 @@ message LWWRegisterState {
     int64 custom_clock_value = 3;
 }
 
-// FlagState TODO
+//*FlagState* TODO
 //
 // A Flag is a boolean value, that once set to true, stays true.
 //
@@ -310,7 +310,7 @@ message FlagState {
     bool value = 1;
 }
 
-//ORMapState TODO
+//*ORMapState* TODO
 //
 // An Observed-Removed Map
 //
@@ -330,7 +330,7 @@ message ORMapState {
     repeated ORMapEntry entries = 1;
 }
 
-//ORMapEntry TODO
+//*ORMapEntry* TODO
 //
 //---
 //
@@ -348,7 +348,7 @@ message ORMapEntry {
     CrdtState value = 2;
 }
 
-//VoteState TODO
+//*VoteState* TODO
 //
 // A Vote. This allows nodes to vote on something.
 //
@@ -372,7 +372,7 @@ message VoteState {
     bool self_vote = 3;
 }
 
-//CrdtDelta TODO
+//*CrdtDelta* TODO
 //
 //---
 //
@@ -410,7 +410,7 @@ message CrdtDelta {
     }
 }
 
-//GCounterDelta TODO
+//*GCounterDelta* TODO
 //
 //---
 //
@@ -422,7 +422,7 @@ message GCounterDelta {
     uint64 increment = 1;
 }
 
-//PNCounterDelta TODO
+//*PNCounterDelta* TODO
 //
 //---
 //
@@ -434,7 +434,7 @@ message PNCounterDelta {
     sint64 change = 1;
 }
 
-//GSetDelta TODO
+//*GSetDelta* TODO
 //
 //---
 //
@@ -446,7 +446,7 @@ message GSetDelta {
     repeated google.protobuf.Any added = 1;
 }
 
-//ORSetDelta TODO
+//*ORSetDelta* TODO
 //
 //---
 //
@@ -465,7 +465,7 @@ message ORSetDelta {
     repeated google.protobuf.Any added = 3;
 }
 
-//LWWRegisterDelta TODO
+//*LWWRegisterDelta* TODO
 //
 //---
 //
@@ -484,7 +484,7 @@ message LWWRegisterDelta {
     int64 custom_clock_value = 3;
 }
 
-//FlagDelta TODO
+//*FlagDelta* TODO
 //
 //---
 //
@@ -497,7 +497,7 @@ message FlagDelta {
     bool value = 1;
 }
 
-//ORMapDelta TODO
+//*ORMapDelta* TODO
 //
 //---
 //
@@ -519,7 +519,7 @@ message ORMapDelta {
     repeated ORMapEntry added = 4;
 }
 
-//ORMapEntryDelta TODO
+//*ORMapEntryDelta* TODO
 //
 //---
 //
@@ -535,7 +535,7 @@ message ORMapEntryDelta {
     CrdtDelta delta = 2;
 }
 
-//VoteDelta TODO
+//*VoteDelta* TODO
 //
 //---
 //
@@ -554,7 +554,7 @@ message VoteDelta {
     int32 total_voters = 3;
 }
 
-//CrdtInit TODO
+//*CrdtInit* TODO
 //
 //---
 //
@@ -573,7 +573,7 @@ message CrdtInit {
     CrdtState state = 3;
 }
 
-//CrdtDelete TODO
+//*CrdtDelete* TODO
 //
 //---
 //
@@ -585,7 +585,7 @@ message CrdtDelete {
 }
 
 
-//CrdtReply TODO
+//*CrdtReply* TODO
 //
 //---
 //
@@ -614,7 +614,7 @@ message CrdtReply {
     bool streamed = 6;
 }
 
-//CrdtStateAction TODO
+//*CrdtStateAction* TODO
 //
 //---
 //
@@ -642,7 +642,7 @@ message CrdtStateAction {
     CrdtWriteConsistency write_consistency = 8;
 }
 
-//CrdtStreamedMessage TODO
+//*CrdtStreamedMessage* TODO
 //
 // May be sent as often as liked if the first reply set streamed to true.
 //
@@ -667,7 +667,7 @@ message CrdtStreamedMessage {
     bool end_stream = 4;
 }
 
-//CrdtStreamCancelledResponse TODO
+//*CrdtStreamCancelledResponse* TODO
 //
 //---
 //
@@ -686,7 +686,7 @@ message CrdtStreamCancelledResponse {
     CrdtStateAction state_action = 3;
 }
 
-//CrdtWriteConsistency TODO
+//*CrdtWriteConsistency* TODO
 enum CrdtWriteConsistency {
     // TODO
     LOCAL = 0;
@@ -696,7 +696,7 @@ enum CrdtWriteConsistency {
     ALL = 2;
 }
 
-//CrdtClock TODO
+//*CrdtClock* TODO
 enum CrdtClock {
     // Use the default clock for deciding the last write, which is the system clocks
     // milliseconds since epoch.

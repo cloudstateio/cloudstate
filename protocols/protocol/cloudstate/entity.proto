@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// gRPC definitions for Entity Discovery
+//gRPC definitions for Entity Discovery
 //
 //---
 //
@@ -40,7 +40,7 @@ import "google/protobuf/descriptor.proto";
 option java_package = "io.cloudstate.protocol";
 option go_package = "cloudstate/protocol";
 
-//Reply represents a Command processing successful reply.
+//*Reply* represents a Command processing successful reply.
 //
 //---
 //
@@ -53,7 +53,7 @@ message Reply {
     google.protobuf.Any payload = 1;
 }
 
-//Forwards handling of this request to another entity.
+//*Forwards* handling of this request to another entity.
 //
 //---
 //
@@ -72,7 +72,7 @@ message Forward {
     google.protobuf.Any payload = 3;
 }
 
-//ClientAction represents a side effect to be done after this command is handled.
+//*ClientAction* represents a side effect to be done after this command is handled.
 //
 //---
 //
@@ -97,7 +97,7 @@ message ClientAction {
     }
 }
 
-//SideEffect represents a side effect to be done after this command is handled.
+//*SideEffect* represents a side effect to be done after this command is handled.
 //
 //---
 //
@@ -123,7 +123,7 @@ message SideEffect {
     bool synchronous = 4;
 }
 
-//Command represents TODO
+//*Command* represents TODO
 //
 //---
 //
@@ -153,7 +153,7 @@ message Command {
     bool streamed = 5;
 }
 
-//StreamCancelled TODO
+//*StreamCancelled* TODO
 //
 //---
 //
@@ -171,7 +171,7 @@ message StreamCancelled {
     int64 id = 2;
 }
 
-//Failure represents a Command processing failure reply.
+//*Failure* represents a Command processing failure reply.
 //If this is returned, it will be translated into a gRPC unknown error with the corresponding description if supplied.
 //
 //---
@@ -190,16 +190,16 @@ message Failure {
     string description = 2;
 }
 
-//EntitySpec TODO
+//*EntitySpec* TODO
 //
 //---
 //
 //`Specification`:
 //
 //  - An `EntitySpec` is considered to be valid iff:
-//    - `proto` TODO
-//    - `entities` TODO
-//    - `service_info` TODO
+//    - `proto` MUST be valid binary proto of a Descriptors.FileDescriptorSet with atleast one Service definition.
+//    - `entities` MUST each be a valid `Entity` with a `service_name` corresponding to the name of a distinct Service contained in `proto`.
+//    - `service_info` MUST be a valid ServiceInfo
 message EntitySpec {
     // A Protobuf Descriptors.FileDescriptorSet of the Service to be proxied in proto serialized form.
     bytes proto = 1;
@@ -211,7 +211,7 @@ message EntitySpec {
     ServiceInfo service_info = 3;
 }
 
-//ServiceInfo contains information about the service that the CloudState Proxy will proxy.
+//*ServiceInfo* contains information about the service that the CloudState Proxy will proxy.
 //All of the information in here is optional, it is intended to be used for debug purposes.
 //
 //---
@@ -244,7 +244,7 @@ message ServiceInfo {
     string support_library_version = 5;
 }
 
-//Entity represents TODO
+//*Entity* represents TODO
 //
 //---
 //
@@ -271,7 +271,7 @@ message Entity {
     string persistence_id = 3;
 }
 
-//UserFunctionError contains information about a problem pretaining to erronous behavior of a UserFunction.
+//*UserFunctionError* contains information about a problem pretaining to erronous behavior of a UserFunction.
 //
 //---
 //
@@ -284,7 +284,7 @@ message UserFunctionError {
     string message = 1;
 }
 
-//ProxyInfo contains information about the CloudState PRoxy which is responsible for proxying a UserFunction.
+//*ProxyInfo* contains information about the CloudState PRoxy which is responsible for proxying a UserFunction.
 //
 //---
 //
@@ -312,7 +312,7 @@ message ProxyInfo {
     repeated string supported_entity_types = 5;
 }
 
-//The *EntityDiscovery* Service is the entrypoint for CloudState Proxies
+//The *EntityDiscovery* Service is the entrypoint for CloudState Proxies.
 //
 //---
 //
@@ -326,9 +326,9 @@ message ProxyInfo {
 //    - *MAY* be called any number of times by its CloudState Proxy
 //    - *MUST* yield a failure if the provided `ProxyInfo` is not deemed compatible with the User Function
 //  - `reportError`
-//    - *MUST* only be invoked to inform a User Function about violations of the CloudState Specification
 //    - *MUST* only receive failures not originating from invoking `reportError`, since that would cause a crash-loop.
-//    - implementations are *RECOMMENDED* to log the received errors, for debugging purposes.
+//    - *SHOULD* be used for informational purposes only—the message MUST be reported to the developer in a way which is visible without debug logging turned on, such as STDOUT, but it may go somewhere else depending on the language used. Fatal errors will lead to the proxy closing the connection, as always.
+//
 service EntityDiscovery {
 
     // Lets a CloudState Proxy discover which `service` and `entities` a User Function implements.
