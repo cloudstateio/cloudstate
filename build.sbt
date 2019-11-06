@@ -51,9 +51,9 @@ name := "cloudstate"
 
 val GrpcJavaVersion = "1.22.1"
 val GraalAkkaVersion = "0.4.1"
-val AkkaVersion = "2.5.25"
+val AkkaVersion = "2.5.26"
 val AkkaHttpVersion = "10.1.10+124-779795c4" // TODO: Remove once we're switching to akka-http 10.1.11
-val AkkaManagementVersion = "1.0.1"
+val AkkaManagementVersion = "1.0.4"
 val AkkaPersistenceCassandraVersion = "0.96"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
@@ -78,7 +78,8 @@ def common: Seq[Setting[_]] = Seq(
   PB.protoSources in Test := Seq(),
   // Akka gRPC overrides the default ScalaPB setting including the file base name, let's override it right back.
   akkaGrpcCodeGeneratorSettings := Seq(),
-  excludeFilter in headerResources := HiddenFileFilter || GlobFilter("reflection.proto")
+  excludeFilter in headerResources := HiddenFileFilter || GlobFilter("reflection.proto"),
+  javaOptions in Test ++= Seq("-Xms1G", "-XX:+CMSClassUnloadingEnabled", "-XX:+UseConcMarkSweepGC")
 )
 
 // Include sources from the npm projects
@@ -100,6 +101,7 @@ lazy val root = (project in file("."))
   .aggregate(`proxy-core`,
              `proxy-cassandra`,
              `proxy-postgres`,
+             `proxy-tests`,
              `java-support`,
              `scala-support`,
              `java-shopping-cart`,
@@ -371,10 +373,15 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion % "provided", // Only needed for compilation
         "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion % "provided", // Only needed for compilation
         "com.typesafe.akka" %% "akka-remote" % AkkaVersion excludeAll (excludeTheseDependencies: _*),
+        // For Eventing support of Google Pubsub
+        "com.google.api.grpc" % "grpc-google-cloud-pubsub-v1" % "0.12.0" % "protobuf", // ApacheV2
+        "io.grpc" % "grpc-auth" % GrpcJavaVersion, // ApacheV2
+        "com.google.auth" % "google-auth-library-oauth2-http" % "0.15.0", // BSD 3-clause
         "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
         "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
         "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
         "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
         "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http-core" % AkkaHttpVersion,
@@ -408,6 +415,8 @@ lazy val `proxy-core` = (project in file("proxy/core"))
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "proxy", baseDir / "frontend", baseDir / "protocol", (sourceDirectory in Compile).value / "protos")
     },
+    // For Google Cloud Pubsub API
+    PB.protoSources in Compile += target.value / "protobuf_external" / "google" / "pubsub" / "v1",
     // This adds the test/protos dir and enables the ProtocPlugin to generate protos in the Test scope
     inConfig(Test)(
       sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
@@ -522,7 +531,8 @@ lazy val `proxy-tests` = (project in file("proxy/proxy-tests"))
   .settings(
     common,
     name := "cloudstate-proxy-tests",
-    fork in Test := true,
+    fork in Test := System.getProperty("RUN_STRESS_TESTS", "false") == "true",
+    parallelExecution in Test := false,
     baseDirectory in Test := (baseDirectory in ThisBuild).value,
     libraryDependencies ++= Seq(
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,

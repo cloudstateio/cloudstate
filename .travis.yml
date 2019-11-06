@@ -10,7 +10,8 @@ env:
   - secure: nPtepdKPvidwnxijiaIQiKnwuNvy+P4YAQUe4+1UzsiNMLILC/8UgWlUHoJMmlcS9ycYM5G1EwQNiT3hJetJbRL4VN3/uhnNpntmucASpC1KbpGjl3gaMfx7yDnJj252aj0yrSDoxJHDXe9p7zBY+bV+Dvp/SWGO1216ZgpiEx+T2n7QJ7kj5dhU+j6AIPj2R1U2lGOiAjHaCudGlv7evswSYrfdXL9yRZGXxeM361vien1akwTjSJzZr/EZmXhVyBSEWKitWMLuboCmXaUvr+VZVm5FkY8X7FKKBre05/itWGQTrnrEaKaUMd1bW+GfPOyFTjmuJnLiwmSmeEx2o/krQt9EfyFJpSfiX/b5bxYQan+ozxiwrsDF0/7tYfGBVg48miccqN+oAtAD1X8cWYa9svLOwKnv82ELq/18QE5OY9DPc9zARGDnPxwZ96Zl6dDtQkJz2+qBo/EU8dU2q1uaNTvuImmtLAHQZ2PtzdaGkklQQ3YvfZeWyD/fTVZdMQi2NXv0LRHkwAxf65vwrf84Edyy+HlqD5zTpKzhr1q6+wj54oOsQDnK6gSmmguG5Nd2HbJQxQhDlEZQ6+b00TY5WxYPG5Qo5zH0TXbu+/txLZlZOyJ5qJqGCICC1QW3YNDvFbTBIYGQUKVZ6vadXD8SqFUNvYK/wXXLYmdoXm8=
   # DockerHub password for cloudstatebot
   - secure: "3YFGW7bUil+CFQSbgjCSMnFezWIGFdv6/eaNlKKhaxOueDoLmVrLqNhCXkS2Nz3f4tvPFzDN9VH3RyzEIG1u53nQvMw7vceV5szj4oyM4pGZ3TnugtEQFfRHJsUFAWFuRTr9etukBlxCo8HHT3FvcM5uKYQAmBt23wO/NuF8hFXDYQ6c6WHTvP6gzLP5lG70fVJ3ViA1QZEfOaEnOJNqknFtmGj8j0pQTE8oxXTSz61KDBzN3C9PtupDo2Xj0dtpurSZnGRt4BJYoBJkgBiQQJ0W/p5YWGHewdyV12/GgafhkyrPkSx02iOsq3yJrnX238xP/2QQCpMTtZ1lVMQsdXYmpX40hCoEXdxG1qlhH4ISNtXmck1J1VMRVg+sg8+PyFlRZObKcHtIWeGYOu8+T34zn0t+7VPswq0UY2xtPhetk9csNNtGQ7vTKKNFcFUdrROSEV/wmV/eudue473j5YZDDGEm43a04P81FsHVWxV9+uwuCiofMz3E1TcZJkySHYt3XnFhWGtdbJMHOkaYsrW++UA1wjWgn/EPcwNWpxiKJVoQmw3WYb0PH7ZXWaeQ/hqGpT+lhQzrNlP18us72c6kx7KW4aHgpWHEqsjceuSkoaAbCvxQxGbJqwDRyzOKdqTiVpapvd/wXAdatzcf1O+0n3C2lzLUbTpSkRx+s/8="
-
+services:
+  - docker
 jobs:
   include:
   - stage: Format checks
@@ -27,8 +28,16 @@ jobs:
     - cd samples/js-shopping-cart && npm test && cd -
   
   - name: sbt tests
-    before_script: sbt update
-    script: sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' test
+    before_script:
+      - cd node-support && npm install && cd -
+      - cd samples/js-shopping-cart && npm install && cd -
+      - sbt update
+      - docker pull google/cloud-sdk:latest
+      - docker run --rm --expose=8085 --volume=/data -m 140MB --name=googlepubsub -d -p 8085:8085 google/cloud-sdk:latest /bin/sh -c "gcloud beta emulators pubsub start --project=test --host-port=0.0.0.0:8085 --data-dir=/data"
+      - docker ps -a
+    script: sbt -jvm-opts travis/jvmopts 'set concurrentRestrictions in Global += Tags.limitAll(1)' test
+    after_script:
+      - docker stop googlepubsub
   
   - name: docs tests
     before_script:
