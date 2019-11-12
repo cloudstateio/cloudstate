@@ -118,7 +118,7 @@ object Serve {
               None
           }
         })
-        .collect(Function.unlift(identity)) // Keep only the valid payloads
+        .collect(Function.unlift(identity)) // Keep only the valid payloads, possible candidate for ExecutionContext.parasitic in 2.13
   }
 
   def createRoute(entities: Seq[ServableEntity],
@@ -130,7 +130,7 @@ object Serve {
       mat: Materializer,
       ec: ExecutionContext
   ): PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    val grpcProxy = compileProxy(entities, router, statsCollector, entityDiscoveryClient)
+    val grpcProxy = createGrpcApi(entities, router, statsCollector, entityDiscoveryClient)
 
     grpcProxy orElse // Fast path
     HttpApi.serve(entities.map(_.serviceDescriptor -> grpcProxy).toList) orElse
@@ -145,17 +145,17 @@ object Serve {
   def handleNetworkProbe(): PartialFunction[HttpRequest, Future[HttpResponse]] = Function.unlift { req =>
     req.headers.find(_.name.equalsIgnoreCase("K-Network-Probe")).map { header =>
       Future.successful(header.value match {
-        case "queue" => HttpResponse(entity = HttpEntity("queue"))
+        case q @ "queue" => HttpResponse(entity = HttpEntity(q))
         case other =>
           HttpResponse(status = StatusCodes.BadRequest, entity = HttpEntity(s"unexpected probe header value: $other"))
       })
     }
   }
 
-  private[this] final def compileProxy(entities: Seq[ServableEntity],
-                                       router: UserFunctionRouter,
-                                       statsCollector: ActorRef,
-                                       entityDiscoveryClient: EntityDiscoveryClient)(
+  private[this] final def createGrpcApi(entities: Seq[ServableEntity],
+                                        router: UserFunctionRouter,
+                                        statsCollector: ActorRef,
+                                        entityDiscoveryClient: EntityDiscoveryClient)(
       implicit sys: ActorSystem,
       mat: Materializer,
       ec: ExecutionContext

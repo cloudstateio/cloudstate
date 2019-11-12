@@ -223,7 +223,7 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
         )
         .toMat(Sink.ignore)(Keep.right)
 
-    subscriberClient
+    subscriberClient // FIXME add retries, backoff etc
       .streamingPull(pull) // TODO Consider Source.repeat(()).flatMapConcat(_ => subscriberClient.streamingPull(pull))
       .mapConcat(_.receivedMessages.toVector) // Note: receivedMessages is most likely a Vector already due to impl, so should be a noop
       .alsoTo(ackSink) // at-most-once //FIXME Add stats generation/collection so we can track progress here
@@ -246,7 +246,7 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
           pushConfig = None,
           ackDeadlineSeconds = upstreamAckDeadlineSeconds,
           retainAckedMessages = false,
-          messageRetentionDuration = None
+          messageRetentionDuration = None // TODO configure this?
         )
 
         Source
@@ -289,7 +289,8 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
   private[this] final def createDestination(topic: String): Flow[ProtobufByteString, AnyRef, NotUsed] =
     batchResults
       .mapAsyncUnordered(1 /*parallelism*/ )(
-        batch => publisherClient.publish(PublishRequest(topic = topic, messages = batch))
+        batch =>
+          publisherClient.publish(PublishRequest(topic = topic, messages = batch)) // FIXME add retries, backoff etc
       )
 
   private[this] final def createByProxyManagedDestination(topic: String): Flow[ProtobufByteString, AnyRef, NotUsed] =
