@@ -59,6 +59,12 @@ val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
 
+def excludeTheseDependencies = Seq(
+  ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
+  ExclusionRule("io.aeron"), // we're using Artery-TCP
+  ExclusionRule("org.agrona"), // and we don't need this either
+)
+
 def common: Seq[Setting[_]] = Seq(
   headerMappings := headerMappings.value ++ Seq(
       de.heikoseeberger.sbtheader.FileType("proto") -> HeaderCommentStyle.cppStyleLineComment,
@@ -240,8 +246,15 @@ commands ++= Seq(
 // Shared settings for native image and docker builds
 def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   nativeImageDockerBuild := false,
-  graalVMVersion := Some("19.1.1"), // FYI: Set this to None to make a local only native-image build
-  graalVMNativeImageOptions ++= sharedNativeImageSettings,
+
+  // FYI: Use these two settings in order to create the native images inside of Docker
+  graalVMVersion := Some("19.2.1"), // FYI: Set this to None to make a local only native-image build
+  graalVMNativeImageOptions ++= sharedNativeImageSettings(target.value / "graalvm-native-image" / "stage" / "resources"),
+
+  // FYI: Use the following two instead of the ones above to create graalvm-native-image:packageBin outside of Docker
+  //graalVMVersion := None,
+  //graalVMNativeImageOptions ++= sharedNativeImageSettings(baseDirectory.value / "src" / "graal"),
+
   (mappings in Docker) := Def.taskDyn {
       if (nativeImageDockerBuild.value) {
         Def.task {
@@ -286,11 +299,11 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   }
 )
 
-def sharedNativeImageSettings = Seq(
+def sharedNativeImageSettings(targetDir: File) = Seq(
   //"-O1", // Optimization level
-  "-H:ResourceConfigurationFiles=/opt/graalvm/stage/resources/resource-config.json",
-  "-H:ReflectionConfigurationFiles=/opt/graalvm/stage/resources/reflect-config.json",
-  "-H:DynamicProxyConfigurationFiles=/opt/graalvm/stage/resources/proxy-config.json",
+  "-H:ResourceConfigurationFiles=" + targetDir / "resource-config.json",
+  "-H:ReflectionConfigurationFiles=" + targetDir / "reflect-config.json",
+  "-H:DynamicProxyConfigurationFiles=" + targetDir / "proxy-config.json",
   "-H:IncludeResources=.+\\.conf",
   "-H:IncludeResources=.+\\.properties",
   "-H:+AllowVMInspection",
@@ -359,11 +372,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
         "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion % "provided", // Only needed for compilation
         "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.typesafe.akka" %% "akka-remote" % AkkaVersion excludeAll (
-          ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
-          ExclusionRule("io.aeron"), // we're using Artery-TCP
-          ExclusionRule("org.agrona"), // and we don't need this either
-        ),
+        "com.typesafe.akka" %% "akka-remote" % AkkaVersion excludeAll ( excludeTheseDependencies: _* ),
         "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
         "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
         "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
@@ -372,17 +381,9 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http-core" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-cluster-sharding" % AkkaVersion exclude ("org.lmdbjava", "lmdbjava"),
-        "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion excludeAll (
-          ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
-          ExclusionRule("io.aeron"), // we're using Artery-TCP
-          ExclusionRule("org.agrona"), // and we don't need this either
-        ),
-        "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion excludeAll (
-          ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
-          ExclusionRule("io.aeron"), // we're using Artery-TCP
-          ExclusionRule("org.agrona"), // and we don't need this either
-        ),
+        "com.typesafe.akka" %% "akka-cluster-sharding" % AkkaVersion excludeAll ( (excludeTheseDependencies :+ ExclusionRule("org.lmdbjava", "lmdbjava")): _*),
+        "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion excludeAll ( excludeTheseDependencies: _* ),
+        "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion excludeAll ( excludeTheseDependencies: _* ),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
         "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
@@ -441,9 +442,7 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
     name := "cloudstate-proxy-cassandra",
     libraryDependencies ++= Seq(
         "com.typesafe.akka" %% "akka-persistence-cassandra" % AkkaPersistenceCassandraVersion excludeAll (
-          ExclusionRule("io.aeron"), // we're using Artery-TCP
-          ExclusionRule("org.agrona"), // and we don't need this either
-          ExclusionRule("com.github.jnr"), // Can't native-image this, so we don't need this either
+          (excludeTheseDependencies :+ ExclusionRule("com.github.jnr")): _* // Can't native-image this, so we don't need this either
         ),
         "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test,
         // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY

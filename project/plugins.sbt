@@ -19,3 +19,5 @@ addSbtPlugin("org.xerial.sbt" % "sbt-sonatype" % "2.5")
 addSbtPlugin("io.crashbox" % "sbt-gpg" % "0.2.0")
 
 addSbtPlugin("com.lightbend.paradox" % "sbt-paradox" % "0.6.5")
+
+addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.10.0-RC1")
