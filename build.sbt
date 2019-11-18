@@ -249,7 +249,7 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
 
   // FYI: Use these two settings in order to create the native images inside of Docker
   graalVMVersion := Some("19.2.1"), // FYI: Set this to None to make a local only native-image build
-  graalVMNativeImageOptions ++= sharedNativeImageSettings(target.value / "graalvm-native-image" / "stage" / "resources"),
+  graalVMNativeImageOptions ++= sharedNativeImageSettings(new File("/opt/graalvm/stage/resources/")),
 
   // FYI: Use the following two instead of the ones above to create graalvm-native-image:packageBin outside of Docker
   //graalVMVersion := None,
