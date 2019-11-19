@@ -63,7 +63,7 @@ val GraalVersion = "19.2.1"
 def excludeTheseDependencies = Seq(
   ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
   ExclusionRule("io.aeron"), // we're using Artery-TCP
-  ExclusionRule("org.agrona"), // and we don't need this either
+  ExclusionRule("org.agrona") // and we don't need this either
 )
 
 def common: Seq[Setting[_]] = Seq(
@@ -247,15 +247,12 @@ commands ++= Seq(
 // Shared settings for native image and docker builds
 def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   nativeImageDockerBuild := false,
-
   // FYI: Use these two settings in order to create the native images inside of Docker
   graalVMVersion := Some(GraalVersion), // FYI: Set this to None to make a local only native-image build
   graalVMNativeImageOptions ++= sharedNativeImageSettings(new File("/opt/graalvm/stage/resources/")),
-
   // FYI: Use the following two instead of the ones above to create graalvm-native-image:packageBin outside of Docker
   //graalVMVersion := None,
   //graalVMNativeImageOptions ++= sharedNativeImageSettings(baseDirectory.value / "src" / "graal"),
-
   (mappings in Docker) := Def.taskDyn {
       if (nativeImageDockerBuild.value) {
         Def.task {
@@ -373,7 +370,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
         "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion % "provided", // Only needed for compilation
         "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.typesafe.akka" %% "akka-remote" % AkkaVersion excludeAll ( excludeTheseDependencies: _* ),
+        "com.typesafe.akka" %% "akka-remote" % AkkaVersion excludeAll (excludeTheseDependencies: _*),
         "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
         "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
         "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
@@ -382,9 +379,12 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http-core" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-cluster-sharding" % AkkaVersion excludeAll ( (excludeTheseDependencies :+ ExclusionRule("org.lmdbjava", "lmdbjava")): _*),
-        "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion excludeAll ( excludeTheseDependencies: _* ),
-        "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion excludeAll ( excludeTheseDependencies: _* ),
+        "com.typesafe.akka" %% "akka-cluster-sharding" % AkkaVersion excludeAll ((excludeTheseDependencies :+ ExclusionRule(
+          "org.lmdbjava",
+          "lmdbjava"
+        )): _*),
+        "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion excludeAll (excludeTheseDependencies: _*),
+        "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion excludeAll (excludeTheseDependencies: _*),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
         "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
