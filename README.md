@@ -371,8 +371,7 @@ TODO: add general docs
 
 1. Create a GKE cluster. We recommend at least 6 vCPUs (ie, a node pool of 3 `n1-standard-2` nodes). Also ensure that the current user is a cluster admin. Detailed instructions for creating the GKE cluster can be found in the [Knative documentation](https://github.com/knative/docs/blob/master/docs/install/Knative-with-GKE.md), follow all the steps up to (but not including) installing Knative.
 2. If using an event sourced entity, install Cassandra. This can be done from the Google Marketplace, by visiting the [Cassandra Cluster](https://console.cloud.google.com/marketplace/details/google/cassandra), selecting configure, selecting your GCloud project, and then installing it in the Kubernetes cluster you just created. The defaults should be good enough, in our examples we called the app instance name `cassandra`. Note there is an option to use an in memory store if you just want to test it out, of course, as soon as your pods shut down (or if they are rebalanced), your store will be lost.
-3. Create the `cloudstate` namespace and install the CloudState operator:
-
+3. Create the `cloudstate` namespace and install the Cloudstate operator:
 
     ```
     kubectl create namespace cloudstate
@@ -701,6 +700,7 @@ Are you interested in helping out making this vision a reality? We would love to
 All contributions are welcome: ideas, criticism, praise, code, bug fixes, docs, buzz, etc. 
 
 Our [Mailing List](https://groups.google.com/forum/#!forum/cloudstate) is a good place to start with open ended discussions about Cloudstate, or you can also join the discussion on our [Gitter Channel](https://gitter.im/Cloudstate-IO/community).
+
 
 The [GitHub Issue Tracker](https://github.com/cloudstateio/cloudstate/issues) is a good place to raise issues, including bug reports and feature requests.
 
