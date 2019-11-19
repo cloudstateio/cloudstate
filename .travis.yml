@@ -73,7 +73,7 @@ jobs:
         branch: master
   
   - name: Publish release
-    if: tag =~ /^v*/
+    if: tag =~ /^v.*/
     script:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
     - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish
