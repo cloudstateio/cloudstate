@@ -170,29 +170,6 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
         invoked shouldBe true
       }
 
-      "allow changing behavior" in {
-        var invoked1 = false
-        var invoked2 = false
-        val handler = create(new {
-          @EventHandler
-          def handle(event: String, ctx: EventBehaviorContext) = {
-            event should ===("event-one")
-            ctx.become(new {
-              @EventHandler
-              def handle(event: String) = {
-                event should ===("event-two")
-                invoked2 = true
-              }
-            })
-            invoked1 = true
-          }
-        })
-        handler.handleEvent(event("event-one"), eventCtx)
-        invoked1 shouldBe true
-        handler.handleEvent(event("event-two"), eventCtx)
-        invoked2 shouldBe true
-      }
-
       "fail if there's a bad context type" in {
         a[RuntimeException] should be thrownBy create(new {
           @EventHandler
@@ -391,7 +368,7 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
         var invoked = false
         val handler = create(new {
           @SnapshotHandler
-          def handleSnapshot(snapshot: String, context: SnapshotBehaviorContext) = {
+          def handleSnapshot(snapshot: String, context: SnapshotContext) = {
             snapshot should ===("snap!")
             context.sequenceNumber() should ===(10)
             invoked = true
@@ -399,30 +376,6 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
         })
         handler.handleSnapshot(event("snap!"), ctx)
         invoked shouldBe true
-      }
-
-      "changing behavior" in {
-        var invoked = false
-        var invoked2 = false
-        val handler = create(new {
-          @SnapshotHandler
-          def handleSnapshot(snapshot: String, context: SnapshotBehaviorContext) = {
-            snapshot should ===("snap!")
-            context.sequenceNumber() should ===(10)
-            context.become(new {
-              @EventHandler
-              def handleEvent(event: String) = {
-                event should ===("my-event")
-                invoked2 = true
-              }
-            })
-            invoked = true
-          }
-        })
-        handler.handleSnapshot(event("snap!"), ctx)
-        invoked shouldBe true
-        handler.handleEvent(event("my-event"), eventCtx)
-        invoked2 shouldBe true
       }
 
       "fail if there's a bad context" in {

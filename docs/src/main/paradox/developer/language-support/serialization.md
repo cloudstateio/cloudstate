@@ -1,10 +1,10 @@
-# CloudState serialization convention
+# Cloudstate serialization convention
 
-There are several cases in CloudState where user provided values need to be serialized. Given CloudState's dependence on gRPC, protobuf is an obvious serialization format, however, it's not always convenient. For example, if protobufs were the only supported format, it would not be possible to use strings as keys in an ORMap, instead users would have to create a protobuf message that wrapped a string, and use that instead.
+There are several cases in Cloudstate where user provided values need to be serialized. Given Cloudstate's dependence on gRPC, protobuf is an obvious serialization format, however, it's not always convenient. For example, if protobufs were the only supported format, it would not be possible to use strings as keys in an ORMap, instead users would have to create a protobuf message that wrapped a string, and use that instead.
 
 User function libraries are therefore encouraged to support a variety of primitive types, according to what's available in their language. JSON is also a popular and convenient serialization format in some situations, and this may supported too.
 
-User provided values in CloudState are serialized to [protobuf `Any`](https://developers.google.com/protocol-buffers/docs/proto3#any) values. These contain a `type_url` `string` field that identify the protobuf type, along with a `value` `bytes` value for the serialized bytes. While there's nothing technically stopping anything being put in either of the fields, such as a UTF8 encoded string or JSON, the `bytes` are meant to be a valid protobuf, and the `type_url` is meant to refer to a protobuf type. To support the serialization of primitive and JSON values in a way that is as consistent as possible with the intentions behind `Any`, CloudState has defined convention for achieving this.
+User provided values in Cloudstate are serialized to [protobuf `Any`](https://developers.google.com/protocol-buffers/docs/proto3#any) values. These contain a `type_url` `string` field that identify the protobuf type, along with a `value` `bytes` value for the serialized bytes. While there's nothing technically stopping anything being put in either of the fields, such as a UTF8 encoded string or JSON, the `bytes` are meant to be a valid protobuf, and the `type_url` is meant to refer to a protobuf type. To support the serialization of primitive and JSON values in a way that is as consistent as possible with the intentions behind `Any`, Cloudstate has defined convention for achieving this.
 
 ## Primitive values
 
@@ -42,7 +42,7 @@ The UTF8 encoded serialized JSON is placed in the `json` field of the message ab
 
 ### Serialized JSON value stability
 
-As with primitive values, the stability of the encoded form is important. Libraries are encouraged to use JSON encoders that produce a stable output for logically equal inputs. CloudState does not put any requirements on how to achieve stable serialization, however many languages have libraries that do produce a canonical JSON representation of values. In the absence of such a library, the following considerations need to be remembered:
+As with primitive values, the stability of the encoded form is important. Libraries are encouraged to use JSON encoders that produce a stable output for logically equal inputs. Cloudstate does not put any requirements on how to achieve stable serialization, however many languages have libraries that do produce a canonical JSON representation of values. In the absence of such a library, the following considerations need to be remembered:
 
 * The order of fields must not change for two equivalent objects - lexicographically sorting them is one way to achieve this.
 * The whitespace in the representation must be consistent (typically, no whitespace is best).

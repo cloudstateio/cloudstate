@@ -68,14 +68,39 @@ data:
       # Proxy configuration
       proxy {
         image {
-          cassandra = "cloudstateio/cloudstate-proxy-native-cassandra:latest"
+          cassandra = "cloudstateio/cloudstate-proxy-cassandra:latest"
           postgres =  "cloudstateio/cloudstate-proxy-postgres:latest"
-          no-store = "cloudstateio/cloudstate-proxy-native-no-store:latest"
-          in-memory = "cloudstateio/cloudstate-proxy-native-in-memory:latest"
+          no-store = "cloudstateio/cloudstate-proxy-no-store:latest"
+          in-memory = "cloudstateio/cloudstate-proxy-in-memory:latest"
         }
       }
     }
 
+---
+
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: Role
+metadata:
+  name: cloudstate-operator-config-reader
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "watch"]
+  resourceNames: ["cloudstate-operator-config"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: RoleBinding
+metadata:
+  name: cloudstate-operator-config-reader-binding
+subjects:
+- kind: ServiceAccount
+  name: cloudstate-operator
+roleRef:
+  kind: Role
+  name: cloudstate-operator-config-reader
+  apiGroup: rbac.authorization.k8s.io
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -108,17 +133,6 @@ rules:
   resources: ["statefulstores/status", "statefulservices/status"]
   verbs: ["update", "patch"]
 
----
-
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: Role
-metadata:
-  name: cloudstate-operator-role
-rules:
-- apiGroups: [""]
-  resources: ["configmaps"]
-  verbs: ["get", "watch"]
-  resourceNames: ["cloudstate-operator-config"]
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -134,19 +148,6 @@ roleRef:
   name: cloudstate-operator-role
   apiGroup: rbac.authorization.k8s.io
 
----
-
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: RoleBinding
-metadata:
-  name: cloudstate-operator
-subjects:
-- kind: ServiceAccount
-  name: cloudstate-operator
-roleRef:
-  kind: Role
-  name: cloudstate-operator-role
-  apiGroup: rbac.authorization.k8s.io
 
 ---
 apiVersion: apps/v1

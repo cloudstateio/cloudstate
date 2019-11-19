@@ -16,13 +16,11 @@ public class ShoppingCartEntity {
   private final Map<String, Shoppingcart.LineItem> cart = new LinkedHashMap<>();
   private boolean checkedout = false;
 
-  public ShoppingCartEntity(EventSourcedEntityCreationContext ctx) {
-    ctx.become(new Open(), this);
-  }
+  public ShoppingCartEntity(EventSourcedEntityCreationContext ctx) {}
 
-  class Open {
-    @CommandHandler
-    public Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
+  @CommandHandler
+  public Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
+    if (!checkedout) {
       if (item.getQuantity() <= 0) {
         ctx.fail("Cannot add negative quantity of to item" + item.getProductId());
       }
@@ -36,45 +34,38 @@ public class ShoppingCartEntity {
                       .build())
               .build());
       return Empty.getDefaultInstance();
-    }
-
-    @CommandHandler
-    public Empty checkout(CommandContext ctx) {
-      ctx.emit(Domain.CheckedOut.getDefaultInstance());
-      return Empty.getDefaultInstance();
-    }
-
-    @EventHandler
-    public void itemAdded(Domain.ItemAdded itemAdded) {
-      Shoppingcart.LineItem item = cart.get(itemAdded.getItem().getProductId());
-      if (item == null) {
-        item = convert(itemAdded.getItem());
-      } else {
-        item =
-            item.toBuilder()
-                .setQuantity(item.getQuantity() + itemAdded.getItem().getQuantity())
-                .build();
-      }
-      cart.put(item.getProductId(), item);
-    }
-
-    @EventHandler(eventClass = Domain.CheckedOut.class)
-    public void checkedOut(EventBehaviorContext ctx) {
-      checkedout = true;
-      ctx.become(new CheckedOut(), this);
+    } else {
+      throw ctx.fail("Can't add more items to an already checked out shopping cart");
     }
   }
 
-  class CheckedOut {
-    @CommandHandler
-    public Empty addItem(CommandContext ctx) {
-      throw ctx.fail("Can't add more items to an already checked out shopping cart");
-    }
-
-    @CommandHandler
-    public Empty checkout(CommandContext ctx) {
+  @CommandHandler
+  public Empty checkout(CommandContext ctx) {
+    if (!checkedout) {
+      ctx.emit(Domain.CheckedOut.getDefaultInstance());
+      return Empty.getDefaultInstance();
+    } else {
       throw ctx.fail("Shopping cart is already checked out");
     }
+  }
+
+  @EventHandler
+  public void itemAdded(Domain.ItemAdded itemAdded) {
+    Shoppingcart.LineItem item = cart.get(itemAdded.getItem().getProductId());
+    if (item == null) {
+      item = convert(itemAdded.getItem());
+    } else {
+      item =
+          item.toBuilder()
+              .setQuantity(item.getQuantity() + itemAdded.getItem().getQuantity())
+              .build();
+    }
+    cart.put(item.getProductId(), item);
+  }
+
+  @EventHandler(eventClass = Domain.CheckedOut.class)
+  public void checkedOut(EventContext ctx) {
+    checkedout = true;
   }
 
   @CommandHandler
@@ -90,15 +81,12 @@ public class ShoppingCartEntity {
   }
 
   @SnapshotHandler
-  public void handleSnapshot(Domain.Cart cart, SnapshotBehaviorContext ctx) {
+  public void handleSnapshot(Domain.Cart cart, SnapshotContext ctx) {
     this.cart.clear();
     for (Domain.LineItem item : cart.getItemsList()) {
       this.cart.put(item.getProductId(), convert(item));
     }
     this.checkedout = cart.getCheckedout();
-    if (this.checkedout) {
-      ctx.become(new CheckedOut(), this);
-    }
   }
 
   private Shoppingcart.LineItem convert(Domain.LineItem item) {
