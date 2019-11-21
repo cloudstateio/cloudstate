@@ -21,17 +21,21 @@ import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import akka.ConfigurationException
 import akka.http.scaladsl.model.{
+  ContentType,
   ContentTypes,
   HttpEntity,
+  HttpHeader,
   HttpMethod,
   HttpMethods,
   HttpRequest,
   HttpResponse,
   IllegalRequestException,
+  RequestEntity,
   RequestEntityAcceptance,
-  StatusCodes
+  StatusCodes,
+  Uri
 }
-import akka.http.scaladsl.model.Uri
+import akka.http.scaladsl.model.headers.`User-Agent`
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.actor.ActorSystem
@@ -41,9 +45,14 @@ import akka.parboiled2.util.Base64
 import com.google.api.annotations.AnnotationsProto
 import com.google.api.http.HttpRule
 import com.google.protobuf.{DynamicMessage, MessageOrBuilder, ByteString => ProtobufByteString}
-import com.google.protobuf.Descriptors.{Descriptor, EnumValueDescriptor, FieldDescriptor, MethodDescriptor}
+import com.google.protobuf.Descriptors.{
+  Descriptor,
+  EnumValueDescriptor,
+  FieldDescriptor,
+  MethodDescriptor,
+  ServiceDescriptor
+}
 import com.google.protobuf.{descriptor => ScalaPBDescriptorProtos}
-import com.google.protobuf.any.{Any => ProtobufAny}
 import com.google.protobuf.util.JsonFormat
 import com.google.protobuf.Descriptors.FieldDescriptor.JavaType
 import java.lang.{
@@ -54,11 +63,21 @@ import java.lang.{
   Long => JLong,
   Short => JShort
 }
+import java.net.URLDecoder
+import java.util.regex.{Matcher, Pattern}
 
+import akka.grpc.Grpc
+import akka.grpc.scaladsl.headers.`Message-Accept-Encoding`
+import akka.http.scaladsl.model.HttpEntity.LastChunk
+import akka.stream.scaladsl.{Sink, Source}
+import akka.util.ByteString
 import com.google.protobuf.{ListValue, Struct, Value}
-import io.cloudstate.protocol.entity.{ClientAction, EntityDiscovery, Failure, Reply, UserFunctionError}
-import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
-import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
+import io.grpc.Status
+
+import scala.util.matching.Regex
+import scala.util.parsing.combinator.Parsers
+import scala.util.parsing.input.{CharSequenceReader, Positional}
+import scala.concurrent.duration._
 
 // References:
 // https://cloud.google.com/endpoints/docs/grpc-service-config/reference/rpc/google.api#httprule
@@ -125,7 +144,7 @@ object HttpApi {
   // We use this to signal to the requestor that there's something wrong with the request
   private final val requestError: String => Nothing = s => throw IllegalRequestException(StatusCodes.BadRequest, s)
   // This is so that we can reuse path comparisons for path value extraction
-  private final val nofx: (Option[Any], FieldDescriptor) => Unit = (_, _) => ()
+  private final val nofx: (FieldDescriptor, Option[Any]) => Unit = (_, _) => ()
 
   // This is used to support the "*" custom pattern
   private final val ANY_METHOD = HttpMethod.custom(name = "ANY",
@@ -135,90 +154,64 @@ object HttpApi {
 
   // A route which will not match anything
   private final val NoMatch = PartialFunction.empty[HttpRequest, Future[HttpResponse]]
+  private final val identityHeader = new `Message-Accept-Encoding`("identity")
 
   final class HttpEndpoint(
       final val methDesc: MethodDescriptor,
       final val rule: HttpRule,
-      final val userFunctionRouter: UserFunctionRouter,
-      final val entityDiscovery: EntityDiscovery
+      final val handler: PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]]
   )(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext)
       extends PartialFunction[HttpRequest, Future[HttpResponse]] {
     private[this] final val log = Logging(sys, rule.pattern.toString) // TODO use other name?
 
-    private[this] final val (methodPattern, urlPattern, bodyDescriptor, responseBodyDescriptor) = extractAndValidate()
+    private[this] final val timeout = 10.seconds
+
+    private[this] final val (methodPattern, pathTemplate, pathExtractor, bodyDescriptor, responseBodyDescriptor) =
+      extractAndValidate()
 
     private[this] final val jsonParser =
       JsonFormat.parser.usingTypeRegistry(JsonFormat.TypeRegistry.newBuilder.add(bodyDescriptor).build())
     //ignoringUnknownFields().
     //usingRecursionLimit(…).
 
-    private[this] final val jsonPrinter = JsonFormat.printer
+    private[this] final val prettyJsonPrinter = JsonFormat.printer
       .usingTypeRegistry(JsonFormat.TypeRegistry.newBuilder.add(methDesc.getOutputType).build())
       .includingDefaultValueFields()
-      .omittingInsignificantWhitespace()
+
+    private[this] final val jsonPrinter = prettyJsonPrinter.omittingInsignificantWhitespace()
     //printingEnumsAsInts() // If you enable this, you need to fix the output for responseBody as well
     //preservingProtoFieldNames(). // If you enable this, you need to fix the output for responseBody structs as well
     //sortingMapKeys().
 
-    private[this] final val expectedReplyTypeUrl = Serve.AnyTypeUrlHostName + methDesc.getOutputType.getFullName
-
     // This method validates the configuration and returns values obtained by parsing the configuration
-    private[this] final def extractAndValidate(): (HttpMethod, Path, Descriptor, Option[FieldDescriptor]) = {
+    private[this] final def extractAndValidate(): (HttpMethod,
+                                                   PathTemplateParser.ParsedTemplate,
+                                                   ExtractPathParameters,
+                                                   Descriptor,
+                                                   Option[FieldDescriptor]) = {
       // Validate selector
       if (rule.selector != "" && rule.selector != methDesc.getFullName)
         configError(s"Rule selector [${rule.selector}] must be empty or [${methDesc.getFullName}]")
 
       // Validate pattern
-      val (mp, up) = {
+      val (mp, pattern) = {
         import HttpRule.Pattern.{Custom, Delete, Empty, Get, Patch, Post, Put}
         import HttpMethods.{DELETE, GET, PATCH, POST, PUT}
 
-        def validPath(pattern: String): Path = {
-          val path = Uri.Path(pattern)
-          if (!path.startsWithSlash)
-            configError(s"Configured pattern [$pattern] does not start with slash") // FIXME better error description
-          else {
-            var p = path
-            var found = Set[String]()
-            while (!p.isEmpty) {
-              p.head match {
-                case '/' =>
-                case vbl: String if vbl.head == '{' && vbl.last == '}' =>
-                  // FIXME support more advanced variable declarations: x=*, x=**, x=/foo/** etc
-                  val variable = vbl.substring(1, vbl.length - 1)
-                  lookupFieldByName(methDesc.getInputType, variable) match {
-                    case null => false
-                    case field =>
-                      if (field.isRepeated)
-                        configError(s"Repeated parameters [$field] are not allowed as path variables")
-                      else if (field.isMapField)
-                        configError(s"Map parameters [$field] are not allowed as path variables")
-                      else if (suitableParserFor(field)(configError) == null) () // Can't really happen
-                      else if (found.contains(variable))
-                        configError(s"Path parameter [$variable] occurs more than once")
-                      else found += variable // Keep track of the variables we've seen so far
-                  }
-                case _ => // path element, ignore
-              }
-              p = p.tail
-            }
-            path
-          }
-        }
-
         rule.pattern match {
           case Empty => configError(s"Pattern missing for rule [$rule]!") // TODO improve error message
-          case p @ Get(pattern) => (GET, validPath(pattern))
-          case p @ Put(pattern) => (PUT, validPath(pattern))
-          case p @ Post(pattern) => (POST, validPath(pattern))
-          case p @ Delete(pattern) => (DELETE, validPath(pattern))
-          case p @ Patch(pattern) => (PATCH, validPath(pattern))
+          case p @ Get(pattern) => (GET, pattern)
+          case p @ Put(pattern) => (PUT, pattern)
+          case p @ Post(pattern) => (POST, pattern)
+          case p @ Delete(pattern) => (DELETE, pattern)
+          case p @ Patch(pattern) => (PATCH, pattern)
           case p @ Custom(chp) =>
             if (chp.kind == "*")
-              (ANY_METHOD, validPath(chp.path)) // FIXME is "path" the same as "pattern" for the other kinds? Is an empty kind valid?
+              (ANY_METHOD, chp.path) // FIXME is "path" the same as "pattern" for the other kinds? Is an empty kind valid?
             else configError(s"Only Custom patterns with [*] kind supported but [${chp.kind}] found!")
         }
       }
+      val (template, extractor) = parsePathExtractor(pattern)
 
       // Validate body value
       val bd =
@@ -258,34 +251,51 @@ object HttpApi {
       if (rule.additionalBindings.exists(_.additionalBindings.nonEmpty))
         configError(s"Only one level of additionalBindings supported, but [$rule] has more than one!")
 
-      (mp, up, bd, rd)
+      (mp, template, extractor, bd, rd)
     }
 
-    // TODO support more advanced variable declarations: x=*, x=**, x=/foo/** etc?
-    @tailrec private[this] final def pathMatches(patPath: Path,
-                                                 reqPath: Path,
-                                                 effect: (Option[Any], FieldDescriptor) => Unit): Boolean =
-      if (patPath.isEmpty && reqPath.isEmpty) true
-      else if (patPath.isEmpty || reqPath.isEmpty) false
-      else {
-        if (log.isDebugEnabled)
-          log.debug((if (effect eq nofx) "Matching: " else "Extracting: ") + patPath.head + " " + reqPath.head)
-        val segmentMatch = (patPath.head, reqPath.head) match {
-          case ('/', '/') => true
-          case (vbl: String, seg: String) if !vbl.isEmpty && vbl.head == '{' && vbl.last == '}' =>
-            val variable = vbl.substring(1, vbl.length - 1)
-            lookupFieldByPath(methDesc.getInputType, variable) match {
-              case null => false
-              case field =>
-                val value = suitableParserFor(field)(requestError)(seg)
-                effect(value, field)
-                value.isDefined
-            }
-          case (seg1, seg2) => seg1 == seg2
-        }
+    // For descriptive purposes so it's clear what these types do
+    private type PathParameterEffect = (FieldDescriptor, Option[Any]) => Unit
+    private type ExtractPathParameters = (Matcher, PathParameterEffect) => Unit
 
-        segmentMatch && pathMatches(patPath.tail, reqPath.tail, effect)
-      }
+    private[this] final def parsePathExtractor(
+        pattern: String
+    ): (PathTemplateParser.ParsedTemplate, ExtractPathParameters) = {
+      val template = PathTemplateParser.parse(pattern)
+      val pathFieldParsers = template.fields.iterator
+        .map {
+          case tv @ PathTemplateParser.TemplateVariable(fieldName :: Nil, _) =>
+            lookupFieldByName(methDesc.getInputType, fieldName) match {
+              case null =>
+                configError(
+                  s"Unknown field name [$fieldName] in type [${methDesc.getInputType.getFullName}] reference in path template for method [${methDesc.getFullName}]"
+                )
+              case field =>
+                if (field.isRepeated)
+                  configError(s"Repeated parameters [${field.getFullName}] are not allowed as path variables")
+                else if (field.isMapField)
+                  configError(s"Map parameters [${field.getFullName}] are not allowed as path variables")
+                else (tv, field, suitableParserFor(field)(configError))
+            }
+          case multi =>
+            // todo implement field paths properly
+            configError("Multiple fields in field path not yet implemented: " + multi.fieldPath.mkString("."))
+        }
+        .zipWithIndex
+        .toList
+
+      (template, (matcher, effect) => {
+        pathFieldParsers.foreach {
+          case ((tv, field, parser), idx) =>
+            val rawValue = matcher.group(idx + 1)
+            // When encoding, we need to be careful to only encode / if it's a single segment variable. But when
+            // decoding, it doesn't matter, we decode %2F if it's there regardless.
+            val decoded = URLDecoder.decode(rawValue, "utf-8")
+            val value = parser(decoded)
+            effect(field, value)
+        }
+      })
+    }
 
     @tailrec private[this] final def lookupFieldByPath(desc: Descriptor, selector: String): FieldDescriptor =
       Names.splitNext(selector) match {
@@ -298,6 +308,12 @@ object HttpApi {
           else lookupFieldByPath(field.getMessageType, next)
       }
 
+    // Making this a method so we can ensure it's used the same way
+    final def matches(path: Uri.Path): Boolean =
+      pathTemplate.regex.pattern
+        .matcher(path.toString())
+        .matches() // FIXME path.toString is costly, and using Regexes are too, switch to using a generated parser instead
+
     // Question: Do we need to handle conversion from JSON names?
     private[this] final def lookupFieldByName(desc: Descriptor, selector: String): FieldDescriptor =
       desc.findFieldByName(selector) // TODO potentially start supporting path-like selectors with maximum nesting level?
@@ -309,7 +325,7 @@ object HttpApi {
           if (values.nonEmpty) {
             lookupFieldByPath(methDesc.getInputType, selector) match {
               case null => requestError("Query parameter [$selector] refers to non-existant field")
-              case field if field.getMessageType != null =>
+              case field if field.getJavaType == FieldDescriptor.JavaType.MESSAGE =>
                 requestError("Query parameter [$selector] refers to a message type") // FIXME validate assumption that this is prohibited
               case field if !field.isRepeated && values.size > 1 =>
                 requestError("Multiple values sent for non-repeated field by query parameter [$selector]")
@@ -327,13 +343,12 @@ object HttpApi {
           } // Ignore empty values
       }
 
-    private[this] final def parsePathParametersInto(requestPath: Path, inputBuilder: DynamicMessage.Builder): Unit =
-      pathMatches(urlPattern,
-                  requestPath,
-                  (value, field) =>
-                    inputBuilder.setField(field, value.getOrElse(requestError("Path contains value of wrong type!"))))
+    private[this] final def parsePathParametersInto(matcher: Matcher, inputBuilder: DynamicMessage.Builder): Unit =
+      pathExtractor(matcher,
+                    (field, value) =>
+                      inputBuilder.setField(field, value.getOrElse(requestError("Path contains value of wrong type!"))))
 
-    final def parseCommand(req: HttpRequest): Future[UserFunctionCommand] =
+    final def transformRequest(req: HttpRequest, matcher: Matcher): Future[HttpRequest] =
       if (rule.body.nonEmpty && req.entity.contentType != ContentTypes.`application/json`) {
         Future.failed(IllegalRequestException(StatusCodes.BadRequest, "Content-type must be application/json!"))
       } else {
@@ -342,15 +357,15 @@ object HttpApi {
           case "" => // Iff empty body rule, then only query parameters
             req.discardEntityBytes()
             parseRequestParametersInto(req.uri.query().toMultiMap, inputBuilder)
-            parsePathParametersInto(req.uri.path, inputBuilder)
-            Future.successful(createCommand(inputBuilder.build))
+            parsePathParametersInto(matcher, inputBuilder)
+            Future.successful(updateRequest(req, inputBuilder.build))
           case "*" => // Iff * body rule, then no query parameters, and only fields not mapped in path variables
             Unmarshal(req.entity)
               .to[String]
               .map(str => {
                 jsonParser.merge(str, inputBuilder)
-                parsePathParametersInto(req.uri.path, inputBuilder)
-                createCommand(inputBuilder.build)
+                parsePathParametersInto(matcher, inputBuilder)
+                updateRequest(req, inputBuilder.build)
               })
           case fieldName => // Iff fieldName body rule, then all parameters not mapped in path variables
             Unmarshal(req.entity)
@@ -360,19 +375,44 @@ object HttpApi {
                 val subInputBuilder = DynamicMessage.newBuilder(subField.getMessageType)
                 jsonParser.merge(str, subInputBuilder)
                 parseRequestParametersInto(req.uri.query().toMultiMap, inputBuilder)
-                parsePathParametersInto(req.uri.path, inputBuilder)
+                parsePathParametersInto(matcher, inputBuilder)
                 inputBuilder.setField(subField, subInputBuilder.build())
-                createCommand(inputBuilder.build)
+                updateRequest(req, inputBuilder.build)
               })
         }
       }
 
     override final def isDefinedAt(req: HttpRequest): Boolean =
-      (methodPattern == ANY_METHOD || req.method == methodPattern) && pathMatches(urlPattern, req.uri.path, nofx)
+      (methodPattern == ANY_METHOD || req.method == methodPattern) && matches(req.uri.path)
 
-    override final def apply(req: HttpRequest): Future[HttpResponse] =
-      parseCommand(req).flatMap(command => sendCommand(command).map(createResponse)).recover {
-        case ire: IllegalRequestException => HttpResponse(ire.status.intValue, entity = ire.status.reason)
+    // Assumes that `isDefinedAt` has been called previously
+    override final def apply(req: HttpRequest): Future[HttpResponse] = {
+      assert((methodPattern == ANY_METHOD || req.method == methodPattern))
+      val matcher = pathTemplate.regex.pattern.matcher(req.uri.path.toString())
+      assert(matcher.matches())
+      // TODO either register a new content type `application/pretty+json` and look for that
+      // or remove this altogether and let the caller worry about it, possibly using:
+      // `curl … | python -m json.tool` or `curl … | jq '.'`
+      val prettyPrint = req.header[`User-Agent`].exists(_.products.exists(_.product == "curl")) // TODO devise a better way
+      transformRequest(req, matcher)
+        .flatMap(request => handler(request).flatMap(transformResponse(prettyPrint)))
+        .recover {
+          case ire: IllegalRequestException => HttpResponse(ire.status.intValue, entity = ire.status.reason)
+        }
+    }
+
+    override final def applyOrElse[A1 <: HttpRequest, B1 >: Future[HttpResponse]](req: A1, default: A1 => B1): B1 =
+      if (methodPattern != ANY_METHOD && req.method != methodPattern) default(req)
+      else {
+        val matcher = pathTemplate.regex.pattern.matcher(req.uri.path.toString())
+        if (matcher.matches()) {
+          val prettyPrint = req.header[`User-Agent`].exists(_.products.exists(_.product == "curl")) // TODO devise a better way
+          transformRequest(req, matcher)
+            .flatMap(request => handler(request).flatMap(transformResponse(prettyPrint)))
+            .recover {
+              case ire: IllegalRequestException => HttpResponse(ire.status.intValue, entity = ire.status.reason)
+            }
+        } else default(req)
       }
 
     private[this] final def debugMsg(msg: DynamicMessage, preamble: String): Unit =
@@ -381,39 +421,21 @@ object HttpApi {
           s"$preamble: ${msg}${msg.getAllFields().asScala.map(f => s"\n\r   * Request Field: [${f._1.getFullName}] = [${f._2}]").mkString}"
         )
 
-    private[this] final def createCommand(command: DynamicMessage): UserFunctionCommand = {
-      debugMsg(command, "Got request")
-      UserFunctionCommand(
-        name = methDesc.getName,
-        payload = Some(
-          ProtobufAny(typeUrl = Serve.AnyTypeUrlHostName + methDesc.getInputType.getFullName,
-                      value = command.toByteString)
-        )
+    private[this] final def updateRequest(req: HttpRequest, message: DynamicMessage): HttpRequest = {
+      debugMsg(message, "Got request")
+      HttpRequest(
+        method = HttpMethods.POST,
+        uri = Uri(path = Path / methDesc.getService.getFullName / methDesc.getName),
+        headers = req.headers :+ identityHeader,
+        entity = encodeMessage(message),
+        protocol = req.protocol
       )
     }
 
-    private[this] final def sendCommand(command: UserFunctionCommand): Future[DynamicMessage] =
-      userFunctionRouter.handleUnary(methDesc.getService.getFullName, command).map { reply =>
-        reply.clientAction match {
-          case Some(ClientAction(ClientAction.Action.Reply(Reply(Some(payload))))) =>
-            if (payload.typeUrl != expectedReplyTypeUrl) {
-              val msg =
-                s"${methDesc.getFullName}: Expected reply type_url to be [$expectedReplyTypeUrl] but was [${payload.typeUrl}]."
-              log.warning(msg)
-              entityDiscovery.reportError(UserFunctionError("Warning: " + msg))
-            }
-            DynamicMessage.parseFrom(methDesc.getOutputType, payload.value)
-          case Some(ClientAction(ClientAction.Action.Forward(_))) =>
-            log.error("Cannot serialize forward reply, this should have been handled by the UserFunctionRouter")
-            throw new Exception("Internal error")
-          case Some(ClientAction(ClientAction.Action.Failure(Failure(_, message)))) =>
-            requestError(message)
-          case _ =>
-            val msg = s"${methDesc.getFullName}: return no reply."
-            entityDiscovery.reportError(UserFunctionError(msg))
-            throw new Exception(msg)
-        }
-      }
+    // TODO enable compression?
+    private[this] final def encodeMessage(message: DynamicMessage): RequestEntity =
+      HttpEntity(ContentTypes.`application/grpc+proto`,
+                 Grpc.encodeFrame(Grpc.notCompressed, ByteString(message.toByteString.asReadOnlyByteBuffer())))
 
     // FIXME Devise other way of supporting responseBody, this is waaay too costly and unproven
     // This method converts an arbitrary type to something which can be represented as JSON.
@@ -453,18 +475,101 @@ object HttpApi {
       result.build()
     }
 
-    private[this] final def createResponse(response: DynamicMessage): HttpResponse = {
-      val output =
-        responseBodyDescriptor match {
-          case None =>
-            response
-          case Some(field) =>
-            response.getField(field) match {
-              case m: MessageOrBuilder if !field.isRepeated => m // No need to wrap this
-              case value => responseBody(field.getJavaType, value, field.isRepeated)
+    private[this] final def transformResponse(prettyPrint: Boolean)(response: HttpResponse): Future[HttpResponse] =
+      response.entity match {
+        case HttpEntity.Chunked(_, data) =>
+          if (methDesc.isServerStreaming) {
+
+            val body = data
+              .filter(!_.isLastChunk())
+              .map(_.data())
+              .via(Grpc.grpcFramingDecoder)
+              .map { bytes =>
+                HttpEntity.Chunk(transformResponseBody(bytes, prettyPrint) ++ ByteString('\n'))
+              }
+
+            Future.successful(response.copy(entity = HttpEntity.Chunked(ContentTypes.`application/json`, body)))
+          } else {
+            data.runWith(Sink.seq).map {
+              // This assumes that Akka GRPC will produce exactly two chunks for successful non streaming calls which
+              // it does
+              case Seq(HttpEntity.Chunk(bytes, _), HttpEntity.LastChunk(_, _)) =>
+                // gRPC framing encoding has an exactly 5 byte header
+                val json = transformResponseBody(bytes.drop(5), prettyPrint)
+                response.copy(entity = HttpEntity(ContentTypes.`application/json`, json))
+
+              // Error case
+              case Seq(HttpEntity.LastChunk(_, trailer)) => transformFailedRequest(response, trailer)
+              case other =>
+                throw new IllegalStateException(
+                  "Akka GRPC should only produce at most 1 chunk followed by a last chunk?? " + other
+                )
             }
+          }
+        case other =>
+          throw new IllegalStateException("Akka GRPC should only produce chunked responses?? " + other)
+      }
+
+    private[this] final def transformFailedRequest(resp: HttpResponse, trailer: Seq[HttpHeader]) = {
+      val message = trailer.find(_.is("grpc-message"))
+      val status = Status.fromCodeValue(trailer.filter(_.is("grpc-status")).head.value().toInt)
+      val httpStatus = status.getCode match {
+        case Status.Code.OK => StatusCodes.OK
+        case Status.Code.CANCELLED => StatusCodes.BadRequest
+        case Status.Code.UNKNOWN => StatusCodes.InternalServerError
+        case Status.Code.INVALID_ARGUMENT => StatusCodes.BadRequest
+        case Status.Code.DEADLINE_EXCEEDED => StatusCodes.InternalServerError
+        case Status.Code.NOT_FOUND => StatusCodes.NotFound
+        case Status.Code.ALREADY_EXISTS => StatusCodes.Conflict
+        case Status.Code.PERMISSION_DENIED => StatusCodes.Forbidden
+        case Status.Code.UNAUTHENTICATED => StatusCodes.Unauthorized
+        case Status.Code.RESOURCE_EXHAUSTED => StatusCodes.InsufficientStorage
+        case Status.Code.FAILED_PRECONDITION => StatusCodes.PreconditionFailed
+        case Status.Code.ABORTED => StatusCodes.InternalServerError
+        case Status.Code.OUT_OF_RANGE => StatusCodes.RequestedRangeNotSatisfiable
+        case Status.Code.UNIMPLEMENTED => StatusCodes.NotImplemented
+        case Status.Code.INTERNAL => StatusCodes.InternalServerError
+        case Status.Code.UNAVAILABLE => StatusCodes.ServiceUnavailable
+        case Status.Code.DATA_LOSS => StatusCodes.InternalServerError
+      }
+
+      val entity =
+        if (status.getCode == Status.Code.OK) HttpEntity.Empty
+        else {
+          val messageEncoded = message.fold(status.getCode.name())(
+            _.value
+              .replaceAll("\\\\", "\\\\\\\\")
+              .replaceAll("\"", "\\\"")
+              .replaceAll("\n", "\\\n")
+              .replaceAll("\r", "\\\r") // FIXME replace with something faster
+          )
+          HttpEntity(ContentTypes.`application/json`,
+                     s"""{"status":${status.getCode.value},"description":"$messageEncoded"}""")
         }
-      HttpResponse(200, entity = HttpEntity(ContentTypes.`application/json`, jsonPrinter.print(output)))
+
+      HttpResponse(
+        status = httpStatus,
+        headers = resp.headers,
+        entity = entity
+      )
+    }
+
+    private[this] final def transformResponseBody(bytes: ByteString, prettyPrint: Boolean): ByteString = {
+      val message = DynamicMessage.parseFrom(methDesc.getOutputType, bytes.iterator.asInputStream)
+      val output = responseBodyDescriptor match {
+        case None =>
+          message
+        case Some(field) =>
+          message.getField(field) match {
+            case m: MessageOrBuilder if !field.isRepeated => m // No need to wrap this
+            case value => responseBody(field.getJavaType, value, field.isRepeated)
+          }
+      }
+      if (prettyPrint) {
+        ByteString(prettyJsonPrinter.print(output)) ++ ByteString("\n")
+      } else {
+        ByteString(jsonPrinter.print(output))
+      }
     }
   }
 
@@ -487,17 +592,15 @@ object HttpApi {
         }.toMap)
       )
 
-  final def serve(userFunctionRouter: UserFunctionRouter,
-                  entities: Seq[ServableEntity],
-                  entityDiscoveryClient: EntityDiscovery)(
+  final def serve(services: List[(ServiceDescriptor, PartialFunction[HttpRequest, Future[HttpResponse]])])(
       implicit sys: ActorSystem,
       mat: Materializer,
       ec: ExecutionContext
   ): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val log = Logging(sys, "HttpApi")
     (for {
-      entity <- entities.iterator
-      method <- entity.serviceDescriptor.getMethods.iterator.asScala
+      (service, handler) <- services
+      method <- service.getMethods.iterator.asScala
       rule = AnnotationsProto.http.get(convertMethodOptions(method)) match {
         case Some(rule) =>
           log.info(s"Using configured HTTP API endpoint using [$rule]")
@@ -515,7 +618,7 @@ object HttpApi {
       }
       binding <- rule +: rule.additionalBindings
     } yield {
-      new HttpEndpoint(method, binding, userFunctionRouter, entityDiscoveryClient)
+      new HttpEndpoint(method, binding, handler)
     }).foldLeft(NoMatch) {
       case (NoMatch, first) => first
       case (previous, current) => current orElse previous // Last goes first
@@ -523,7 +626,7 @@ object HttpApi {
   }
 }
 
-private[proxy] object Names {
+private object Names {
   final def splitPrev(name: String): (String, String) = {
     val dot = name.lastIndexOf('.')
     if (dot >= 0) {
@@ -541,4 +644,174 @@ private[proxy] object Names {
       (name, "")
     }
   }
+}
+
+private object PathTemplateParser extends Parsers {
+
+  override type Elem = Char
+
+  class ParsedTemplate(path: String, template: Template) {
+    val regex: Regex = {
+      val regexBuilder = new StringBuilder
+
+      def doToRegex(segments: List[Segment], matchSlash: Boolean): Unit = segments match {
+        case Nil => // Do nothing
+        case head :: tail =>
+          if (matchSlash) {
+            regexBuilder.append('/')
+          }
+          head match {
+            case LiteralSegment(literal) =>
+              regexBuilder.append(Pattern.quote(literal))
+            case SingleSegmentMatcher =>
+              regexBuilder.append("[^/:]*")
+            case MultiSegmentMatcher() =>
+              regexBuilder.append(".*")
+            case VariableSegment(_, None) =>
+              regexBuilder.append("([^/:]*)")
+            case VariableSegment(_, Some(template)) =>
+              regexBuilder.append("(")
+              doToRegex(template, matchSlash = false)
+              regexBuilder.append(")")
+          }
+          doToRegex(tail, matchSlash = true)
+      }
+      doToRegex(template.segments, matchSlash = true)
+
+      template.verb.foreach { verb =>
+        regexBuilder.append(":")
+        regexBuilder.append(Pattern.quote(verb))
+      }
+
+      regexBuilder.toString().r
+    }
+
+    val fields: List[TemplateVariable] = {
+      var found = Set.empty[List[String]]
+      template.segments.collect {
+        case v @ VariableSegment(fieldPath, _) if found(fieldPath) =>
+          throw PathTemplateParseException("Duplicate path in template", path, v.pos.column + 1)
+        case VariableSegment(fieldPath, segments) =>
+          found += fieldPath
+          TemplateVariable(
+            fieldPath,
+            segments.fold(false)(segments => segments.length > 1 || segments.head.isInstanceOf[MultiSegmentMatcher])
+          )
+      }
+    }
+  }
+
+  case class TemplateVariable(fieldPath: List[String], multi: Boolean)
+
+  case class PathTemplateParseException(msg: String, path: String, column: Int)
+      extends RuntimeException(
+        s"$msg at ${if (column >= path.length) "end of input" else s"character $column"} of '$path'"
+      ) {
+
+    def prettyPrint: String = {
+      val caret =
+        if (column >= path.length) ""
+        else "\n" + path.take(column - 1).map { case '\t' => '\t'; case _ => ' ' } + "^"
+
+      s"$msg at ${if (column >= path.length) "end of input" else s"character $column"}:${'\n'}$path$caret"
+    }
+  }
+
+  def parse(path: String): ParsedTemplate =
+    template(new CharSequenceReader(path)) match {
+      case Success(template, _) =>
+        new ParsedTemplate(path, validate(path, template))
+      case NoSuccess(msg, next) =>
+        throw PathTemplateParseException(msg, path, next.pos.column)
+    }
+
+  private def validate(path: String, template: Template): Template = {
+    def flattenSegments(segments: Segments, allowVariables: Boolean): Segments =
+      segments.flatMap {
+        case variable: VariableSegment if !allowVariables =>
+          throw PathTemplateParseException("Variable segments may not be nested", path, variable.pos.column)
+        case VariableSegment(_, Some(nested)) => flattenSegments(nested, false)
+        case other => List(other)
+      }
+
+    // Flatten, verifying that there are no nested variables
+    val flattened = flattenSegments(template.segments, true)
+
+    // Verify there are no ** matchers that aren't the last matcher
+    flattened.dropRight(1).foreach {
+      case m @ MultiSegmentMatcher() =>
+        throw PathTemplateParseException("Multi segment matchers (**) may only be in the last position of the template",
+                                         path,
+                                         m.pos.column)
+      case _ =>
+    }
+    template
+  }
+
+  // AST for syntax described here:
+  // https://cloud.google.com/endpoints/docs/grpc-service-config/reference/rpc/google.api#google.api.HttpRule.description.subsection
+  // Note that there are additional rules (eg variables cannot contain nested variables) that this AST doesn't enforce,
+  // these are validated elsewhere.
+  private case class Template(segments: Segments, verb: Option[Verb])
+  private type Segments = List[Segment]
+  private type Verb = String
+  private sealed trait Segment
+  private case class LiteralSegment(literal: Literal) extends Segment
+  private case class VariableSegment(fieldPath: FieldPath, template: Option[Segments]) extends Segment with Positional
+  private type FieldPath = List[Ident]
+  private case object SingleSegmentMatcher extends Segment
+  private case class MultiSegmentMatcher() extends Segment with Positional
+  private type Literal = String
+  private type Ident = String
+
+  private val NotLiteral = Set('*', '{', '}', '/', ':', '\n')
+
+  // Matches ident syntax from https://developers.google.com/protocol-buffers/docs/reference/proto3-spec
+  private val ident: Parser[Ident] = rep1(
+      acceptIf(ch => (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'))(
+        e => s"Expected identifier first letter, but got '$e'"
+      ),
+      acceptIf(ch => (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_')(
+        _ => "identifier part"
+      )
+    ) ^^ (_.mkString)
+
+  // There is no description of this in the spec. It's not a URL segment, since the spec explicitly says that the value
+  // must be URL encoded when expressed as a URL. Since all segments are delimited by a / character or a colon, and a
+  // literal may only be a full segment, we could assume it's any non slash or colon character, but that would mean
+  // syntax errors in variables for example would end up being parsed as literals, which wouldn't give nice error
+  // messages at all. So we'll be a little more strict, and not allow *, { or } in any literals.
+  private val literal: Parser[Literal] = rep(acceptIf(ch => !NotLiteral(ch))(_ => "literal part")) ^^ (_.mkString)
+
+  private val fieldPath: Parser[FieldPath] = rep1(ident, '.' ~> ident)
+
+  private val literalSegment: Parser[LiteralSegment] = literal ^^ LiteralSegment
+  // After we see an open curly, we commit to erroring if we fail to parse the remainder.
+  private def variable: Parser[VariableSegment] =
+    positioned(
+      '{' ~> commit(
+        fieldPath ~ ('=' ~> segments).? <~ '}'.withFailureMessage("Unclosed variable or unexpected character") ^^ {
+          case fieldPath ~ maybeTemplate => VariableSegment(fieldPath, maybeTemplate)
+        }
+      )
+    )
+  private val singleSegmentMatcher: Parser[SingleSegmentMatcher.type] = '*' ^^ (_ => SingleSegmentMatcher)
+  private val multiSegmentMatcher: Parser[MultiSegmentMatcher] = positioned('*' ~ '*' ^^ (_ => MultiSegmentMatcher()))
+  private val segment: Parser[Segment] = commit(multiSegmentMatcher | singleSegmentMatcher | variable | literalSegment)
+
+  private val verb: Parser[Verb] = ':' ~> literal
+  private val segments: Parser[Segments] = rep1(segment, '/' ~> segment)
+  private val endOfInput: Parser[None.type] = Parser { in =>
+    if (!in.atEnd) {
+      Error("Expected '/', ':', path literal character, or end of input", in)
+    } else {
+      Success(None, in)
+    }
+  }
+
+  private val template: Parser[Template] = '/'.withFailureMessage("Template must start with a slash") ~>
+    segments ~ verb.? <~ endOfInput ^^ {
+      case segments ~ maybeVerb => Template(segments, maybeVerb)
+    }
+
 }

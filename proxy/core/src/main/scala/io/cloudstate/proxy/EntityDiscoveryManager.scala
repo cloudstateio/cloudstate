@@ -53,6 +53,10 @@ import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
 
 import scala.concurrent.duration._
 
+//import io.cloudstate.protocol.entity.{ClientAction, EntityDiscovery, Failure, Reply, UserFunctionError}
+import io.cloudstate.protocol.entity.EntityDiscovery
+import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
+
 object EntityDiscoveryManager {
   final case class Configuration(
       devMode: Boolean,

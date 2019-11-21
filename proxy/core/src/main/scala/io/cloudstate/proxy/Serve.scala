@@ -93,12 +93,15 @@ object Serve {
       implicit sys: ActorSystem,
       mat: Materializer,
       ec: ExecutionContext
-  ): PartialFunction[HttpRequest, Future[HttpResponse]] =
-    compileProxy(entities, router, statsCollector, entityDiscoveryClient) orElse // Fast path
+  ): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+    val grpcRoutes = compileProxy(entities, router, statsCollector, entityDiscoveryClient)
+
+    grpcRoutes orElse // Fast path
+    HttpApi.serve(entities.map(_.serviceDescriptor -> grpcRoutes).toList) orElse
     handleNetworkProbe() orElse
     Reflection.serve(fileDescriptors, entities.map(_.serviceName).toList) orElse
-    HttpApi.serve(router, entities, entityDiscoveryClient) orElse // Slow path
     NotFound // No match. TODO: Consider having the caller of this method deal with this condition
+  }
 
   /**
    * Knative network probe handler.
