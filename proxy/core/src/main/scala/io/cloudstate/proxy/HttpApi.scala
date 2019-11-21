@@ -641,7 +641,7 @@ private object PathTemplateParser extends Parsers {
 
   override type Elem = Char
 
-  class ParsedTemplate(path: String, template: Template) {
+  final class ParsedTemplate(path: String, template: Template) {
     val regex: Regex = {
       def doToRegex(builder: StringBuilder, segments: List[Segment], matchSlash: Boolean): StringBuilder =
         segments match {
@@ -688,15 +688,18 @@ private object PathTemplateParser extends Parsers {
           found += fieldPath
           TemplateVariable(
             fieldPath,
-            segments.exists(segments => segments.length > 1 || segments.head.isInstanceOf[MultiSegmentMatcher])
+            segments.exists(_ match {
+              case ((_: MultiSegmentMatcher) :: _) | (_ :: _ :: _) => true
+              case _ => false
+            })
           )
       }
     }
   }
 
-  case class TemplateVariable(fieldPath: List[String], multi: Boolean)
+  final case class TemplateVariable(fieldPath: List[String], multi: Boolean)
 
-  case class PathTemplateParseException(msg: String, path: String, column: Int)
+  final case class PathTemplateParseException(msg: String, path: String, column: Int)
       extends RuntimeException(
         s"$msg at ${if (column >= path.length) "end of input" else s"character $column"} of '$path'"
       ) {
@@ -710,7 +713,7 @@ private object PathTemplateParser extends Parsers {
     }
   }
 
-  def parse(path: String): ParsedTemplate =
+  final def parse(path: String): ParsedTemplate =
     template(new CharSequenceReader(path)) match {
       case Success(template, _) =>
         new ParsedTemplate(path, validate(path, template))
@@ -718,7 +721,7 @@ private object PathTemplateParser extends Parsers {
         throw PathTemplateParseException(msg, path, next.pos.column)
     }
 
-  private def validate(path: String, template: Template): Template = {
+  private final def validate(path: String, template: Template): Template = {
     def flattenSegments(segments: Segments, allowVariables: Boolean): Segments =
       segments.flatMap {
         case variable: VariableSegment if !allowVariables =>
@@ -745,22 +748,24 @@ private object PathTemplateParser extends Parsers {
   // https://cloud.google.com/endpoints/docs/grpc-service-config/reference/rpc/google.api#google.api.HttpRule.description.subsection
   // Note that there are additional rules (eg variables cannot contain nested variables) that this AST doesn't enforce,
   // these are validated elsewhere.
-  private case class Template(segments: Segments, verb: Option[Verb])
+  private final case class Template(segments: Segments, verb: Option[Verb])
   private type Segments = List[Segment]
   private type Verb = String
   private sealed trait Segment
-  private case class LiteralSegment(literal: Literal) extends Segment
-  private case class VariableSegment(fieldPath: FieldPath, template: Option[Segments]) extends Segment with Positional
+  private final case class LiteralSegment(literal: Literal) extends Segment
+  private final case class VariableSegment(fieldPath: FieldPath, template: Option[Segments])
+      extends Segment
+      with Positional
   private type FieldPath = List[Ident]
   private case object SingleSegmentMatcher extends Segment
-  private case class MultiSegmentMatcher() extends Segment with Positional
+  private final case class MultiSegmentMatcher() extends Segment with Positional
   private type Literal = String
   private type Ident = String
 
-  private val NotLiteral = Set('*', '{', '}', '/', ':', '\n')
+  private final val NotLiteral = Set('*', '{', '}', '/', ':', '\n')
 
   // Matches ident syntax from https://developers.google.com/protocol-buffers/docs/reference/proto3-spec
-  private val ident: Parser[Ident] = rep1(
+  private final val ident: Parser[Ident] = rep1(
       acceptIf(ch => (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'))(
         e => s"Expected identifier first letter, but got '$e'"
       ),
@@ -774,13 +779,13 @@ private object PathTemplateParser extends Parsers {
   // literal may only be a full segment, we could assume it's any non slash or colon character, but that would mean
   // syntax errors in variables for example would end up being parsed as literals, which wouldn't give nice error
   // messages at all. So we'll be a little more strict, and not allow *, { or } in any literals.
-  private val literal: Parser[Literal] = rep(acceptIf(ch => !NotLiteral(ch))(_ => "literal part")) ^^ (_.mkString)
+  private final val literal: Parser[Literal] = rep(acceptIf(ch => !NotLiteral(ch))(_ => "literal part")) ^^ (_.mkString)
 
-  private val fieldPath: Parser[FieldPath] = rep1(ident, '.' ~> ident)
+  private final val fieldPath: Parser[FieldPath] = rep1(ident, '.' ~> ident)
 
-  private val literalSegment: Parser[LiteralSegment] = literal ^^ LiteralSegment
+  private final val literalSegment: Parser[LiteralSegment] = literal ^^ LiteralSegment
   // After we see an open curly, we commit to erroring if we fail to parse the remainder.
-  private def variable: Parser[VariableSegment] =
+  private final def variable: Parser[VariableSegment] =
     positioned(
       '{' ~> commit(
         fieldPath ~ ('=' ~> segments).? <~ '}'.withFailureMessage("Unclosed variable or unexpected character") ^^ {
@@ -788,13 +793,17 @@ private object PathTemplateParser extends Parsers {
         }
       )
     )
-  private val singleSegmentMatcher: Parser[SingleSegmentMatcher.type] = '*' ^^ (_ => SingleSegmentMatcher)
-  private val multiSegmentMatcher: Parser[MultiSegmentMatcher] = positioned('*' ~ '*' ^^ (_ => MultiSegmentMatcher()))
-  private val segment: Parser[Segment] = commit(multiSegmentMatcher | singleSegmentMatcher | variable | literalSegment)
+  private final val singleSegmentMatcher: Parser[SingleSegmentMatcher.type] = '*' ^^ (_ => SingleSegmentMatcher)
+  private final val multiSegmentMatcher: Parser[MultiSegmentMatcher] = positioned(
+    '*' ~ '*' ^^ (_ => MultiSegmentMatcher())
+  )
+  private final val segment: Parser[Segment] = commit(
+    multiSegmentMatcher | singleSegmentMatcher | variable | literalSegment
+  )
 
-  private val verb: Parser[Verb] = ':' ~> literal
-  private val segments: Parser[Segments] = rep1(segment, '/' ~> segment)
-  private val endOfInput: Parser[None.type] = Parser { in =>
+  private final val verb: Parser[Verb] = ':' ~> literal
+  private final val segments: Parser[Segments] = rep1(segment, '/' ~> segment)
+  private final val endOfInput: Parser[None.type] = Parser { in =>
     if (!in.atEnd) {
       Error("Expected '/', ':', path literal character, or end of input", in)
     } else {
@@ -802,9 +811,8 @@ private object PathTemplateParser extends Parsers {
     }
   }
 
-  private val template: Parser[Template] = '/'.withFailureMessage("Template must start with a slash") ~>
+  private final val template: Parser[Template] = '/'.withFailureMessage("Template must start with a slash") ~>
     segments ~ verb.? <~ endOfInput ^^ {
       case segments ~ maybeVerb => Template(segments, maybeVerb)
     }
-
 }
