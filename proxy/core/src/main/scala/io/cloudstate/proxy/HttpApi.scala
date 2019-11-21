@@ -688,7 +688,7 @@ private object PathTemplateParser extends Parsers {
           found += fieldPath
           TemplateVariable(
             fieldPath,
-            segments.fold(false)(segments => segments.length > 1 || segments.head.isInstanceOf[MultiSegmentMatcher])
+            segments.exists(segments => segments.length > 1 || segments.head.isInstanceOf[MultiSegmentMatcher])
           )
       }
     }
