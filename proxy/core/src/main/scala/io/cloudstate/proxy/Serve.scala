@@ -187,20 +187,22 @@ object Serve {
 
         unmarshalStream(req)(handler.serializer, mat)
           .map({ commands =>
-            val pipeline = {
-              val common = handler.flowUsing(entityDiscoveryClient, log) // TODO consider caching this
-              if (handler.unary) {
-                common.watchTermination() { (_, complete) =>
-                  complete.onComplete { _ =>
-                    statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
+            marshalStream(
+              commands.via({
+                val pipeline = handler.flowUsing(entityDiscoveryClient, log) // TODO consider caching this
+                if (handler.unary) {
+                  pipeline.watchTermination() { (_, complete) =>
+                    complete.onComplete { _ =>
+                      statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
+                    }
+                    NotUsed
                   }
-                  NotUsed
+                } else {
+                  pipeline
                 }
-              } else {
-                common
-              }
-            }
-            marshalStream(commands.via(pipeline), mapRequestFailureExceptions)(ReplySerializer, mat, responseCodec, sys)
+              }),
+              mapRequestFailureExceptions
+            )(ReplySerializer, mat, responseCodec, sys)
           })
           .recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
     }
