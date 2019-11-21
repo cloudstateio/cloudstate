@@ -93,12 +93,15 @@ object Serve {
       implicit sys: ActorSystem,
       mat: Materializer,
       ec: ExecutionContext
-  ): PartialFunction[HttpRequest, Future[HttpResponse]] =
-    compileProxy(entities, router, statsCollector, entityDiscoveryClient) orElse // Fast path
+  ): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+    val grpcProxy = compileProxy(entities, router, statsCollector, entityDiscoveryClient)
+
+    grpcProxy orElse // Fast path
+    HttpApi.serve(entities.map(_.serviceDescriptor -> grpcProxy).toList) orElse
     handleNetworkProbe() orElse
     Reflection.serve(fileDescriptors, entities.map(_.serviceName).toList) orElse
-    HttpApi.serve(router, entities, entityDiscoveryClient) orElse // Slow path
     NotFound // No match. TODO: Consider having the caller of this method deal with this condition
+  }
 
   /**
    * Knative network probe handler.
@@ -136,11 +139,10 @@ object Serve {
        ))
     }).toMap
 
-    val mapRequestFailureExceptions: ActorSystem => PartialFunction[Throwable, Status] = {
-      val pf: PartialFunction[Throwable, Status] = {
+    val mapRequestFailureExceptions: ActorSystem => PartialFunction[Throwable, Status] = { _ =>
+      {
         case CommandException(msg) => Status.UNKNOWN.augmentDescription(msg)
       }
-      _ => pf
     }
 
     {
@@ -154,38 +156,44 @@ object Serve {
         }
         unmarshalStream(req)(handler.serializer, mat)
           .map { commands =>
-            val pipeline: Source[ProtobufByteString, NotUsed] = commands
-              .via(handler.flow)
-              .map { reply =>
-                reply.clientAction match {
-                  case Some(ClientAction(ClientAction.Action.Reply(Reply(Some(payload))))) =>
-                    if (payload.typeUrl != handler.expectedReplyTypeUrl) {
-                      val msg =
-                        s"${handler.fullCommandName}: Expected reply type_url to be [${handler.expectedReplyTypeUrl}] but was [${payload.typeUrl}]."
-                      log.warn(msg)
-                      entityDiscoveryClient.reportError(UserFunctionError("Warning: " + msg))
-                    }
-                    Some(payload.value)
-                  case Some(ClientAction(ClientAction.Action.Forward(_))) =>
-                    log.error("Cannot serialize forward reply, this should have been handled by the UserFunctionRouter")
-                    None
-                  case Some(ClientAction(ClientAction.Action.Failure(Failure(_, message)))) =>
-                    throw CommandException(message)
-                  case _ =>
-                    None
-                }
-              }
-              .collect(Function.unlift(identity))
-              .watchTermination() { (_, complete) =>
-                if (handler.unary) {
-                  complete.onComplete { _ =>
-                    statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
+            val actionHandler =
+              handler.flow
+                .map { reply =>
+                  reply.clientAction match {
+                    case Some(ClientAction(ClientAction.Action.Reply(Reply(Some(payload))))) =>
+                      if (payload.typeUrl != handler.expectedReplyTypeUrl) {
+                        val msg =
+                          s"${handler.fullCommandName}: Expected reply type_url to be [${handler.expectedReplyTypeUrl}] but was [${payload.typeUrl}]."
+                        log.warn(msg)
+                        entityDiscoveryClient.reportError(UserFunctionError("Warning: " + msg))
+                      }
+                      Some(payload.value)
+                    case Some(ClientAction(ClientAction.Action.Forward(_))) =>
+                      log.error(
+                        "Cannot serialize forward reply, this should have been handled by the UserFunctionRouter"
+                      )
+                      None
+                    case Some(ClientAction(ClientAction.Action.Failure(Failure(_, message)))) =>
+                      throw CommandException(message)
+                    case _ =>
+                      None
                   }
                 }
-                NotUsed
-              }
+                .collect(Function.unlift(identity))
 
-            marshalStream(pipeline, mapRequestFailureExceptions)(ReplySerializer, mat, responseCodec, sys)
+            val pipeline =
+              if (handler.unary) {
+                actionHandler.watchTermination() { (_, complete) =>
+                  if (handler.unary) {
+                    complete.onComplete { _ =>
+                      statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
+                    }
+                  }
+                  NotUsed
+                }
+              } else actionHandler
+
+            marshalStream(commands via pipeline, mapRequestFailureExceptions)(ReplySerializer, mat, responseCodec, sys)
           }
           .recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
     }
