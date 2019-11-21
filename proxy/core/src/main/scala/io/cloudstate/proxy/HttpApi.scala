@@ -154,7 +154,8 @@ object HttpApi {
 
   // A route which will not match anything
   private final val NoMatch = PartialFunction.empty[HttpRequest, Future[HttpResponse]]
-  private final val identityHeader = new `Message-Accept-Encoding`("identity")
+  private final val IdentityHeader = new `Message-Accept-Encoding`("identity")
+  private final val NEWLINE_BYTES = ByteString('\n')
 
   final class HttpEndpoint(
       final val methDesc: MethodDescriptor,
@@ -174,11 +175,10 @@ object HttpApi {
     //ignoringUnknownFields().
     //usingRecursionLimit(…).
 
-    private[this] final val prettyJsonPrinter = JsonFormat.printer
+    private[this] final val jsonPrinter = JsonFormat.printer
       .usingTypeRegistry(JsonFormat.TypeRegistry.newBuilder.add(methDesc.getOutputType).build())
       .includingDefaultValueFields()
-
-    private[this] final val jsonPrinter = prettyJsonPrinter.omittingInsignificantWhitespace()
+      .omittingInsignificantWhitespace()
     //printingEnumsAsInts() // If you enable this, you need to fix the output for responseBody as well
     //preservingProtoFieldNames(). // If you enable this, you need to fix the output for responseBody structs as well
     //sortingMapKeys().
@@ -390,12 +390,8 @@ object HttpApi {
       assert((methodPattern == ANY_METHOD || req.method == methodPattern))
       val matcher = pathTemplate.regex.pattern.matcher(req.uri.path.toString())
       assert(matcher.matches())
-      // TODO either register a new content type `application/pretty+json` and look for that
-      // or remove this altogether and let the caller worry about it, possibly using:
-      // `curl … | python -m json.tool` or `curl … | jq '.'`
-      val prettyPrint = req.header[`User-Agent`].exists(_.products.exists(_.product == "curl")) // TODO devise a better way
       transformRequest(req, matcher)
-        .flatMap(request => handler(request).flatMap(transformResponse(prettyPrint)))
+        .flatMap(request => handler(request).flatMap(transformResponse))
         .recover {
           case ire: IllegalRequestException => HttpResponse(ire.status.intValue, entity = ire.status.reason)
         }
@@ -406,9 +402,8 @@ object HttpApi {
       else {
         val matcher = pathTemplate.regex.pattern.matcher(req.uri.path.toString())
         if (matcher.matches()) {
-          val prettyPrint = req.header[`User-Agent`].exists(_.products.exists(_.product == "curl")) // TODO devise a better way
           transformRequest(req, matcher)
-            .flatMap(request => handler(request).flatMap(transformResponse(prettyPrint)))
+            .flatMap(request => handler(request).flatMap(transformResponse))
             .recover {
               case ire: IllegalRequestException => HttpResponse(ire.status.intValue, entity = ire.status.reason)
             }
@@ -426,7 +421,7 @@ object HttpApi {
       HttpRequest(
         method = HttpMethods.POST,
         uri = Uri(path = Path / methDesc.getService.getFullName / methDesc.getName),
-        headers = req.headers :+ identityHeader,
+        headers = req.headers :+ IdentityHeader,
         entity = encodeMessage(message),
         protocol = req.protocol
       )
@@ -475,7 +470,7 @@ object HttpApi {
       result.build()
     }
 
-    private[this] final def transformResponse(prettyPrint: Boolean)(response: HttpResponse): Future[HttpResponse] =
+    private[this] final def transformResponse(response: HttpResponse): Future[HttpResponse] =
       response.entity match {
         case HttpEntity.Chunked(_, data) =>
           if (methDesc.isServerStreaming) {
@@ -485,7 +480,7 @@ object HttpApi {
               .map(_.data())
               .via(Grpc.grpcFramingDecoder)
               .map { bytes =>
-                HttpEntity.Chunk(transformResponseBody(bytes, prettyPrint) ++ ByteString('\n'))
+                HttpEntity.Chunk(transformResponseBody(bytes) ++ NEWLINE_BYTES) // TODO why \n? to demarkate end of chunk?
               }
 
             Future.successful(response.copy(entity = HttpEntity.Chunked(ContentTypes.`application/json`, body)))
@@ -495,7 +490,7 @@ object HttpApi {
               // it does
               case Seq(HttpEntity.Chunk(bytes, _), HttpEntity.LastChunk(_, _)) =>
                 // gRPC framing encoding has an exactly 5 byte header
-                val json = transformResponseBody(bytes.drop(5), prettyPrint)
+                val json = transformResponseBody(bytes.drop(5))
                 response.copy(entity = HttpEntity(ContentTypes.`application/json`, json))
 
               // Error case
@@ -554,7 +549,7 @@ object HttpApi {
       )
     }
 
-    private[this] final def transformResponseBody(bytes: ByteString, prettyPrint: Boolean): ByteString = {
+    private[this] final def transformResponseBody(bytes: ByteString): ByteString = {
       val message = DynamicMessage.parseFrom(methDesc.getOutputType, bytes.iterator.asInputStream)
       val output = responseBodyDescriptor match {
         case None =>
@@ -565,11 +560,7 @@ object HttpApi {
             case value => responseBody(field.getJavaType, value, field.isRepeated)
           }
       }
-      if (prettyPrint) {
-        ByteString(prettyJsonPrinter.print(output)) ++ ByteString("\n")
-      } else {
-        ByteString(jsonPrinter.print(output))
-      }
+      ByteString(jsonPrinter.print(output))
     }
   }
 
