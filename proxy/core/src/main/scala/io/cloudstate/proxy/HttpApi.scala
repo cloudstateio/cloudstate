@@ -643,38 +643,40 @@ private object PathTemplateParser extends Parsers {
 
   class ParsedTemplate(path: String, template: Template) {
     val regex: Regex = {
-      val regexBuilder = new StringBuilder
+      def doToRegex(builder: StringBuilder, segments: List[Segment], matchSlash: Boolean): StringBuilder =
+        segments match {
+          case Nil => builder // Do nothing
+          case head :: tail =>
+            if (matchSlash) {
+              builder.append('/')
+            }
 
-      def doToRegex(segments: List[Segment], matchSlash: Boolean): Unit = segments match {
-        case Nil => // Do nothing
-        case head :: tail =>
-          if (matchSlash) {
-            regexBuilder.append('/')
-          }
-          head match {
-            case LiteralSegment(literal) =>
-              regexBuilder.append(Pattern.quote(literal))
-            case SingleSegmentMatcher =>
-              regexBuilder.append("[^/:]*")
-            case MultiSegmentMatcher() =>
-              regexBuilder.append(".*")
-            case VariableSegment(_, None) =>
-              regexBuilder.append("([^/:]*)")
-            case VariableSegment(_, Some(template)) =>
-              regexBuilder.append("(")
-              doToRegex(template, matchSlash = false)
-              regexBuilder.append(")")
-          }
-          doToRegex(tail, matchSlash = true)
-      }
-      doToRegex(template.segments, matchSlash = true)
+            head match {
+              case LiteralSegment(literal) =>
+                builder.append(Pattern.quote(literal))
+              case SingleSegmentMatcher =>
+                builder.append("[^/:]*")
+              case MultiSegmentMatcher() =>
+                builder.append(".*")
+              case VariableSegment(_, None) =>
+                builder.append("([^/:]*)")
+              case VariableSegment(_, Some(template)) =>
+                builder.append('(')
+                doToRegex(builder, template, matchSlash = false)
+                builder.append(')')
+            }
 
-      template.verb.foreach { verb =>
-        regexBuilder.append(":")
-        regexBuilder.append(Pattern.quote(verb))
-      }
+            doToRegex(builder, tail, matchSlash = true)
+        }
 
-      regexBuilder.toString().r
+      val builder = doToRegex(new StringBuilder, template.segments, matchSlash = true)
+
+      template.verb
+        .foldLeft(builder)({ (builder, verb) =>
+          builder.append(':').append(Pattern.quote(verb))
+        })
+        .toString()
+        .r
     }
 
     val fields: List[TemplateVariable] = {
