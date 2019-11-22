@@ -59,6 +59,7 @@ val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
 val GraalVersion = "19.2.1"
+val SVMVersion = "19.2.1"
 
 def excludeTheseDependencies = Seq(
   ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
@@ -249,12 +250,15 @@ commands ++= Seq(
 // Shared settings for native image and docker builds
 def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   nativeImageDockerBuild := false,
-  // FYI: Use these two settings in order to create the native images inside of Docker
-  graalVMVersion := Some(GraalVersion), // FYI: Set this to None to make a local only native-image build
-  graalVMNativeImageOptions ++= sharedNativeImageSettings(new File("/opt/graalvm/stage/resources/")),
-  // FYI: Use the following two instead of the ones above to create graalvm-native-image:packageBin outside of Docker
-  //graalVMVersion := None,
-  //graalVMNativeImageOptions ++= sharedNativeImageSettings(baseDirectory.value / "src" / "graal"),
+  // If this is Some(…): run the native-image generation inside a Docker image
+  // If this is None: run the native-image generation using a local GraalVM installation
+  graalVMVersion := Some(GraalVersion),
+  graalVMNativeImageOptions ++= sharedNativeImageSettings({
+      graalVMVersion.value match {
+        case Some(_) => new File("/opt/graalvm/stage/resources/")
+        case None => baseDirectory.value / "src" / "graal"
+      }
+    }),
   (mappings in Docker) := Def.taskDyn {
       if (nativeImageDockerBuild.value) {
         Def.task {
@@ -365,8 +369,8 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         // Since we exclude Aeron, we also exclude its transitive Agrona dependency, so we need to manually add it HERE
         "org.agrona" % "agrona" % "0.9.29",
         // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        "com.oracle.substratevm" % "svm" % GraalVersion % "provided", // Only needed for compilation
+        "org.graalvm.sdk" % "graal-sdk" % SVMVersion % "provided", // Only needed for compilation
+        "com.oracle.substratevm" % "svm" % SVMVersion % "provided", // Only needed for compilation
 
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
@@ -456,8 +460,8 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
         ),
         "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test,
         // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        "com.oracle.substratevm" % "svm" % GraalVersion % "provided", // Only needed for compilation
+        "org.graalvm.sdk" % "graal-sdk" % SVMVersion % "provided", // Only needed for compilation
+        "com.oracle.substratevm" % "svm" % SVMVersion % "provided", // Only needed for compilation
 
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
@@ -493,8 +497,8 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
     libraryDependencies ++= Seq(
         "org.postgresql" % "postgresql" % "42.2.6",
         // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        "com.oracle.substratevm" % "svm" % GraalVersion % "provided", // Only needed for compilation
+        "org.graalvm.sdk" % "graal-sdk" % SVMVersion % "provided", // Only needed for compilation
+        "com.oracle.substratevm" % "svm" % SVMVersion % "provided", // Only needed for compilation
 
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
