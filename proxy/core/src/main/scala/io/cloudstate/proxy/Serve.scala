@@ -185,7 +185,7 @@ object Serve {
           statsCollector ! StatsCollector.RequestReceived
         }
 
-        unmarshalStream(req)(handler.serializer, mat)
+        unmarshalStream(req)(handler.serializer, mat) // FIXME Figure out if we need to deal with unmarshal vs unmarshal stream here
           .map({ commands =>
             marshalStream(
               commands.via({
