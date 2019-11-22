@@ -3,6 +3,7 @@ syntax = "proto3";
 
 import "google/protobuf/empty.proto";
 import "cloudstate/entity_key.proto";
+import "cloudstate/eventing.proto";
 import "google/api/annotations.proto";
 import "google/api/http.proto";
 
@@ -42,6 +43,7 @@ service ShoppingCart {
             post: "/cart/{user_id}/items/add",
             body: "*",
         };
+        option (.cloudstate.eventing).in = "items";
     }
 
     rpc RemoveItem(RemoveLineItem) returns (google.protobuf.Empty) {

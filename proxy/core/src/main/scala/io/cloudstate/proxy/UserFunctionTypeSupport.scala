@@ -3,10 +3,11 @@ package io.cloudstate.proxy
 import akka.NotUsed
 import akka.stream.scaladsl.Flow
 import com.google.protobuf.Descriptors.{FieldDescriptor, MethodDescriptor, ServiceDescriptor}
-import com.google.protobuf.{ByteString, DynamicMessage, descriptor => ScalaPBDescriptorProtos}
+import com.google.protobuf.{ByteString, DynamicMessage}
 import io.cloudstate.protocol.entity.Entity
 import io.cloudstate.entity_key.EntityKeyProto
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionCommand, UserFunctionReply}
+import io.cloudstate.proxy.protobuf.Options
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
@@ -46,26 +47,8 @@ private object EntityMethodDescriptor {
 }
 
 final class EntityMethodDescriptor(val method: MethodDescriptor) {
-
-  /**
-   * ScalaPB doesn't do this conversion for us unfortunately.
-   * By doing it, we can use EntitykeyProto.entityKey.get() to read the entity key nicely.
-   */
-  private def convertFieldOptions(field: FieldDescriptor): ScalaPBDescriptorProtos.FieldOptions =
-    ScalaPBDescriptorProtos.FieldOptions
-      .fromJavaProto(field.toProto.getOptions)
-      .withUnknownFields(scalapb.UnknownFieldSet(field.getOptions.getUnknownFields.asMap.asScala.map {
-        case (idx, f) =>
-          idx.toInt -> scalapb.UnknownFieldSet.Field(
-            varint = f.getVarintList.asScala.map(_.toLong),
-            fixed64 = f.getFixed64List.asScala.map(_.toLong),
-            fixed32 = f.getFixed32List.asScala.map(_.toInt),
-            lengthDelimited = f.getLengthDelimitedList.asScala
-          )
-      }.toMap))
-
   private val fields = method.getInputType.getFields.iterator.asScala
-    .filter(field => EntityKeyProto.entityKey.get(convertFieldOptions(field)))
+    .filter(field => EntityKeyProto.entityKey.get(Options.convertFieldOptions(field)))
     .toArray
     .sortBy(_.getIndex)
 

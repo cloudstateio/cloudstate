@@ -105,7 +105,7 @@ class KubernetesDeploymentScaler(autoscaler: ActorRef) extends Actor with ActorL
 
   import akka.pattern.pipe
 
-  import context.dispatcher
+  implicit val ec = context.dispatcher
   implicit val mat: Materializer = ActorMaterializer()
 
   // A lot of the below is copied shamelessly from KubernetesApiServiceDiscovery

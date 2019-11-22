@@ -19,6 +19,10 @@ package io.cloudstate.proxy
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
+import scala.util.matching.Regex
+import scala.util.parsing.combinator.Parsers
+import scala.util.parsing.input.{CharSequenceReader, Positional}
 import akka.ConfigurationException
 import akka.http.scaladsl.model.{
   ContentType,
@@ -44,7 +48,14 @@ import akka.stream.Materializer
 import akka.parboiled2.util.Base64
 import com.google.api.annotations.AnnotationsProto
 import com.google.api.http.HttpRule
-import com.google.protobuf.{DynamicMessage, MessageOrBuilder, ByteString => ProtobufByteString}
+import com.google.protobuf.{
+  DynamicMessage,
+  MessageOrBuilder,
+  ByteString => ProtobufByteString,
+  ListValue,
+  Struct,
+  Value
+}
 import com.google.protobuf.Descriptors.{
   Descriptor,
   EnumValueDescriptor,
@@ -71,13 +82,10 @@ import akka.grpc.scaladsl.headers.`Message-Accept-Encoding`
 import akka.http.scaladsl.model.HttpEntity.LastChunk
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.ByteString
-import com.google.protobuf.{ListValue, Struct, Value}
+
 import io.grpc.Status
 
-import scala.util.matching.Regex
-import scala.util.parsing.combinator.Parsers
-import scala.util.parsing.input.{CharSequenceReader, Positional}
-import scala.concurrent.duration._
+import io.cloudstate.proxy.protobuf.Options
 
 // References:
 // https://cloud.google.com/endpoints/docs/grpc-service-config/reference/rpc/google.api#httprule
@@ -592,7 +600,7 @@ object HttpApi {
     (for {
       (service, handler) <- services
       method <- service.getMethods.iterator.asScala
-      rule = AnnotationsProto.http.get(convertMethodOptions(method)) match {
+      rule = AnnotationsProto.http.get(Options.convertMethodOptions(method)) match {
         case Some(rule) =>
           log.info(s"Using configured HTTP API endpoint using [$rule]")
           rule

@@ -10,8 +10,10 @@ import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 
-class UserFunctionRouter(entities: Seq[ServableEntity], entityDiscovery: EntityDiscovery)(implicit mat: Materializer,
-                                                                                          ec: ExecutionContext) {
+class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: EntityDiscovery)(
+    implicit mat: Materializer,
+    ec: ExecutionContext
+) {
 
   private[this] final val entityCommands = entities.map {
     case ServableEntity(serviceName, serviceDescriptor, entitySupport) =>
