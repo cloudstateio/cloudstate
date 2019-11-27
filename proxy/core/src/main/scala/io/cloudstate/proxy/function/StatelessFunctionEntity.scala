@@ -89,7 +89,6 @@ object StatelessFunctionEntity {
 
   private final case class OutstandingCommand(
       actionId: String,
-      commandId: Long, // TODO FunctionReply does not carry a commandId, so we don't need to care?
       replyTo: ActorRef,
       startTime: Long
   )
@@ -124,39 +123,21 @@ final class StatelessFunctionEntity(configuration: StatelessFunctionEntity.Confi
   // Set up passivation timer
   context.setReceiveTimeout(configuration.passivationTimeout.duration)
 
-  override final def postStop(): Unit = currentCommand match {
-    case null =>
-    case command =>
-      log.warning("Stopped but we have a current action id {}", command.actionId)
-      reportActionComplete(command)
-  }
-
-  private[this] final def commandHandled(): Unit = {
-    currentCommand = null
-    if (stashedCommands.nonEmpty) {
-      val ((request, sender), newStashedCommands) = stashedCommands.dequeue
-      stashedCommands = newStashedCommands
-      handleCommand(request, sender)
-    } else if (stopped) {
-      context.stop(self)
-    }
-  }
-
-  private[this] final def notifyOutstandingRequests(msg: String): Unit = {
+  override final def postStop(): Unit = {
     currentCommand match {
       case null =>
-      case req => req.replyTo ! createFailure(msg)
+      case command =>
+        log.warning("Stopped but we have a current action id {}", command.actionId)
+        command.replyTo ! createFailure("Unexpected entity termination")
+        reportActionComplete(command)
+        currentCommand = null
     }
+
     val errorNotification = createFailure("Entity terminated")
-    stashedCommands.foreach {
-      case (_, replyTo) => replyTo ! errorNotification
+    for ((_, replyTo) <- stashedCommands) {
+      replyTo ! errorNotification
     }
     stashedCommands = Queue.empty
-  }
-
-  private[this] final def crash(msg: String): Unit = {
-    notifyOutstandingRequests(msg)
-    throw new Exception(msg)
   }
 
   private[this] final def reportActionComplete(command: StatelessFunctionEntity.OutstandingCommand) =
@@ -180,7 +161,6 @@ final class StatelessFunctionEntity(configuration: StatelessFunctionEntity.Confi
             () => client.handleUnary(command) pipeTo replyer
           }
         currentCommand = StatelessFunctionEntity.OutstandingCommand(actorId + ":" + entityId + ":" + idCounter,
-                                                                    idCounter,
                                                                     sender,
                                                                     System.nanoTime())
         concurrencyEnforcer ! Action(currentCommand.actionId, actionFunction)
@@ -215,17 +195,21 @@ final class StatelessFunctionEntity(configuration: StatelessFunctionEntity.Confi
     case reply: FunctionReply =>
       currentCommand match {
         case null =>
-          notifyOutstandingRequests("Unexpected error")
-          throw new Exception("Received reply when no command was being processed")
+          throw new Exception("Received reply when no command was being processed") // Will stop the actor, hence postStop will be called
         case command =>
           reportActionComplete(command)
-          currentCommand.replyTo ! createResponse(reply)
-          commandHandled()
+          command.replyTo ! createResponse(reply)
+          currentCommand = null
+          if (stashedCommands.nonEmpty) {
+            val ((request, sender), newStashedCommands) = stashedCommands.dequeue
+            stashedCommands = newStashedCommands
+            handleCommand(request, sender)
+          } else if (stopped) {
+            context.stop(self)
+          }
       }
 
-    case Status.Failure(error) =>
-      notifyOutstandingRequests("Unexpected entity termination")
-      throw error
+    case Status.Failure(error) => throw error // Will stop the actor, hence postStop will be called
 
     case ReceiveTimeout =>
       context.parent ! ShardRegion.Passivate(stopMessage = StatelessFunctionEntity.Stop)
