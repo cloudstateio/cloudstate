@@ -165,7 +165,11 @@ final class StatelessFunctionEntity(configuration: StatelessFunctionEntity.Confi
                                                                     System.nanoTime())
         concurrencyEnforcer ! Action(currentCommand.actionId, actionFunction)
       case _ =>
-        stashedCommands = stashedCommands.enqueue((entityCommand, sender))
+        if (stashedCommands.length < configuration.sendQueueSize) {
+          stashedCommands = stashedCommands.enqueue((entityCommand, sender))
+        } else {
+          sender ! createFailure("Try again later")
+        }
     }
 
   private final def createFailure(message: String) =
