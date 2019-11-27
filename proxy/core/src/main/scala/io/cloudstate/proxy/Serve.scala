@@ -22,6 +22,9 @@ import scala.util.Success
 import scala.annotation.tailrec
 import akka.grpc.scaladsl.{GrpcExceptionHandler, GrpcMarshalling}
 import GrpcMarshalling.{marshalStream, unmarshalStream}
+import akka.grpc.internal.{CancellationBarrierGraphStage, GrpcResponseHelpers}
+import akka.grpc.scaladsl.headers.`Message-Encoding`
+import akka.grpc.Grpc
 import akka.{Done, NotUsed}
 import akka.grpc.{Codecs, ProtobufSerializer}
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes}
@@ -29,7 +32,7 @@ import akka.http.scaladsl.model.Uri.Path
 import akka.actor.{ActorRef, ActorSystem}
 import akka.util.ByteString
 import akka.stream.Materializer
-import akka.stream.scaladsl.{Flow, RunnableGraph, Source}
+import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Source}
 import com.google.protobuf.{ByteString => ProtobufByteString}
 import com.google.protobuf.any.{Any => ProtobufAny}
 import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor, MethodDescriptor}
@@ -214,7 +217,6 @@ object Serve {
     val routes: PartialFunction[HttpRequest, Future[HttpResponse]] = {
       case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
         val startTime = System.nanoTime()
-        val responseCodec = Codecs.negotiate(req)
         val handler = rpcMethodSerializers(req.uri.path)
 
         // Only report request stats for unary commands, doesn't make sense for streamed
@@ -222,10 +224,16 @@ object Serve {
           statsCollector ! StatsCollector.RequestReceived
         }
 
-        unmarshalStream(req)(handler.serializer, mat) // FIXME Figure out if we need to deal with unmarshal vs unmarshal stream here
-          .map({ commands =>
-            marshalStream(
-              commands
+        val responseCodec = Codecs.negotiate(req)
+        val messageEncoding = `Message-Encoding`.findIn(req.headers)
+
+        Future
+          .successful(
+            GrpcResponseHelpers(
+              req.entity.dataBytes
+                .viaMat(Grpc.grpcFramingDecoder(messageEncoding))(Keep.none)
+                .map(handler.serializer.deserialize)
+                .via(new CancellationBarrierGraphStage) // In gRPC we signal failure by returning an error code, so we don't want the cancellation bubbled out
                 .via({
                   if (handler.unary) {
                     handler.flow.watchTermination() { (_, complete) =>
@@ -234,13 +242,11 @@ object Serve {
                       }
                       NotUsed
                     }
-                  } else {
-                    handler.flow
-                  }
+                  } else handler.flow
                 }),
               mapRequestFailureExceptions
             )(ReplySerializer, mat, responseCodec, sys)
-          })
+          )
           .recoverWith(handleGrpcExceptions)
     }
 

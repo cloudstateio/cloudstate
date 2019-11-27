@@ -1,7 +1,7 @@
 package io.cloudstate.proxy.crdt
 
 import java.net.URLEncoder
-
+import java.nio.charset.StandardCharsets.UTF_8
 import akka.{Done, NotUsed}
 import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
 import akka.cluster.ddata.DistributedData
@@ -45,7 +45,7 @@ class CrdtSupportFactory(system: ActorSystem,
 
     val crdtEntityProps = CrdtEntity.props(crdtClient, crdtEntityConfig, discovery)
     val crdtEntityManager =
-      system.actorOf(CrdtEntityManager.props(crdtEntityProps), URLEncoder.encode(entity.serviceName, "utf-8"))
+      system.actorOf(CrdtEntityManager.props(crdtEntityProps), URLEncoder.encode(entity.serviceName, UTF_8))
 
     // Ensure the ddata replicator is started, to ensure state replication starts immediately, and also ensure the first
     // request to the first CRDT doesn't timeout

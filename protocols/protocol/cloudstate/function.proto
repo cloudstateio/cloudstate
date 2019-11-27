@@ -40,6 +40,7 @@ message FunctionCommand {
 message FunctionReply {
 
     oneof response {
+        Failure failure = 1;
         Reply reply = 2;
         Forward forward = 3;
     }
