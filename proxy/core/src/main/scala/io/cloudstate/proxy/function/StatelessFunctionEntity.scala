@@ -113,8 +113,7 @@ final class StatelessFunctionEntity(configuration: StatelessFunctionEntity.Confi
                                     statsCollector: ActorRef)
     extends Actor
     with ActorLogging {
-  private val actorId = StatelessFunctionEntity.actorCounter.incrementAndGet()
-
+  private[this] final val actorId = StatelessFunctionEntity.actorCounter.incrementAndGet()
   private[this] final var stashedCommands = Queue.empty[(EntityCommand, ActorRef)] // PERFORMANCE: look at options for data structures
   private[this] final var currentCommand: StatelessFunctionEntity.OutstandingCommand = null
   private[this] final var stopped = false
