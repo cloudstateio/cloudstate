@@ -99,18 +99,58 @@ headerSources in Compile ++= {
 lazy val root = (project in file("."))
 // Don't forget to add your sbt module here!
 // A missing module here can lead to failing Travis test results
-  .aggregate(`proxy-core`,
-             `proxy-cassandra`,
-             `proxy-postgres`,
-             `proxy-tests`,
-             `java-support`,
-             `scala-support`,
-             `java-shopping-cart`,
-             `akka-client`,
-             operator,
-             `tck`,
-             docs)
+  .aggregate(
+    `protocols`,
+    `proxy-core`,
+    `proxy-cassandra`,
+    `proxy-postgres`,
+    `proxy-tests`,
+    `java-support`,
+    `scala-support`,
+    `java-shopping-cart`,
+    `akka-client`,
+    operator,
+    `tck`,
+    docs
+  )
   .settings(common)
+
+val cloudstateProtocolsName = "cloudstate-protocols"
+val cloudstateTCKProtocolsName = "cloudstate-tck-protocols"
+
+lazy val protocols = (project in file("protocols"))
+  .settings(
+    name := "protocols",
+    publish / skip := true,
+    packageBin in Compile := {
+      val base = baseDirectory.value
+      val cloudstateProtos = base / s"$cloudstateProtocolsName.zip"
+      val cloudstateTCKProtos = base / s"$cloudstateTCKProtocolsName.zip"
+
+      def archiveStructure(topDirName: String, files: PathFinder): Seq[(File, String)] =
+        files pair Path.relativeTo(base) map {
+          case (f, s) => (f, s"$topDirName${File.separator}$s")
+        }
+
+      // Common Language Support Proto Dependencies
+      IO.zip(
+        archiveStructure(cloudstateProtocolsName,
+                         (base / "frontend" ** "*.proto" +++
+                         base / "protocol" ** "*.proto" +++
+                         base / "proxy" ** "*.proto")),
+        cloudstateProtos
+      )
+
+      // Common TCK Language Support Proto Dependencies
+      IO.zip(archiveStructure(cloudstateTCKProtocolsName, base / "example" ** "*.proto"), cloudstateTCKProtos)
+
+      cloudstateProtos
+    },
+    cleanFiles ++= Seq(
+        baseDirectory.value / s"$cloudstateProtocolsName.zip",
+        baseDirectory.value / s"$cloudstateTCKProtocolsName.zip"
+      )
+  )
 
 lazy val docs = (project in file("docs"))
   .enablePlugins(ParadoxPlugin, ProtocPlugin)
