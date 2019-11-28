@@ -13,6 +13,13 @@ This is achieved by having a gRPC based protocol between the Proxy and the User 
 
 In order to implement a Support Library for a language, the Cloudstate protocol needs to be implemented as a gRPC server which is started when a Stateful Service is started. This gRPC server will then relay state and commands to the underlying User function.
 
+To obtain the necessary Cloudstate Protobuf descriptors which needs to be implemented, your build can be set up to fetch the following compressed archives and extract the contents. The archives are available from version `v0.6.0` and forwards.
+
+  * The Cloudstate protocols
+      - `https://raw.githubusercontent.com/cloudstateio/cloudstate/<VERSION_TAG>/protocols/cloudstate-protocols.zip`
+  * The Cloudstate TCK protocols
+      - `https://raw.githubusercontent.com/cloudstateio/cloudstate/<VERSION_TAG>/protocols/cloudstate-tck-protocols.zip`
+
 When implementing a Support Library, the implementation can be verified using the TCK. In order to run the TCK, one must create an implementation of the Shopping Cart application using the newly created Support Library which is to be verified.
 
 After that, the TCK [application.conf](https://github.com/cloudstateio/cloudstate/blob/master/tck/src/it/resources/application.conf) needs to be modified with a new section to instruct what combination of Proxy implementation will be verified against which implementation of the Shopping Cart application.
