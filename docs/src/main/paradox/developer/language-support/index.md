@@ -20,6 +20,13 @@ To obtain the necessary Cloudstate Protobuf descriptors which needs to be implem
   * The Cloudstate TCK protocols
       - `https://raw.githubusercontent.com/cloudstateio/cloudstate/<VERSION_TAG>/protocols/cloudstate-tck-protocols.zip`
 
+It is also possible to take a look at the various protobuf messages available in the [project's `protocols` folder](https://github.com/cloudstateio/cloudstate/tree/master/protocols). In this folder, you will see 4 sub-folders divided as follow: 
+
+- `example` is for implementing the example application, which is also used by the TCK for third-party language (and proxy implementation) validation.
+- `frontend` is what is used by developers of services when they define their proto interfaces.
+- `protocol` is the protocol between the proxy and what we call a Language Support, i.e. a bridge library which speaks with the proxy and exposes a native API for some programming language.
+- `proxy` contains the protocols which the proxy itself speaks with the outside world.
+
 When implementing a Support Library, the implementation can be verified using the TCK. In order to run the TCK, one must create an implementation of the Shopping Cart application using the newly created Support Library which is to be verified.
 
 After that, the TCK [application.conf](https://github.com/cloudstateio/cloudstate/blob/master/tck/src/it/resources/application.conf) needs to be modified with a new section to instruct what combination of Proxy implementation will be verified against which implementation of the Shopping Cart application.
