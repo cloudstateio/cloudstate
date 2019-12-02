@@ -236,7 +236,7 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
       subscription: String
   ): Source[ProtobufByteString, Future[Cancellable]] =
     Source
-      .setup { (mat, attrs) => // FIXME replace with creating a CRD
+      .setup { (mat, attrs) =>
         val topic = s"projects/${projectId}/topics/${sourceName}"
         implicit val ec = mat.system.dispatcher
         val t = Topic(topic)
@@ -266,9 +266,8 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
                 })
             } yield createSource(subscription = subscription)
           )
-          .mapMaterializedValue(_.flatten)
       }
-      .mapMaterializedValue(_.flatten)
+      .mapMaterializedValue(_.flatten.flatten)
 
   private[this] final def createUsingCrdManagedSource(
       sourceName: String,
