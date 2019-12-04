@@ -20,6 +20,7 @@ import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
+import scala.util.{Failure, Success}
 import scala.util.matching.Regex
 import scala.util.parsing.combinator.Parsers
 import scala.util.parsing.input.{CharSequenceReader, Positional}
@@ -398,24 +399,27 @@ object HttpApi {
       assert((methodPattern == ANY_METHOD || req.method == methodPattern))
       val matcher = pathTemplate.regex.pattern.matcher(req.uri.path.toString())
       assert(matcher.matches())
+      processRequest(req, matcher)
+    }
+
+    private[this] final def processRequest(req: HttpRequest, matcher: Matcher): Future[HttpResponse] =
       transformRequest(req, matcher)
-        .flatMap(request => handler(request).flatMap(transformResponse))
+        .transformWith {
+          case Success(request) => handler(request).flatMap(transformResponse)
+          case Failure(f) =>
+            log.debug("Unable to transform request due to '{}' of type '{}' ", f.getMessage, f.getClass.getName)
+            requestError("Malformed request")
+        }
         .recover {
           case ire: IllegalRequestException => HttpResponse(ire.status.intValue, entity = ire.status.reason)
         }
-    }
 
     override final def applyOrElse[A1 <: HttpRequest, B1 >: Future[HttpResponse]](req: A1, default: A1 => B1): B1 =
       if (methodPattern != ANY_METHOD && req.method != methodPattern) default(req)
       else {
         val matcher = pathTemplate.regex.pattern.matcher(req.uri.path.toString())
-        if (matcher.matches()) {
-          transformRequest(req, matcher)
-            .flatMap(request => handler(request).flatMap(transformResponse))
-            .recover {
-              case ire: IllegalRequestException => HttpResponse(ire.status.intValue, entity = ire.status.reason)
-            }
-        } else default(req)
+        if (matcher.matches()) processRequest(req, matcher)
+        else default(req)
       }
 
     private[this] final def debugMsg(msg: DynamicMessage, preamble: String): Unit =
