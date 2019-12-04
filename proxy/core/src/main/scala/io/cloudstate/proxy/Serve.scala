@@ -18,6 +18,7 @@ package io.cloudstate.proxy
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.annotation.tailrec
 import akka.grpc.scaladsl.{GrpcExceptionHandler, GrpcMarshalling}
 import GrpcMarshalling.{marshalStream, unmarshalStream}
 import akka.{Done, NotUsed}
@@ -39,47 +40,39 @@ import io.grpc.Status
 import org.slf4j.{Logger, LoggerFactory}
 
 object Serve {
-
   private final val log = LoggerFactory.getLogger(getClass)
   // When the entity key is made up of multiple fields, this is used to separate them
   final val AnyTypeUrlHostName = "type.googleapis.com/"
 
-  private final val NotFound: PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    case req: HttpRequest =>
-      log.debug("Not found request: " + req.getUri())
-      Future.successful(HttpResponse(StatusCodes.NotFound))
-  }
+  private[this] final val fallback: Any => Any = _ => fallback
+  private final def checkFallback[B] = fallback.asInstanceOf[Any => B]
 
   private final object ReplySerializer extends ProtobufSerializer[ProtobufByteString] {
     override final def serialize(reply: ProtobufByteString): ByteString =
-      if (reply.isEmpty) {
-        ByteString.empty
-      } else {
-        ByteString.fromArrayUnsafe(reply.toByteArray)
-      }
+      if (reply.isEmpty) ByteString.empty
+      else ByteString.fromArrayUnsafe(reply.toByteArray)
 
     override final def deserialize(bytes: ByteString): ProtobufByteString =
       if (bytes.isEmpty) ProtobufByteString.EMPTY
-      else ProtobufByteString.readFrom(bytes.iterator.asInputStream)
+      else ProtobufByteString.copyFrom(bytes.asByteBuffer)
   }
 
   final class CommandSerializer(val commandName: String, desc: Descriptor)
       extends ProtobufSerializer[UserFunctionCommand] {
     final val commandTypeUrl = AnyTypeUrlHostName + desc.getFullName
 
-    // Should not be used in practice
     override final def serialize(command: UserFunctionCommand): ByteString = command.payload match {
       case None => ByteString.empty
-      case Some(payload) => ByteString(payload.value.asReadOnlyByteBuffer())
+      case Some(payload) => ByteString.fromArrayUnsafe(payload.value.toByteArray)
     }
 
     override final def deserialize(bytes: ByteString): UserFunctionCommand =
-      parse(ProtobufByteString.copyFrom(bytes.asByteBuffer))
+      parse(ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer)))
 
-    final def parse(bytes: ProtobufByteString): UserFunctionCommand =
+    final def parse(any: ProtobufAny): UserFunctionCommand =
       UserFunctionCommand(
         name = commandName,
-        payload = Some(ProtobufAny(typeUrl = commandTypeUrl, value = bytes))
+        payload = Some(any)
       )
   }
 
@@ -95,7 +88,7 @@ object Serve {
 
     def flowUsing(entityDiscoveryClient: EntityDiscoveryClient,
                   log: Logger,
-                  futureEmitter: Future[Emitter]): Flow[UserFunctionCommand, ProtobufByteString, NotUsed] =
+                  futureEmitter: Future[Emitter]): Flow[UserFunctionCommand, ProtobufAny, NotUsed] =
       flow
         .mapAsync(1)({ command =>
           futureEmitter.map({
@@ -110,7 +103,7 @@ object Serve {
                   } else {
                     val _ = emitter.emit(payload, method) // TODO: check returned boolean?
                   }
-                  Some(payload.value) // FIXME instead throw exception?!
+                  Some(payload) // FIXME instead throw exception?!
                 case Some(ClientAction(ClientAction.Action.Forward(_))) =>
                   log.error("Cannot serialize forward reply, this should have been handled by the UserFunctionRouter")
                   None
@@ -137,27 +130,41 @@ object Serve {
   ): (PartialFunction[HttpRequest, Future[HttpResponse]], Option[RunnableGraph[Future[Done]]]) = {
     val (grpcProxy, eventingGraph) =
       createGrpcApi(entities, router, statsCollector, entityDiscoveryClient, eventingSupport)
+    val routes = Array(
+      grpcProxy,
+      HttpApi.serve(entities.map(_.serviceDescriptor -> grpcProxy).toList),
+      handleNetworkProbe(),
+      Reflection.serve(fileDescriptors, entities.map(_.serviceName).toList)
+    )
 
-    val route = grpcProxy orElse // Fast path
-      HttpApi.serve(entities.map(_.serviceDescriptor -> grpcProxy).toList) orElse
-      handleNetworkProbe() orElse
-      Reflection.serve(fileDescriptors, entities.map(_.serviceName).toList) orElse
-      NotFound // No match. TODO: Consider having the caller of this method deal with this condition
-
-    (route, eventingGraph)
+    ({
+      case req =>
+        @tailrec def matchRoutes(req: HttpRequest, idx: Int): Future[HttpResponse] =
+          if (idx < routes.length) {
+            val res = routes(idx).applyOrElse(req, checkFallback): AnyRef
+            if (res eq fallback) matchRoutes(req, idx + 1)
+            else res.asInstanceOf[Future[HttpResponse]]
+          } else {
+            log.debug("Not found request: " + req.getUri())
+            Future.successful(HttpResponse(StatusCodes.NotFound))
+          }
+        matchRoutes(req, 0)
+    }, eventingGraph)
   }
 
   /**
    * Knative network probe handler.
    */
-  def handleNetworkProbe(): PartialFunction[HttpRequest, Future[HttpResponse]] = Function.unlift { req =>
-    req.headers.find(_.name.equalsIgnoreCase("K-Network-Probe")).map { header =>
-      Future.successful(header.value match {
-        case q @ "queue" => HttpResponse(entity = HttpEntity(q))
-        case other =>
-          HttpResponse(status = StatusCodes.BadRequest, entity = HttpEntity(s"unexpected probe header value: $other"))
-      })
-    }
+  def handleNetworkProbe(): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+    case req if req.headers.exists(_.name.equalsIgnoreCase("K-Network-Probe")) =>
+      Future.successful(
+        req.headers.find(_.name.equalsIgnoreCase("K-Network-Probe")).get match {
+          case header if header.value == "queue" => HttpResponse(entity = HttpEntity("queue"))
+          case other =>
+            HttpResponse(status = StatusCodes.BadRequest,
+                         entity = HttpEntity(s"unexpected probe header value: ${other.value}"))
+        }
+      )
   }
 
   private[this] final def createGrpcApi(entities: Seq[ServableEntity],
@@ -212,21 +219,23 @@ object Serve {
         unmarshalStream(req)(handler.serializer, mat) // FIXME Figure out if we need to deal with unmarshal vs unmarshal stream here
           .map({ commands =>
             marshalStream(
-              commands.via({
-                val pipeline =
-                  handler
-                    .flowUsing(entityDiscoveryClient, log, p.future)
-                if (handler.unary) {
-                  pipeline.watchTermination() { (_, complete) =>
-                    complete.onComplete { _ =>
-                      statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
+              commands
+                .via({
+                  val pipeline =
+                    handler
+                      .flowUsing(entityDiscoveryClient, log, p.future)
+                  if (handler.unary) {
+                    pipeline.watchTermination() { (_, complete) =>
+                      complete.onComplete { _ =>
+                        statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
+                      }
+                      NotUsed
                     }
-                    NotUsed
+                  } else {
+                    pipeline
                   }
-                } else {
-                  pipeline
-                }
-              }),
+                })
+                .map(_.value),
               mapRequestFailureExceptions
             )(ReplySerializer, mat, responseCodec, sys)
           })

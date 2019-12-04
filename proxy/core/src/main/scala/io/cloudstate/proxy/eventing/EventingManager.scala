@@ -42,8 +42,8 @@ object Emitters {
 }
 
 trait EventingSupport {
-  def createSource(sourceName: String, handler: CommandHandler): Source[ProtobufByteString, Future[Cancellable]]
-  def createDestination(destinationName: String, handler: CommandHandler): Flow[ProtobufByteString, AnyRef, NotUsed]
+  def createSource(sourceName: String, handler: CommandHandler): Source[ProtobufAny, Future[Cancellable]]
+  def createDestination(destinationName: String, handler: CommandHandler): Flow[ProtobufAny, AnyRef, NotUsed]
 }
 
 class TestEventingSupport(config: Config, materializer: ActorMaterializer) extends EventingSupport {
@@ -52,26 +52,26 @@ class TestEventingSupport(config: Config, materializer: ActorMaterializer) exten
 
   final val sampleData = config.getConfig("data")
 
-  def createSource(sourceName: String, handler: CommandHandler): Source[ProtobufByteString, Future[Cancellable]] = {
+  def createSource(sourceName: String, handler: CommandHandler): Source[ProtobufAny, Future[Cancellable]] = {
     EventingManager.log.debug("Creating eventing source for {}", sourceName)
     val command =
       sampleData.getString(sourceName) match {
         case null | "" =>
           EventingManager.log.error("No sample data found for {}", handler.fullCommandName)
           throw new IllegalStateException(s"No test sample data found for ${handler.fullCommandName}")
-        case data => ProtobufByteString.copyFrom(Base64.rfc2045.decode(data))
+        case data => ProtobufAny.parseFrom(Base64.rfc2045.decode(data))
       }
     Source.tick(pollInitialDelay, pollInterval, command).mapMaterializedValue(_ => Future.never)
   }
 
-  def createDestination(destinationName: String, handler: CommandHandler): Flow[ProtobufByteString, AnyRef, NotUsed] = {
+  def createDestination(destinationName: String, handler: CommandHandler): Flow[ProtobufAny, AnyRef, NotUsed] = {
     val (msg, eventMsg) =
       if (destinationName == "")
         ("Discarding response: {}", "Discarding event: {}")
       else
         ("Publishing response: {}", "Publishing event: {}")
 
-    Flow[ProtobufByteString]
+    Flow[ProtobufAny]
       .alsoTo(Sink.foreach(m => EventingManager.log.info(msg, m)))
   }
 }
@@ -130,10 +130,10 @@ object EventingManager {
             .toMap
 
         type TopicName = String
+        type Record = (TopicName, ProtobufAny)
 
         val inNOutBurger: Seq[
-          (Option[(TopicName, Source[(TopicName, ProtobufByteString), Future[Cancellable]])],
-           Option[(TopicName, Flow[(TopicName, ProtobufByteString), AnyRef, NotUsed])])
+          (Option[(TopicName, Source[Record, Future[Cancellable]])], Option[(TopicName, Flow[Record, AnyRef, NotUsed])])
         ] =
           for {
             EventMapping(entity, routes) <- eventMappings
@@ -155,7 +155,7 @@ object EventingManager {
 
             val out = Option(eventing.out).collect({
               case topic if topic != "" =>
-                val dest = Flow[(TopicName, ProtobufByteString)]
+                val dest = Flow[Record]
                   .map(_._2)
                   .via(support.createDestination(topic, commandHandler))
                   .dropWhile(_ => true)
@@ -168,27 +168,26 @@ object EventingManager {
         val sources = inNOutBurger.collect({ case (Some(in), _) => in })
 
         val deadLetters =
-          Flow[(TopicName, ProtobufByteString)].map(_._2).dropWhile(_ => true) // TODO Log at warn?
+          Flow[Record].map(_._2).dropWhile(_ => true) // TODO Log at warn?
 
         val destinations =
           ("", deadLetters) +: inNOutBurger.collect({ case (_, Some(out)) => out })
 
         val emitter =
-          Source.queue[(TopicName, ProtobufByteString)](destinations.size * 128, OverflowStrategy.backpressure)
+          Source.queue[Record](destinations.size * 128, OverflowStrategy.backpressure)
 
         val destinationMap = destinations.map(_._1).sorted.zipWithIndex.toMap
         val destinationSelector =
-          (t: (TopicName, ProtobufByteString)) =>
-            destinationMap.get(t._1).getOrElse(destinationMap("")) // Send to deadLetters if no match
+          (r: Record) => destinationMap.get(r._1).getOrElse(destinationMap("")) // Send to deadLetters if no match
 
         val eventingFlow = Flow
           .fromGraph(GraphDSL.create() { implicit b =>
             import GraphDSL.Implicits._
 
-            val mergeForPublish = b.add(Merge[(TopicName, ProtobufByteString)](sources.size + 1)) // 1 + for emitter
+            val mergeForPublish = b.add(Merge[Record](sources.size + 1)) // 1 + for emitter
 
             val routeToDestination =
-              b.add(Partition[(TopicName, ProtobufByteString)](destinations.size, destinationSelector))
+              b.add(Partition[Record](destinations.size, destinationSelector))
 
             val mergeForExit = b.add(Merge[AnyRef](destinations.size))
 
@@ -215,11 +214,11 @@ object EventingManager {
                 override def emit(event: ProtobufAny, method: MethodDescriptor): Boolean =
                   if (event.value.isEmpty) false // TODO do we need to check this here?
                   else {
-                    // Check expected type of event compared to method.getOutputType
+                    // FIXME Check expected type of event compared to method.getOutputType
                     allEligibleOutputsByMethodDescriptor
                       .get(method.getFullName)
                       .map(
-                        out => queue.offer((out, event.value)) // FIXME handle this Future
+                        out => queue.offer((out, event)) // FIXME handle this Future
                       )
                       .isDefined
                   }

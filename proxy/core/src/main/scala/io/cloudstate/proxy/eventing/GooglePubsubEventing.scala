@@ -14,6 +14,7 @@ import io.cloudstate.proxy.entity.{UserFunctionCommand}
 
 import io.cloudstate.eventing.Eventing
 
+import com.google.protobuf.any.{Any => ProtobufAny}
 import com.google.protobuf.{ByteString => ProtobufByteString}
 import com.google.protobuf.Descriptors.MethodDescriptor
 
@@ -197,12 +198,12 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
 
   private[this] val batchResults =
     if (downstreamBatchDeadline > 0.seconds || downstreamBatchSize > 1) {
-      Flow[ProtobufByteString]
-        .map(bytes => PubsubMessage(data = bytes))
+      Flow[ProtobufAny]
+        .map(any => PubsubMessage(data = any.toByteString))
         .groupedWithin(downstreamBatchSize, downstreamBatchDeadline)
-    } else Flow[ProtobufByteString].map(bytes => PubsubMessage(data = bytes) :: Nil)
+    } else Flow[ProtobufAny].map(any => PubsubMessage(data = any.toByteString) :: Nil)
 
-  private[this] final def createSource(subscription: String): Source[ProtobufByteString, Future[Cancellable]] = {
+  private[this] final def createSource(subscription: String): Source[ProtobufAny, Future[Cancellable]] = {
     val cancellable = Promise[Cancellable]
 
     val request =
@@ -226,15 +227,15 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
     subscriberClient // FIXME add retries, backoff etc
       .streamingPull(pull) // TODO Consider Source.repeat(()).flatMapConcat(_ => subscriberClient.streamingPull(pull))
       .mapConcat(_.receivedMessages.toVector) // Note: receivedMessages is most likely a Vector already due to impl, so should be a noop
-      .alsoTo(ackSink) // at-most-once //FIXME Add stats generation/collection so we can track progress here
-      .collect({ case ReceivedMessage(_, Some(msg)) => msg.data })
+      .alsoTo(ackSink) // at-most-once // FIXME Add stats generation/collection so we can track progress here
+      .collect({ case ReceivedMessage(_, Some(msg)) => ProtobufAny.parseFrom(msg.data.newCodedInput) }) // TODO - investigate ProtobufAny.fromJavaAny(PbAnyJava.parseFrom(msg.data))
       .mapMaterializedValue(_ => cancellable.future)
   }
 
   private[this] final def createByProxyManagedSource(
       sourceName: String,
       subscription: String
-  ): Source[ProtobufByteString, Future[Cancellable]] =
+  ): Source[ProtobufAny, Future[Cancellable]] =
     Source
       .setup { (mat, attrs) =>
         val topic = s"projects/${projectId}/topics/${sourceName}"
@@ -272,11 +273,11 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
   private[this] final def createUsingCrdManagedSource(
       sourceName: String,
       subscription: String
-  ): Source[ProtobufByteString, Future[Cancellable]] =
+  ): Source[ProtobufAny, Future[Cancellable]] =
     throw new IllegalStateException("NOT IMPLEMENTED YET") // FIXME IMPLEMENT THIS: create CRD-requests
 
   override final def createSource(sourceName: String,
-                                  handler: CommandHandler): Source[ProtobufByteString, Future[Cancellable]] = {
+                                  handler: CommandHandler): Source[ProtobufAny, Future[Cancellable]] = {
     val subscription = s"projects/${projectId}/subscriptions/${sourceName}_${handler.fullCommandName}"
     manageTopicsAndSubscriptions match {
       case MANUALLY => createSource(subscription = subscription)
@@ -285,14 +286,14 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
     }
   }
 
-  private[this] final def createDestination(topic: String): Flow[ProtobufByteString, AnyRef, NotUsed] =
+  private[this] final def createDestination(topic: String): Flow[ProtobufAny, AnyRef, NotUsed] =
     batchResults
       .mapAsyncUnordered(1 /*parallelism*/ )(
         batch =>
           publisherClient.publish(PublishRequest(topic = topic, messages = batch)) // FIXME add retries, backoff etc
       )
 
-  private[this] final def createByProxyManagedDestination(topic: String): Flow[ProtobufByteString, AnyRef, NotUsed] =
+  private[this] final def createByProxyManagedDestination(topic: String): Flow[ProtobufAny, AnyRef, NotUsed] =
     Flow
       .setup { (mat, attrs) =>
         implicit val ec = mat.system.dispatcher
@@ -310,14 +311,14 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
       }
       .mapMaterializedValue(_ => NotUsed)
 
-  private[this] final def createUsingCrdManagedDestination(topic: String): Flow[ProtobufByteString, AnyRef, NotUsed] =
+  private[this] final def createUsingCrdManagedDestination(topic: String): Flow[ProtobufAny, AnyRef, NotUsed] =
     throw new IllegalStateException("NOT IMPLEMENTED YET") // FIXME IMPLEMENT THIS: create CRD-requests
 
   //FIXME Add stats generation/collection so we can track progress here
   override final def createDestination(destinationName: String,
-                                       handler: CommandHandler): Flow[ProtobufByteString, AnyRef, NotUsed] =
+                                       handler: CommandHandler): Flow[ProtobufAny, AnyRef, NotUsed] =
     if (destinationName == "")
-      Flow[ProtobufByteString]
+      Flow[ProtobufAny]
     else {
       val topic = s"projects/${projectId}/topics/${destinationName}"
       manageTopicsAndSubscriptions match {
