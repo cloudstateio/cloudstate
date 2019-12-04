@@ -90,32 +90,29 @@ object Serve {
                   log: Logger,
                   futureEmitter: Future[Emitter]): Flow[UserFunctionCommand, ProtobufAny, NotUsed] =
       flow
-        .mapAsync(1)({ command =>
-          futureEmitter.map({
-            emitter =>
-              command.clientAction match {
-                case Some(ClientAction(ClientAction.Action.Reply(Reply(Some(payload))))) =>
-                  if (payload.typeUrl != expectedReplyTypeUrl) {
-                    val msg =
-                      s"${fullCommandName}: Expected reply type_url to be [${expectedReplyTypeUrl}] but was [${payload.typeUrl}]."
-                    log.warn(msg)
-                    entityDiscoveryClient.reportError(UserFunctionError(s"Warning: $msg"))
-                  } else {
-                    val _ = emitter.emit(payload, method) // TODO: check returned boolean?
-                  }
-                  Some(payload) // FIXME instead throw exception?!
-                case Some(ClientAction(ClientAction.Action.Forward(_))) =>
-                  log.error("Cannot serialize forward reply, this should have been handled by the UserFunctionRouter")
-                  None
-                case Some(ClientAction(ClientAction.Action.Failure(Failure(_, message)))) =>
-                  log.error("User Function responded with a failure: {}", message)
-                  None
-                case _ =>
-                  None
-              }
-          })(router.ec)
+        .mapAsync(1)(reply => futureEmitter.zip(Future.successful(reply))) // TODO more efficient?
+        .map({
+          case (emitter,
+                UserFunctionReply(Some(ClientAction(ClientAction.Action.Reply(Reply(some @ Some(payload))))), _)) =>
+            if (payload.typeUrl != expectedReplyTypeUrl) {
+              val msg =
+                s"${fullCommandName}: Expected reply type_url to be [${expectedReplyTypeUrl}] but was [${payload.typeUrl}]."
+              log.warn(msg)
+              entityDiscoveryClient.reportError(UserFunctionError(s"Warning: $msg"))
+            } else {
+              val _ = emitter.emit(payload, method) // TODO: check returned boolean?
+            }
+            some
+          case (_, UserFunctionReply(Some(ClientAction(ClientAction.Action.Forward(_))), _)) =>
+            log.error("Cannot serialize forward reply, this should have been handled by the UserFunctionRouter")
+            None
+          case (_, UserFunctionReply(Some(ClientAction(ClientAction.Action.Failure(Failure(_, message)))), _)) =>
+            log.error("User Function responded with a failure: {}", message)
+            None
+          case _ =>
+            None
         })
-        .collect(Function.unlift(identity)) // Keep only the valid payloads, possible candidate for ExecutionContext.parasitic in 2.13
+        .collect(Function.unlift(identity))
   }
 
   def createRoute(entities: Seq[ServableEntity],
@@ -222,8 +219,7 @@ object Serve {
               commands
                 .via({
                   val pipeline =
-                    handler
-                      .flowUsing(entityDiscoveryClient, log, p.future)
+                    handler.flowUsing(entityDiscoveryClient, log, p.future).map(_.value)
                   if (handler.unary) {
                     pipeline.watchTermination() { (_, complete) =>
                       complete.onComplete { _ =>
@@ -234,8 +230,7 @@ object Serve {
                   } else {
                     pipeline
                   }
-                })
-                .map(_.value),
+                }),
               mapRequestFailureExceptions
             )(ReplySerializer, mat, responseCodec, sys)
           })
