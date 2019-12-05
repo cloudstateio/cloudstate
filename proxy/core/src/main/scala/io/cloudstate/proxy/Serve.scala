@@ -86,6 +86,9 @@ object Serve {
 
     final val fullCommandName: String = entity.serviceName + "." + method.getName
     final val serializer: CommandSerializer = new CommandSerializer(method.getName, method.getInputType)
+    final val unary: Boolean = !method.toProto.getClientStreaming && !method.toProto.getServerStreaming
+    final val expectedReplyTypeUrl: String = AnyTypeUrlHostName + method.getOutputType.getFullName
+
     final val flow: Flow[UserFunctionCommand, ProtobufAny, NotUsed] = {
       val handler = router.handle(entity.serviceName)
 
@@ -118,9 +121,6 @@ object Serve {
         })
         .collect(Function.unlift(identity))
     }
-
-    final val unary: Boolean = !method.toProto.getClientStreaming && !method.toProto.getServerStreaming
-    final val expectedReplyTypeUrl: String = AnyTypeUrlHostName + method.getOutputType.getFullName
   }
 
   def createRoute(entities: Seq[ServableEntity],
