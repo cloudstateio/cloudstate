@@ -18,6 +18,7 @@ package io.cloudstate.proxy
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.util.Success
 import scala.annotation.tailrec
 import akka.grpc.scaladsl.{GrpcExceptionHandler, GrpcMarshalling}
 import GrpcMarshalling.{marshalStream, unmarshalStream}
@@ -78,19 +79,22 @@ object Serve {
 
   final class CommandHandler(final val entity: ServableEntity,
                              final val method: MethodDescriptor,
-                             final val router: UserFunctionRouter) {
+                             final val router: UserFunctionRouter,
+                             final val emitter: Future[Emitter],
+                             final val entityDiscoveryClient: EntityDiscoveryClient,
+                             final val log: Logger) {
 
     final val fullCommandName: String = entity.serviceName + "." + method.getName
     final val serializer: CommandSerializer = new CommandSerializer(method.getName, method.getInputType)
-    final val flow: Flow[UserFunctionCommand, UserFunctionReply, NotUsed] = router.handle(entity.serviceName)
-    final val unary: Boolean = !method.toProto.getClientStreaming && !method.toProto.getServerStreaming
-    final val expectedReplyTypeUrl: String = AnyTypeUrlHostName + method.getOutputType.getFullName
+    final val flow: Flow[UserFunctionCommand, ProtobufAny, NotUsed] = {
+      val handler = router.handle(entity.serviceName)
 
-    def flowUsing(entityDiscoveryClient: EntityDiscoveryClient,
-                  log: Logger,
-                  futureEmitter: Future[Emitter]): Flow[UserFunctionCommand, ProtobufAny, NotUsed] =
-      flow
-        .mapAsync(1)(reply => futureEmitter.zip(Future.successful(reply))) // TODO more efficient?
+      val zipWithEmitter = emitter.value match {
+        case Some(Success(e)) => handler.map(v => (e, v)) // Cheaper than mapAsync if already completed
+        case _ => handler.mapAsync(1)(reply => emitter.zip(Future.successful(reply)))
+      }
+
+      zipWithEmitter
         .map({
           case (emitter,
                 UserFunctionReply(Some(ClientAction(ClientAction.Action.Reply(Reply(some @ Some(payload))))), _)) =>
@@ -113,6 +117,10 @@ object Serve {
             None
         })
         .collect(Function.unlift(identity))
+    }
+
+    final val unary: Boolean = !method.toProto.getClientStreaming && !method.toProto.getServerStreaming
+    final val expectedReplyTypeUrl: String = AnyTypeUrlHostName + method.getOutputType.getFullName
   }
 
   def createRoute(entities: Seq[ServableEntity],
@@ -192,7 +200,7 @@ object Serve {
       entity <- entities.iterator
       method <- entity.serviceDescriptor.getMethods.iterator.asScala
     } yield {
-      val handler = new CommandHandler(entity, method, router)
+      val handler = new CommandHandler(entity, method, router, p.future, entityDiscoveryClient, log)
       (Path / entity.serviceName / method.getName, handler)
     }).toMap
 
@@ -218,19 +226,18 @@ object Serve {
             marshalStream(
               commands
                 .via({
-                  val pipeline =
-                    handler.flowUsing(entityDiscoveryClient, log, p.future).map(_.value)
                   if (handler.unary) {
-                    pipeline.watchTermination() { (_, complete) =>
+                    handler.flow.watchTermination() { (_, complete) =>
                       complete.onComplete { _ =>
                         statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
                       }
                       NotUsed
                     }
                   } else {
-                    pipeline
+                    handler.flow
                   }
-                }),
+                })
+                .map(_.value),
               mapRequestFailureExceptions
             )(ReplySerializer, mat, responseCodec, sys)
           })

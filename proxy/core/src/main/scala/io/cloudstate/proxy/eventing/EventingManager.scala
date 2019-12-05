@@ -42,7 +42,7 @@ object Emitters {
 }
 
 trait EventingSupport {
-  def createSource(sourceName: String, handler: CommandHandler): Source[ProtobufAny, Future[Cancellable]]
+  def createSource(sourceName: String, handler: CommandHandler): Source[UserFunctionCommand, Future[Cancellable]]
   def createDestination(destinationName: String, handler: CommandHandler): Flow[ProtobufAny, AnyRef, NotUsed]
 }
 
@@ -52,14 +52,14 @@ class TestEventingSupport(config: Config, materializer: ActorMaterializer) exten
 
   final val sampleData = config.getConfig("data")
 
-  def createSource(sourceName: String, handler: CommandHandler): Source[ProtobufAny, Future[Cancellable]] = {
+  def createSource(sourceName: String, handler: CommandHandler): Source[UserFunctionCommand, Future[Cancellable]] = {
     EventingManager.log.debug("Creating eventing source for {}", sourceName)
     val command =
       sampleData.getString(sourceName) match {
         case null | "" =>
           EventingManager.log.error("No sample data found for {}", handler.fullCommandName)
           throw new IllegalStateException(s"No test sample data found for ${handler.fullCommandName}")
-        case data => ProtobufAny.parseFrom(Base64.rfc2045.decode(data))
+        case data => handler.serializer.parse(ProtobufAny.parseFrom(Base64.rfc2045.decode(data)))
       }
     Source.tick(pollInitialDelay, pollInterval, command).mapMaterializedValue(_ => Future.never)
   }
@@ -140,16 +140,15 @@ object EventingManager {
             (mdesc, eventing) <- routes
           } yield {
             log.info("Creating route for {}", eventing)
-            val commandHandler = new CommandHandler(entity, mdesc, router) // Could we reuse these from Serve?
+            val commandHandler = new CommandHandler(entity, mdesc, router, noEmitter, entityDiscoveryClient, log) // Could we reuse these from Serve?
 
             val in = Option(eventing.in).collect({
               case topic if topic != "" =>
                 val source =
                   support
                     .createSource(topic, commandHandler)
-                    .map(commandHandler.serializer.parse)
-                    .via(commandHandler.flowUsing(entityDiscoveryClient, log, noEmitter))
-                    .collect({ case bytes if eventing.out != "" => (eventing.out, bytes) }) //Without an out there is nothing to persist
+                    .via(commandHandler.flow)
+                    .collect({ case any if eventing.out != "" => (eventing.out, any) }) //Without an out there is nothing to persist
                 (topic, source)
             })
 

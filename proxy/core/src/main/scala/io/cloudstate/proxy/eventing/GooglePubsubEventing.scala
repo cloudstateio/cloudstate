@@ -203,7 +203,10 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
         .groupedWithin(downstreamBatchSize, downstreamBatchDeadline)
     } else Flow[ProtobufAny].map(any => PubsubMessage(data = any.toByteString) :: Nil)
 
-  private[this] final def createSource(subscription: String): Source[ProtobufAny, Future[Cancellable]] = {
+  private[this] final def createManualSource(
+      subscription: String,
+      commandHandler: CommandHandler
+  ): Source[UserFunctionCommand, Future[Cancellable]] = {
     val cancellable = Promise[Cancellable]
 
     val request =
@@ -228,14 +231,18 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
       .streamingPull(pull) // TODO Consider Source.repeat(()).flatMapConcat(_ => subscriberClient.streamingPull(pull))
       .mapConcat(_.receivedMessages.toVector) // Note: receivedMessages is most likely a Vector already due to impl, so should be a noop
       .alsoTo(ackSink) // at-most-once // FIXME Add stats generation/collection so we can track progress here
-      .collect({ case ReceivedMessage(_, Some(msg)) => ProtobufAny.parseFrom(msg.data.newCodedInput) }) // TODO - investigate ProtobufAny.fromJavaAny(PbAnyJava.parseFrom(msg.data))
+      .collect({
+        case ReceivedMessage(_, Some(msg)) =>
+          commandHandler.serializer.parse(ProtobufAny.parseFrom(msg.data.newCodedInput))
+      }) // TODO - investigate ProtobufAny.fromJavaAny(PbAnyJava.parseFrom(msg.data))
       .mapMaterializedValue(_ => cancellable.future)
   }
 
   private[this] final def createByProxyManagedSource(
       sourceName: String,
-      subscription: String
-  ): Source[ProtobufAny, Future[Cancellable]] =
+      subscription: String,
+      commandHandler: CommandHandler
+  ): Source[UserFunctionCommand, Future[Cancellable]] =
     Source
       .setup { (mat, attrs) =>
         val topic = s"projects/${projectId}/topics/${sourceName}"
@@ -265,24 +272,25 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
                   case ex: gRPCStatusRuntimeException if ex.getStatus.getCode == gRPCStatus.Code.ALREADY_EXISTS =>
                     s
                 })
-            } yield createSource(subscription = subscription)
+            } yield createManualSource(subscription, commandHandler)
           )
       }
       .mapMaterializedValue(_.flatten.flatten)
 
   private[this] final def createUsingCrdManagedSource(
       sourceName: String,
-      subscription: String
-  ): Source[ProtobufAny, Future[Cancellable]] =
+      subscription: String,
+      commandHandler: CommandHandler
+  ): Source[UserFunctionCommand, Future[Cancellable]] =
     throw new IllegalStateException("NOT IMPLEMENTED YET") // FIXME IMPLEMENT THIS: create CRD-requests
 
   override final def createSource(sourceName: String,
-                                  handler: CommandHandler): Source[ProtobufAny, Future[Cancellable]] = {
-    val subscription = s"projects/${projectId}/subscriptions/${sourceName}_${handler.fullCommandName}"
+                                  commandHandler: CommandHandler): Source[UserFunctionCommand, Future[Cancellable]] = {
+    val subscription = s"projects/${projectId}/subscriptions/${sourceName}_${commandHandler.fullCommandName}"
     manageTopicsAndSubscriptions match {
-      case MANUALLY => createSource(subscription = subscription)
-      case USING_CRD => createUsingCrdManagedSource(sourceName = sourceName, subscription = subscription)
-      case BY_PROXY => createByProxyManagedSource(sourceName = sourceName, subscription = subscription)
+      case MANUALLY => createManualSource(subscription, commandHandler)
+      case USING_CRD => createUsingCrdManagedSource(sourceName, subscription, commandHandler)
+      case BY_PROXY => createByProxyManagedSource(sourceName, subscription, commandHandler)
     }
   }
 

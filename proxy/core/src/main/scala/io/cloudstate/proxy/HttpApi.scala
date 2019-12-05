@@ -572,25 +572,6 @@ object HttpApi {
     }
   }
 
-  /**
-   * ScalaPB doesn't do this conversion for us unfortunately.
-   * By doing it, we can use HttpProto.entityKey.get() to read the entity key nicely.
-   */
-  private[this] final def convertMethodOptions(method: MethodDescriptor): ScalaPBDescriptorProtos.MethodOptions =
-    ScalaPBDescriptorProtos.MethodOptions
-      .fromJavaProto(method.toProto.getOptions)
-      .withUnknownFields(
-        scalapb.UnknownFieldSet(method.getOptions.getUnknownFields.asMap.asScala.map {
-          case (idx, f) =>
-            idx.toInt -> scalapb.UnknownFieldSet.Field(
-              varint = f.getVarintList.asScala.map(_.toLong),
-              fixed64 = f.getFixed64List.asScala.map(_.toLong),
-              fixed32 = f.getFixed32List.asScala.map(_.toInt),
-              lengthDelimited = f.getLengthDelimitedList.asScala
-            )
-        }.toMap)
-      )
-
   final def serve(services: List[(ServiceDescriptor, PartialFunction[HttpRequest, Future[HttpResponse]])])(
       implicit sys: ActorSystem,
       mat: Materializer,
