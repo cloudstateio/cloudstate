@@ -37,30 +37,31 @@ import io.cloudstate.protocol.entity._
 import io.cloudstate.proxy.eventing.{Emitter, Emitters, EventingManager, EventingSupport}
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
+import io.cloudstate.proxy.protobuf.Types
 import io.grpc.Status
 import org.slf4j.{Logger, LoggerFactory}
 
 object Serve {
   private final val log = LoggerFactory.getLogger(getClass)
-  // When the entity key is made up of multiple fields, this is used to separate them
-  final val AnyTypeUrlHostName = "type.googleapis.com/"
 
   private[this] final val fallback: Any => Any = _ => fallback
   private final def checkFallback[B] = fallback.asInstanceOf[Any => B]
 
-  private final object ReplySerializer extends ProtobufSerializer[ProtobufByteString] {
-    override final def serialize(reply: ProtobufByteString): ByteString =
-      if (reply.isEmpty) ByteString.empty
-      else ByteString.fromArrayUnsafe(reply.toByteArray)
+  private final val Http404Response: Future[HttpResponse] =
+    Future.successful(HttpResponse(StatusCodes.NotFound))
 
-    override final def deserialize(bytes: ByteString): ProtobufByteString =
-      if (bytes.isEmpty) ProtobufByteString.EMPTY
-      else ProtobufByteString.copyFrom(bytes.asByteBuffer)
+  private final object ReplySerializer extends ProtobufSerializer[ProtobufAny] {
+    override final def serialize(reply: ProtobufAny): ByteString =
+      if (reply.value.isEmpty) ByteString.empty
+      else ByteString.fromArrayUnsafe(reply.value.toByteArray)
+
+    override final def deserialize(bytes: ByteString): ProtobufAny =
+      throw new UnsupportedOperationException("operation not supported")
   }
 
   final class CommandSerializer(val commandName: String, desc: Descriptor)
       extends ProtobufSerializer[UserFunctionCommand] {
-    final val commandTypeUrl = AnyTypeUrlHostName + desc.getFullName
+    final val commandTypeUrl = Types.AnyTypeUrlHostName + desc.getFullName
 
     override final def serialize(command: UserFunctionCommand): ByteString = command.payload match {
       case None => ByteString.empty
@@ -71,10 +72,7 @@ object Serve {
       parse(ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer)))
 
     final def parse(any: ProtobufAny): UserFunctionCommand =
-      UserFunctionCommand(
-        name = commandName,
-        payload = Some(any)
-      )
+      UserFunctionCommand(name = commandName, payload = Some(any))
   }
 
   final class CommandHandler(final val entity: ServableEntity,
@@ -87,7 +85,7 @@ object Serve {
     final val fullCommandName: String = entity.serviceName + "." + method.getName
     final val serializer: CommandSerializer = new CommandSerializer(method.getName, method.getInputType)
     final val unary: Boolean = !method.toProto.getClientStreaming && !method.toProto.getServerStreaming
-    final val expectedReplyTypeUrl: String = AnyTypeUrlHostName + method.getOutputType.getFullName
+    final val expectedReplyTypeUrl: String = Types.AnyTypeUrlHostName + method.getOutputType.getFullName
 
     final val flow: Flow[UserFunctionCommand, ProtobufAny, NotUsed] = {
       val handler = router.handle(entity.serviceName)
@@ -142,7 +140,7 @@ object Serve {
       Reflection.serve(fileDescriptors, entities.map(_.serviceName).toList)
     )
 
-    ({
+    ({ // Creates a fast implementation of multi-PartialFunction composition
       case req =>
         @tailrec def matchRoutes(req: HttpRequest, idx: Int): Future[HttpResponse] =
           if (idx < routes.length) {
@@ -151,7 +149,7 @@ object Serve {
             else res.asInstanceOf[Future[HttpResponse]]
           } else {
             log.debug("Not found request: " + req.getUri())
-            Future.successful(HttpResponse(StatusCodes.NotFound))
+            Http404Response
           }
         matchRoutes(req, 0)
     }, eventingGraph)
@@ -210,6 +208,9 @@ object Serve {
       }
     }
 
+    val handleGrpcExceptions =
+      GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys))
+
     val routes: PartialFunction[HttpRequest, Future[HttpResponse]] = {
       case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
         val startTime = System.nanoTime()
@@ -236,12 +237,11 @@ object Serve {
                   } else {
                     handler.flow
                   }
-                })
-                .map(_.value),
+                }),
               mapRequestFailureExceptions
             )(ReplySerializer, mat, responseCodec, sys)
           })
-          .recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
+          .recoverWith(handleGrpcExceptions)
     }
 
     (routes, eventingGraph)
