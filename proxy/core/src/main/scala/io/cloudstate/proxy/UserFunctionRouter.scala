@@ -56,8 +56,8 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
     }
 
   private final def routeUnary(trace: List[(RouteReason, String, String)],
-                               response: UserFunctionReply): Future[UserFunctionReply] = {
-    val afterSideEffects = response.sideEffects.foldLeft(Future.successful[Any](())) { (future, sideEffect) =>
+                               response: UserFunctionReply): Future[UserFunctionReply] =
+    response.sideEffects.foldLeft(Future.unit: Future[Any]) { (future, sideEffect) =>
       future.flatMap { _ =>
         val sideEffectFuture = routeMessageUnary(trace,
                                                  RouteReason.SideEffect,
@@ -67,12 +67,10 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
         if (sideEffect.synchronous) {
           sideEffectFuture
         } else {
-          Future.successful(())
+          future
         }
       }
-    }
-
-    afterSideEffects.flatMap { _ =>
+    } flatMap { _ =>
       response.clientAction match {
         case Some(ClientAction(ClientAction.Action.Forward(Forward(serviceName, commandName, payload)))) =>
           routeMessageUnary(trace, RouteReason.Forwarded, serviceName, commandName, payload)
@@ -80,7 +78,6 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
           Future.successful(response)
       }
     }
-  }
 
   private final def routeMessage(trace: List[(RouteReason, String, String)],
                                  routeReason: RouteReason,
@@ -109,7 +106,7 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
     } else {
       // This side effect is not synchronous, so we run it asynchronously and ignore the result, and return
       // nothing to do
-      source.runWith(Sink.ignore)
+      source.runWith(Sink.ignore) // TODO: investigate the risk of congestion here
       Source.empty
     }
   }

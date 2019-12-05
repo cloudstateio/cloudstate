@@ -4,8 +4,8 @@ import akka.{Done, NotUsed}
 import akka.actor.{ActorSystem, Cancellable}
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes}
 import akka.http.scaladsl.model.Uri.Path
-import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{Flow, Keep, Merge, RunnableGraph, Sink, Source}
+import akka.stream.{ActorMaterializer, FlowShape, OverflowStrategy}
+import akka.stream.scaladsl.{Flow, GraphDSL, Keep, Merge, Partition, RunnableGraph, Sink, Source}
 import akka.parboiled2.util.Base64
 
 import io.cloudstate.protocol.entity.{ClientAction, EntityDiscoveryClient, Failure, Reply, UserFunctionError}
@@ -31,19 +31,19 @@ import org.slf4j.{Logger, LoggerFactory}
 
 import Serve.{CommandHandler}
 
-trait EventingSupport {
-  def createSource(sourceName: String, handler: CommandHandler): Source[ProtobufByteString, Future[Cancellable]]
-  def createDestination(destinationName: String, handler: CommandHandler): Flow[ProtobufByteString, AnyRef, NotUsed]
+trait Emitter {
+  def emit(payload: ProtobufAny, method: MethodDescriptor): Boolean = ???
+}
 
-  final def serve(eventing: Eventing,
-                  commandHandler: CommandHandler,
-                  entityDiscoveryClient: EntityDiscoveryClient,
-                  log: Logger): Source[AnyRef, Future[Cancellable]] =
-    createSource(eventing.in, commandHandler)
-      .map(commandHandler.serializer.parse)
-      .via(commandHandler.flowUsing(entityDiscoveryClient, log))
-      .via(createDestination(eventing.out, commandHandler))
-      .dropWhile(_ => true) // TODO decide what to do with these messages, we want to keep on forever if possible
+object Emitters {
+  val ignore: Emitter = new Emitter {
+    override def emit(payload: ProtobufAny, method: MethodDescriptor): Boolean = false
+  }
+}
+
+trait EventingSupport {
+  def createSource(sourceName: String, handler: CommandHandler): Source[UserFunctionCommand, Future[Cancellable]]
+  def createDestination(destinationName: String, handler: CommandHandler): Flow[ProtobufAny, AnyRef, NotUsed]
 }
 
 class TestEventingSupport(config: Config, materializer: ActorMaterializer) extends EventingSupport {
@@ -52,21 +52,27 @@ class TestEventingSupport(config: Config, materializer: ActorMaterializer) exten
 
   final val sampleData = config.getConfig("data")
 
-  def createSource(sourceName: String, handler: CommandHandler): Source[ProtobufByteString, Future[Cancellable]] = {
+  def createSource(sourceName: String, handler: CommandHandler): Source[UserFunctionCommand, Future[Cancellable]] = {
     EventingManager.log.debug("Creating eventing source for {}", sourceName)
     val command =
       sampleData.getString(sourceName) match {
         case null | "" =>
           EventingManager.log.error("No sample data found for {}", handler.fullCommandName)
           throw new IllegalStateException(s"No test sample data found for ${handler.fullCommandName}")
-        case data => ProtobufByteString.copyFrom(Base64.rfc2045.decode(data))
+        case data => handler.serializer.parse(ProtobufAny.parseFrom(Base64.rfc2045.decode(data)))
       }
     Source.tick(pollInitialDelay, pollInterval, command).mapMaterializedValue(_ => Future.never)
   }
 
-  def createDestination(destinationName: String, handler: CommandHandler): Flow[ProtobufByteString, AnyRef, NotUsed] = {
-    val msg = if (destinationName == "") "Discarding response: {}" else "Publishing response: {}"
-    Flow[ProtobufByteString].alsoTo(Sink.foreach(m => EventingManager.log.info(msg, m)))
+  def createDestination(destinationName: String, handler: CommandHandler): Flow[ProtobufAny, AnyRef, NotUsed] = {
+    val (msg, eventMsg) =
+      if (destinationName == "")
+        ("Discarding response: {}", "Discarding event: {}")
+      else
+        ("Publishing response: {}", "Publishing event: {}")
+
+    Flow[ProtobufAny]
+      .alsoTo(Sink.foreach(m => EventingManager.log.info(msg, m)))
   }
 }
 
@@ -76,6 +82,8 @@ object EventingManager {
 
   final case class EventMapping private (entity: ServableEntity, routes: Map[MethodDescriptor, Eventing])
 
+  private val noEmitter = Future.successful(Emitters.ignore)
+
   // Contains all entities which has at least one endpoint which accepts events
   def createEventMappings(entities: Seq[ServableEntity]): Seq[EventMapping] =
     entities.flatMap { entity =>
@@ -83,8 +91,9 @@ object EventingManager {
         entity.serviceDescriptor.getMethods.iterator.asScala.foldLeft(Map.empty[MethodDescriptor, Eventing]) {
           case (map, method) =>
             val e = EventingProto.eventing.get(Options.convertMethodOptions(method))
+            // FIXME Validate that in and out are set appropriately!!
             log.debug("EventingProto.events for {}", method.getFullName + " " + e)
-            e.fold(map)(map.updated(method, _))
+            e.filter(e => e.in != "" || e.out != "").fold(map)(map.updated(method, _))
         }
 
       if (endpoints.isEmpty) Nil
@@ -109,16 +118,112 @@ object EventingManager {
   def createStreams(router: UserFunctionRouter,
                     entityDiscoveryClient: EntityDiscoveryClient,
                     entities: Seq[ServableEntity],
-                    support: EventingSupport): Option[RunnableGraph[Future[Done]]] =
-    (for {
-      EventMapping(entity, routes) <- createEventMappings(entities)
-      (mdesc, eventing) <- routes
-    } yield {
-      log.debug("Creating route for {}", eventing)
-      support.serve(eventing, new CommandHandler(entity, mdesc, router), entityDiscoveryClient, log)
-    }) match {
-      case Seq() => None
-      case Seq(s) => Some(s.toMat(Sink.ignore)(Keep.right))
-      case Seq(s1, s2, sN @ _*) => Some(Source.combine(s1, s2, sN: _*)(Merge(_)).toMat(Sink.ignore)(Keep.right))
+                    support: EventingSupport): Option[RunnableGraph[(Emitter, Future[Done])]] =
+    createEventMappings(entities) match {
+      case Nil => None
+      case eventMappings =>
+        val allEligibleOutputsByMethodDescriptor =
+          eventMappings
+            .flatMap(_.routes.collect {
+              case (m, e) if e.out != "" => (m.getFullName, e.out)
+            })
+            .toMap
+
+        type TopicName = String
+        type Record = (TopicName, ProtobufAny)
+
+        val inNOutBurger: Seq[
+          (Option[(TopicName, Source[Record, Future[Cancellable]])], Option[(TopicName, Flow[Record, AnyRef, NotUsed])])
+        ] =
+          for {
+            EventMapping(entity, routes) <- eventMappings
+            (mdesc, eventing) <- routes
+          } yield {
+            log.info("Creating route for {}", eventing)
+            val commandHandler = new CommandHandler(entity, mdesc, router, noEmitter, entityDiscoveryClient, log) // Could we reuse these from Serve?
+
+            val in = Option(eventing.in).collect({
+              case topic if topic != "" =>
+                val source =
+                  support
+                    .createSource(topic, commandHandler)
+                    .via(commandHandler.flow)
+                    .collect({ case any if eventing.out != "" => (eventing.out, any) }) //Without an out there is nothing to persist
+                (topic, source)
+            })
+
+            val out = Option(eventing.out).collect({
+              case topic if topic != "" =>
+                val dest = Flow[Record]
+                  .map(_._2)
+                  .via(support.createDestination(topic, commandHandler))
+                  .dropWhile(_ => true)
+                (topic, dest)
+            })
+
+            (in, out)
+          }
+
+        val sources = inNOutBurger.collect({ case (Some(in), _) => in })
+
+        val deadLetters =
+          Flow[Record].map(_._2).dropWhile(_ => true) // TODO Log at warn?
+
+        val destinations =
+          ("", deadLetters) +: inNOutBurger.collect({ case (_, Some(out)) => out })
+
+        val emitter =
+          Source.queue[Record](destinations.size * 128, OverflowStrategy.backpressure)
+
+        val destinationMap = destinations.map(_._1).sorted.zipWithIndex.toMap
+        val destinationSelector =
+          (r: Record) => destinationMap.get(r._1).getOrElse(destinationMap("")) // Send to deadLetters if no match
+
+        val eventingFlow = Flow
+          .fromGraph(GraphDSL.create() { implicit b =>
+            import GraphDSL.Implicits._
+
+            val mergeForPublish = b.add(Merge[Record](sources.size + 1)) // 1 + for emitter
+
+            val routeToDestination =
+              b.add(Partition[Record](destinations.size, destinationSelector))
+
+            val mergeForExit = b.add(Merge[AnyRef](destinations.size))
+
+            sources.zipWithIndex foreach {
+              case ((topicName, source), idx) =>
+                b.add(source).out ~> mergeForPublish.in(idx + 1) // 0 we keep for emitter
+            }
+
+            mergeForPublish.out ~> routeToDestination.in
+
+            destinations foreach {
+              case (topicName, flow) =>
+                routeToDestination.out(destinationMap(topicName)) ~> b.add(flow) ~> mergeForExit
+            }
+
+            FlowShape(mergeForPublish.in(0), mergeForExit.out)
+          })
+
+        Some(
+          emitter
+            .via(eventingFlow)
+            .toMat(Sink.ignore)((queue, future) => {
+              val emitter = new Emitter {
+                override def emit(event: ProtobufAny, method: MethodDescriptor): Boolean =
+                  if (event.value.isEmpty) false // TODO do we need to check this here?
+                  else {
+                    // FIXME Check expected type of event compared to method.getOutputType
+                    allEligibleOutputsByMethodDescriptor
+                      .get(method.getFullName)
+                      .map(
+                        out => queue.offer((out, event)) // FIXME handle this Future
+                      )
+                      .isDefined
+                  }
+              }
+              (emitter, future)
+            })
+        )
     }
 }
