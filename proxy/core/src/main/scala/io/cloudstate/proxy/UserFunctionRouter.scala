@@ -12,7 +12,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: EntityDiscovery)(
     implicit mat: Materializer,
-    val ec: ExecutionContext
+    ec: ExecutionContext
 ) {
 
   private[this] final val entityCommands = entities.map {
@@ -57,7 +57,7 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
 
   private final def routeUnary(trace: List[(RouteReason, String, String)],
                                response: UserFunctionReply): Future[UserFunctionReply] =
-    response.sideEffects.foldLeft(Future.successful[Any](())) { (future, sideEffect) =>
+    response.sideEffects.foldLeft(Future.unit: Future[Any]) { (future, sideEffect) =>
       future.flatMap { _ =>
         val sideEffectFuture = routeMessageUnary(trace,
                                                  RouteReason.SideEffect,
