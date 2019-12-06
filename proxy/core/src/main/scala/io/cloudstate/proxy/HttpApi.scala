@@ -540,11 +540,11 @@ object HttpApi {
               }
           }
         val body =
-          ByteString(
+          ByteString.fromArrayUnsafe(
             entityMessage
               .getField(entityMessage.getDescriptorForType.findFieldByName("data"))
               .asInstanceOf[ProtobufByteString]
-              .asReadOnlyByteBuffer
+              .toByteArray
           )
         HttpEntity(contentType, body)
       } else
