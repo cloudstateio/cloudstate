@@ -66,7 +66,8 @@ entity.setBehavior(cart => {
     commandHandlers: {
       AddItem: addItem,
       RemoveItem: removeItem,
-      GetCart: getCart
+      GetCart: getCart,
+      ShowCartPage: showCartPage
     },
     // Event handlers. The name of the event corresponds to the (unqualified) name of the
     // persisted protobuf message.
@@ -130,6 +131,19 @@ function getCart(request, cart) {
   // Simply return the shopping cart as is.
   return cart;
 }
+
+/**
+ * Handler for get cart commands.
+ */
+function showCartPage(request, cart) {
+  // Simply return the shopping cart as is.
+  return {
+    contentType: "text/html",
+    data: Buffer.from("<html><head></head><body>test</body></html>")
+  };
+}
+
+
 
 /**
  * Handler for item added events.

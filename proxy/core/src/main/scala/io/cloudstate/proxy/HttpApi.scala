@@ -173,9 +173,6 @@ object HttpApi {
   private final val IdentityHeader = new `Message-Accept-Encoding`("identity")
   private final val NEWLINE_BYTES = ByteString('\n')
 
-  private final val HttpBodyDataField = HttpBody.javaDescriptor.findFieldByName("data")
-  private final val HttpBodyContentTypeField = HttpBody.javaDescriptor.findFieldByName("contentType")
-
   final class HttpEndpoint(
       final val methDesc: MethodDescriptor,
       final val rule: HttpRule,
@@ -528,14 +525,12 @@ object HttpApi {
       }
 
     private[this] final def render(entityMessage: MessageOrBuilder): ResponseEntity =
-      if (methDesc.getOutputType == HttpBody.javaDescriptor) {
+      if (methDesc.getOutputType.getFullName == "google.api.HttpBody") {
         val contentType =
           entityMessage
-            .getField(HttpBodyContentTypeField)
-            .asInstanceOf[StringValue]
-            .getValue match {
+            .getField(entityMessage.getDescriptorForType.findFieldByName("content_type")) match {
             case null | "" => ContentTypes.NoContentType
-            case string =>
+            case string: String =>
               ContentType.parse(string) match {
                 case Left(list) =>
                   throw new IllegalResponseException(
@@ -545,14 +540,12 @@ object HttpApi {
               }
           }
         val body =
-          ByteString.fromArrayUnsafe(
+          ByteString(
             entityMessage
-              .getField(HttpBodyDataField)
-              .asInstanceOf[BytesValue]
-              .getValue
-              .toByteArray
+              .getField(entityMessage.getDescriptorForType.findFieldByName("data"))
+              .asInstanceOf[ProtobufByteString]
+              .asReadOnlyByteBuffer
           )
-        System.err.println("HttpBody.contentType = " + contentType + " " + contentType.getClass.getName)
         HttpEntity(contentType, body)
       } else
         HttpEntity(ContentTypes.`application/json`, ByteString(jsonPrinter.print(entityMessage)))
