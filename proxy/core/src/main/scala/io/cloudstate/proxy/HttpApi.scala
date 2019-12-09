@@ -593,32 +593,6 @@ object HttpApi {
           Source.failed(new IllegalStateException("Akka GRPC should only produce chunked responses?? " + other))
       }
 
-    private[this] final def render(entityMessage: MessageOrBuilder): ResponseEntity =
-      if (methDesc.getOutputType.getFullName == "google.api.HttpBody") {
-        val contentType =
-          entityMessage
-            .getField(entityMessage.getDescriptorForType.findFieldByName("content_type")) match {
-            case null | "" => ContentTypes.NoContentType
-            case string: String =>
-              ContentType.parse(string) match {
-                case Left(list) =>
-                  throw new IllegalResponseException(
-                    list.headOption.getOrElse(ErrorInfo.fromCompoundString("Unknown error"))
-                  )
-                case Right(tpe) => tpe
-              }
-          }
-        val body =
-          ByteString.fromArrayUnsafe(
-            entityMessage
-              .getField(entityMessage.getDescriptorForType.findFieldByName("data"))
-              .asInstanceOf[ProtobufByteString]
-              .toByteArray
-          )
-        HttpEntity(contentType, body)
-      } else
-        HttpEntity(ContentTypes.`application/json`, ByteString(jsonPrinter.print(entityMessage)))
-
     private[this] final def transformFailedRequest(resp: HttpResponse, trailer: Seq[HttpHeader]): HttpResponse = {
       val message = trailer.find(_.is("grpc-message"))
       val status = Status.fromCodeValue(trailer.filter(_.is("grpc-status")).head.value().toInt)
