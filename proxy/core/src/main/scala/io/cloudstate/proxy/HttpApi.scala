@@ -414,7 +414,7 @@ object HttpApi {
     private[this] final def processRequest(req: HttpRequest, matcher: Matcher): Future[HttpResponse] =
       transformRequest(req, matcher)
         .transformWith {
-          case Success(request) => handler(request).flatMap(transformResponse(_).runWith(Sink.head))
+          case Success(request) => handler(request).flatMap(res => transformResponse(res).runWith(Sink.head))
           case Failure(f) =>
             log.debug("Unable to transform request due to '{}' of type '{}' ", f.getMessage, f.getClass.getName)
             requestError("Malformed request")
@@ -515,49 +515,57 @@ object HttpApi {
             )
 
           if (methDesc.isServerStreaming) {
-            if (!isHttpBodyResponse) {
-              Source.single(
-                response.copy(
-                  entity = HttpEntity.Chunked(
-                    ContentTypes.`application/json`,
-                    data
-                      .collect({ case chunk if !chunk.isLastChunk() => chunk.data })
-                      .via(Grpc.grpcFramingDecoder)
-                      .map { bytes =>
-                        val chunk = ByteString(jsonPrinter.print(parseResponseBody(bytes))) // TODO avoid another copy?
-                        HttpEntity.Chunk(chunk ++ NEWLINE_BYTES)
-                      }
-                  )
-                )
-              )
-            } else {
-              data
-                .collect({ case chunk if !chunk.isLastChunk() => chunk.data })
-                .via(Grpc.grpcFramingDecoder)
-                .prefixAndTail(1)
-                .map {
-                  case (Seq(first), rest) =>
-                    val entityMessage: MessageOrBuilder = parseResponseBody(first)
-                    val contentType = extractContentTypeFromHttpBody(entityMessage)
-                    val data = extractDataFromHttpBody(entityMessage)
+            data
+              .prefixAndTail(1)
+              .flatMapConcat {
+                case (Seq(chunk @ HttpEntity.Chunk(bytes, _)), rest) =>
+                  val entityMessage: MessageOrBuilder = parseResponseBody(bytes.drop(5))
+                  val contentType =
+                    if (isHttpBodyResponse) extractContentTypeFromHttpBody(entityMessage)
+                    else ContentTypes.`application/json`
 
-                    //val extensions = extractExtensionsFromHttpBody(entityMessage) // FIXME / TODO HttpBody.extensions not supported yet
+                  val data =
+                    if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage)
+                    else ByteString(jsonPrinter.print(entityMessage))
 
+                  //val extensions = extractExtensionsFromHttpBody(entityMessage) // FIXME / TODO HttpBody.extensions not supported yet
+
+                  Source.single(
                     response.copy(
                       entity = HttpEntity.Chunked(
                         contentType,
-                        Source
-                          .single(data)
-                          .concat(rest.map(bytes => extractDataFromHttpBody(parseResponseBody(bytes))))
-                          .map(chunk => HttpEntity.Chunk(chunk ++ NEWLINE_BYTES))
-                      ) // TODO Do we need to send a LastChunk?
+                        rest map {
+                          case HttpEntity.Chunk(bytes, extension) =>
+                            val entityMessage: MessageOrBuilder = parseResponseBody(bytes.drop(5))
+                            val data =
+                              if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage)
+                              else ByteString(jsonPrinter.print(entityMessage))
+                            HttpEntity.Chunk(data ++ NEWLINE_BYTES)
+                          case l @ HttpEntity.LastChunk(_, trailer) =>
+                            trailer
+                              .find(_.is("grpc-status"))
+                              .map(status => Status.fromCodeValue(status.value().toInt).getCode) match {
+                              case None | Some(Status.Code.OK) => HttpEntity.LastChunk
+                              case Some(other) =>
+                                throw new IllegalResponseException(
+                                  ErrorInfo.fromCompoundString(s"Response error: $other")
+                                )
+                            }
+                        }
+                      )
                     )
-                  case (Seq(), rest) => // FIXME do we need to consume the `rest`?
-                    throw new IllegalStateException(
-                      "Akka GRPC should only produce at most 1 chunk followed by a last chunk??"
+                  )
+                case (Seq(HttpEntity.LastChunk(_, trailer)), rest) =>
+                  rest.map(_ => transformFailedRequest(response, trailer))
+                case (Seq(), rest) =>
+                  rest
+                    .map(
+                      _ =>
+                        throw new IllegalStateException(
+                          "Akka GRPC should only produce at most 1 chunk followed by a last chunk??"
+                        )
                     )
-                }
-            }
+              }
           } else {
             data
               .grouped(2)
@@ -582,7 +590,7 @@ object HttpApi {
               })
           }
         case other =>
-          throw new IllegalStateException("Akka GRPC should only produce chunked responses?? " + other)
+          Source.failed(new IllegalStateException("Akka GRPC should only produce chunked responses?? " + other))
       }
 
     private[this] final def render(entityMessage: MessageOrBuilder): ResponseEntity =
