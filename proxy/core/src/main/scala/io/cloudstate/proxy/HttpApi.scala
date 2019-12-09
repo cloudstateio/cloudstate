@@ -181,7 +181,9 @@ object HttpApi {
       extends PartialFunction[HttpRequest, Future[HttpResponse]] {
     private[this] final val log = Logging(sys, rule.pattern.toString) // TODO use other name?
 
-    private[this] final val timeout = 10.seconds
+    private[this] final val timeout = 10.seconds // TODO make configurable
+
+    private[this] final val isHttpBodyResponse = methDesc.getOutputType.getFullName == "google.api.HttpBody"
 
     private[this] final val (methodPattern, pathTemplate, pathExtractor, bodyDescriptor, responseBodyDescriptor) =
       extractAndValidate()
@@ -412,7 +414,7 @@ object HttpApi {
     private[this] final def processRequest(req: HttpRequest, matcher: Matcher): Future[HttpResponse] =
       transformRequest(req, matcher)
         .transformWith {
-          case Success(request) => handler(request).flatMap(transformResponse)
+          case Success(request) => handler(request).flatMap(transformResponse(_).runWith(Sink.head))
           case Failure(f) =>
             log.debug("Unable to transform request due to '{}' of type '{}' ", f.getMessage, f.getClass.getName)
             requestError("Malformed request")
@@ -487,38 +489,97 @@ object HttpApi {
       result.build()
     }
 
-    private[this] final def transformResponse(response: HttpResponse): Future[HttpResponse] =
+    private[this] final def transformResponse(response: HttpResponse): Source[HttpResponse, Any] =
       response.entity match {
         case HttpEntity.Chunked(_, data) =>
+          def extractContentTypeFromHttpBody(entityMessage: MessageOrBuilder): ContentType =
+            entityMessage
+              .getField(entityMessage.getDescriptorForType.findFieldByName("content_type")) match {
+              case null | "" => ContentTypes.NoContentType
+              case string: String =>
+                ContentType.parse(string) match {
+                  case Left(list) =>
+                    throw new IllegalResponseException(
+                      list.headOption.getOrElse(ErrorInfo.fromCompoundString("Unknown error"))
+                    )
+                  case Right(tpe) => tpe
+                }
+            }
+
+          def extractDataFromHttpBody(entityMessage: MessageOrBuilder): ByteString =
+            ByteString.fromArrayUnsafe(
+              entityMessage
+                .getField(entityMessage.getDescriptorForType.findFieldByName("data"))
+                .asInstanceOf[ProtobufByteString]
+                .toByteArray
+            )
+
           if (methDesc.isServerStreaming) {
-            Future.successful(
-              response.copy(
-                entity = HttpEntity.Chunked(
-                  ContentTypes.`application/json`,
-                  data
-                    .collect({ case chunk if !chunk.isLastChunk() => chunk.data })
-                    .via(Grpc.grpcFramingDecoder)
-                    .map { bytes =>
-                      val chunk = ByteString(jsonPrinter.print(parseResponseBody(bytes))) // TODO avoid another copy?
-                      HttpEntity.Chunk(chunk ++ NEWLINE_BYTES) // TODO why \n? to demarkate end of chunk?
-                    }
+            if (!isHttpBodyResponse) {
+              Source.single(
+                response.copy(
+                  entity = HttpEntity.Chunked(
+                    ContentTypes.`application/json`,
+                    data
+                      .collect({ case chunk if !chunk.isLastChunk() => chunk.data })
+                      .via(Grpc.grpcFramingDecoder)
+                      .map { bytes =>
+                        val chunk = ByteString(jsonPrinter.print(parseResponseBody(bytes))) // TODO avoid another copy?
+                        HttpEntity.Chunk(chunk ++ NEWLINE_BYTES)
+                      }
+                  )
                 )
               )
-            )
-          } else {
-            data.runWith(Sink.seq).map {
-              // This assumes that Akka GRPC will produce exactly two chunks for successful non streaming calls which
-              // it does
-              case Seq(HttpEntity.Chunk(bytes, _), HttpEntity.LastChunk(_, _)) =>
-                // gRPC framing encoding has an exactly 5 byte header
-                response.copy(entity = render(parseResponseBody(bytes.drop(5))))
-              // Error case
-              case Seq(HttpEntity.LastChunk(_, trailer)) => transformFailedRequest(response, trailer)
-              case other =>
-                throw new IllegalStateException(
-                  "Akka GRPC should only produce at most 1 chunk followed by a last chunk?? " + other
-                )
+            } else {
+              data
+                .collect({ case chunk if !chunk.isLastChunk() => chunk.data })
+                .via(Grpc.grpcFramingDecoder)
+                .prefixAndTail(1)
+                .map {
+                  case (Seq(first), rest) =>
+                    val entityMessage: MessageOrBuilder = parseResponseBody(first)
+                    val contentType = extractContentTypeFromHttpBody(entityMessage)
+                    val data = extractDataFromHttpBody(entityMessage)
+
+                    //val extensions = extractExtensionsFromHttpBody(entityMessage) // FIXME / TODO HttpBody.extensions not supported yet
+
+                    response.copy(
+                      entity = HttpEntity.Chunked(
+                        contentType,
+                        Source
+                          .single(data)
+                          .concat(rest.map(bytes => extractDataFromHttpBody(parseResponseBody(bytes))))
+                          .map(chunk => HttpEntity.Chunk(chunk ++ NEWLINE_BYTES))
+                      ) // TODO Do we need to send a LastChunk?
+                    )
+                  case (Seq(), rest) => // FIXME do we need to consume the `rest`?
+                    throw new IllegalStateException(
+                      "Akka GRPC should only produce at most 1 chunk followed by a last chunk??"
+                    )
+                }
             }
+          } else {
+            data
+              .grouped(2)
+              .take(1)
+              .map({
+                // This assumes that Akka GRPC will produce exactly two chunks for successful non streaming calls which
+                // it does
+                case Seq(HttpEntity.Chunk(bytes, _), HttpEntity.LastChunk(_, _)) =>
+                  val entityMessage
+                      : MessageOrBuilder = parseResponseBody(bytes.drop(5)) // gRPC framing encoding has an exactly 5 byte header
+                  response.copy(entity = if (!isHttpBodyResponse) {
+                    HttpEntity(ContentTypes.`application/json`, ByteString(jsonPrinter.print(entityMessage)))
+                  } else {
+                    HttpEntity(extractContentTypeFromHttpBody(entityMessage), extractDataFromHttpBody(entityMessage))
+                  })
+                // Error case
+                case Seq(HttpEntity.LastChunk(_, trailer)) => transformFailedRequest(response, trailer)
+                case other =>
+                  throw new IllegalStateException(
+                    "Akka GRPC should only produce at most 1 chunk followed by a last chunk?? " + other
+                  )
+              })
           }
         case other =>
           throw new IllegalStateException("Akka GRPC should only produce chunked responses?? " + other)
