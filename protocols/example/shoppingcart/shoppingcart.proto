@@ -6,6 +6,7 @@ import "cloudstate/entity_key.proto";
 import "cloudstate/eventing.proto";
 import "google/api/annotations.proto";
 import "google/api/http.proto";
+import "google/api/httpbody.proto";
 
 package com.example.shoppingcart;
 
@@ -58,5 +59,9 @@ service ShoppingCart {
             response_body: "items"
           }
         };
+    }
+
+    rpc ShowCartPage(GetShoppingCart) returns (google.api.HttpBody) {
+        option (google.api.http).get = "/carts/{user_id}/show.html";
     }
 }
