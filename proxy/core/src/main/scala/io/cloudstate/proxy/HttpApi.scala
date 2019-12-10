@@ -518,7 +518,7 @@ object HttpApi {
             data
               .prefixAndTail(1)
               .flatMapConcat {
-                case (Seq(chunk @ HttpEntity.Chunk(bytes, _)), rest) =>
+                case (Seq(chunk @ HttpEntity.Chunk(bytes, extension)), rest) =>
                   val entityMessage: MessageOrBuilder = parseResponseBody(bytes.drop(5))
                   val contentType =
                     if (isHttpBodyResponse) extractContentTypeFromHttpBody(entityMessage)
@@ -555,7 +555,7 @@ object HttpApi {
                       )
                     )
                   )
-                case (Seq(HttpEntity.LastChunk(_, trailer)), rest) =>
+                case (Seq(HttpEntity.LastChunk(extension, trailer)), rest) =>
                   rest.map(_ => transformFailedRequest(response, trailer))
                 case (Seq(), rest) =>
                   rest
@@ -573,7 +573,7 @@ object HttpApi {
               .map({
                 // This assumes that Akka GRPC will produce exactly two chunks for successful non streaming calls which
                 // it does
-                case Seq(HttpEntity.Chunk(bytes, _), HttpEntity.LastChunk(_, _)) =>
+                case Seq(HttpEntity.Chunk(bytes, extension), HttpEntity.LastChunk(_, _)) =>
                   val entityMessage
                       : MessageOrBuilder = parseResponseBody(bytes.drop(5)) // gRPC framing encoding has an exactly 5 byte header
                   response.copy(entity = if (!isHttpBodyResponse) {
@@ -582,7 +582,7 @@ object HttpApi {
                     HttpEntity(extractContentTypeFromHttpBody(entityMessage), extractDataFromHttpBody(entityMessage))
                   })
                 // Error case
-                case Seq(HttpEntity.LastChunk(_, trailer)) => transformFailedRequest(response, trailer)
+                case Seq(HttpEntity.LastChunk(extension, trailer)) => transformFailedRequest(response, trailer)
                 case other =>
                   throw new IllegalStateException(
                     "Akka GRPC should only produce at most 1 chunk followed by a last chunk?? " + other
