@@ -541,7 +541,7 @@ object HttpApi {
                               if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage)
                               else ByteString(jsonPrinter.print(entityMessage))
                             HttpEntity.Chunk(data ++ NEWLINE_BYTES)
-                          case l @ HttpEntity.LastChunk(_, trailer) =>
+                          case HttpEntity.LastChunk(extension, trailer) =>
                             trailer
                               .find(_.is("grpc-status"))
                               .map(status => Status.fromCodeValue(status.value().toInt).getCode) match {
