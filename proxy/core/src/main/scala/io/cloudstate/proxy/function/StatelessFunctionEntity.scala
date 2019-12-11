@@ -34,48 +34,6 @@ import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 
 import scala.collection.immutable.Queue
 
-object StatelessFunctionEntitySupervisor {
-
-  def props(client: StatelessFunctionClient,
-            configuration: StatelessFunctionEntity.Configuration,
-            concurrencyEnforcer: ActorRef, // FIXME Do we really need this thing?
-            statsCollector: ActorRef)(implicit mat: Materializer): Props =
-    Props(new StatelessFunctionEntitySupervisor(client, configuration, concurrencyEnforcer, statsCollector))
-}
-
-/**
- * TODO Document
- */
-final class StatelessFunctionEntitySupervisor(client: StatelessFunctionClient,
-                                              configuration: StatelessFunctionEntity.Configuration,
-                                              concurrencyEnforcer: ActorRef,
-                                              statsCollector: ActorRef)(implicit mat: Materializer)
-    extends Actor {
-
-  override final def receive: Receive = PartialFunction.empty
-
-  override final def preStart(): Unit = {
-    val entityId = URLDecoder.decode(self.path.name, UTF_8)
-    val manager = context.watch(
-      context
-        .actorOf(
-          StatelessFunctionEntity.props(configuration, entityId, client, concurrencyEnforcer, statsCollector),
-          "entity"
-        )
-    )
-    context.become({
-      case Terminated(`manager`) =>
-        context.stop(self)
-      case toParent if sender() == manager =>
-        context.parent ! toParent
-      case msg =>
-        manager forward msg
-    })
-  }
-
-  override final def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
-}
-
 object StatelessFunctionEntity {
 
   final case object Stop
@@ -83,7 +41,6 @@ object StatelessFunctionEntity {
   final case class Configuration(
       serviceName: String,
       userFunctionName: String,
-      passivationTimeout: Timeout,
       sendQueueSize: Int
   )
 
@@ -118,9 +75,6 @@ final class StatelessFunctionEntity(configuration: StatelessFunctionEntity.Confi
   private[this] final var currentCommand: StatelessFunctionEntity.OutstandingCommand = null
   private[this] final var stopped = false
   private[this] final var idCounter = 0L
-
-  // Set up passivation timer
-  context.setReceiveTimeout(configuration.passivationTimeout.duration)
 
   override final def postStop(): Unit = {
     currentCommand match {
@@ -213,9 +167,6 @@ final class StatelessFunctionEntity(configuration: StatelessFunctionEntity.Confi
       }
 
     case Status.Failure(error) => throw error // Will stop the actor, hence postStop will be called
-
-    case ReceiveTimeout =>
-      context.parent ! ShardRegion.Passivate(stopMessage = StatelessFunctionEntity.Stop)
 
     case StatelessFunctionEntity.Stop =>
       stopped = true

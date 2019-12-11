@@ -53,6 +53,12 @@ object Serve {
   private final val Http404Response: Future[HttpResponse] =
     Future.successful(HttpResponse(StatusCodes.NotFound))
 
+  val mapRequestFailureExceptions: ActorSystem => PartialFunction[Throwable, Status] = { _ =>
+    {
+      case CommandException(msg) => Status.UNKNOWN.augmentDescription(msg)
+    }
+  }
+
   private final object ReplySerializer extends ProtobufSerializer[ProtobufAny] {
     override final def serialize(reply: ProtobufAny): ByteString =
       if (reply.value.isEmpty) ByteString.empty
@@ -205,24 +211,24 @@ object Serve {
       (Path / entity.serviceName / method.getName, handler)
     }).toMap
 
-    val mapRequestFailureExceptions: ActorSystem => PartialFunction[Throwable, Status] = { _ =>
-      {
-        case CommandException(msg) => Status.UNKNOWN.augmentDescription(msg)
-      }
-    }
-
-    val handleGrpcExceptions =
-      GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys))
-
     val routes: PartialFunction[HttpRequest, Future[HttpResponse]] = {
       case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
         val startTime = System.nanoTime()
         val handler = rpcMethodSerializers(req.uri.path)
 
         // Only report request stats for unary commands, doesn't make sense for streamed
-        if (handler.unary) {
-          statsCollector ! StatsCollector.RequestReceived
-        }
+        val processRequest =
+          if (handler.unary) {
+            statsCollector ! StatsCollector.RequestReceived
+            handler.flow.watchTermination() { (_, complete) =>
+              complete.onComplete { _ =>
+                statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
+              }
+              NotUsed
+            }
+          } else {
+            handler.flow
+          }
 
         val responseCodec = Codecs.negotiate(req)
         val messageEncoding = `Message-Encoding`.findIn(req.headers)
@@ -234,20 +240,10 @@ object Serve {
                 .viaMat(Grpc.grpcFramingDecoder(messageEncoding))(Keep.none)
                 .map(handler.serializer.deserialize)
                 .via(new CancellationBarrierGraphStage) // In gRPC we signal failure by returning an error code, so we don't want the cancellation bubbled out
-                .via({
-                  if (handler.unary) {
-                    handler.flow.watchTermination() { (_, complete) =>
-                      complete.onComplete { _ =>
-                        statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
-                      }
-                      NotUsed
-                    }
-                  } else handler.flow
-                }),
+                .via(processRequest),
               mapRequestFailureExceptions
             )(ReplySerializer, mat, responseCodec, sys)
           )
-          .recoverWith(handleGrpcExceptions)
     }
 
     (routes, eventingGraph)
