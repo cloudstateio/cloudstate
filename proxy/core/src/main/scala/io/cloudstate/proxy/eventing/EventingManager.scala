@@ -32,7 +32,7 @@ import org.slf4j.{Logger, LoggerFactory}
 import Serve.{CommandHandler}
 
 trait Emitter {
-  def emit(payload: ProtobufAny, method: MethodDescriptor): Boolean = ???
+  def emit(payload: ProtobufAny, method: MethodDescriptor): Boolean
 }
 
 object Emitters {
@@ -44,36 +44,6 @@ object Emitters {
 trait EventingSupport {
   def createSource(sourceName: String, handler: CommandHandler): Source[UserFunctionCommand, Future[Cancellable]]
   def createDestination(destinationName: String, handler: CommandHandler): Flow[ProtobufAny, AnyRef, NotUsed]
-}
-
-class TestEventingSupport(config: Config, materializer: ActorMaterializer) extends EventingSupport {
-  final val pollInitialDelay: FiniteDuration = config.getDuration("poll-initial-delay").toMillis.millis
-  final val pollInterval: FiniteDuration = config.getDuration("poll-interval").toMillis.millis
-
-  final val sampleData = config.getConfig("data")
-
-  def createSource(sourceName: String, handler: CommandHandler): Source[UserFunctionCommand, Future[Cancellable]] = {
-    EventingManager.log.debug("Creating eventing source for {}", sourceName)
-    val command =
-      sampleData.getString(sourceName) match {
-        case null | "" =>
-          EventingManager.log.error("No sample data found for {}", handler.fullCommandName)
-          throw new IllegalStateException(s"No test sample data found for ${handler.fullCommandName}")
-        case data => handler.serializer.parse(ProtobufAny.parseFrom(Base64.rfc2045.decode(data)))
-      }
-    Source.tick(pollInitialDelay, pollInterval, command).mapMaterializedValue(_ => Future.never)
-  }
-
-  def createDestination(destinationName: String, handler: CommandHandler): Flow[ProtobufAny, AnyRef, NotUsed] = {
-    val (msg, eventMsg) =
-      if (destinationName == "")
-        ("Discarding response: {}", "Discarding event: {}")
-      else
-        ("Publishing response: {}", "Publishing event: {}")
-
-    Flow[ProtobufAny]
-      .alsoTo(Sink.foreach(m => EventingManager.log.info(msg, m)))
-  }
 }
 
 object EventingManager {
@@ -102,15 +72,12 @@ object EventingManager {
 
   def createSupport(eventConfig: Config)(implicit materializer: ActorMaterializer): Option[EventingSupport] =
     eventConfig.getString("support") match {
-      case s @ "google-pubsub" =>
-        log.info("Creating google-pubsub eventing support")
-        Some(new GCPubsubEventingSupport(eventConfig.getConfig(s), materializer))
-      case s @ "test" =>
-        log.info("Creating test eventing support")
-        Some(new TestEventingSupport(eventConfig.getConfig(s), materializer))
       case "none" =>
         log.info("Eventing support turned off in configuration")
         None
+      case s @ "google-pubsub" =>
+        log.info("Creating google-pubsub eventing support")
+        Some(new GCPubsubEventingSupport(eventConfig.getConfig(s), materializer))
       case other =>
         throw new IllegalStateException(s"Check your configuration. There is no eventing support named: $other")
     }
