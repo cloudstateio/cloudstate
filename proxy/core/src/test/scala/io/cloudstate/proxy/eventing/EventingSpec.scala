@@ -20,21 +20,32 @@ import akka.actor.ActorRef
 
 import scala.concurrent.duration._
 import akka.{ConfigurationException, Done, NotUsed}
+import akka.actor.ActorSystem
 import akka.util.Timeout
 import akka.stream.scaladsl.Flow
 import org.scalatest._
 import akka.testkit.TestProbe
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.google.protobuf.empty.Empty
+import io.cloudstate.proxy.CloudStateProxyMain
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
 
 import scala.concurrent.Future
 
-class EventingSpec extends WordSpec with MustMatchers {
+class EventingSpec extends WordSpec with MustMatchers with BeforeAndAfterAll {
+  final var system: ActorSystem = _
+  override protected def beforeAll(): Unit = system = CloudStateProxyMain.start()
+  override protected def afterAll(): Unit = {
+    system.terminate()
+    system = null
+  }
+
+  final def testEventing: Boolean = system.settings.config.getString("cloudstate.proxyeventing") != "none"
+
   "Eventing API" must {
     "someday work" in {
-      ()
+      assume(testEventing)
     }
   }
 }
