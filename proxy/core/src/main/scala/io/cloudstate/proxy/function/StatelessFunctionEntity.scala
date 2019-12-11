@@ -97,50 +97,45 @@ final class StatelessFunctionEntity(configuration: StatelessFunctionEntity.Confi
     concurrencyEnforcer ! ActionCompleted(command.actionId, System.nanoTime() - command.startTime)
 
   private[this] final def handleCommand(entityCommand: EntityCommand, sender: ActorRef): Unit =
-    currentCommand match {
-      case null =>
-        idCounter += 1
-        val command = FunctionCommand(
-          serviceName = configuration.serviceName,
-          name = entityCommand.name,
-          payload = entityCommand.payload
-        )
-        val actionFunction: () => Unit =
-          if (entityCommand.streamed) { () =>
-            { ??? } // FIXME IMPLEMENT STREAMING? Also, do we need to separate streamed in from streamed out?
-          } else {
-            val replyer = self
-            import context.dispatcher // TODO consider using sameThreadExecutionContext here
-            () => client.handleUnary(command) pipeTo replyer
-          }
-        currentCommand = StatelessFunctionEntity.OutstandingCommand(actorId + ":" + entityId + ":" + idCounter,
-                                                                    sender,
-                                                                    System.nanoTime())
-        concurrencyEnforcer ! Action(currentCommand.actionId, actionFunction)
-      case _ =>
-        if (stashedCommands.length < configuration.sendQueueSize) {
-          stashedCommands = stashedCommands.enqueue((entityCommand, sender))
+    if (currentCommand == null) {
+      idCounter += 1
+      val command = FunctionCommand(
+        serviceName = configuration.serviceName,
+        name = entityCommand.name,
+        payload = entityCommand.payload
+      )
+      val actionFunction: () => Unit =
+        if (entityCommand.streamed) { () =>
+          { ??? } // FIXME IMPLEMENT STREAMING? Also, do we need to separate streamed in from streamed out?
         } else {
-          sender ! createFailure("Try again later")
+          val replyer = self
+          import context.dispatcher // TODO consider using sameThreadExecutionContext here
+          () => client.handleUnary(command) pipeTo replyer
         }
+      currentCommand =
+        StatelessFunctionEntity.OutstandingCommand(s"${actorId}:${entityId}:${idCounter}", sender, System.nanoTime())
+      concurrencyEnforcer ! Action(currentCommand.actionId, actionFunction)
+    } else if (stashedCommands.length < configuration.sendQueueSize) {
+      stashedCommands = stashedCommands.enqueue((entityCommand, sender))
+    } else {
+      sender ! createFailure("Try again later")
     }
 
-  private final def createFailure(message: String) =
+  private[this] final def createFailure(message: String): UserFunctionReply =
     UserFunctionReply(
       clientAction = Some(ClientAction(ClientAction.Action.Failure(Failure(description = message))))
     )
 
-  private final def createResponse(reply: FunctionReply): UserFunctionReply = {
+  private[this] final def createResponse(reply: FunctionReply): UserFunctionReply = {
     import FunctionReply.Response
     import ClientAction.Action
-    val clientAction = Some(ClientAction(reply.response match {
-      case Response.Reply(r) => Action.Reply(r)
-      case Response.Failure(f) => Action.Failure(f)
-      case Response.Forward(f) => Action.Forward(f)
-      case Response.Empty => Action.Empty
-    }))
     UserFunctionReply(
-      clientAction = clientAction,
+      clientAction = Some(ClientAction(reply.response match {
+        case Response.Reply(r) => Action.Reply(r)
+        case Response.Failure(f) => Action.Failure(f)
+        case Response.Forward(f) => Action.Forward(f)
+        case Response.Empty => Action.Empty
+      })),
       sideEffects = reply.sideEffects
     )
   }

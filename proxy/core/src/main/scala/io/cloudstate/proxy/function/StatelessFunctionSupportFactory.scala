@@ -25,10 +25,12 @@ class StatelessFunctionSupportFactory(system: ActorSystem,
 
   private final val log = Logging.getLogger(system, this.getClass)
 
-  private val statelessFunctionClient = StatelessFunctionClient(grpcClientSettings)
+  private final val statelessFunctionClient = StatelessFunctionClient(grpcClientSettings)
 
   override def buildEntityTypeSupport(entity: Entity, serviceDescriptor: ServiceDescriptor): EntityTypeSupport = {
     log.debug("Starting StatelessFunction entity for {}", entity.persistenceId)
+
+    validate(serviceDescriptor)
 
     val stateManagerConfig =
       StatelessFunctionEntity.Configuration(entity.serviceName, entity.persistenceId, config.relayOutputBufferSize)
@@ -48,7 +50,7 @@ class StatelessFunctionSupportFactory(system: ActorSystem,
     new StatelessFunctionSupport(statelessFunctionEntity, config.proxyParallelism, config.relayTimeout)
   }
 
-  private def validate(serviceDescriptor: ServiceDescriptor): Unit = {
+  private[this] final def validate(serviceDescriptor: ServiceDescriptor): Unit = {
     val streamedMethods =
       serviceDescriptor.getMethods.asScala.filter(m => m.toProto.getClientStreaming || m.toProto.getServerStreaming)
     if (streamedMethods.nonEmpty) {
