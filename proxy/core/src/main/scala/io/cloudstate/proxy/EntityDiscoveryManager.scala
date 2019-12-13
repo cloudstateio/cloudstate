@@ -173,7 +173,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
   private[this] final val concurrencyEnforcer =
     context.actorOf(ConcurrencyEnforcer.props(config.concurrencySettings, statsCollector), "concurrencyEnforcer")
 
-  private val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
+  private final val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
       Crdt.name -> new CrdtSupportFactory(context.system,
                                           config,
                                           entityDiscoveryClient,

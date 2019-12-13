@@ -34,6 +34,9 @@ class CrdtSupportFactory(system: ActorSystem,
   private[this] final val crdtClient = CrdtClient(grpcClientSettings)
 
   override def buildEntityTypeSupport(entity: Entity, serviceDescriptor: ServiceDescriptor): EntityTypeSupport = {
+
+    validate(serviceDescriptor)
+
     val crdtEntityConfig = CrdtEntity.Configuration(entity.serviceName,
                                                     entity.persistenceId,
                                                     config.passivationTimeout,
@@ -81,11 +84,11 @@ private class CrdtSupport(crdtEntity: ActorRef, parallelism: Int, private implic
         .mapAsync(parallelism)(command => (crdtEntity ? command).mapTo[Source[UserFunctionReply, NotUsed]])
         .flatMapConcat(identity)
     } else {
-      Flow[EntityCommand].mapAsync(parallelism)(command => (crdtEntity ? command).mapTo[UserFunctionReply])
+      Flow[EntityCommand].mapAsync(parallelism)(handleUnary)
     }
 
   override def handleUnary(command: EntityCommand): Future[UserFunctionReply] =
     (crdtEntity ? command).mapTo[UserFunctionReply]
 }
 
-case class StreamedCrdtCommand(command: EntityCommand)
+final case class StreamedCrdtCommand(command: EntityCommand)

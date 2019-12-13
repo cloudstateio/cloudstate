@@ -8,9 +8,9 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
-import io.cloudstate.protocol.entity.Entity
-import io.cloudstate.protocol.function.StatelessFunctionClient
+import io.cloudstate.protocol.entity.{ClientAction, Entity}
 import io.cloudstate.proxy._
+import io.cloudstate.protocol.function._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -32,22 +32,11 @@ class StatelessFunctionSupportFactory(system: ActorSystem,
 
     validate(serviceDescriptor)
 
-    val stateManagerConfig =
-      StatelessFunctionEntity.Configuration(entity.serviceName, entity.persistenceId, config.relayOutputBufferSize)
-
-    val statelessFunctionEntity =
-      system.actorOf(
-        StatelessFunctionEntity.props(
-          stateManagerConfig,
-          entity.persistenceId,
-          statelessFunctionClient,
-          concurrencyEnforcer,
-          statsCollector
-        ),
-        "stateless-function-entity"
-      )
-
-    new StatelessFunctionSupport(statelessFunctionEntity, config.proxyParallelism, config.relayTimeout)
+    new StatelessFunctionSupport(entity.serviceName,
+                                 statelessFunctionClient,
+                                 config.proxyParallelism,
+                                 config.relayTimeout,
+                                 ec)
   }
 
   private[this] final def validate(serviceDescriptor: ServiceDescriptor): Unit = {
@@ -61,15 +50,41 @@ class StatelessFunctionSupportFactory(system: ActorSystem,
   }
 }
 
-private final class StatelessFunctionSupport(statelessFunctionEntity: ActorRef,
+private final class StatelessFunctionSupport(serviceName: String,
+                                             statelessFunctionClient: StatelessFunctionClient,
                                              parallelism: Int,
-                                             private implicit val relayTimeout: Timeout)
+                                             private implicit val relayTimeout: Timeout,
+                                             private implicit val ec: ExecutionContext)
     extends EntityTypeSupport {
   import akka.pattern.ask
 
   override final def handler(method: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed] =
     Flow[EntityCommand].mapAsync(parallelism)(handleUnary)
 
-  override final def handleUnary(command: EntityCommand): Future[UserFunctionReply] =
-    (statelessFunctionEntity ? command).mapTo[UserFunctionReply]
+  override final def handleUnary(entityCommand: EntityCommand): Future[UserFunctionReply] =
+    if (entityCommand.streamed) {
+      throw new IllegalStateException("Request streaming is not yet supported for StatelessFunctions")
+    } else {
+      statelessFunctionClient
+        .handleUnary(
+          FunctionCommand(
+            serviceName = serviceName,
+            name = entityCommand.name,
+            payload = entityCommand.payload
+          )
+        )
+        .map(reply => {
+          import FunctionReply.Response
+          import ClientAction.Action
+          UserFunctionReply(
+            clientAction = Some(ClientAction(reply.response match {
+              case Response.Reply(r) => Action.Reply(r)
+              case Response.Failure(f) => Action.Failure(f)
+              case Response.Forward(f) => Action.Forward(f)
+              case Response.Empty => Action.Empty
+            })),
+            sideEffects = reply.sideEffects
+          )
+        })
+    }
 }
