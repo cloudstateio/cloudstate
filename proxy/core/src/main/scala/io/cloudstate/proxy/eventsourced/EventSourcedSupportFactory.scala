@@ -30,6 +30,8 @@ class EventSourcedSupportFactory(system: ActorSystem,
   private val eventSourcedClient = EventSourcedClient(grpcClientSettings)
 
   override def buildEntityTypeSupport(entity: Entity, serviceDescriptor: ServiceDescriptor): EntityTypeSupport = {
+    validate(serviceDescriptor)
+
     val stateManagerConfig = EventSourcedEntity.Configuration(entity.serviceName,
                                                               entity.persistenceId,
                                                               config.passivationTimeout,

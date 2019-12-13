@@ -38,6 +38,7 @@ import com.typesafe.config.Config
 import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.crdt.Crdt
 import io.cloudstate.protocol.event_sourced.EventSourced
+import io.cloudstate.protocol.function.StatelessFunction
 import io.cloudstate.proxy.StatsCollector.StatsCollectorSettings
 import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
 import io.cloudstate.proxy.ConcurrencyEnforcer.ConcurrencyEnforcerSettings
@@ -52,6 +53,7 @@ import io.cloudstate.proxy.autoscaler.{
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
 import io.cloudstate.proxy.eventing.EventingManager
+import io.cloudstate.proxy.function.StatelessFunctionSupportFactory
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -171,13 +173,18 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
   private[this] final val concurrencyEnforcer =
     context.actorOf(ConcurrencyEnforcer.props(config.concurrencySettings, statsCollector), "concurrencyEnforcer")
 
-  private val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
+  private final val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
       Crdt.name -> new CrdtSupportFactory(context.system,
                                           config,
                                           entityDiscoveryClient,
                                           clientSettings,
                                           concurrencyEnforcer = concurrencyEnforcer,
-                                          statsCollector = statsCollector)
+                                          statsCollector = statsCollector),
+      StatelessFunction.name -> new StatelessFunctionSupportFactory(context.system,
+                                                                    config,
+                                                                    clientSettings,
+                                                                    concurrencyEnforcer = concurrencyEnforcer,
+                                                                    statsCollector = statsCollector)
     ) ++ {
       if (config.journalEnabled)
         Map(

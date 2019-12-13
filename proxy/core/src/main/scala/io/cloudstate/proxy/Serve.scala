@@ -22,6 +22,9 @@ import scala.util.Success
 import scala.annotation.tailrec
 import akka.grpc.scaladsl.{GrpcExceptionHandler, GrpcMarshalling}
 import GrpcMarshalling.{marshalStream, unmarshalStream}
+import akka.grpc.internal.{CancellationBarrierGraphStage, GrpcResponseHelpers}
+import akka.grpc.scaladsl.headers.`Message-Encoding`
+import akka.grpc.Grpc
 import akka.{Done, NotUsed}
 import akka.grpc.{Codecs, ProtobufSerializer}
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes}
@@ -29,7 +32,7 @@ import akka.http.scaladsl.model.Uri.Path
 import akka.actor.{ActorRef, ActorSystem}
 import akka.util.ByteString
 import akka.stream.Materializer
-import akka.stream.scaladsl.{Flow, RunnableGraph, Source}
+import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Source}
 import com.google.protobuf.{ByteString => ProtobufByteString}
 import com.google.protobuf.any.{Any => ProtobufAny}
 import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor, MethodDescriptor}
@@ -49,6 +52,12 @@ object Serve {
 
   private final val Http404Response: Future[HttpResponse] =
     Future.successful(HttpResponse(StatusCodes.NotFound))
+
+  val mapRequestFailureExceptions: ActorSystem => PartialFunction[Throwable, Status] = { _ =>
+    {
+      case CommandException(msg) => Status.UNKNOWN.augmentDescription(msg)
+    }
+  }
 
   private final object ReplySerializer extends ProtobufSerializer[ProtobufAny] {
     override final def serialize(reply: ProtobufAny): ByteString =
@@ -202,46 +211,39 @@ object Serve {
       (Path / entity.serviceName / method.getName, handler)
     }).toMap
 
-    val mapRequestFailureExceptions: ActorSystem => PartialFunction[Throwable, Status] = { _ =>
-      {
-        case CommandException(msg) => Status.UNKNOWN.augmentDescription(msg)
-      }
-    }
-
-    val handleGrpcExceptions =
-      GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys))
-
     val routes: PartialFunction[HttpRequest, Future[HttpResponse]] = {
       case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
         val startTime = System.nanoTime()
-        val responseCodec = Codecs.negotiate(req)
         val handler = rpcMethodSerializers(req.uri.path)
 
         // Only report request stats for unary commands, doesn't make sense for streamed
-        if (handler.unary) {
-          statsCollector ! StatsCollector.RequestReceived
-        }
+        val processRequest =
+          if (handler.unary) {
+            statsCollector ! StatsCollector.RequestReceived
+            handler.flow.watchTermination() { (_, complete) =>
+              complete.onComplete { _ =>
+                statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
+              }
+              NotUsed
+            }
+          } else {
+            handler.flow
+          }
 
-        unmarshalStream(req)(handler.serializer, mat) // FIXME Figure out if we need to deal with unmarshal vs unmarshal stream here
-          .map({ commands =>
-            marshalStream(
-              commands
-                .via({
-                  if (handler.unary) {
-                    handler.flow.watchTermination() { (_, complete) =>
-                      complete.onComplete { _ =>
-                        statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
-                      }
-                      NotUsed
-                    }
-                  } else {
-                    handler.flow
-                  }
-                }),
+        val responseCodec = Codecs.negotiate(req)
+        val messageEncoding = `Message-Encoding`.findIn(req.headers)
+
+        Future
+          .successful(
+            GrpcResponseHelpers(
+              req.entity.dataBytes
+                .viaMat(Grpc.grpcFramingDecoder(messageEncoding))(Keep.none)
+                .map(handler.serializer.deserialize)
+                .via(new CancellationBarrierGraphStage) // In gRPC we signal failure by returning an error code, so we don't want the cancellation bubbled out
+                .via(processRequest),
               mapRequestFailureExceptions
             )(ReplySerializer, mat, responseCodec, sys)
-          })
-          .recoverWith(handleGrpcExceptions)
+          )
     }
 
     (routes, eventingGraph)

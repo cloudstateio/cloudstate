@@ -1,7 +1,7 @@
 package io.cloudstate.proxy.crdt
 
 import java.net.URLEncoder
-
+import java.nio.charset.StandardCharsets.UTF_8
 import akka.{Done, NotUsed}
 import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
 import akka.cluster.ddata.DistributedData
@@ -34,6 +34,9 @@ class CrdtSupportFactory(system: ActorSystem,
   private[this] final val crdtClient = CrdtClient(grpcClientSettings)
 
   override def buildEntityTypeSupport(entity: Entity, serviceDescriptor: ServiceDescriptor): EntityTypeSupport = {
+
+    validate(serviceDescriptor)
+
     val crdtEntityConfig = CrdtEntity.Configuration(entity.serviceName,
                                                     entity.persistenceId,
                                                     config.passivationTimeout,
@@ -45,7 +48,7 @@ class CrdtSupportFactory(system: ActorSystem,
 
     val crdtEntityProps = CrdtEntity.props(crdtClient, crdtEntityConfig, discovery)
     val crdtEntityManager =
-      system.actorOf(CrdtEntityManager.props(crdtEntityProps), URLEncoder.encode(entity.serviceName, "utf-8"))
+      system.actorOf(CrdtEntityManager.props(crdtEntityProps), URLEncoder.encode(entity.serviceName, UTF_8))
 
     // Ensure the ddata replicator is started, to ensure state replication starts immediately, and also ensure the first
     // request to the first CRDT doesn't timeout
@@ -81,11 +84,11 @@ private class CrdtSupport(crdtEntity: ActorRef, parallelism: Int, private implic
         .mapAsync(parallelism)(command => (crdtEntity ? command).mapTo[Source[UserFunctionReply, NotUsed]])
         .flatMapConcat(identity)
     } else {
-      Flow[EntityCommand].mapAsync(parallelism)(command => (crdtEntity ? command).mapTo[UserFunctionReply])
+      Flow[EntityCommand].mapAsync(parallelism)(handleUnary)
     }
 
   override def handleUnary(command: EntityCommand): Future[UserFunctionReply] =
     (crdtEntity ? command).mapTo[UserFunctionReply]
 }
 
-case class StreamedCrdtCommand(command: EntityCommand)
+final case class StreamedCrdtCommand(command: EntityCommand)
