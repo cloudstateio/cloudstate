@@ -34,7 +34,8 @@ inThisBuild(
                   url = url("https://viktorklang.com"))
       ),
     sonatypeProfileName := "io.cloudstate",
-    scalafmtOnCompile := true
+    scalafmtOnCompile := true,
+    closeClassLoaders := false
   )
 )
 
