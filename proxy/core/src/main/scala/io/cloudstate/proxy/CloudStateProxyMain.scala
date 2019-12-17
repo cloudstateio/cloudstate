@@ -124,16 +124,22 @@ object CloudStateProxyMain {
     field.get(null).asInstanceOf[AtomicLong].set(seed)
   }
 
-  def main(args: Array[String]): Unit =
+  final def main(args: Array[String]): Unit =
     start()
 
-  def start(): ActorSystem = {
+  final def start(): ActorSystem =
+    start(None)
+
+  final def start(config: Config): ActorSystem =
+    start(Option(config))
+
+  private def start(configuration: Option[Config]): ActorSystem = {
     // Must do this first, before anything uses ThreadLocalRandom
     if (isGraalVM) {
       initializeThreadLocalRandom()
     }
 
-    implicit val system = ActorSystem("cloudstate-proxy")
+    implicit val system = configuration.fold(ActorSystem("cloudstate-proxy"))(c => ActorSystem("cloudstate-proxy", c))
     implicit val materializer = ActorMaterializer()
     import system.dispatcher
 

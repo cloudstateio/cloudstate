@@ -1,6 +1,6 @@
-# Using CloudState
+# Using Cloudstate
 
-Documentation for CloudState users.
+Documentation for Cloudstate users.
 
 @@toc{ depth=2 }
 

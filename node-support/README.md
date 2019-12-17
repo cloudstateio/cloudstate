@@ -1,6 +1,6 @@
-# CloudState stateful service support
+# Cloudstate stateful service support
 
-This package provides support for writing CloudState stateful functions.
+This package provides support for writing Cloudstate stateful functions.
 
 An example event sourced function:
 

@@ -24,6 +24,7 @@ import "google/protobuf/any.proto";
 import "cloudstate/entity.proto";
 
 option java_package = "io.cloudstate.protocol";
+option go_package = "cloudstate/protocol";
 
 message FunctionCommand {
     // The name of the service this function is on.
@@ -39,6 +40,7 @@ message FunctionCommand {
 message FunctionReply {
 
     oneof response {
+        Failure failure = 1;
         Reply reply = 2;
         Forward forward = 3;
     }

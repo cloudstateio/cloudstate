@@ -71,7 +71,7 @@ class ResourceHelper(client: KubernetesClient)(implicit ec: ExecutionContext) {
           attributeRestrictions = None,
           nonResourceURLs = Nil,
           resources = List("deployments"),
-          verbs = List("get", "watch"),
+          verbs = List("get", "watch", "list"),
           resourceNames = Nil
         ),
         PolicyRule(

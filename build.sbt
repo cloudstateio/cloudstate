@@ -13,6 +13,8 @@ inThisBuild(
     scalaVersion := "2.12.9",
     // Needed for our fork of skuber
     resolvers += Resolver.bintrayRepo("jroper", "maven"), // TODO: Remove once skuber has the required functionality
+    // Needed for the fixed HTTP/2 connection cleanup version of akka-http
+    resolvers += Resolver.bintrayRepo("akka", "snapshots"), // TODO: Remove once we're switching to akka-http 10.1.11
     organizationName := "Lightbend Inc.",
     organizationHomepage := Some(url("https://lightbend.com")),
     startYear := Some(2019),
@@ -32,7 +34,8 @@ inThisBuild(
                   url = url("https://viktorklang.com"))
       ),
     sonatypeProfileName := "io.cloudstate",
-    scalafmtOnCompile := true
+    scalafmtOnCompile := true,
+    closeClassLoaders := false
   )
 )
 
@@ -49,13 +52,21 @@ name := "cloudstate"
 
 val GrpcJavaVersion = "1.22.1"
 val GraalAkkaVersion = "0.4.1"
-val AkkaVersion = "2.5.25"
-val AkkaHttpVersion = "10.1.9"
-val AkkaManagementVersion = "1.0.1"
+val AkkaVersion = "2.5.26"
+val AkkaHttpVersion = "10.1.10+124-779795c4" // TODO: Remove once we're switching to akka-http 10.1.11
+val AkkaManagementVersion = "1.0.4"
 val AkkaPersistenceCassandraVersion = "0.96"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
+val GraalVersion = "19.2.1"
+val SVMVersion = "19.2.1"
+
+def excludeTheseDependencies = Seq(
+  ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
+  ExclusionRule("io.aeron"), // we're using Artery-TCP
+  ExclusionRule("org.agrona") // and we don't need this either
+)
 
 def common: Seq[Setting[_]] = Seq(
   headerMappings := headerMappings.value ++ Seq(
@@ -69,7 +80,8 @@ def common: Seq[Setting[_]] = Seq(
   PB.protoSources in Test := Seq(),
   // Akka gRPC overrides the default ScalaPB setting including the file base name, let's override it right back.
   akkaGrpcCodeGeneratorSettings := Seq(),
-  excludeFilter in headerResources := HiddenFileFilter || GlobFilter("reflection.proto")
+  excludeFilter in headerResources := HiddenFileFilter || GlobFilter("reflection.proto"),
+  javaOptions in Test ++= Seq("-Xms1G", "-XX:+CMSClassUnloadingEnabled", "-XX:+UseConcMarkSweepGC")
 )
 
 // Include sources from the npm projects
@@ -86,23 +98,67 @@ headerSources in Compile ++= {
 }
 
 lazy val root = (project in file("."))
-  .aggregate(`proxy-core`,
-             `proxy-cassandra`,
-             `proxy-postgres`,
-             `java-support`,
-             `java-shopping-cart`,
-             `akka-client`,
-             operator,
-             `tck`,
-             docs)
+// Don't forget to add your sbt module here!
+// A missing module here can lead to failing Travis test results
+  .aggregate(
+    `protocols`,
+    `proxy-core`,
+    `proxy-cassandra`,
+    `proxy-postgres`,
+    `proxy-tests`,
+    `java-support`,
+    `scala-support`,
+    `java-shopping-cart`,
+    `akka-client`,
+    operator,
+    `tck`,
+    docs
+  )
   .settings(common)
+
+val cloudstateProtocolsName = "cloudstate-protocols"
+val cloudstateTCKProtocolsName = "cloudstate-tck-protocols"
+
+lazy val protocols = (project in file("protocols"))
+  .settings(
+    name := "protocols",
+    publish / skip := true,
+    packageBin in Compile := {
+      val base = baseDirectory.value
+      val cloudstateProtos = base / s"$cloudstateProtocolsName.zip"
+      val cloudstateTCKProtos = base / s"$cloudstateTCKProtocolsName.zip"
+
+      def archiveStructure(topDirName: String, files: PathFinder): Seq[(File, String)] =
+        files pair Path.relativeTo(base) map {
+          case (f, s) => (f, s"$topDirName${File.separator}$s")
+        }
+
+      // Common Language Support Proto Dependencies
+      IO.zip(
+        archiveStructure(cloudstateProtocolsName,
+                         (base / "frontend" ** "*.proto" +++
+                         base / "protocol" ** "*.proto" +++
+                         base / "proxy" ** "*.proto")),
+        cloudstateProtos
+      )
+
+      // Common TCK Language Support Proto Dependencies
+      IO.zip(archiveStructure(cloudstateTCKProtocolsName, base / "example" ** "*.proto"), cloudstateTCKProtos)
+
+      cloudstateProtos
+    },
+    cleanFiles ++= Seq(
+        baseDirectory.value / s"$cloudstateProtocolsName.zip",
+        baseDirectory.value / s"$cloudstateTCKProtocolsName.zip"
+      )
+  )
 
 lazy val docs = (project in file("docs"))
   .enablePlugins(ParadoxPlugin, ProtocPlugin)
   .dependsOn(`java-support` % Test)
   .settings(
     common,
-    name := "CloudState Documentation",
+    name := "Cloudstate Documentation",
     paradoxTheme := Some(builtinParadoxTheme("generic")),
     mappings in (Compile, paradox) ++= {
       val javaApiDocs = (doc in (`java-support`, Compile)).value
@@ -128,7 +184,9 @@ lazy val docs = (project in file("docs"))
         "extref.jsdoc.base_url" -> ".../user/lang/javascript/api/module-cloudstate.%s",
         "cloudstate.version" -> "0.4.3", // hardcode, otherwise we'll end up with the wrong version in the docs
         "cloudstate.java-support.version" -> "0.4.3",
-        "cloudstate.node-support.version" -> "0.0.1"
+        "cloudstate.node-support.version" -> "0.0.1",
+        "cloudstate.go-support.version" -> "0.1.0",
+        "cloudstate.go.version" -> "1.13"
       ),
     paradoxNavigationDepth := 3,
     inConfig(Test)(
@@ -149,7 +207,7 @@ def dockerSettings: Seq[Setting[_]] = Seq(
   proxyDockerBuild := None,
   dockerUpdateLatest := true,
   dockerRepository := sys.props.get("docker.registry"),
-  dockerUsername := sys.props.get("docker.username").orElse(Some("cloudstateio")),
+  dockerUsername := sys.props.get("docker.username").orElse(Some("cloudstateio")).filter(_ != ""),
   dockerAlias := {
     val old = dockerAlias.value
     proxyDockerBuild.value match {
@@ -167,7 +225,9 @@ def dockerSettings: Seq[Setting[_]] = Seq(
       case _ if isSnapshot.value => Seq(single.withTag(Some("latest")))
       case _ => old
     }
-  }
+  },
+  // For projects that we publish using Docker, disable the generation of java/scaladocs
+  publishArtifact in (Compile, packageDoc) := false
 )
 
 def buildProxyHelp(commandName: String, name: String) =
@@ -219,11 +279,11 @@ commands ++= Seq(
   buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, false),
   Command.single("dockerBuildAllNonNative", buildProxyHelp("dockerBuildAllNonNative", "all non native")) {
     (state, command) =>
-      List("DevMode", "NoJournal", "InMemory", "Cassandra", "Postgres")
+      List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres")
         .map(c => s"dockerBuild$c $command") ::: state
   },
   Command.single("dockerBuildAllNative", buildProxyHelp("dockerBuildAllNative", "all native")) { (state, command) =>
-    List("DevMode", "NoJournal", "InMemory", "Cassandra", "Postgres")
+    List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres")
       .map(c => s"dockerBuildNative$c $command") ::: state
   }
 )
@@ -231,8 +291,15 @@ commands ++= Seq(
 // Shared settings for native image and docker builds
 def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   nativeImageDockerBuild := false,
-  graalVMVersion := Some("19.1.1"), // FYI: Set this to None to make a local only native-image build
-  graalVMNativeImageOptions ++= sharedNativeImageSettings,
+  // If this is Some(…): run the native-image generation inside a Docker image
+  // If this is None: run the native-image generation using a local GraalVM installation
+  graalVMVersion := Some(GraalVersion),
+  graalVMNativeImageOptions ++= sharedNativeImageSettings({
+      graalVMVersion.value match {
+        case Some(_) => new File("/opt/graalvm/stage/resources/")
+        case None => baseDirectory.value / "src" / "graal"
+      }
+    }),
   (mappings in Docker) := Def.taskDyn {
       if (nativeImageDockerBuild.value) {
         Def.task {
@@ -277,11 +344,11 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   }
 )
 
-def sharedNativeImageSettings = Seq(
+def sharedNativeImageSettings(targetDir: File) = Seq(
   //"-O1", // Optimization level
-  "-H:ResourceConfigurationFiles=/opt/graalvm/stage/resources/resource-config.json",
-  "-H:ReflectionConfigurationFiles=/opt/graalvm/stage/resources/reflect-config.json",
-  "-H:DynamicProxyConfigurationFiles=/opt/graalvm/stage/resources/proxy-config.json",
+  "-H:ResourceConfigurationFiles=" + targetDir / "resource-config.json",
+  "-H:ReflectionConfigurationFiles=" + targetDir / "reflect-config.json",
+  "-H:DynamicProxyConfigurationFiles=" + targetDir / "proxy-config.json",
   "-H:IncludeResources=.+\\.conf",
   "-H:IncludeResources=.+\\.properties",
   "-H:+AllowVMInspection",
@@ -343,37 +410,33 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         // Since we exclude Aeron, we also exclude its transitive Agrona dependency, so we need to manually add it HERE
         "org.agrona" % "agrona" % "0.9.29",
         // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % "19.1.1" % "provided", // Only needed for compilation
-        "com.oracle.substratevm" % "svm" % "19.1.1" % "provided", // Only needed for compilation
+        "org.graalvm.sdk" % "graal-sdk" % SVMVersion % "provided", // Only needed for compilation
+        "com.oracle.substratevm" % "svm" % SVMVersion % "provided", // Only needed for compilation
 
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
         "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion % "provided", // Only needed for compilation
         "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.typesafe.akka" %% "akka-remote" % AkkaVersion excludeAll (
-          ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
-          ExclusionRule("io.aeron"), // we're using Artery-TCP
-          ExclusionRule("org.agrona"), // and we don't need this either
-        ),
+        "com.typesafe.akka" %% "akka-remote" % AkkaVersion excludeAll (excludeTheseDependencies: _*),
+        // For Eventing support of Google Pubsub
+        "com.google.api.grpc" % "grpc-google-cloud-pubsub-v1" % "0.12.0" % "protobuf", // ApacheV2
+        "io.grpc" % "grpc-auth" % GrpcJavaVersion, // ApacheV2
+        "com.google.auth" % "google-auth-library-oauth2-http" % "0.15.0", // BSD 3-clause
         "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
         "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
         "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
         "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
         "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http-core" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-cluster-sharding" % AkkaVersion exclude ("org.lmdbjava", "lmdbjava"),
-        "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion excludeAll (
-          ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
-          ExclusionRule("io.aeron"), // we're using Artery-TCP
-          ExclusionRule("org.agrona"), // and we don't need this either
-        ),
-        "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion excludeAll (
-          ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
-          ExclusionRule("io.aeron"), // we're using Artery-TCP
-          ExclusionRule("org.agrona"), // and we don't need this either
-        ),
+        "com.typesafe.akka" %% "akka-cluster-sharding" % AkkaVersion excludeAll ((excludeTheseDependencies :+ ExclusionRule(
+          "org.lmdbjava",
+          "lmdbjava"
+        )): _*),
+        "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion excludeAll (excludeTheseDependencies: _*),
+        "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion excludeAll (excludeTheseDependencies: _*),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
         "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
@@ -397,6 +460,8 @@ lazy val `proxy-core` = (project in file("proxy/core"))
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "proxy", baseDir / "frontend", baseDir / "protocol", (sourceDirectory in Compile).value / "protos")
     },
+    // For Google Cloud Pubsub API
+    PB.protoSources in Compile += target.value / "protobuf_external" / "google" / "pubsub" / "v1",
     // This adds the test/protos dir and enables the ProtocPlugin to generate protos in the Test scope
     inConfig(Test)(
       sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
@@ -432,14 +497,12 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
     name := "cloudstate-proxy-cassandra",
     libraryDependencies ++= Seq(
         "com.typesafe.akka" %% "akka-persistence-cassandra" % AkkaPersistenceCassandraVersion excludeAll (
-          ExclusionRule("io.aeron"), // we're using Artery-TCP
-          ExclusionRule("org.agrona"), // and we don't need this either
-          ExclusionRule("com.github.jnr"), // Can't native-image this, so we don't need this either
+          (excludeTheseDependencies :+ ExclusionRule("com.github.jnr")): _* // Can't native-image this, so we don't need this either
         ),
         "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test,
         // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % "19.1.1" % "provided", // Only needed for compilation
-        "com.oracle.substratevm" % "svm" % "19.1.1" % "provided", // Only needed for compilation
+        "org.graalvm.sdk" % "graal-sdk" % SVMVersion % "provided", // Only needed for compilation
+        "com.oracle.substratevm" % "svm" % SVMVersion % "provided", // Only needed for compilation
 
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
@@ -475,8 +538,8 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
     libraryDependencies ++= Seq(
         "org.postgresql" % "postgresql" % "42.2.6",
         // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % "19.1.1" % "provided", // Only needed for compilation
-        "com.oracle.substratevm" % "svm" % "19.1.1" % "provided", // Only needed for compilation
+        "org.graalvm.sdk" % "graal-sdk" % SVMVersion % "provided", // Only needed for compilation
+        "com.oracle.substratevm" % "svm" % SVMVersion % "provided", // Only needed for compilation
 
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
@@ -513,7 +576,8 @@ lazy val `proxy-tests` = (project in file("proxy/proxy-tests"))
   .settings(
     common,
     name := "cloudstate-proxy-tests",
-    fork in Test := true,
+    fork in Test := System.getProperty("RUN_STRESS_TESTS", "false") == "true",
+    parallelExecution in Test := false,
     baseDirectory in Test := (baseDirectory in ThisBuild).value,
     libraryDependencies ++= Seq(
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
@@ -576,7 +640,86 @@ lazy val `java-support` = (project in file("java-support"))
         ((javaSource in Compile).value / "overview.html").getAbsolutePath,
         "-notimestamp",
         "-doctitle",
-        "CloudState Java Support"
+        "Cloudstate Java Support"
+      ),
+    libraryDependencies ++= Seq(
+        // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
+        "io.grpc" % "grpc-core" % GrpcJavaVersion,
+        "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
+        "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
+        "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
+        "com.typesafe.akka" %% "akka-http-core" % AkkaHttpVersion,
+        "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
+        "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
+        "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
+        "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
+        "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
+        "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
+        "com.typesafe.akka" %% "akka-http-testkit" % AkkaHttpVersion % Test,
+        "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
+        "org.slf4j" % "slf4j-simple" % "1.7.26",
+        "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9.3"
+      ),
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
+    javacOptions in (Compile, compile) ++= Seq("-source", "1.8", "-target", "1.8"),
+    akkaGrpcGeneratedSources in Compile := Seq(AkkaGrpc.Server),
+    akkaGrpcGeneratedLanguages in Compile := Seq(AkkaGrpc.Scala), // FIXME should be Java, but here be dragons
+
+    // Work around for https://github.com/akka/akka-grpc/pull/673
+    (PB.targets in Compile) := {
+      val old = (PB.targets in Compile).value
+      val ct = crossTarget.value
+
+      old.map(_.copy(outputPath = ct / "akka-grpc" / "main"))
+    },
+    PB.protoSources in Compile ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "protocol", baseDir / "frontend")
+    },
+    // We need to generate the java files for things like entity_key.proto so that downstream libraries can use them
+    // without needing to generate them themselves
+    PB.targets in Compile += PB.gens.java -> crossTarget.value / "akka-grpc" / "main",
+    inConfig(Test)(
+      sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
+        PB.protoSources ++= {
+          val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+          Seq(baseDir / "example")
+        },
+        PB.targets := Seq(
+            PB.gens.java -> crossTarget.value / "akka-grpc" / "test"
+          )
+      )
+    )
+  )
+
+lazy val `scala-support` = (project in file("scala-support"))
+  .enablePlugins(AkkaGrpcPlugin, BuildInfoPlugin)
+  .settings(
+    name := "cloudstate-scala-support",
+    common,
+    crossPaths := false,
+    publishMavenStyle := true,
+    publishTo := sonatypePublishTo.value,
+    buildInfoKeys := Seq[BuildInfoKey](name, version),
+    buildInfoPackage := "io.cloudstate.scalasupport",
+    // Generate javadocs by just including non generated Java sources
+    sourceDirectories in (Compile, doc) := Seq((javaSource in Compile).value),
+    sources in (Compile, doc) := {
+      val javaSourceDir = (javaSource in Compile).value.getAbsolutePath
+      (sources in (Compile, doc)).value.filter(_.getAbsolutePath.startsWith(javaSourceDir))
+    },
+    // javadoc (I think java 9 onwards) refuses to compile javadocs if it can't compile the entire source path.
+    // but since we have java files depending on Scala files, we need to include ourselves on the classpath.
+    dependencyClasspath in (Compile, doc) := (fullClasspath in Compile).value,
+    javacOptions in (Compile, doc) ++= Seq(
+        "-overview",
+        ((javaSource in Compile).value / "overview.html").getAbsolutePath,
+        "-notimestamp",
+        "-doctitle",
+        "CloudState Scala Support"
       ),
     libraryDependencies ++= Seq(
         // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
@@ -613,28 +756,16 @@ lazy val `java-support` = (project in file("java-support"))
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "protocol", baseDir / "frontend")
-    },
-    // We need to generate the java files for things like entity_key.proto so that downstream libraries can use them
-    // without needing to generate them themselves
-    PB.targets in Compile += PB.gens.java -> crossTarget.value / "akka-grpc" / "main",
-    inConfig(Test)(
-      sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
-        PB.protoSources ++= {
-          val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-          Seq(baseDir / "example")
-        },
-        PB.targets := Seq(
-            PB.gens.java -> crossTarget.value / "akka-grpc" / "test"
-          )
-      )
-    )
+    }
   )
 
 lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
   .dependsOn(`java-support`)
-  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin)
+  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin)
   .settings(
     name := "java-shopping-cart",
+    dockerSettings,
+    dockerBaseImage := "adoptopenjdk/openjdk8",
     mainClass in Compile := Some("io.cloudstate.samples.shoppingcart.Main"),
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
@@ -645,9 +776,32 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
     PB.targets in Compile := Seq(
         PB.gens.java -> (sourceManaged in Compile).value
       ),
-    javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8"),
     mainClass in assembly := (mainClass in Compile).value,
     assemblyJarName in assembly := "java-shopping-cart.jar",
+    test in assembly := {},
+    // logLevel in assembly := Level.Debug,
+    assemblyMergeStrategy in assembly := {
+      /*ADD CUSTOMIZATIONS HERE*/
+      //case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    }
+  )
+
+lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart"))
+  .dependsOn(`scala-support`)
+  .enablePlugins(AkkaGrpcPlugin)
+  .settings(
+    name := "scala-shopping-cart",
+    PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`scala-support`, Compile)).value,
+    PB.protoSources in Compile ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "frontend", baseDir / "example")
+    },
+    mainClass in assembly := Some("io.cloudstate.samples.shoppingcart.Main"),
+    assemblyJarName in assembly := "scala-shopping-cart.jar",
     test in assembly := {},
     // logLevel in assembly := Level.Debug,
     assemblyMergeStrategy in assembly := {
@@ -720,7 +874,7 @@ lazy val `tck` = (project in file("tck"))
     fork in test := true,
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
-        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly)
+        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly, `scala-shopping-cart` / assembly)
         .value
   )
 
@@ -733,18 +887,20 @@ def doCompileK8sDescriptors(dir: File,
 
   val targetFileName = if (tag != "latest") s"cloudstate-$tag.yaml" else "cloudstate.yaml"
   val target = targetDir / targetFileName
+  val useNativeBuilds = sys.props.get("use.native.builds").forall(_ == "true")
 
   val files = ((dir / "crds") * "*.yaml").get ++
     (dir * "*.yaml").get.sortBy(_.getName)
 
   val fullDescriptor = files.map(IO.read(_)).mkString("\n---\n")
 
-  val user = username.getOrElse("cloudstateio")
-  val registryAndUsername = registry.fold(user)(r => s"$r/$user")
-  val substitutedDescriptor = fullDescriptor.replaceAll(
-    "cloudstateio/(cloudstate-.*):latest",
-    s"$registryAndUsername/$$1:$tag"
-  )
+  val registryAndUsername = (registry.toSeq ++ username :+ "").mkString("/")
+  val substitutedDescriptor = "cloudstateio/(cloudstate-.*):latest".r.replaceAllIn(fullDescriptor, m => {
+    val artifact =
+      if (useNativeBuilds) m.group(1)
+      else m.group(1).replace("-native", "")
+    s"$registryAndUsername$artifact:$tag"
+  })
 
   IO.write(target, substitutedDescriptor)
   streams.log.info("Generated YAML descriptor in " + target)

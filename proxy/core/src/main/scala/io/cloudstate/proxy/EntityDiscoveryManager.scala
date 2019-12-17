@@ -16,12 +16,13 @@
 
 package io.cloudstate.proxy
 
-import akka.Done
+import akka.{Done, NotUsed}
 import akka.actor.{Actor, ActorLogging, CoordinatedShutdown, PoisonPill, Props, Status}
 import akka.cluster.Cluster
 import akka.util.Timeout
 import akka.pattern.pipe
-import akka.stream.Materializer
+import akka.stream.{ActorMaterializer, Materializer}
+import akka.stream.scaladsl.{RunnableGraph, Sink}
 import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
 import akka.cluster.singleton.{
@@ -37,6 +38,7 @@ import com.typesafe.config.Config
 import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.crdt.Crdt
 import io.cloudstate.protocol.event_sourced.EventSourced
+import io.cloudstate.protocol.function.StatelessFunction
 import io.cloudstate.proxy.StatsCollector.StatsCollectorSettings
 import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
 import io.cloudstate.proxy.ConcurrencyEnforcer.ConcurrencyEnforcerSettings
@@ -50,8 +52,15 @@ import io.cloudstate.proxy.autoscaler.{
 }
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
+import io.cloudstate.proxy.eventing.EventingManager
+import io.cloudstate.proxy.function.StatelessFunctionSupportFactory
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
+
+//import io.cloudstate.protocol.entity.{ClientAction, EntityDiscovery, Failure, Reply, UserFunctionError}
+import io.cloudstate.protocol.entity.EntityDiscovery
+import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 
 object EntityDiscoveryManager {
   final case class Configuration(
@@ -68,31 +77,34 @@ object EntityDiscoveryManager {
       proxyParallelism: Int,
       concurrencySettings: ConcurrencyEnforcerSettings,
       statsCollectorSettings: StatsCollectorSettings,
-      journalEnabled: Boolean
+      journalEnabled: Boolean,
+      config: Config
   ) {
     validate()
     def this(config: Config) = {
-      this(
-        devMode = config.getBoolean("dev-mode-enabled"),
-        httpInterface = config.getString("http-interface"),
-        httpPort = config.getInt("http-port"),
-        userFunctionInterface = config.getString("user-function-interface"),
-        userFunctionPort = config.getInt("user-function-port"),
-        relayTimeout = Timeout(config.getDuration("relay-timeout").toMillis.millis),
-        relayOutputBufferSize = config.getInt("relay-buffer-size"),
-        gracefulTerminationTimeout = Timeout(config.getDuration("graceful-termination-timeout").toMillis.millis),
-        passivationTimeout = Timeout(config.getDuration("passivation-timeout").toMillis.millis),
-        numberOfShards = config.getInt("number-of-shards"),
-        proxyParallelism = config.getInt("proxy-parallelism"),
-        concurrencySettings = ConcurrencyEnforcerSettings(
-          concurrency = config.getInt("container-concurrency"),
-          actionTimeout = config.getDuration("action-timeout").toMillis.millis,
-          cleanupPeriod = config.getDuration("action-timeout-poll-period").toMillis.millis
-        ),
-        statsCollectorSettings = new StatsCollectorSettings(config.getConfig("stats")),
-        journalEnabled = config.getBoolean("journal-enabled")
-      )
+      this(devMode = config.getBoolean("dev-mode-enabled"),
+           httpInterface = config.getString("http-interface"),
+           httpPort = config.getInt("http-port"),
+           userFunctionInterface = config.getString("user-function-interface"),
+           userFunctionPort = config.getInt("user-function-port"),
+           relayTimeout = Timeout(config.getDuration("relay-timeout").toMillis.millis),
+           relayOutputBufferSize = config.getInt("relay-buffer-size"),
+           gracefulTerminationTimeout = Timeout(config.getDuration("graceful-termination-timeout").toMillis.millis),
+           passivationTimeout = Timeout(config.getDuration("passivation-timeout").toMillis.millis),
+           numberOfShards = config.getInt("number-of-shards"),
+           proxyParallelism = config.getInt("proxy-parallelism"),
+           concurrencySettings = ConcurrencyEnforcerSettings(
+             concurrency = config.getInt("container-concurrency"),
+             actionTimeout = config.getDuration("action-timeout").toMillis.millis,
+             cleanupPeriod = config.getDuration("action-timeout-poll-period").toMillis.millis
+           ),
+           statsCollectorSettings = new StatsCollectorSettings(config.getConfig("stats")),
+           journalEnabled = config.getBoolean("journal-enabled"),
+           config = config)
     }
+
+    final def getConfig(path: String): Config =
+      config.getConfig(path)
 
     private def validate(): Unit = {
       require(proxyParallelism > 0, s"proxy-parallelism must be greater than 0 but was $proxyParallelism")
@@ -101,7 +113,8 @@ object EntityDiscoveryManager {
     }
   }
 
-  def props(config: Configuration)(implicit mat: Materializer): Props = Props(new EntityDiscoveryManager(config))
+  def props(config: Configuration)(implicit mat: ActorMaterializer): Props =
+    Props(new EntityDiscoveryManager(config))
 
   final case object Ready // Responds with true / false
 
@@ -118,11 +131,12 @@ object EntityDiscoveryManager {
                                   userFunctionTypeSupport: UserFunctionTypeSupport)
 }
 
-class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(implicit mat: Materializer)
-    extends Actor
+class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
+    implicit mat: ActorMaterializer
+) extends Actor
     with ActorLogging {
-  import context.system
-  import context.dispatcher
+  implicit val system = context.system
+  implicit val ec = context.dispatcher
   import EntityDiscoveryManager.Ready
 
   private[this] final val clientSettings =
@@ -159,13 +173,18 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
   private[this] final val concurrencyEnforcer =
     context.actorOf(ConcurrencyEnforcer.props(config.concurrencySettings, statsCollector), "concurrencyEnforcer")
 
-  private val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
+  private final val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
       Crdt.name -> new CrdtSupportFactory(context.system,
                                           config,
                                           entityDiscoveryClient,
                                           clientSettings,
                                           concurrencyEnforcer = concurrencyEnforcer,
-                                          statsCollector = statsCollector)
+                                          statsCollector = statsCollector),
+      StatelessFunction.name -> new StatelessFunctionSupportFactory(context.system,
+                                                                    config,
+                                                                    clientSettings,
+                                                                    concurrencyEnforcer = concurrencyEnforcer,
+                                                                    statsCollector = statsCollector)
     ) ++ {
       if (config.journalEnabled)
         Map(
@@ -216,14 +235,17 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
 
         val router = new UserFunctionRouter(entities, entityDiscoveryClient)
 
-        val handler = Serve.createRoute(entities, router, statsCollector, entityDiscoveryClient, descriptors)
+        val eventSupport = EventingManager.createSupport(config.getConfig("eventing"))
+
+        val (route, eventingGraph) =
+          Serve.createRoute(entities, router, statsCollector, entityDiscoveryClient, descriptors, eventSupport)
 
         log.debug("Starting gRPC proxy")
 
         // Don't actually bind until we have a cluster
         Cluster(context.system).registerOnMemberUp {
           Http().bindAndHandleAsync(
-            handler = handler,
+            handler = route,
             interface = config.httpInterface,
             port = config.httpPort,
             connectionContext = HttpConnectionContext(http2 = UseHttp2.Negotiated)
@@ -233,7 +255,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
         // Start warmup
         system.actorOf(Warmup.props(spec.entities.exists(_.entityType == EventSourced.name)), "state-manager-warm-up")
 
-        context.become(binding)
+        context.become(binding(eventingGraph))
 
       } catch {
         case e @ EntityDiscoveryException(message) =>
@@ -252,29 +274,30 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
     Some(descriptor).filter(_.getPackage == pkg).map(_.findServiceByName(name))
   }
 
-  private[this] final def binding: Receive = {
-    case binding: ServerBinding =>
-      log.info(s"CloudState proxy online at ${binding.localAddress}")
+  private[this] final def binding(eventManager: Option[RunnableGraph[Future[Done]]]): Receive = {
+    case sb: ServerBinding =>
+      log.info(s"CloudState proxy online at ${sb.localAddress}")
 
       // These can be removed if https://github.com/akka/akka-http/issues/1210 ever gets implemented
       val shutdown = CoordinatedShutdown(system)
 
       shutdown.addTask(CoordinatedShutdown.PhaseServiceUnbind, "http-unbind") { () =>
-        binding.unbind().map(_ => Done)
+        sb.unbind().map(_ => Done)
       }
 
       shutdown.addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "http-graceful-terminate") { () =>
-        binding.terminate(config.gracefulTerminationTimeout.duration).map(_ => Done)
+        sb.terminate(config.gracefulTerminationTimeout.duration).map(_ => Done)
       }
 
       shutdown.addTask(CoordinatedShutdown.PhaseServiceStop, "http-shutdown") { () =>
         Http().shutdownAllConnectionPools().map(_ => Done)
       }
 
+      eventManager.foreach(_.run() pipeTo self)
+
       context.become(running)
 
-    case Status.Failure(cause) =>
-      // Failure to bind the HTTP server is fatal, terminate
+    case Status.Failure(cause) => // Failure to bind the HTTP server is fatal, terminate
       log.error(cause, "Failed to bind HTTP server")
       system.terminate()
 
@@ -283,11 +306,17 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(impli
 
   /** Nothing to do when running */
   private[this] final def running: Receive = {
-    case Ready => sender ! true
+    case Ready =>
+      sender ! true
+    case Status.Failure(cause) => // Failure in the eventing subsystem, terminate
+      log.error(cause, "Eventing failed")
+      system.terminate()
+    case Done =>
+      system.terminate() // FIXME context.become(dead)
   }
 
   override final def postStop(): Unit =
     entityDiscoveryClient.close()
 }
 
-case class EntityDiscoveryException(message: String) extends RuntimeException(message)
+final case class EntityDiscoveryException(message: String) extends RuntimeException(message)

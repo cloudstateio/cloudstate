@@ -17,178 +17,236 @@
 package io.cloudstate.proxy
 
 import scala.collection.JavaConverters._
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.util.Success
+import scala.annotation.tailrec
 import akka.grpc.scaladsl.{GrpcExceptionHandler, GrpcMarshalling}
 import GrpcMarshalling.{marshalStream, unmarshalStream}
-import akka.NotUsed
+import akka.grpc.internal.{CancellationBarrierGraphStage, GrpcResponseHelpers}
+import akka.grpc.scaladsl.headers.`Message-Encoding`
+import akka.grpc.Grpc
+import akka.{Done, NotUsed}
 import akka.grpc.{Codecs, ProtobufSerializer}
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes}
 import akka.http.scaladsl.model.Uri.Path
 import akka.actor.{ActorRef, ActorSystem}
 import akka.util.ByteString
 import akka.stream.Materializer
+import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Source}
 import com.google.protobuf.{ByteString => ProtobufByteString}
 import com.google.protobuf.any.{Any => ProtobufAny}
-import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor}
+import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor, MethodDescriptor}
 import io.cloudstate.protocol.entity._
-import akka.stream.scaladsl.{Flow, Source}
+import io.cloudstate.proxy.eventing.{Emitter, Emitters, EventingManager, EventingSupport}
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
+import io.cloudstate.proxy.protobuf.Types
 import io.grpc.Status
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 object Serve {
-
   private final val log = LoggerFactory.getLogger(getClass)
-  // When the entity key is made up of multiple fields, this is used to separate them
-  final val AnyTypeUrlHostName = "type.googleapis.com/"
 
-  private final val NotFound: PartialFunction[HttpRequest, Future[HttpResponse]] = {
-    case req: HttpRequest =>
-      log.debug("Not found request: " + req.getUri())
-      Future.successful(HttpResponse(StatusCodes.NotFound))
+  private[this] final val fallback: Any => Any = _ => fallback
+  private final def checkFallback[B] = fallback.asInstanceOf[Any => B]
+
+  private final val Http404Response: Future[HttpResponse] =
+    Future.successful(HttpResponse(StatusCodes.NotFound))
+
+  val mapRequestFailureExceptions: ActorSystem => PartialFunction[Throwable, Status] = { _ =>
+    {
+      case CommandException(msg) => Status.UNKNOWN.augmentDescription(msg)
+    }
   }
 
-  private final object ReplySerializer extends ProtobufSerializer[ProtobufByteString] {
-    override final def serialize(reply: ProtobufByteString): ByteString =
-      if (reply.isEmpty) {
-        ByteString.empty
-      } else {
-        ByteString.fromArrayUnsafe(reply.toByteArray)
-      }
+  private final object ReplySerializer extends ProtobufSerializer[ProtobufAny] {
+    override final def serialize(reply: ProtobufAny): ByteString =
+      if (reply.value.isEmpty) ByteString.empty
+      else ByteString.fromArrayUnsafe(reply.value.toByteArray)
 
-    override final def deserialize(bytes: ByteString): ProtobufByteString =
-      if (bytes.isEmpty) ProtobufByteString.EMPTY
-      else ProtobufByteString.readFrom(bytes.iterator.asInputStream)
+    override final def deserialize(bytes: ByteString): ProtobufAny =
+      throw new UnsupportedOperationException("operation not supported")
   }
 
-  private final class CommandSerializer(commandName: String, desc: Descriptor)
+  final class CommandSerializer(val commandName: String, desc: Descriptor)
       extends ProtobufSerializer[UserFunctionCommand] {
-    private[this] final val commandTypeUrl = AnyTypeUrlHostName + desc.getFullName
+    final val commandTypeUrl = Types.AnyTypeUrlHostName + desc.getFullName
 
-    // Should not be used in practice
     override final def serialize(command: UserFunctionCommand): ByteString = command.payload match {
       case None => ByteString.empty
-      case Some(payload) => ByteString(payload.value.asReadOnlyByteBuffer())
+      case Some(payload) => ByteString.fromArrayUnsafe(payload.value.toByteArray)
     }
 
     override final def deserialize(bytes: ByteString): UserFunctionCommand =
-      UserFunctionCommand(
-        name = commandName,
-        payload = Some(ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer)))
-      )
+      parse(ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer)))
+
+    final def parse(any: ProtobufAny): UserFunctionCommand =
+      UserFunctionCommand(name = commandName, payload = Some(any))
   }
 
-  private final case class CommandHandler(fullCommandName: String,
-                                          serializer: CommandSerializer,
-                                          flow: Flow[UserFunctionCommand, UserFunctionReply, NotUsed],
-                                          unary: Boolean,
-                                          expectedReplyTypeUrl: String)
+  final class CommandHandler(final val entity: ServableEntity,
+                             final val method: MethodDescriptor,
+                             final val router: UserFunctionRouter,
+                             final val emitter: Future[Emitter],
+                             final val entityDiscoveryClient: EntityDiscoveryClient,
+                             final val log: Logger) {
+
+    final val fullCommandName: String = entity.serviceName + "." + method.getName
+    final val serializer: CommandSerializer = new CommandSerializer(method.getName, method.getInputType)
+    final val unary: Boolean = !method.toProto.getClientStreaming && !method.toProto.getServerStreaming
+    final val expectedReplyTypeUrl: String = Types.AnyTypeUrlHostName + method.getOutputType.getFullName
+
+    final val flow: Flow[UserFunctionCommand, ProtobufAny, NotUsed] = {
+      val handler = router.handle(entity.serviceName)
+
+      val zipWithEmitter = emitter.value match {
+        case Some(Success(e)) => handler.map(v => (e, v)) // Cheaper than mapAsync if already completed
+        case _ => handler.mapAsync(1)(reply => emitter.zip(Future.successful(reply)))
+      }
+
+      zipWithEmitter
+        .map({
+          case (emitter,
+                UserFunctionReply(Some(ClientAction(ClientAction.Action.Reply(Reply(some @ Some(payload))))), _)) =>
+            if (payload.typeUrl != expectedReplyTypeUrl) {
+              val msg =
+                s"${fullCommandName}: Expected reply type_url to be [${expectedReplyTypeUrl}] but was [${payload.typeUrl}]."
+              log.warn(msg)
+              entityDiscoveryClient.reportError(UserFunctionError(s"Warning: $msg"))
+            } else {
+              val _ = emitter.emit(payload, method) // TODO: check returned boolean?
+            }
+            some
+          case (_, UserFunctionReply(Some(ClientAction(ClientAction.Action.Forward(_))), _)) =>
+            log.error("Cannot serialize forward reply, this should have been handled by the UserFunctionRouter")
+            None
+          case (_, UserFunctionReply(Some(ClientAction(ClientAction.Action.Failure(Failure(_, message)))), _)) =>
+            log.error("User Function responded with a failure: {}", message)
+            None
+          case _ =>
+            None
+        })
+        .collect(Function.unlift(identity))
+    }
+  }
 
   def createRoute(entities: Seq[ServableEntity],
                   router: UserFunctionRouter,
                   statsCollector: ActorRef,
                   entityDiscoveryClient: EntityDiscoveryClient,
-                  fileDescriptors: Seq[FileDescriptor])(
+                  fileDescriptors: Seq[FileDescriptor],
+                  eventingSupport: Option[EventingSupport])(
       implicit sys: ActorSystem,
       mat: Materializer,
       ec: ExecutionContext
-  ): PartialFunction[HttpRequest, Future[HttpResponse]] =
-    compileProxy(entities, router, statsCollector, entityDiscoveryClient) orElse // Fast path
-    handleNetworkProbe() orElse
-    Reflection.serve(fileDescriptors, entities.map(_.serviceName).toList) orElse
-    HttpApi.serve(router, entities, entityDiscoveryClient) orElse // Slow path
-    NotFound // No match. TODO: Consider having the caller of this method deal with this condition
+  ): (PartialFunction[HttpRequest, Future[HttpResponse]], Option[RunnableGraph[Future[Done]]]) = {
+    val (grpcProxy, eventingGraph) =
+      createGrpcApi(entities, router, statsCollector, entityDiscoveryClient, eventingSupport)
+    val routes = Array(
+      grpcProxy,
+      HttpApi.serve(entities.map(_.serviceDescriptor -> grpcProxy).toList),
+      handleNetworkProbe(),
+      Reflection.serve(fileDescriptors, entities.map(_.serviceName).toList)
+    )
+
+    ({ // Creates a fast implementation of multi-PartialFunction composition
+      case req =>
+        @tailrec def matchRoutes(req: HttpRequest, idx: Int): Future[HttpResponse] =
+          if (idx < routes.length) {
+            val res = routes(idx).applyOrElse(req, checkFallback): AnyRef
+            if (res eq fallback) matchRoutes(req, idx + 1)
+            else res.asInstanceOf[Future[HttpResponse]]
+          } else {
+            log.debug("Not found request: " + req.getUri())
+            Http404Response
+          }
+        matchRoutes(req, 0)
+    }, eventingGraph)
+  }
 
   /**
    * Knative network probe handler.
    */
-  def handleNetworkProbe(): PartialFunction[HttpRequest, Future[HttpResponse]] = Function.unlift { req =>
-    req.headers.find(_.name.equalsIgnoreCase("K-Network-Probe")).map { header =>
-      Future.successful(header.value match {
-        case "queue" => HttpResponse(entity = HttpEntity("queue"))
-        case other =>
-          HttpResponse(status = StatusCodes.BadRequest, entity = HttpEntity(s"unexpected probe header value: $other"))
-      })
-    }
+  def handleNetworkProbe(): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+    case req if req.headers.exists(_.name.equalsIgnoreCase("K-Network-Probe")) =>
+      Future.successful(
+        req.headers.find(_.name.equalsIgnoreCase("K-Network-Probe")).get match {
+          case header if header.value == "queue" => HttpResponse(entity = HttpEntity("queue"))
+          case other =>
+            HttpResponse(status = StatusCodes.BadRequest,
+                         entity = HttpEntity(s"unexpected probe header value: ${other.value}"))
+        }
+      )
   }
 
-  private[this] final def compileProxy(entities: Seq[ServableEntity],
-                                       router: UserFunctionRouter,
-                                       statsCollector: ActorRef,
-                                       entityDiscoveryClient: EntityDiscoveryClient)(
+  private[this] final def createGrpcApi(entities: Seq[ServableEntity],
+                                        router: UserFunctionRouter,
+                                        statsCollector: ActorRef,
+                                        entityDiscoveryClient: EntityDiscoveryClient,
+                                        eventingSupport: Option[EventingSupport])(
       implicit sys: ActorSystem,
       mat: Materializer,
       ec: ExecutionContext
-  ): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+  ): (PartialFunction[HttpRequest, Future[HttpResponse]], Option[RunnableGraph[Future[Done]]]) = {
+    val p = Promise[Emitter]
+    val eventingGraph =
+      eventingSupport.flatMap(
+        support =>
+          EventingManager
+            .createStreams(router, entityDiscoveryClient, entities, support)
+            .map(_.mapMaterializedValue({ case (emitter, done) => p.success(emitter); done }))
+      ) match {
+        case None =>
+          p.success(Emitters.ignore)
+          None
+        case some =>
+          some
+      }
 
     val rpcMethodSerializers = (for {
       entity <- entities.iterator
       method <- entity.serviceDescriptor.getMethods.iterator.asScala
     } yield {
-      (Path / entity.serviceName / method.getName,
-       CommandHandler(
-         fullCommandName = entity.serviceName + "." + method.getName,
-         new CommandSerializer(method.getName, method.getInputType),
-         router.handle(entity.serviceName),
-         unary = !method.toProto.getClientStreaming && !method.toProto.getServerStreaming,
-         expectedReplyTypeUrl = AnyTypeUrlHostName + method.getOutputType.getFullName
-       ))
+      val handler = new CommandHandler(entity, method, router, p.future, entityDiscoveryClient, log)
+      (Path / entity.serviceName / method.getName, handler)
     }).toMap
 
-    val mapRequestFailureExceptions: ActorSystem => PartialFunction[Throwable, Status] = {
-      val pf: PartialFunction[Throwable, Status] = {
-        case CommandException(msg) => Status.UNKNOWN.augmentDescription(msg)
-      }
-      _ => pf
-    }
-
-    {
+    val routes: PartialFunction[HttpRequest, Future[HttpResponse]] = {
       case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
         val startTime = System.nanoTime()
-        val responseCodec = Codecs.negotiate(req)
         val handler = rpcMethodSerializers(req.uri.path)
-        if (handler.unary) {
-          // Only report request stats for unary commands, doesn't make sense for streamed
-          statsCollector ! StatsCollector.RequestReceived
-        }
-        unmarshalStream(req)(handler.serializer, mat)
-          .map { commands =>
-            val pipeline: Source[ProtobufByteString, NotUsed] = commands
-              .via(handler.flow)
-              .map { reply =>
-                reply.clientAction match {
-                  case Some(ClientAction(ClientAction.Action.Reply(Reply(Some(payload))))) =>
-                    if (payload.typeUrl != handler.expectedReplyTypeUrl) {
-                      val msg =
-                        s"${handler.fullCommandName}: Expected reply type_url to be [${handler.expectedReplyTypeUrl}] but was [${payload.typeUrl}]."
-                      log.warn(msg)
-                      entityDiscoveryClient.reportError(UserFunctionError("Warning: " + msg))
-                    }
-                    Some(payload.value)
-                  case Some(ClientAction(ClientAction.Action.Forward(_))) =>
-                    log.error("Cannot serialize forward reply, this should have been handled by the UserFunctionRouter")
-                    None
-                  case Some(ClientAction(ClientAction.Action.Failure(Failure(_, message)))) =>
-                    throw CommandException(message)
-                  case _ =>
-                    None
-                }
-              }
-              .collect(Function.unlift(identity))
-              .watchTermination() { (_, complete) =>
-                if (handler.unary) {
-                  complete.onComplete { _ =>
-                    statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
-                  }
-                }
-                NotUsed
-              }
 
-            marshalStream(pipeline, mapRequestFailureExceptions)(ReplySerializer, mat, responseCodec, sys)
+        // Only report request stats for unary commands, doesn't make sense for streamed
+        val processRequest =
+          if (handler.unary) {
+            statsCollector ! StatsCollector.RequestReceived
+            handler.flow.watchTermination() { (_, complete) =>
+              complete.onComplete { _ =>
+                statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
+              }
+              NotUsed
+            }
+          } else {
+            handler.flow
           }
-          .recoverWith(GrpcExceptionHandler.default(GrpcExceptionHandler.defaultMapper(sys)))
+
+        val responseCodec = Codecs.negotiate(req)
+        val messageEncoding = `Message-Encoding`.findIn(req.headers)
+
+        Future
+          .successful(
+            GrpcResponseHelpers(
+              req.entity.dataBytes
+                .viaMat(Grpc.grpcFramingDecoder(messageEncoding))(Keep.none)
+                .map(handler.serializer.deserialize)
+                .via(new CancellationBarrierGraphStage) // In gRPC we signal failure by returning an error code, so we don't want the cancellation bubbled out
+                .via(processRequest),
+              mapRequestFailureExceptions
+            )(ReplySerializer, mat, responseCodec, sys)
+          )
     }
+
+    (routes, eventingGraph)
   }
 
   private case class CommandException(msg: String) extends RuntimeException(msg, null, false, false)

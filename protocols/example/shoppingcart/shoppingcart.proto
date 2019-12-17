@@ -3,10 +3,14 @@ syntax = "proto3";
 
 import "google/protobuf/empty.proto";
 import "cloudstate/entity_key.proto";
+import "cloudstate/eventing.proto";
 import "google/api/annotations.proto";
 import "google/api/http.proto";
+import "google/api/httpbody.proto";
 
 package com.example.shoppingcart;
+
+option go_package = "tck/shoppingcart";
 
 message AddLineItem {
     string user_id = 1 [(.cloudstate.entity_key) = true];
@@ -40,6 +44,7 @@ service ShoppingCart {
             post: "/cart/{user_id}/items/add",
             body: "*",
         };
+        option (.cloudstate.eventing).in = "items";
     }
 
     rpc RemoveItem(RemoveLineItem) returns (google.protobuf.Empty) {
@@ -54,5 +59,9 @@ service ShoppingCart {
             response_body: "items"
           }
         };
+    }
+
+    rpc ShowCartPage(GetShoppingCart) returns (google.api.HttpBody) {
+        option (google.api.http).get = "/carts/{user_id}/show.html";
     }
 }

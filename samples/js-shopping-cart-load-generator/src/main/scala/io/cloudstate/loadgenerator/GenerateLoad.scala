@@ -94,7 +94,7 @@ class LoadGeneratorActor extends Actor with Timers {
 
   implicit val materializer = ActorMaterializer()
   implicit val system = context.system
-  import context.dispatcher
+  implicit val ec = context.dispatcher
 
   private val clients = {
     val settings = GrpcClientSettings.connectToServiceAt(serviceName, servicePort)

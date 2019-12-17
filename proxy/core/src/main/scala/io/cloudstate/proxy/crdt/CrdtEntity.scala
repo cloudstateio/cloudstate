@@ -135,7 +135,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
   private[this] final var closingStreams = Set.empty[Long]
   private[this] final var stopping = false
 
-  import context.dispatcher
+  implicit val ec = context.dispatcher
 
   context.setReceiveTimeout(configuration.passivationTimeout.duration)
 

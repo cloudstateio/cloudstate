@@ -1,11 +1,11 @@
-# The CloudState Build
+# The Cloudstate Build
 
-The CloudState Build uses `sbt` as its build tool.
+The Cloudstate Build uses `sbt` as its build tool.
 
 ## Installation instructions
 
 * Install the `git` source code manager from [here](https://git-scm.com/).
-* Clone the CloudState repository using `git`: `git clone git@github.com:cloudstateio/cloudstate.git`
+* Clone the Cloudstate repository using `git`: `git clone git@github.com:cloudstateio/cloudstate.git`
 * Install `sbt`, follow [these instructions](https://www.scala-sbt.org/download.html).
 
 ## Getting started
@@ -27,13 +27,13 @@ The following is a list of sbt commands and use-cases:
 
 For more documentation about `sbt`, see [this page](https://www.scala-sbt.org/1.x/docs/index.html).
 
-## Running CloudState in Minikube
+## Running Cloudstate in Minikube
 
-CloudState can be easily run in Minikube. If you wish to use Istio, be aware that it can be quite resource intensive, we recommend not using Istio in development unless you have specific requirements to test with Istio.
+Cloudstate can be easily run in Minikube. If you wish to use Istio, be aware that it can be quite resource intensive, we recommend not using Istio in development unless you have specific requirements to test with Istio.
 
-### Installing a local build of CloudState
+### Installing a local build of Cloudstate
 
-To install a local build of CloudState to Minikube, first setup your docker environment to use the Minikube Docker registry:
+To install a local build of Cloudstate to Minikube, first setup your docker environment to use the Minikube Docker registry:
 
 ```
 eval $(minikube docker-env)
@@ -53,7 +53,7 @@ Now build the operator image:
 operator/docker:publishLocal
 ```
 
-Now build one or more proxy images. CloudState has a different image for each database backend, and in most cases, is able to build either a native image, or an image that runs a regular JVM. It takes at least 5 minutes to compile the native images, so for most development purposes, we recommend using the regular JVM images. For example, to compile the `InMemory` proxy image, run:
+Now build one or more proxy images. Cloudstate has a different image for each database backend, and in most cases, is able to build either a native image, or an image that runs a regular JVM. It takes at least 5 minutes to compile the native images, so for most development purposes, we recommend using the regular JVM images. For example, to compile the `InMemory` proxy image, run:
 
 ```
 dockerBuildInMemory publishLocal
@@ -87,13 +87,13 @@ kubectl create namespace cloudstate
 kubectl apply -n cloudstate -f operator/cloudstate-dev.yaml
 ```
 
-This installs CloudState locally. You can tail the logs of the operator by running:
+This installs Cloudstate locally. You can tail the logs of the operator by running:
 
 ```
 kubectl logs -n cloudstate -l app=cloudstate-operator -f
 ```
 
-There is one more thing that needs to be done, assuming you did not build the native images, the default configuration for the CloudState operator is to use the native images. Update the config map it uses to tell it to use the regular JVM images:
+There is one more thing that needs to be done, assuming you did not build the native images, the default configuration for the Cloudstate operator is to use the native images. Update the config map it uses to tell it to use the regular JVM images:
 
 ```
 kubectl edit -n cloudstate configmap cloudstate-operator-config
@@ -112,7 +112,7 @@ proxy {
 }
 ```
 
-Once you have CloudState running, you will presumably want to deploy a stateful function to it. If your function needs a stateful store, then either install the necessary database along with a `StatefulStore` descriptor to point to it, or deploy an in memory store if you don't need to test any particular database:
+Once you have Cloudstate running, you will presumably want to deploy a stateful function to it. If your function needs a stateful store, then either install the necessary database along with a `StatefulStore` descriptor to point to it, or deploy an in memory store if you don't need to test any particular database:
 
 ```yaml
 apiVersion: cloudstate.io/v1alpha1
@@ -137,7 +137,7 @@ spec:
   - image: cloudstateio/samples-js-shopping-cart:latest
 ```
 
-The CloudState operator should now create the necessary deployment for the shopping cart. There are a few ways it can be accessed, one is to port forward into the pod, but perhaps the simpler way is to create a `NodePort` service for it, by running:
+The Cloudstate operator should now create the necessary deployment for the shopping cart. There are a few ways it can be accessed, one is to port forward into the pod, but perhaps the simpler way is to create a `NodePort` service for it, by running:
 
 ```
 kubectl expose deployment shopping-cart-deployment --port=8013 --type=NodePort
@@ -192,13 +192,13 @@ res3: com.example.shoppingcart.shoppingcart.Cart = Cart(Vector(LineItem(item-id-
 
 ### Development loops for the proxy
 
-Once you've installed CloudState and got a user function running, the proxy can be iterated on by running the corresponding `dockerBuild*` command for the proxy backend you're using, for example, for the in memory proxy:
+Once you've installed Cloudstate and got a user function running, the proxy can be iterated on by running the corresponding `dockerBuild*` command for the proxy backend you're using, for example, for the in memory proxy:
 
 ``` 
 sbt:cloudstate> dockerBuildInMemory publishLocal
 ```
 
-Now, after each time you make changes and rebuild the docker image, the simplest way to ensure your CloudState functions pick it up is to delete the pods for it and let the deployment recreate them, eg:
+Now, after each time you make changes and rebuild the docker image, the simplest way to ensure your Cloudstate functions pick it up is to delete the pods for it and let the deployment recreate them, eg:
 
 ```
 kubectl delete pods --all
@@ -206,7 +206,7 @@ kubectl delete pods --all
 
 ### Development loops for the operator
 
-The easiest way to iterate on the operator is to run it locally, from an IDE or from sbt, rather than deploying it to Minikube/Kubernetes. The only advantage to deploying to Kubernetes is that it will verify that the RBAC permissions that the operator has are correct. The CloudState operator uses [Skuber](https://github.com/doriordan/skuber), and when it runs outside of a Kubernetes container, it will use the credentials configured for `kubectl`. In the case of using Minikube, this will be the default cluster admin account.
+The easiest way to iterate on the operator is to run it locally, from an IDE or from sbt, rather than deploying it to Minikube/Kubernetes. The only advantage to deploying to Kubernetes is that it will verify that the RBAC permissions that the operator has are correct. The Cloudstate operator uses [Skuber](https://github.com/doriordan/skuber), and when it runs outside of a Kubernetes container, it will use the credentials configured for `kubectl`. In the case of using Minikube, this will be the default cluster admin account.
 
 To use a locally running operator, first shutdown the operator running in Kubernetes, by scaling its deployment down to zero:
 

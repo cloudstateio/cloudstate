@@ -110,7 +110,7 @@ $endif$
 <footer class="site-footer">
 
   <a href="$page.base$.."><img src="$page.base$images/cloudstate-stacked-white.svg"></a>
-  <p>© CloudState 2019 | <a href="$page.base$../privacy/">Privacy Policy</a> | <a class="optanon-toggle-display">Cookie Settings</a></p>
+  <p>© Cloudstate 2019 | <a href="$page.base$../privacy/">Privacy Policy</a> | <a class="optanon-toggle-display">Cookie Settings</a></p>
 
 </footer>
 

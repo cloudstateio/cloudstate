@@ -15,7 +15,7 @@ import java.lang.annotation.Target;
  *
  * <p>The method may take the event object as a parameter.
  *
- * <p>Methods annotated with this may take an {@link EventBehaviorContext}.
+ * <p>Methods annotated with this may take an {@link EventContext}.
  */
 @CloudStateAnnotation
 @Target(ElementType.METHOD)

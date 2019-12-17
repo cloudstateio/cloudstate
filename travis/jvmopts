@@ -1,0 +1,3 @@
+-XX:+UseCompressedOops
+-XX:+CMSClassUnloadingEnabled
+-Dfile.encoding=UTF8

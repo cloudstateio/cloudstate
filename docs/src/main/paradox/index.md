@@ -1,6 +1,6 @@
-# CloudState
+# Cloudstate
 
-The CloudState docs are a work in progress. The best place to go right now for the documentation is the [CloudState README](https://github.com/cloudstateio/cloudstate/tree/master/README.md).
+The Cloudstate docs are a work in progress. The best place to go right now for the documentation is the [Cloudstate README](https://github.com/cloudstateio/cloudstate/tree/master/README.md).
 
 @@toc { depth=1 }
 

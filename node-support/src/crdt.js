@@ -29,6 +29,8 @@ const crdtServices = new support.CrdtServices();
  *
  * @typedef module:cloudstate.crdt.Crdt~options
  * @property {array<string>} includeDirs The directories to include when looking up imported protobuf files.
+ * @property {string} persistenceId The "persistence" id of this entity, used to namespace entities of different CRDT
+ * types in the same service.
  */
 
 /**
@@ -82,6 +84,7 @@ class Crdt {
     this.options = {
       ...{
         includeDirs: ["."],
+        persistenceId: serviceName.split(".").pop()
       },
       ...options
     };

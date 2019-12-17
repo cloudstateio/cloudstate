@@ -17,9 +17,8 @@ import java.lang.annotation.Target;
  * <p>An entity may declare more than one snapshot handler if it wants different handling for
  * different types.
  *
- * <p>The snapshot handler method may additionally accept a {@link SnapshotBehaviorContext}
- * parameter, allowing it to access context for the snapshot, and potentially change behavior based
- * on the state from the snapshot, if required.
+ * <p>The snapshot handler method may additionally accept a {@link SnapshotContext} parameter,
+ * allowing it to access context for the snapshot, if required.
  */
 @CloudStateAnnotation
 @Target(ElementType.METHOD)
