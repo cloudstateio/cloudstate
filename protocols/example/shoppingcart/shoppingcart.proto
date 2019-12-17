@@ -60,8 +60,4 @@ service ShoppingCart {
           }
         };
     }
-
-    rpc ShowCartPage(GetShoppingCart) returns (google.api.HttpBody) {
-        option (google.api.http).get = "/carts/{user_id}/show.html";
-    }
 }
