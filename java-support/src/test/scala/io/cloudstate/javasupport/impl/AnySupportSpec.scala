@@ -38,7 +38,7 @@ class AnySupportSpec extends WordSpec with Matchers with OptionValues {
 
     "support resolving a service descriptor" in {
       val methods = anySupport.resolveServiceDescriptor(Shoppingcart.getDescriptor.findServiceByName("ShoppingCart"))
-      methods should have size 4
+      methods should have size 3
       val method = methods("AddItem")
 
       // Input type
