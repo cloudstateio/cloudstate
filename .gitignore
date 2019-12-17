@@ -36,7 +36,7 @@ target-sbt
 node_modules
 .idea/
 .nyc_output
+null
 .bloop
 .metals
 null/*
-
