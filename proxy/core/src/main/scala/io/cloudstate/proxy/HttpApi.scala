@@ -445,7 +445,7 @@ object HttpApi {
         headers = req.headers :+ IdentityHeader,
         entity = HttpEntity(
           ContentTypes.`application/grpc+proto`,
-          Grpc.encodeFrame(Grpc.notCompressed, ByteString.fromArrayUnsafe(message.toByteString.toByteArray))
+          Grpc.encodeFrame(Grpc.notCompressed, ByteString.fromArrayUnsafe(message.toByteArray))
         ),
         protocol = req.protocol
       )
