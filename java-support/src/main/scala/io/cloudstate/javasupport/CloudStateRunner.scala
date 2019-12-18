@@ -70,14 +70,15 @@ final class CloudStateRunner private[this] (_system: ActorSystem, services: Map[
 
   // TODO JavaDoc
   def this(services: java.util.Map[String, StatefulService]) {
-    this(
-      {
-        val conf = ConfigFactory.load()
-        // We do this to apply the cloud-state specific akka configuration to the ActorSystem we create for hosting the user function
-        ActorSystem("StatefulService", conf.getConfig("cloudstate.system").withFallback(conf))
-      },
-      services.asScala.toMap
-    )
+    this(ActorSystem("StatefulService", {
+      val conf = ConfigFactory.load()
+      conf.getConfig("cloudstate.system").withFallback(conf)
+    }), services.asScala.toMap)
+  }
+
+  // TODO JavaDoc
+  def this(services: java.util.Map[String, StatefulService], config: Config) {
+    this(ActorSystem("StatefulService", config), services.asScala.toMap)
   }
 
   private val rootContext = new Context {

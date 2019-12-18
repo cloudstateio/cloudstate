@@ -109,6 +109,7 @@ lazy val root = (project in file("."))
     `java-support`,
     `scala-support`,
     `java-shopping-cart`,
+    `java-pingpong`,
     `akka-client`,
     operator,
     `tck`,
@@ -572,7 +573,7 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
   )
 
 lazy val `proxy-tests` = (project in file("proxy/proxy-tests"))
-  .dependsOn(`proxy-core`, `akka-client`)
+  .dependsOn(`proxy-core`, `akka-client`, `java-pingpong`)
   .settings(
     common,
     name := "cloudstate-proxy-tests",
@@ -783,7 +784,38 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
     // logLevel in assembly := Level.Debug,
     assemblyMergeStrategy in assembly := {
       /*ADD CUSTOMIZATIONS HERE*/
-      //case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
+      case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    }
+  )
+
+lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
+  .dependsOn(`java-support`)
+  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin)
+  .settings(
+    name := "java-pingpong",
+    dockerSettings,
+    dockerBaseImage := "adoptopenjdk/openjdk8",
+    mainClass in Compile := Some("io.cloudstate.samples.pingpong.Main"),
+    PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
+    akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
+    PB.protoSources in Compile ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "frontend", (sourceDirectory in Compile).value / "protos")
+    },
+    PB.targets in Compile := Seq(
+        PB.gens.java -> (sourceManaged in Compile).value
+      ),
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8"),
+    mainClass in assembly := (mainClass in Compile).value,
+    assemblyJarName in assembly := "java-pingpong.jar",
+    test in assembly := {},
+    // logLevel in assembly := Level.Debug,
+    assemblyMergeStrategy in assembly := {
+      /*ADD CUSTOMIZATIONS HERE*/
+      case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
       case x =>
         val oldStrategy = (assemblyMergeStrategy in assembly).value
         oldStrategy(x)
@@ -806,7 +838,7 @@ lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart")
     // logLevel in assembly := Level.Debug,
     assemblyMergeStrategy in assembly := {
       /*ADD CUSTOMIZATIONS HERE*/
-      //case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
+      case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
       case x =>
         val oldStrategy = (assemblyMergeStrategy in assembly).value
         oldStrategy(x)

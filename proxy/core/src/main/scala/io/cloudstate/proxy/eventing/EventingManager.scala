@@ -60,10 +60,23 @@ object EventingManager {
       val endpoints =
         entity.serviceDescriptor.getMethods.iterator.asScala.foldLeft(Map.empty[MethodDescriptor, Eventing]) {
           case (map, method) =>
-            val e = EventingProto.eventing.get(Options.convertMethodOptions(method))
-            // FIXME Validate that in and out are set appropriately!!
-            log.debug("EventingProto.events for {}", method.getFullName + " " + e)
-            e.filter(e => e.in != "" || e.out != "").fold(map)(map.updated(method, _))
+            EventingProto.eventing.get(Options.convertMethodOptions(method)) match {
+              case None => map
+              case Some(e) =>
+                (e.in, e.out) match {
+                  case (null, null) | ("", "") => map
+                  case (in, out) if in == out =>
+                    throw new IllegalStateException(
+                      s"Endpoint '${method.getFullName}' has the same input topic as output topic ('${in}'), this is not allowed."
+                    )
+                  case (in, out) =>
+                    log.debug("EventingProto.events for {}: {} -> {}",
+                              method.getFullName: AnyRef,
+                              in: AnyRef,
+                              out: AnyRef)
+                    map.updated(method, e)
+                }
+            }
         }
 
       if (endpoints.isEmpty) Nil
@@ -104,7 +117,7 @@ object EventingManager {
         ] =
           for {
             EventMapping(entity, routes) <- eventMappings
-            (mdesc, eventing) <- routes
+            (mdesc, eventing) <- routes.toSeq // Important since we do not want dedupe that we get from the map otherwise
           } yield {
             log.info("Creating route for {}", eventing)
             val commandHandler = new CommandHandler(entity, mdesc, router, noEmitter, entityDiscoveryClient, log) // Could we reuse these from Serve?
