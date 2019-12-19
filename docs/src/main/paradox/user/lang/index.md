@@ -25,16 +25,14 @@ Here is a list of other, **non-official** libraries in various other languages:
 | [scala-support](https://github.com/cloudstateio/cloudstate/tree/master/scala-support/src/main) | Scala | :warning: | :warning: |
 | [kotlin-support](https://github.com/cloudstateio/kotlin-support) | Kotlin | :warning: | :warning: |
 | [cloudstate-csharp](https://github.com/nagytech/cloudstate-csharp)| C# | :heavy_check_mark: | :heavy_check_mark: | 
-| [python-support](https://github.com/marcellanz/cloudstate_python-support/tree/feature/python-support)| Python | | |
-| | Elixir | | |
-| | F# | | |
-| | Ruby | | |
-| | Rust | | |
+| [python-support](https://github.com/marcellanz/cloudstate_python-support/tree/feature/python-support)| Python | :question: | :question: |
+| [cloudstate-rust](https://github.com/sleipnir/cloudstate-rust)| Rust | :question: | :question: |
 
 ### Legend:
 - :heavy_check_mark: Supported
 - :x: Not supported
 - :warning: Partial support / Unstable (see details on the website)
+- :question: Support status unknown
 
 ## Cloudstate CLI
 :point_up_2: Please be aware that the **CloudState CLI** project allows you to easily kick-start a new client project. 
