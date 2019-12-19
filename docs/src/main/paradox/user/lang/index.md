@@ -14,9 +14,9 @@ Cloudstate user functions can be implemented in any language that supports gRPC.
 @@@
 
 ## Unofficial client libraries
-We are aware of external libraries implementing the **client CloudState protocol** in various other languages.
+We are aware of external libraries implementing the **client Cloudstate protocol** in various other languages.
 
-:warning: **Though they are mentioned here, these libraries are often not directly maintained by the CloudState dev team and are therefore not supported**.
+:warning: **Though they are mentioned here, these libraries are often not directly maintained by the Cloudstate dev team and are therefore not supported**.
  
 Here is a list of other, **non-official** libraries in various other languages:
 
@@ -35,5 +35,5 @@ Here is a list of other, **non-official** libraries in various other languages:
 - :question: Support status unknown
 
 ## Cloudstate CLI
-:point_up_2: Please be aware that the **CloudState CLI** project allows you to easily kick-start a new client project. 
+:point_up_2: Please be aware that the **Cloudstate CLI** project allows you to easily kick-start a new client project. 
 You can currently find it at https://github.com/sleipnir/cloudstate-cli
