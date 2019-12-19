@@ -1,5 +1,6 @@
 package io.cloudstate.javasupport;
 
+import com.typesafe.config.Config;
 import com.google.protobuf.Descriptors;
 import io.cloudstate.javasupport.crdt.CrdtEntity;
 import io.cloudstate.javasupport.crdt.CrdtEntityFactory;
@@ -216,7 +217,37 @@ public final class CloudState {
    * @return a CompletionStage which will be completed when the server has shut down.
    */
   public CompletionStage<Done> start() {
-    return new CloudStateRunner(services).run();
+    return createRunner().run();
+  }
+
+  /**
+   * Starts a server with the configured entities, using the supplied configuration.
+   *
+   * @return a CompletionStage which will be completed when the server has shut down.
+   */
+  public CompletionStage<Done> start(Config config) {
+    return createRunner(config).run();
+  }
+
+  /**
+   * Creates a CloudStateRunner using the currently configured services. In order to start the
+   * server, `run()` must be invoked on the returned CloudStateRunner.
+   *
+   * @return a CloudStateRunner
+   */
+  public CloudStateRunner createRunner() {
+    return new CloudStateRunner(services);
+  }
+
+  /**
+   * Creates a CloudStateRunner using the currently configured services, using the supplied
+   * configuration. In order to start the server, `run()` must be invoked on the returned
+   * CloudStateRunner.
+   *
+   * @return a CloudStateRunner
+   */
+  public CloudStateRunner createRunner(Config config) {
+    return new CloudStateRunner(services, config);
   }
 
   private AnySupport newAnySupport(Descriptors.FileDescriptor[] descriptors) {

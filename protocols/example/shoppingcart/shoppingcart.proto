@@ -6,6 +6,7 @@ import "cloudstate/entity_key.proto";
 import "cloudstate/eventing.proto";
 import "google/api/annotations.proto";
 import "google/api/http.proto";
+import "google/api/httpbody.proto";
 
 package com.example.shoppingcart;
 

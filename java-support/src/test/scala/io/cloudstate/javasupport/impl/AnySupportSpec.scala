@@ -63,7 +63,6 @@ class AnySupportSpec extends WordSpec with Matchers with OptionValues {
       defaultAny.typeUrl should ===(AnySupport.CloudStatePrimitive + name)
       defaultAny.value.size() shouldBe 0
       anySupport.decode(defaultAny) should ===(defaultValue)
-
     }
 
     "support se/deserializing strings" in testPrimitive("string", "foo", "")

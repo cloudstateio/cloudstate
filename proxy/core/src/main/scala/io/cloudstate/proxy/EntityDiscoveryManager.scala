@@ -38,6 +38,7 @@ import com.typesafe.config.Config
 import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.crdt.Crdt
 import io.cloudstate.protocol.event_sourced.EventSourced
+import io.cloudstate.protocol.function.StatelessFunction
 import io.cloudstate.proxy.StatsCollector.StatsCollectorSettings
 import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
 import io.cloudstate.proxy.ConcurrencyEnforcer.ConcurrencyEnforcerSettings
@@ -52,6 +53,7 @@ import io.cloudstate.proxy.autoscaler.{
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
 import io.cloudstate.proxy.eventing.EventingManager
+import io.cloudstate.proxy.function.StatelessFunctionSupportFactory
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -171,13 +173,18 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
   private[this] final val concurrencyEnforcer =
     context.actorOf(ConcurrencyEnforcer.props(config.concurrencySettings, statsCollector), "concurrencyEnforcer")
 
-  private val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
+  private final val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
       Crdt.name -> new CrdtSupportFactory(context.system,
                                           config,
                                           entityDiscoveryClient,
                                           clientSettings,
                                           concurrencyEnforcer = concurrencyEnforcer,
-                                          statsCollector = statsCollector)
+                                          statsCollector = statsCollector),
+      StatelessFunction.name -> new StatelessFunctionSupportFactory(context.system,
+                                                                    config,
+                                                                    clientSettings,
+                                                                    concurrencyEnforcer = concurrencyEnforcer,
+                                                                    statsCollector = statsCollector)
     ) ++ {
       if (config.journalEnabled)
         Map(
@@ -228,12 +235,10 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
 
         val router = new UserFunctionRouter(entities, entityDiscoveryClient)
 
-        val route = Serve.createRoute(entities, router, statsCollector, entityDiscoveryClient, descriptors)
+        val eventSupport = EventingManager.createSupport(config.getConfig("eventing"))
 
-        val eventManager =
-          EventingManager
-            .createSupport(config.getConfig("eventing"))
-            .flatMap(EventingManager.createStreams(router, entityDiscoveryClient, entities, _))
+        val (route, eventingGraph) =
+          Serve.createRoute(entities, router, statsCollector, entityDiscoveryClient, descriptors, eventSupport)
 
         log.debug("Starting gRPC proxy")
 
@@ -250,7 +255,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
         // Start warmup
         system.actorOf(Warmup.props(spec.entities.exists(_.entityType == EventSourced.name)), "state-manager-warm-up")
 
-        context.become(binding(eventManager))
+        context.become(binding(eventingGraph))
 
       } catch {
         case e @ EntityDiscoveryException(message) =>
@@ -292,8 +297,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
 
       context.become(running)
 
-    case Status.Failure(cause) =>
-      // Failure to bind the HTTP server is fatal, terminate
+    case Status.Failure(cause) => // Failure to bind the HTTP server is fatal, terminate
       log.error(cause, "Failed to bind HTTP server")
       system.terminate()
 
@@ -304,9 +308,8 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
   private[this] final def running: Receive = {
     case Ready =>
       sender ! true
-    case Status.Failure(cause) =>
-      // EventManager Failed
-      log.error(s"EventManager failed")
+    case Status.Failure(cause) => // Failure in the eventing subsystem, terminate
+      log.error(cause, "Eventing failed")
       system.terminate()
     case Done =>
       system.terminate() // FIXME context.become(dead)

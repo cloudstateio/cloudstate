@@ -3,6 +3,8 @@ package io.cloudstate.proxy.eventing
 import java.io.File
 import java.net.ServerSocket
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
+import java.util.concurrent.{CompletionStage, TimeUnit}
+import com.typesafe.config.Config
 
 import akka.{Done, NotUsed}
 import akka.actor.{ActorRef, ActorSystem, ExtendedActorSystem}
@@ -23,6 +25,10 @@ import scala.concurrent.duration._
 import scala.sys.process.Process
 import scala.util.Random
 
+import io.cloudstate.pingpong._
+import io.cloudstate.samples.pingpong._
+import io.cloudstate.javasupport.{CloudState, CloudStateRunner}
+
 /**
  This test requires a running Google Pubsub Emulator,
  easiest is to start it in an emulator, just don't forget to stop the image.
@@ -30,24 +36,15 @@ import scala.util.Random
  `docker run --rm --expose=8085 --volume=/data --name=googlepubsub -d -p 8085:8085 google/cloud-sdk:latest /bin/sh -c "gcloud beta emulators pubsub start --project=test --host-port=0.0.0.0:8085 --data-dir=/data"`
  */
 class GooglePubsubSpec extends WordSpec with BeforeAndAfterAll with Eventually with Matchers with ScalaFutures {
-  // Working directory should be the base directory of the sbt build, but in case it's not, try walking up the
-  // directory hierarchy until we find the the samples directory.
-  val baseDir = {
-    @annotation.tailrec
-    def locateBaseDir(dir: File): File =
-      if (new File(dir, "samples").isDirectory) {
-        dir
-      } else if (dir.getParentFile == null) {
-        sys.error("Could not locate base directory")
-      } else locateBaseDir(dir.getParentFile)
-    locateBaseDir(new File("."))
-  }
-  val nodeSupportDir = new File(baseDir, "node_support")
-  val crdtExampleDir = new File(new File(baseDir, "samples"), "js-shopping-cart")
+
+  lazy val projectId = System.getenv("PUBSUB_PROJECT_ID")
+
+  final def runTheseTests: Boolean = projectId != null
 
   // We only need to start one user function, since the multiple Akka nodes can all connect to it, it doesn't make
   // a difference whether they use different services or the same.
-  var userFunction: Process = _
+  var userFunction: CloudStateRunner = _
+  var userFunctionDone: CompletionStage[Done] = _
   var node: ActorSystem = _
   var testSystem: ActorSystem = _
   var support: GCPubsubEventingSupport = _
@@ -59,13 +56,20 @@ class GooglePubsubSpec extends WordSpec with BeforeAndAfterAll with Eventually w
     implicit def implicitTestSystem = testSystem
     implicit def implicitMaterializer = materializer
     implicit def implicitDispatcher = implicitTestSystem.dispatcher
-    "be tested" in pending // FIXME ADD TESTS HERE
+    "be tested" in {
+      assume(runTheseTests)
+    }
   }
 
-  override protected def beforeAll(): Unit = {
-    val projectId = "test"
-    val pubsub_port = 8085
-    val pubsub_host = "localhost"
+  def startUserFunction(config: Config): CloudStateRunner =
+    new CloudState()
+      .registerEventSourcedEntity(classOf[PingPongEntity],
+                                  Pingpong.getDescriptor.findServiceByName("PingPongService"),
+                                  Pingpong.getDescriptor)
+      .createRunner(config)
+
+  override protected def beforeAll(): Unit = if (runTheseTests) {
+    val user_function_port = freePort()
 
     implicit val s = ActorSystem(
       "GooglePubsubSpec",
@@ -82,19 +86,7 @@ class GooglePubsubSpec extends WordSpec with BeforeAndAfterAll with Eventually w
 
     val pubsub =
       EventingManager
-        .createSupport(ConfigFactory.parseString(s"""
-        |support = "google-pubsub"
-        |google-pubsub.host = "${pubsub_host}"
-        |google-pubsub.port = ${pubsub_port}
-        |google-pubsub.rootCa = "none"
-        |google-pubsub.callCredentials = "none"
-        |google-pubsub.project-id = "${projectId}"
-        |google-pubsub.poll-interval = 1s
-        |google-pubsub.upstream-ack-deadline = 10s
-        |google-pubsub.downstream-batch-deadline = 5s
-        |google-pubsub.downstream-batch-size = 10
-        |google-pubsub.manage-topics-and-subscriptions = "by-proxy"
-      """.stripMargin))
+        .createSupport(ConfigFactory.load("googlepubsub.conf").resolve())
         .collect({ case g: GCPubsubEventingSupport => g })
         .getOrElse(throw new IllegalStateException("Unable to create EventingSupport for Google Pubsub"))
 
@@ -102,7 +94,15 @@ class GooglePubsubSpec extends WordSpec with BeforeAndAfterAll with Eventually w
     materializer = m
     support = pubsub
 
-    userFunction = Process(Seq("node", "index.js"), crdtExampleDir).run()
+    userFunction = startUserFunction(
+      ConfigFactory.parseString(s"""
+        |cloudstate.user-function-interface = "0.0.0.0"
+        |cloudstate.user-function-port = ${user_function_port}
+        |cloudstate.eventsourced.snapshot-every = 100
+      """.stripMargin).withFallback(ConfigFactory.defaultReference()).resolve()
+    )
+
+    userFunctionDone = userFunction.run()
 
     node = CloudStateProxyMain.start(
       ConfigFactory.load("dev-mode.conf").withFallback(ConfigFactory.defaultReference()).resolve()
@@ -119,7 +119,7 @@ class GooglePubsubSpec extends WordSpec with BeforeAndAfterAll with Eventually w
   }
 
   override protected def afterAll(): Unit = {
-    Option(userFunction).foreach(_.destroy())
+    Option(userFunction).foreach(_.terminate().toCompletableFuture().get(10, TimeUnit.SECONDS)) // FIXME timeout?
     Option(testSystem).foreach(_.terminate())
     Option(node).foreach(_.terminate())
   }
@@ -129,5 +129,4 @@ class GooglePubsubSpec extends WordSpec with BeforeAndAfterAll with Eventually w
     try socket.getLocalPort
     finally socket.close()
   }
-
 }
