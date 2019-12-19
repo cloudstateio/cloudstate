@@ -5,7 +5,7 @@ import akka.actor.{ActorRef, ActorSystem}
 import akka.event.Logging
 import akka.grpc.GrpcClientSettings
 import akka.stream.Materializer
-import akka.stream.scaladsl.{Flow, Source}
+import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
 import io.cloudstate.protocol.entity.{ClientAction, Entity}
@@ -39,15 +39,7 @@ class StatelessFunctionSupportFactory(system: ActorSystem,
                                  ec)
   }
 
-  private[this] final def validate(serviceDescriptor: ServiceDescriptor): Unit = {
-    val streamedMethods =
-      serviceDescriptor.getMethods.asScala.filter(m => m.toProto.getClientStreaming || m.toProto.getServerStreaming)
-    if (streamedMethods.nonEmpty) {
-      throw EntityDiscoveryException(
-        s"Stateless Function entities do not support streamed methods, but ${serviceDescriptor.getFullName} has the following streamed methods: ${streamedMethods.map(_.getName).mkString(",")}"
-      )
-    }
-  }
+  private[this] final def validate(serviceDescriptor: ServiceDescriptor): Unit = ()
 }
 
 private final class StatelessFunctionSupport(serviceName: String,
@@ -58,33 +50,84 @@ private final class StatelessFunctionSupport(serviceName: String,
     extends EntityTypeSupport {
   import akka.pattern.ask
 
-  override final def handler(method: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed] =
-    Flow[EntityCommand].mapAsync(parallelism)(handleUnary)
+  private final val unaryFlow =
+    Flow[EntityCommand].mapAsync(1)(handleUnary)
+
+  private final val streamOutFlow =
+    Flow[EntityCommand]
+      .flatMapConcat(
+        ec =>
+          statelessFunctionClient
+            .handleStreamedOut(entityCommandToFunctionCommand(ec))
+            .map(functionReplyToUserFunctionReply)
+      )
+
+  private final val streamInFlow =
+    Flow
+      .setup[EntityCommand, UserFunctionReply, NotUsed] { (mat, attr) =>
+        implicit val materializer = mat
+
+        val (outSubscriber, outSource) = Source.asSubscriber[FunctionCommand].preMaterialize()
+        val outSink = Flow[EntityCommand].map(entityCommandToFunctionCommand).to(Sink.fromSubscriber(outSubscriber))
+
+        val inSource =
+          Source.fromFuture(statelessFunctionClient.handleStreamedIn(outSource)).map(functionReplyToUserFunctionReply)
+
+        Flow.fromSinkAndSource(outSink, inSource)
+      }
+      .mapMaterializedValue(_ => NotUsed)
+
+  private final val streamedFlow = Flow
+    .setup[EntityCommand, UserFunctionReply, NotUsed] { (mat, attr) =>
+      implicit val materializer = mat
+
+      val (outSubscriber, outSource) = Source.asSubscriber[FunctionCommand].preMaterialize()
+      val outSink = Flow[EntityCommand].map(entityCommandToFunctionCommand).to(Sink.fromSubscriber(outSubscriber))
+
+      val (publisher, inSink) = Sink.asPublisher[FunctionReply](false).preMaterialize()
+      val inSource = Source.fromPublisher(publisher).map(functionReplyToUserFunctionReply)
+
+      statelessFunctionClient.handleStreamed(outSource).runWith(inSink)
+      Flow.fromSinkAndSource(outSink, inSource)
+    }
+    .mapMaterializedValue(_ => NotUsed)
+
+  override final def handler(method: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed] = {
+    val streamIn = method.method.isClientStreaming
+    val streamOut = method.method.isServerStreaming
+    if (streamIn && streamOut) streamedFlow
+    else if (streamIn) streamInFlow
+    else if (streamOut) streamOutFlow
+    else unaryFlow
+  }
+
+  private def functionReplyToUserFunctionReply(reply: FunctionReply): UserFunctionReply = {
+    import FunctionReply.Response
+    import ClientAction.Action
+    UserFunctionReply(
+      clientAction = Some(ClientAction(reply.response match {
+        case Response.Reply(r) => Action.Reply(r)
+        case Response.Failure(f) => Action.Failure(f)
+        case Response.Forward(f) => Action.Forward(f)
+        case Response.Empty => Action.Empty
+      })),
+      sideEffects = reply.sideEffects
+    )
+  }
+
+  private def entityCommandToFunctionCommand(command: EntityCommand): FunctionCommand =
+    FunctionCommand(
+      serviceName = serviceName,
+      name = command.name,
+      payload = command.payload
+    )
 
   override final def handleUnary(entityCommand: EntityCommand): Future[UserFunctionReply] =
     if (entityCommand.streamed) {
       throw new IllegalStateException("Request streaming is not yet supported for StatelessFunctions")
     } else {
       statelessFunctionClient
-        .handleUnary(
-          FunctionCommand(
-            serviceName = serviceName,
-            name = entityCommand.name,
-            payload = entityCommand.payload
-          )
-        )
-        .map(reply => {
-          import FunctionReply.Response
-          import ClientAction.Action
-          UserFunctionReply(
-            clientAction = Some(ClientAction(reply.response match {
-              case Response.Reply(r) => Action.Reply(r)
-              case Response.Failure(f) => Action.Failure(f)
-              case Response.Forward(f) => Action.Forward(f)
-              case Response.Empty => Action.Empty
-            })),
-            sideEffects = reply.sideEffects
-          )
-        })
+        .handleUnary(entityCommandToFunctionCommand(entityCommand))
+        .map(functionReplyToUserFunctionReply)
     }
 }
