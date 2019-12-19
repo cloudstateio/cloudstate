@@ -147,7 +147,15 @@ object EventingManager {
         val sources = inNOutBurger.collect({ case (Some(in), _) => in })
 
         val deadLetters =
-          Flow[Record].map(_._2).dropWhile(_ => true) // TODO Log at warn?
+          Flow[Record]
+            .map({
+              case (topic, msg) =>
+                log.warn(
+                  s"Message destined for eventing topic '${topic}' discarded since no such topic is found in the configuration."
+                )
+                msg
+            })
+            .dropWhile(_ => true)
 
         val destinations =
           ("", deadLetters) +: inNOutBurger.collect({ case (_, Some(out)) => out })

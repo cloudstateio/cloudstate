@@ -9,7 +9,7 @@ import io.cloudstate.pingpong.*;
 
 /** An event sourced entity. */
 @EventSourcedEntity
-class PingPongEntity {
+public class PingPongEntity {
   private final String entityId;
   private int sentPings;
   private int seenPings;

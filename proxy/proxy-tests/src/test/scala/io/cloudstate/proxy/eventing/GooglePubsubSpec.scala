@@ -26,7 +26,7 @@ import scala.sys.process.Process
 import scala.util.Random
 
 import io.cloudstate.pingpong._
-import io.cloudstate.proxy.eventing.pingpong._
+import io.cloudstate.samples.pingpong._
 import io.cloudstate.javasupport.{CloudState, CloudStateRunner}
 
 /**
