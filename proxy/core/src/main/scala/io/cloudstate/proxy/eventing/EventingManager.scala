@@ -199,14 +199,11 @@ object EventingManager {
             .toMat(Sink.ignore)((queue, future) => {
               val emitter = new Emitter {
                 override def emit(event: ProtobufAny, method: MethodDescriptor): Boolean =
-                  if (event.value.isEmpty) false // TODO do we need to check this here?
+                  if (event.value.isEmpty) false
                   else {
-                    // FIXME Check expected type of event compared to method.getOutputType
                     allEligibleOutputsByMethodDescriptor
-                      .get(method.getFullName)
-                      .map(
-                        out => queue.offer((out, event)) // FIXME handle this Future
-                      )
+                      .get(method.getFullName) // FIXME Check expected type of event compared to method.getOutputType
+                      .map(out => queue.offer((out, event))) // FIXME handle this Future
                       .isDefined
                   }
               }
