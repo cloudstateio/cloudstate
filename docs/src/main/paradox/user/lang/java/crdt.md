@@ -1,6 +1,6 @@
 # Conflict-free Replicated Data Types
 
-This page documents how to implement CloudState CRDT entities in Java. For information on what CloudState CRDT entities are, please read the general @ref[Conflict-free Replicated Data Type](../../features/crdts.md) documentation first.
+This page documents how to implement Cloudstate CRDT entities in Java. For information on what Cloudstate CRDT entities are, please read the general @ref[Conflict-free Replicated Data Type](../../features/crdts.md) documentation first.
 
 A CRDT can be created by annotating it with the @javadoc[`@CrdtEntity`](io.cloudstate.javasupport.crdt.CrdtEntity) annotation.
 
@@ -12,7 +12,7 @@ Each CRDT entity manages one root CRDT. That CRDT will either be supplied to the
 
 There are multiple ways that a CRDT entity may access its CRDT. It may have the CRDT injected directly into its constructor or a command handler - the value can be wrapped in an `Optional` to distinguish between entities that have been created and CRDTs that have not yet been created. If not wrapped in `Optional`, the CRDT will be created automatically, according to its type. The CRDT can also be read from any @javadoc[`CrdtContext`](io.cloudstate.javasupport.crdt.CrdtContext) via the @javadoc[`state`](io.cloudstate.javasupport.crdt.CrdtContext#state-java.lang.Class-) method.
 
-An entities CRDT can be created from the entities constructor using the `CrdtFactory` methods on @javadoc[`CrdtCreationContext`](io.cloudstate.javasupport.crdt.CrdtCreationContext), or using the same methods in a command handler using the @javadoc[`CommandContext`](io.cloudstate.javasupport.crdt.CommandContext). Note that the CRDT may only be created once, and only if it hasn't been provided by the CloudState proxy already. Any attempt to create a CRDT when one already exists will throw an `IllegalStateException`.
+An entities CRDT can be created from the entities constructor using the `CrdtFactory` methods on @javadoc[`CrdtCreationContext`](io.cloudstate.javasupport.crdt.CrdtCreationContext), or using the same methods in a command handler using the @javadoc[`CommandContext`](io.cloudstate.javasupport.crdt.CommandContext). Note that the CRDT may only be created once, and only if it hasn't been provided by the Cloudstate proxy already. Any attempt to create a CRDT when one already exists will throw an `IllegalStateException`.
 
 For most use cases, simply injecting the CRDT directly into the constructor, and storing in a local field, will be the most convenient and straight forward method of using a CRDT. In our shopping cart example, we're going to use an @javadoc[`LWWRegisterMap`](io.cloudstate.javasupport.crdt.LWWRegisterMap), this shows how it may be injected:
 
@@ -36,7 +36,7 @@ The following shows the implementation of the `GetCart` command handler. This co
 
 ## Updating a CRDT
 
-Due to CloudStates @ref[take in turns approach](../../features/crdts.md#approach-to-crdts-in-cloudstate), CRDTs may only be updated in command handlers and @ref[stream cancellation callbacks](#responding-to-stream-cancellation).
+Due to Cloudstates @ref[take in turns approach](../../features/crdts.md#approach-to-crdts-in-cloudstate), CRDTs may only be updated in command handlers and @ref[stream cancellation callbacks](#responding-to-stream-cancellation).
 
 Here's a command handler for the `AddItem` command that adds the item to the shopping cart:
 
@@ -78,7 +78,7 @@ A streamed command handler may also register an @javadoc[`onCancel`](io.cloudsta
 
 ## Types of CRDTs
 
-The CloudState Java support library offers Java classes for each of the @ref[CRDTs available in CloudState](../../features/crdts.md#crdts-available-in-cloudstate).
+The Cloudstate Java support library offers Java classes for each of the @ref[CRDTs available in Cloudstate](../../features/crdts.md#crdts-available-in-cloudstate).
 
 ### Counters and flags
 
@@ -114,12 +114,12 @@ In general, we recommend that these values be immutable, as this will prevent ac
 
 ### Sets and Maps
 
-CloudState Java support provides @javadoc[`GSet`](io.cloudstate.javasupport.crdt.GSet) and @javadoc[`ORSet`](io.cloudstate.javasupport.crdt.ORSet) that implement the `java.util.Set` interface, and @javadoc[`ORMap`](io.cloudstate.javasupport.crdt.ORMap) that implements the `java.util.Map`. However, not all operations are implemented - `GSet` doesn't support any removal operations, and `ORMap` does not support any operations that would replace an existing value in the map.
+Cloudstate Java support provides @javadoc[`GSet`](io.cloudstate.javasupport.crdt.GSet) and @javadoc[`ORSet`](io.cloudstate.javasupport.crdt.ORSet) that implement the `java.util.Set` interface, and @javadoc[`ORMap`](io.cloudstate.javasupport.crdt.ORMap) that implements the `java.util.Map`. However, not all operations are implemented - `GSet` doesn't support any removal operations, and `ORMap` does not support any operations that would replace an existing value in the map.
 
 To insert a value into an `ORMap`, you should use the @javadoc[`getOrCreate`](io.cloudstate.javasupport.crdt.ORMap#getOrCreate-K-java.util.function.Function-) method. The passed in callback will give you a @javadoc[`CrdtFactory`](io.cloudstate.javasupport.crdt.CrdtFactory) that you can use to create the CRDT value that you wish to use.
 
 @@@ note { title=Important }
-As with all maps and sets, the values used for map keys and set elements must be immutable, otherwise the elements will be lost, plus in CloudState, any changes made to them will not be replicated to other nodes. Furthermore, their serialized form must be stable. The CloudState proxy uses the serialized form of the values when it's tracking changes, so if the same value serializes to two different sets of bytes on different occasions, they will be treated as different elements in the set or map.
+As with all maps and sets, the values used for map keys and set elements must be immutable, otherwise the elements will be lost, plus in Cloudstate, any changes made to them will not be replicated to other nodes. Furthermore, their serialized form must be stable. The Cloudstate proxy uses the serialized form of the values when it's tracking changes, so if the same value serializes to two different sets of bytes on different occasions, they will be treated as different elements in the set or map.
 
 This is particularly relevant when using protobufs. The ordering of map entries in a serialized protobuf is undefined, and very often will be different for two equal maps, hence, maps should never be used in `ORMap` keys or `GSet` or `ORSet` values. For the rest of the protobuf specification, while no guarantees are made on the stability of it by the protobuf specification itself, the Java libraries do produce stable orderings of fields and stable output of non map values. Care though needs to be taken when changing the protobuf structure, many changes that are backwards compatible from a protobuf standpoint do not produce serializations that are stable across the changes.
 

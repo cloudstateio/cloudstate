@@ -1,6 +1,6 @@
 # Java
 
-CloudState offers an idiomatic, annotation based Java support library for writing stateful services.
+Cloudstate offers an idiomatic, annotation based Java support library for writing stateful services.
 
 @@toc { depth=1 }
 
