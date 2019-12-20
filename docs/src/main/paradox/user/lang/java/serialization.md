@@ -1,15 +1,15 @@
 # Serialization
 
-CloudState functions serve gRPC interfaces, and naturally the input messages and output messages are protobuf messages that get serialized to the protobuf wire format. However, in addition to these messages, there are a number of places where CloudState needs to serialize other objects, for persistence and replication. This includes:
+Cloudstate functions serve gRPC interfaces, and naturally the input messages and output messages are protobuf messages that get serialized to the protobuf wire format. However, in addition to these messages, there are a number of places where Cloudstate needs to serialize other objects, for persistence and replication. This includes:
 
 * Event sourced @ref[events and snapshots](eventsourced.md#persistence-types-and-serialization).
 * CRDT @ref[map keys and set elements](crdt.md#sets-and-maps), and @ref[LWWRegister values](crdt.md#registers).
 
-CloudState supports a number of types and serialization options for these values.
+Cloudstate supports a number of types and serialization options for these values.
 
 ## Primitive types
 
-CloudState supports serializing the following primitive types:
+Cloudstate supports serializing the following primitive types:
 
 | Protobuf type | Java type                      |
 |---------------|--------------------------------|
@@ -25,7 +25,7 @@ The details of how these are serialized can be found @ref[here](../../../develop
 
 ## JSON
 
-CloudState uses [Jackson](https://github.com/FasterXML/jackson) to serialize JSON. Any classes that are annotated with @javadoc[`@Jsonable`](io.cloudstate.javasupport.Jsonable) will be serialized to and from JSON using Jackson.
+Cloudstate uses [Jackson](https://github.com/FasterXML/jackson) to serialize JSON. Any classes that are annotated with @javadoc[`@Jsonable`](io.cloudstate.javasupport.Jsonable) will be serialized to and from JSON using Jackson.
 
 The details of how these are serialized can be found @ref[here](../../../developer/language-support/serialization.md#json-values).
 
