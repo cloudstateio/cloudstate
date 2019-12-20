@@ -20,7 +20,7 @@ We are aware of external libraries implementing the **client Cloudstate protocol
  
 Here is a list of other, **non-official** libraries in various other languages:
 
-| Library Name | Language | Event-based support? | CRDT support? |
+| Library Name | Language | Event-sourcing support? | CRDT support? |
 |--------------|----------|----------------------|---------------|
 | [scala-support](https://github.com/cloudstateio/cloudstate/tree/master/scala-support/src/main) | Scala | :warning: | :warning: |
 | [kotlin-support](https://github.com/cloudstateio/kotlin-support) | Kotlin | :warning: | :warning: |
