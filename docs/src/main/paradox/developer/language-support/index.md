@@ -27,6 +27,8 @@ It is also possible to take a look at the various protobuf messages available in
     
     - `.cloudstate.entity_key`: used to indicate the String to be used as an entity key in a given protobuf object.
     
+    @@@note  { title='Example of an Event where the entity id is defined' }
+    
     ```proto
   message PongSent {
       string id = 1 [(.cloudstate.entity_key) = true];
@@ -34,26 +36,34 @@ It is also possible to take a look at the various protobuf messages available in
   }  
     ```
 
+    @@@
+
     - `.cloudstate.eventing`: used to indicate the name of the topic/queue to use for data input or output.
 
-    ##### Example of topic/queue definition for the function output
+    @@@note  { title='Example of topic/queue definition for the function output' }
+     
     ```proto
   rpc Ping(PongSent) returns (PingSent) {
       option (.cloudstate.eventing) = {
         out: "pings",
-      };
-    }  
+    };
+  }  
     ```
+  
+    @@@
 
-    ##### Example of topic/queue definition for the function input
+    @@@note  { title='Example of topic/queue definition for the function input' }
+    
     ```proto
   rpc SeenPing(PingSent) returns (google.protobuf.Empty) {
       option (.cloudstate.eventing) = {
         in: "pings",
-      };
-    }
+    };
+  }
     ```
-  
+    
+    @@@
+    
 - `protocol` is the protocol between the [proxy](https://cloudstate.io/docs/user/features/index.html#proxy) and what we call a [Language Support](https://cloudstate.io/docs/user/features/index.html#support-library), i.e. a bridge library which speaks with the proxy and exposes a native API for some programming language.
 - `proxy` contains the protocols which the [proxy](https://cloudstate.io/docs/user/features/index.html#proxy) itself speaks with the outside world.
 
@@ -64,7 +74,7 @@ After that, the TCK [application.conf](https://github.com/cloudstateio/cloudstat
 Then in order to run the TCK you need to instruct sbt to run the TCK, but make sure that you have built the Shopping Cart application first.
 
 ```bash
-// This means: "sbt please run the integration tests for the TCK project"
+# This means: "sbt please run the integration tests for the TCK project"
 sbt tck/it:test
 ```
 
