@@ -26,15 +26,14 @@ class StatelessSupport {
   constructor(root, service, handlers, allEntities) {
     this.root = root;
     this.service = service;    
-    this.anySupport = new AnySupport(this.root);
-    this.anySupport = new AnySupport(this.root);
+    this.anySupport = new AnySupport(this.root);    
     this.commandHandlers = handlers.commandHandlers;
     this.allEntities = allEntities;
   }
 
   serialize(obj, requireJsonType) {
-    //return AnySupport.serialize(obj, this.options.serializeAllowPrimitives, this.options.serializeFallbackToJson, requireJsonType);
-    return AnySupport.serialize(obj, true, false, requireJsonType);
+    return AnySupport.serialize(obj, this.options.serializeAllowPrimitives, this.options.serializeFallbackToJson, requireJsonType);
+    //return AnySupport.serialize(obj, true, false, requireJsonType);
   }
 
   deserialize(any) {
@@ -83,10 +82,11 @@ module.exports = class StatelessServices {
 
   handleStreamed(call){
     call.on("data", data => {
-      if (this.services[data.serviceName] && this.services[data.serviceName].commandHandlers.hasOwnProperty(data.name)) {
+      const service = this.services[data.serviceName];
+      if (service && service.commandHandlers.hasOwnProperty(data.name)) {
         const userStream = {
           write: (userData) => {
-            const grpcReturn = this.services[data.serviceName].service.methods[data.name].resolvedResponseType.fromObject(userData);    
+            const grpcReturn = service.service.methods[data.name].resolvedResponseType.fromObject(userData);    
             const requireJsonType =true;
             call.write({        
               reply:{
@@ -97,23 +97,23 @@ module.exports = class StatelessServices {
           end: () => call.end(),                 
         }
         // We call this every time and send a way to stream back .. not sure if this is a good way to do things?
-        this.services[data.serviceName].commandHandlers[data.name](userStream, this.services[data.serviceName].deserialize(data.payload)); 
+        service.commandHandlers[data.name](userStream, service.deserialize(data.payload)); 
       }else{
         console.warn("There is no user function with name: " + data.serviceName + "." + data.name);        
       }
     });
     call.on("end", () => {
       console.debug("stream ended")
-      //call.end();      
     });
   }
 
   handleStreamedOut(call){
     const data = call.request;
-    if (this.services[data.serviceName] && this.services[data.serviceName].commandHandlers.hasOwnProperty(data.name)) {
+    const service = this.services[data.serviceName];
+    if (service && service.commandHandlers.hasOwnProperty(data.name)) {
       const userStream = {
         write: (userData) => {
-          const grpcReturn = this.services[data.serviceName].service.methods[data.name].resolvedResponseType.fromObject(userData);    
+          const grpcReturn = service.service.methods[data.name].resolvedResponseType.fromObject(userData);    
           const requireJsonType =true;
           call.write({        
             reply:{
@@ -125,15 +125,16 @@ module.exports = class StatelessServices {
       }
       this.services[data.serviceName].commandHandlers[data.name](userStream, this.services[data.serviceName].deserialize(data.payload));            
     }else{
-      console.warn("There is no user function with name: ", this.services[data.serviceName] + "." + data.name);      
+      console.warn("There is no user function with name: "+data.name, service);      
     }    
   }
 
   handleStreamedIn(call, callback){
     call.on("data", data => {
-      if (this.services[data.serviceName] && this.services[data.serviceName].commandHandlers.hasOwnProperty(data.name)) {
-        const userReturn = this.services[data.serviceName].commandHandlers[data.name](this.services[data.serviceName].deserialize(data.payload));
-        const grpcReturn = this.services[data.serviceName].service.methods[data.name].resolvedResponseType.fromObject(userReturn);
+      const service = this.services[data.serviceName];
+      if (tservice && service.commandHandlers.hasOwnProperty(data.name)) {
+        const userReturn = service.commandHandlers[data.name](service.deserialize(data.payload));
+        const grpcReturn = service.service.methods[data.name].resolvedResponseType.fromObject(userReturn);
         const requireJsonType =true;
         callback(null, {        
           reply:{
@@ -147,15 +148,15 @@ module.exports = class StatelessServices {
     });
     call.on("end", () => {
       console.debug("stream ended")
-      //call.end();      
     });
 
   }
 
   handleUnary(call, callback){
-    if (this.services[call.request.serviceName] && this.services[call.request.serviceName].commandHandlers.hasOwnProperty(call.request.name)) {
-      const userReturn = this.services[call.request.serviceName].commandHandlers[call.request.name](this.services[call.request.serviceName].deserialize(call.request.payload));
-      const grpcReturn = this.services[call.request.serviceName].service.methods[call.request.name].resolvedResponseType.fromObject(userReturn);
+    const service = this.services[call.request.serviceName];
+    if (service && service.commandHandlers.hasOwnProperty(call.request.name)) {
+      const userReturn = service.commandHandlers[call.request.name](service.deserialize(call.request.payload));
+      const grpcReturn = service.service.methods[call.request.name].resolvedResponseType.fromObject(userReturn);
       const requireJsonType =true;
       var metadata = new grpc.Metadata();
       callback(null, {        
