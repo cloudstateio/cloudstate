@@ -123,7 +123,7 @@ module.exports = class StatelessServices {
         },
         end: () => call.end()        
       }
-      this.services[data.serviceName].commandHandlers[data.name](userStream, this.services[data.serviceName].deserialize(data.payload));            
+      service.commandHandlers[data.name](userStream, service.deserialize(data.payload));            
     }else{
       console.warn("There is no user function with name: "+data.name, service);      
     }    
