@@ -24,3 +24,4 @@
 module.exports.CloudState = require("./src/cloudstate");
 module.exports.EventSourced = require("./src/eventsourced");
 module.exports.crdt = require("./src/crdt");
+module.exports.Stateless = require("./src/stateless");
