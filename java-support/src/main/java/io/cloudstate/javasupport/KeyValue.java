@@ -12,6 +12,9 @@ import io.cloudstate.keyvalue.KeyValue.KVEntity;
 import io.cloudstate.keyvalue.KeyValue.KVModification;
 import io.cloudstate.keyvalue.KeyValue.KVModificationOrBuilder;
 
+import io.cloudstate.javasupport.EntityId;
+import io.cloudstate.javasupport.eventsourced.*;
+
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 public final class KeyValue {
@@ -81,6 +84,10 @@ public final class KeyValue {
       this.unparsed = requireNonNull(initial, "Map initial values must not be null");
     }
 
+    public Map() {
+      this.unparsed = new java.util.TreeMap<String, ByteString>();
+    }
+
     public final <T> Optional<T> get(final Key<T> key) {
       final T value = (T) updated.get(key);
       if (value != null) {
@@ -118,7 +125,7 @@ public final class KeyValue {
       }
     }
 
-    final KVEntityOrBuilder toProto() {
+    final KVEntity toProto() {
       final KVEntity.Builder builder = KVEntity.newBuilder();
       unparsed.forEach(
           (k, v) -> {
@@ -135,10 +142,10 @@ public final class KeyValue {
                       ((Key<Object>) k).writer().apply(v).asByteBuffer()));
             }
           });
-      return builder;
+      return builder.build();
     }
 
-    final KVModificationOrBuilder toProtoModification() {
+    final KVModification toProtoModification() {
       final KVModification.Builder builder = KVModification.newBuilder();
       updated.forEach(
           (k, v) -> {
@@ -151,50 +158,86 @@ public final class KeyValue {
             }
           });
       removed.forEach(builder::addRemovedKeys);
-      return builder;
+      return builder.build();
+    }
+
+    final void resetTo(KVEntity entityState) {
+      unparsed.clear();
+      updated.clear();
+      removed.clear();
+      entityState
+          .getEntriesMap()
+          .forEach(
+              (k, v) ->
+                  unparsed.put(
+                      k,
+                      v.isEmpty()
+                          ? ByteString.empty()
+                          : akka.util.ByteString.fromArrayUnsafe(v.toByteArray())));
+    }
+
+    final void applyModification(KVModificationOrBuilder modification) {
+      // Apply new modifications to the base unparsed values
+      modification
+          .getUpdatedEntriesMap()
+          .forEach(
+              (k, v) ->
+                  unparsed.put(
+                      k,
+                      v.isEmpty()
+                          ? ByteString.empty()
+                          : akka.util.ByteString.fromArrayUnsafe(v.toByteArray())));
+
+      modification.getRemovedKeysList().forEach(unparsed::remove);
     }
   }
 
-  public static class ShoppingCart {
-    private static final Key<String>
-        entity_id = // This would of course be possible to shorten with a stringKeyOf("entity_id")
-        keyOf("entity_id", ByteString::utf8String, ByteString::fromString);
+  @EventSourcedEntity
+  public abstract static class KeyValueEntity {
+    private final Map state = new Map();
 
-    public ShoppingCart(/*@EntityId*/ String entityId, Map state) {
-      state.set(entity_id, entityId);
+    protected Map state() {
+      return state;
+    }
+
+    @Snapshot
+    public KVEntityOrBuilder snapshot() {
+      return state.toProto();
+    }
+
+    @SnapshotHandler
+    public void handleSnapshot(final KVEntity entityState) {
+      state.resetTo(entityState);
+    }
+
+    @EventHandler
+    public void kVModification(final KVModification modification) {
+      state.applyModification(modification);
     }
   }
 
-  public static final void test() {
-    final Key<String> key1 = keyOf("key1", ByteString::utf8String, ByteString::fromString);
+  public static class YourCommandType {}
 
-    final ByteString test = ByteString.fromString("foo", UTF_8);
+  // We'll most likely want to add a KeyValueEntity annotation instead
+  public static class YourClass extends KeyValueEntity {
+    private static final Key<String> name =
+        keyOf("name", ByteString::utf8String, ByteString::fromString);
 
-    final Map state =
-        new Map(new java.util.TreeMap<String, ByteString>(singletonMap(key1.name(), test)));
+    // We'll most likely want to add a specific CommandContext for KeyValueEntity
+    // so you'd instead of state().set(…) would do ctx.setState(…), and then it'd be automatically
+    // flushing ctx.emit(state.toProtoModification()) if there are any changes
+    @CommandHandler
+    public com.google.protobuf.Empty yourCommand(YourCommandType command, CommandContext ctx) {
+      final boolean someValidation = command.hashCode() % 2 == 0; // Or whatever
 
-    System.out.println(state.toProto());
+      if (someValidation) {
+        ctx.fail("Invalid command as foo was baz");
+      }
 
-    System.out.println(state.toProtoModification());
+      state().set(name, "YourAwesomeName");
 
-    System.out.println(state.get(key1));
-
-    state.set(key1, "bar");
-
-    // state.set(key1, 1); <-- can't work, wrong type of the value
-
-    System.out.println(state.get(key1));
-
-    System.out.println(state.toProto());
-
-    System.out.println(state.toProtoModification());
-
-    state.remove(key1);
-
-    System.out.println(state.get(key1));
-
-    System.out.println(state.toProto());
-
-    System.out.println(state.toProtoModification());
+      ctx.emit(state().toProtoModification());
+      return com.google.protobuf.Empty.getDefaultInstance();
+    }
   }
 }
