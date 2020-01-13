@@ -29,8 +29,10 @@ class EventSourcedSupportFactory(system: ActorSystem,
 
   private val eventSourcedClient = EventSourcedClient(grpcClientSettings)
 
-  override def buildEntityTypeSupport(entity: Entity, serviceDescriptor: ServiceDescriptor): EntityTypeSupport = {
-    validate(serviceDescriptor)
+  override def buildEntityTypeSupport(entity: Entity,
+                                      serviceDescriptor: ServiceDescriptor,
+                                      methodDescriptors: Map[String, EntityMethodDescriptor]): EntityTypeSupport = {
+    validate(serviceDescriptor, methodDescriptors)
 
     val stateManagerConfig = EventSourcedEntity.Configuration(entity.serviceName,
                                                               entity.persistenceId,
@@ -53,12 +55,22 @@ class EventSourcedSupportFactory(system: ActorSystem,
     new EventSourcedSupport(eventSourcedEntity, config.proxyParallelism, config.relayTimeout)
   }
 
-  private def validate(serviceDescriptor: ServiceDescriptor): Unit = {
+  private def validate(serviceDescriptor: ServiceDescriptor,
+                       methodDescriptors: Map[String, EntityMethodDescriptor]): Unit = {
     val streamedMethods =
-      serviceDescriptor.getMethods.asScala.filter(m => m.toProto.getClientStreaming || m.toProto.getServerStreaming)
+      methodDescriptors.values.filter(m => m.method.toProto.getClientStreaming || m.method.toProto.getServerStreaming)
     if (streamedMethods.nonEmpty) {
+      val offendingMethods = streamedMethods.map(_.method.getName).mkString(",")
       throw EntityDiscoveryException(
-        s"Event sourced entities do not support streamed methods, but ${serviceDescriptor.getFullName} has the following streamed methods: ${streamedMethods.map(_.getName).mkString(",")}"
+        s"Event sourced entities do not support streamed methods, but ${serviceDescriptor.getFullName} has the following streamed methods: ${offendingMethods}"
+      )
+    }
+    val methodsWithoutKeys = methodDescriptors.values.filter(_.keyFieldsCount < 1)
+    if (methodsWithoutKeys.nonEmpty) {
+      val offendingMethods = methodsWithoutKeys.map(_.method.getName).mkString(",")
+      throw new EntityDiscoveryException(
+        s"Event sourced entities do not support methods whose parameters do not have at least one field marked as entity_key, " +
+        "but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}"
       )
     }
   }
