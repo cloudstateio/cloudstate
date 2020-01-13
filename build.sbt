@@ -61,6 +61,8 @@ val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
 val GraalVersion = "19.3.0"
 
+val svmGroupId = if (GraalVersion startsWith "19.2") "com.oracle.substratevm" else "org.graalvm.nativeimage"
+
 def excludeTheseDependencies = Seq(
   ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
   ExclusionRule("io.aeron"), // we're using Artery-TCP
@@ -411,7 +413,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "org.agrona" % "agrona" % "0.9.29",
         // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
         "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided", // Only needed for compilation
+        svmGroupId % "svm" % GraalVersion % "provided", // Only needed for compilation
 
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
@@ -502,7 +504,7 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
         "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test,
         // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
         "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided", // Only needed for compilation
+        svmGroupId % "svm" % GraalVersion % "provided", // Only needed for compilation
 
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
@@ -539,7 +541,7 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
         "org.postgresql" % "postgresql" % "42.2.6",
         // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
         "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided", // Only needed for compilation
+        svmGroupId % "svm" % GraalVersion % "provided", // Only needed for compilation
 
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
