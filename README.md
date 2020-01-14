@@ -558,6 +558,12 @@ Also, verify that you've added GraalVM correctly by checking that `native-image`
     export GRAALVM_VERSION=graalvm-ce-19.1.1
     export GRAALVM_HOME=<installation-parent-dir>/$GRAALVM_VERSION/Contents/Home
 
+#### LLVM Clang installation
+
+Download and install [`clang`](http://releases.llvm.org/).
+Ensure your system is using `clang` as its c compiler, such as with `alternatives` on linux.
+`sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100`
+
 #### Building
 
 Switch to GraalVM 19.1.1 as your current JRE, and add its binaries (in /bin) to $PATH. You *MUST* do this otherwise you'll get weird warnings since the GraalVM Substitution mechanism won't work.
