@@ -482,6 +482,8 @@ A custom Akka cluster sharding rebalancing strategy may be able to be used to tr
 
 By default, we build a GraalVM native image for Linux. This is done inside a Docker container and so can be done on any platform with Docker installed. We also generate Docker images containing the native image, so the native image can be run on any platform using Docker too.
 
+For further informatoin about setting up the build environment, see [The Cloudstate Build](https://cloudstate.io/docs/developer/thebuild.html#the-cloudstate-build) documentation.
+
 ### Building the native image
 
 If you simply want to run the native image locally, you can use the following command:
@@ -555,6 +557,12 @@ Also, verify that you've added GraalVM correctly by checking that `native-image`
   Example for MacOS:
     export GRAALVM_VERSION=graalvm-ce-19.1.1
     export GRAALVM_HOME=<installation-parent-dir>/$GRAALVM_VERSION/Contents/Home
+
+#### LLVM Clang installation
+
+Download and install [`clang`](http://releases.llvm.org/).
+Ensure your system is using `clang` as its c compiler, such as with `alternatives` on linux.
+`sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100`
 
 #### Building
 
