@@ -540,23 +540,32 @@ If you wish to build a Native Image outside of a container, eg because you're us
 
 #### GraalVM installation
 
-Switch to GraalVM 19.1.1 as your current JRE, and add its binaries (in /bin) to $PATH. You *MUST* do this otherwise you'll get weird warnings since the GraalVM Substitution mechanism won't work.
+Switch to GraalVM 19.2.1 as your current JRE, _and_ add its binaries (in /bin) to $PATH. You *MUST* do this otherwise you'll get weird warnings since the GraalVM Substitution mechanism won't work.
 
 Your `java -version` should report something like:
 
 ```bash
-openjdk version "1.8.0_222"
-OpenJDK Runtime Environment (build 1.8.0_222-20190711112007.graal.jdk8u-src-tar-gz-b08)
-OpenJDK 64-Bit GraalVM CE 19.1.1 (build 25.222-b08-jvmci-19.1-b01, mixed mode)
+openjdk version "1.8.0_232"
+OpenJDK Runtime Environment (build 1.8.0_232-20191008104205.buildslave.jdk8u-src-tar--b07)
+OpenJDK 64-Bit GraalVM CE 19.2.1 (build 25.232-b07-jvmci-19.2-b03, mixed mode)
 ```
 
-Also, verify that you've added GraalVM correctly by checking that `native-image` is available as a command.
+Install native-image using `gu`.
+```
+sudo gu install native-image
+```
 
-* Download and install GraalVM 19.1.1 CE
-* set the GRAALVM_HOME and GRAALVM_VERSION ENV vars:
+Verify that you've added GraalVM correctly by checking that `native-image` is available as a command.
+
+* Download and install GraalVM 19.2.1 CE
+* Install native-image using `gu`
+* Set the GRAALVM_HOME and GRAALVM_VERSION ENV vars.
   Example for MacOS:
-    export GRAALVM_VERSION=graalvm-ce-19.1.1
+    export GRAALVM_VERSION=graalvm-ce-19.2.1
     export GRAALVM_HOME=<installation-parent-dir>/$GRAALVM_VERSION/Contents/Home
+* Add $GRAALVM_HOME/bin to $PATH
+  Example:
+    export PATH=$GRAALVM_HOME/bin:$PATH
 
 #### LLVM Clang installation
 
