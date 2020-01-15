@@ -3,16 +3,16 @@
 ## Prerequisites
 
 Node version
-: CloudState uses the [grpc node package](https://github.com/grpc/grpc-node), which compiles a native gRPC implementation using node-gyp. It requires a minimum of node 4.0.
+: Cloudstate uses the [grpc node package](https://github.com/grpc/grpc-node), which compiles a native gRPC implementation using node-gyp. It requires a minimum of node 4.0.
 
 Build tool
-: CloudState doesn't require any particular build tool, though npm install scripts do need to be run.
+: Cloudstate doesn't require any particular build tool, though npm install scripts do need to be run.
 
 protoc
-: CloudState requires using the protoc compiler to serialize your protobuf definitions into the protobuf binary descriptor format. Helper scripts are provided to automatically download the protoc compiler for your platform and do this compilation.
+: Cloudstate requires using the protoc compiler to serialize your protobuf definitions into the protobuf binary descriptor format. Helper scripts are provided to automatically download the protoc compiler for your platform and do this compilation.
 
 docker
-: CloudState runs in Kubernetes with [Docker], hence you will need Docker to build a container that you can deploy to Kubernetes.
+: Cloudstate runs in Kubernetes with [Docker], hence you will need Docker to build a container that you can deploy to Kubernetes.
 
 Once you have the above, you need to add the `cloudstate` package to your project, which can be done by running:
 
@@ -22,9 +22,9 @@ npm install cloudstate --save
 
 ## Generating the protobuf descriptor set
 
-A CloudState user function needs to report to the CloudState proxy the gRPC descriptor that its serving, serialized to binary using the Protobuf [`FileDescriptorSet` message type](https://developers.google.com/protocol-buffers/docs/techniques#self-description). While there is some support for this in the [protobufjs](https://www.npmjs.com/package/protobufjs) library that is used by CloudState to load descriptors, it is somewhat incomplete and buggy. Hence, CloudState requires that you precompile this descriptor using `protoc` instead.
+A Cloudstate user function needs to report to the Cloudstate proxy the gRPC descriptor that its serving, serialized to binary using the Protobuf [`FileDescriptorSet` message type](https://developers.google.com/protocol-buffers/docs/techniques#self-description). While there is some support for this in the [protobufjs](https://www.npmjs.com/package/protobufjs) library that is used by Cloudstate to load descriptors, it is somewhat incomplete and buggy. Hence, Cloudstate requires that you precompile this descriptor using `protoc` instead.
 
-CloudState provides a utility that does this for you, downloading the `protoc` binary for your platform, and running it with the necessary arguments and include paths. This can be run manually by running `node_modules/cloudstate/bin/compile-descriptor.js`, or we recommend adding it as a `prestart` script to your npm build:
+Cloudstate provides a utility that does this for you, downloading the `protoc` binary for your platform, and running it with the necessary arguments and include paths. This can be run manually by running `node_modules/cloudstate/bin/compile-descriptor.js`, or we recommend adding it as a `prestart` script to your npm build:
 
 ```json
 {
@@ -64,7 +64,7 @@ You can place protobuf files in your project wherever you like, for example, in 
 
 ## Creating and starting a server
 
-There are two ways to create and start a CloudState gRPC server. The first is to create an @extref:[`Entity`](jsdoc:Entity.html), and invoke @extref:[`start`](jsdoc:Entity.html#start) on it. This allows creating a server that serves a single entity, with the default options. We'll look at this more in the subsequent pages. Alternatively, you can use the @extref:[`CloudState`](jsdoc:CloudState.html) class, add one or more entities to it, and then invoke @extref:[`start`](jsdoc:CloudState.html#start), like so:
+There are two ways to create and start a Cloudstate gRPC server. The first is to create an @extref:[`Entity`](jsdoc:Entity.html), and invoke @extref:[`start`](jsdoc:Entity.html#start) on it. This allows creating a server that serves a single entity, with the default options. We'll look at this more in the subsequent pages. Alternatively, you can use the @extref:[`CloudState`](jsdoc:CloudState.html) class, add one or more entities to it, and then invoke @extref:[`start`](jsdoc:CloudState.html#start), like so:
 
 @@snip [index.js](/docs/src/test/js/test/gettingstarted/index.js) { #start }
 

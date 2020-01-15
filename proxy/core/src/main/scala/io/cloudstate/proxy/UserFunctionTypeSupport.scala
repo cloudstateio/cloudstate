@@ -29,16 +29,18 @@ trait UserFunctionTypeSupportFactory {
  */
 abstract class EntityTypeSupportFactory extends UserFunctionTypeSupportFactory {
   override final def build(entity: Entity, serviceDescriptor: ServiceDescriptor): UserFunctionTypeSupport = {
-    val idExtractors = serviceDescriptor.getMethods.asScala
+    val methods = serviceDescriptor.getMethods.asScala
       .map(method => method.getName -> new EntityMethodDescriptor(method))
       .toMap
 
     new EntityUserFunctionTypeSupport(serviceDescriptor,
-                                      idExtractors,
-                                      buildEntityTypeSupport(entity, serviceDescriptor))
+                                      methods,
+                                      buildEntityTypeSupport(entity, serviceDescriptor, methods))
   }
 
-  protected def buildEntityTypeSupport(entity: Entity, serviceDescriptor: ServiceDescriptor): EntityTypeSupport
+  protected def buildEntityTypeSupport(entity: Entity,
+                                       serviceDescriptor: ServiceDescriptor,
+                                       methodDescriptors: Map[String, EntityMethodDescriptor]): EntityTypeSupport
 
 }
 
@@ -47,26 +49,25 @@ private object EntityMethodDescriptor {
 }
 
 final class EntityMethodDescriptor(val method: MethodDescriptor) {
-  private val fields = method.getInputType.getFields.iterator.asScala
+  private[this] val keyFields = method.getInputType.getFields.iterator.asScala
     .filter(field => EntityKeyProto.entityKey.get(Options.convertFieldOptions(field)))
     .toArray
     .sortBy(_.getIndex)
 
-  if (fields.isEmpty) {
-    throw EntityDiscoveryException(
-      s"No field marked with [(cloudstate.entity_key) = true] found for in type ${method.getInputType.getName}, this is needed to associate commands sent to ${method.getFullName} with the entities that they are for."
-    )
-  }
+  def keyFieldsCount: Int = keyFields.length
 
-  def extractId(bytes: ByteString): String = {
-    val dm = DynamicMessage.parseFrom(method.getInputType, bytes)
-
-    fields.length match {
-      case 1 => dm.getField(fields.head).toString
-      case _ => fields.iterator.map(dm.getField).mkString(EntityMethodDescriptor.Separator)
+  def extractId(bytes: ByteString): String =
+    keyFields.length match {
+      case 0 =>
+        ""
+      case 1 =>
+        val dm = DynamicMessage.parseFrom(method.getInputType, bytes)
+        dm.getField(keyFields.head).toString
+      case _ =>
+        val dm = DynamicMessage.parseFrom(method.getInputType, bytes)
+        keyFields.iterator.map(dm.getField).mkString(EntityMethodDescriptor.Separator)
     }
 
-  }
 }
 
 private final class EntityUserFunctionTypeSupport(serviceDescriptor: ServiceDescriptor,

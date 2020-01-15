@@ -1,6 +1,6 @@
 # Forwarding and effects
 
-This page documents how to use CloudState CRDT effects and forwarding in Java. For high level information on what CloudState effects and forwarding is, please read the general @ref[Forwarding and effects](../../features/effects.md) documentation first.
+This page documents how to use Cloudstate CRDT effects and forwarding in Java. For high level information on what Cloudstate effects and forwarding is, please read the general @ref[Forwarding and effects](../../features/effects.md) documentation first.
 
 ## Looking up service call references
 

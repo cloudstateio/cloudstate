@@ -1,3 +1,4 @@
 -Dsbt.classloader.close=false
 -J-XX:+UseCompressedOops
 -J-XX:+CMSClassUnloadingEnabled
+-J-XX:MaxMetaspaceSize=384m

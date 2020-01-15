@@ -11,7 +11,7 @@ This is achieved by having a gRPC based protocol between the Proxy and the User 
 
 ## Creating language support libraries
 
-In order to implement a Support Library for a language, the Cloudstate protocol needs to be implemented as a gRPC server which is started when a Stateful Service is started. This gRPC server will then relay state and commands to the underlying User function.
+In order to implement a [Support Library](https://cloudstate.io/docs/user/features/index.html#support-library) for a language, the Cloudstate protocol needs to be implemented as a gRPC server which is started when a Stateful Service is started. This gRPC server will then relay state and commands to the underlying User function.
 
 To obtain the necessary Cloudstate Protobuf descriptors which needs to be implemented, your build can be set up to fetch the following compressed archives and extract the contents. The archives are available from version `v0.6.0` and forwards.
 
@@ -23,18 +23,58 @@ To obtain the necessary Cloudstate Protobuf descriptors which needs to be implem
 It is also possible to take a look at the various protobuf messages available in the [project's `protocols` folder](https://github.com/cloudstateio/cloudstate/tree/master/protocols). In this folder, you will see 4 sub-folders divided as follow: 
 
 - `example` is for implementing the example application, which is also used by the TCK for third-party language (and proxy implementation) validation.
-- `frontend` is what is used by developers of services when they define their proto interfaces.
-- `protocol` is the protocol between the proxy and what we call a Language Support, i.e. a bridge library which speaks with the proxy and exposes a native API for some programming language.
-- `proxy` contains the protocols which the proxy itself speaks with the outside world.
+- `frontend` is what is used by developers of services when they define their proto interfaces. The `cloudstate` subfolder in particular contains the definition of two protobuf options:
+    
+    - `.cloudstate.entity_key`: used to indicate the String to be used as an entity key in a given protobuf object.
+    
+    @@@note  { title='Example of an Event where the entity id is defined' }
+    
+    ```proto
+  message PongSent {
+      string id = 1 [(.cloudstate.entity_key) = true];
+      int32 sequence_number = 2;
+  }  
+    ```
 
-When implementing a Support Library, the implementation can be verified using the TCK. In order to run the TCK, one must create an implementation of the Shopping Cart application using the newly created Support Library which is to be verified.
+    @@@
+
+    - `.cloudstate.eventing`: used to indicate the name of the topic/queue to use for data input or output.
+
+    @@@note  { title='Example of topic/queue definition for the function output' }
+     
+    ```proto
+  rpc Ping(PongSent) returns (PingSent) {
+      option (.cloudstate.eventing) = {
+        out: "pings",
+    };
+  }  
+    ```
+  
+    @@@
+
+    @@@note  { title='Example of topic/queue definition for the function input' }
+    
+    ```proto
+  rpc SeenPing(PingSent) returns (google.protobuf.Empty) {
+      option (.cloudstate.eventing) = {
+        in: "pings",
+    };
+  }
+    ```
+    
+    @@@
+    
+- `protocol` is the protocol between the [proxy](https://cloudstate.io/docs/user/features/index.html#proxy) and what we call a [Language Support](https://cloudstate.io/docs/user/features/index.html#support-library), i.e. a bridge library which speaks with the proxy and exposes a native API for some programming language.
+- `proxy` contains the protocols which the [proxy](https://cloudstate.io/docs/user/features/index.html#proxy) itself speaks with the outside world.
+
+When implementing a [Support Library](https://cloudstate.io/docs/user/features/index.html#support-library), the implementation can be verified using the TCK. In order to run the TCK, one must create an implementation of the Shopping Cart application using the newly created [Support Library](https://cloudstate.io/docs/user/features/index.html#support-library) which is to be verified.
 
 After that, the TCK [application.conf](https://github.com/cloudstateio/cloudstate/blob/master/tck/src/it/resources/application.conf) needs to be modified with a new section to instruct what combination of Proxy implementation will be verified against which implementation of the Shopping Cart application.
 
 Then in order to run the TCK you need to instruct sbt to run the TCK, but make sure that you have built the Shopping Cart application first.
 
 ```bash
-// This means: "sbt please run the integration tests for the TCK project"
+# This means: "sbt please run the integration tests for the TCK project"
 sbt tck/it:test
 ```
 

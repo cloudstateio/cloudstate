@@ -27,10 +27,12 @@ class StatelessFunctionSupportFactory(system: ActorSystem,
 
   private final val statelessFunctionClient = StatelessFunctionClient(grpcClientSettings)
 
-  override def buildEntityTypeSupport(entity: Entity, serviceDescriptor: ServiceDescriptor): EntityTypeSupport = {
+  override def buildEntityTypeSupport(entity: Entity,
+                                      serviceDescriptor: ServiceDescriptor,
+                                      methodDescriptors: Map[String, EntityMethodDescriptor]): EntityTypeSupport = {
     log.debug("Starting StatelessFunction entity for {}", entity.persistenceId)
 
-    validate(serviceDescriptor)
+    validate(serviceDescriptor, methodDescriptors)
 
     new StatelessFunctionSupport(entity.serviceName,
                                  statelessFunctionClient,
@@ -39,7 +41,8 @@ class StatelessFunctionSupportFactory(system: ActorSystem,
                                  ec)
   }
 
-  private[this] final def validate(serviceDescriptor: ServiceDescriptor): Unit = ()
+  private[this] final def validate(serviceDescriptor: ServiceDescriptor,
+                                   methodDescriptors: Map[String, EntityMethodDescriptor]): Unit = ()
 }
 
 private final class StatelessFunctionSupport(serviceName: String,

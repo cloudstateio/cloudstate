@@ -155,7 +155,7 @@ object CloudStateProxyMain {
       // hooks don't get executed (so no graceful leaving of the cluster). Worse, if the process
       // is the entrypoint for a Docker container (ie, it has pid 1) then it won't respond to TERM
       // at all, because Linux does not implement the default TERM handling if pid is 1, the result
-      // being that the process will be killed after the configured termination timeout. So, we we
+      // being that the process will be killed after the configured termination timeout. So, we
       // need to register a TERM signal handler.
       Signal.handle(new Signal("TERM"), _ => System.exit(0))
 

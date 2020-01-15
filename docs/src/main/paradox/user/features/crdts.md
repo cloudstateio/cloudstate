@@ -16,7 +16,7 @@ CRDTs are also useful in cases where high availability is required. If one or mo
 
 Finally, CRDTs can be useful in some cases where very high throughput writes are required. Exactly when this holds depends on the particular CRDT being used, counters and votes for example can support very high throughput writes because they don't need to replicate every single update to every node, it is sufficient to just replicate their updates occasionally.
 
-## CRDTs available in CloudState
+## CRDTs available in Cloudstate
 
 GCounter
 : A Grow-only Counter, or GCounter, is a counter that can only be incremented. It works by tracking a separate counter value for each node, and taking the sum of the values for all the nodes to get the current counter value. Since each node only updates its own counter value, each node can coordinate those updates to ensure they are consistent. Then the merge function, if it sees two different values for the same node, simply takes the highest value, because that has to be the most recent value that the node published.
@@ -28,13 +28,13 @@ GSet
 : A Grow-only Set, or GSet, is a set that can only have items added to it. A GSet is a very simple CRDT, its merge function is defined by taking the union of the two GSets being merged.
 
 ORSet
-: An Observed-Removed Set, or ORSet, is a set that can have items both added and removed from it. It is implemented by maintaining a set of unique tags for each element which are generated on addition into the set. When an element is removed, all the tags that that node currently observes are added to the removal set, so as long as there haven't been any new additions that the node hasn't seen when it removed the element, the element will be removed. A naive implementation of this will accumulate tombstones as elements are removed, however the CloudState reference implementation provides an implementation that cleans up tombstones.
+: An Observed-Removed Set, or ORSet, is a set that can have items both added and removed from it. It is implemented by maintaining a set of unique tags for each element which are generated on addition into the set. When an element is removed, all the tags that that node currently observes are added to the removal set, so as long as there haven't been any new additions that the node hasn't seen when it removed the element, the element will be removed. A naive implementation of this will accumulate tombstones as elements are removed, however the Cloudstate reference implementation provides an implementation that cleans up tombstones.
 
 Flag
 : A Flag is a boolean value that starts as false, and can be set to true. Once set to true, it cannot be set back to false. A flag is a very simple CRDT, the merge function is simply a boolean or over the two flag values being merged.
 
 LWWRegister
-: A Last-Write-Wins Register, or LWWRegister, is a CRDT that can hold any value, along with a clock value and node id to indicate when it was updated by which node. If two nodes have two different versions of the value, the one with the highest clock value wins. If the clock values are equal, then a stable function on the nodes is used to determine it (eg, the node with the lowest address). Note that LWWRegisters do not support partial updates of their values. If the register holds a person object, and one node updates the age property, while another concurrently updates the name property, only one of those updates will eventually win. By default, LWWRegister's are vulnerable to clock skew between nodes. CloudState supports optionally providing a custom clock value should a more trustworthy ordering for updates be available.
+: A Last-Write-Wins Register, or LWWRegister, is a CRDT that can hold any value, along with a clock value and node id to indicate when it was updated by which node. If two nodes have two different versions of the value, the one with the highest clock value wins. If the clock values are equal, then a stable function on the nodes is used to determine it (eg, the node with the lowest address). Note that LWWRegisters do not support partial updates of their values. If the register holds a person object, and one node updates the age property, while another concurrently updates the name property, only one of those updates will eventually win. By default, LWWRegister's are vulnerable to clock skew between nodes. Cloudstate supports optionally providing a custom clock value should a more trustworthy ordering for updates be available.
 
 ORMap
 : An Observed-Removed Map, or ORMap, is similar to an ORSet, with the addition that the values of the set serve as keys for a map, and the values of the map are themselves, CRDTs. When a value for the same key in an ORMap is modified concurrently on two different nodes, the values from the two nodes are merged together.
@@ -42,24 +42,24 @@ ORMap
 Vote
 : A Vote is a CRDT which allows nodes to vote on a condition. It's similar to a GCounter, each node has its own counter, and an odd value is considered a vote for the condition, while an even value is considered a vote against. The result of the vote is decided by taking the votes of all nodes that are currently members of the cluster (when a node leave, its vote is discarded). Multiple decision strategies can be used to decide the result of the vote, such as at least one, majority and all.
 
-## Approach to CRDTs in CloudState
+## Approach to CRDTs in Cloudstate
 
-A stateful service can manage multiple CRDTs, each CRDT being identified by the CloudState entity key.
+A stateful service can manage multiple CRDTs, each CRDT being identified by the Cloudstate entity key.
 
-The CloudState proxy is responsible for implementing the CRDT mechanics. This includes the merge function, the mechanism for replicating state changes and ensuring all nodes eventually come to consensus on each CRDTs state. The proxy will tell the user function what the state of the CRDT is, and has a protocol for pushing updates and receive updates from the user function. The proxy and the user function keep their local representations in sync by taking it in turns to be allowed to make updates - a user function is allowed to make updates when it receives a command from the proxy, and a proxy is allowed to make updates (received from other nodes) when there is no outstanding command on the user function. This approach keeps the CRDT implementation in the user function very simple, while the proxy does all the heavy lifting and complex logic required for the more complex CRDTs.
+The Cloudstate proxy is responsible for implementing the CRDT mechanics. This includes the merge function, the mechanism for replicating state changes and ensuring all nodes eventually come to consensus on each CRDTs state. The proxy will tell the user function what the state of the CRDT is, and has a protocol for pushing updates and receive updates from the user function. The proxy and the user function keep their local representations in sync by taking it in turns to be allowed to make updates - a user function is allowed to make updates when it receives a command from the proxy, and a proxy is allowed to make updates (received from other nodes) when there is no outstanding command on the user function. This approach keeps the CRDT implementation in the user function very simple, while the proxy does all the heavy lifting and complex logic required for the more complex CRDTs.
 
 ## Streamed CRDT calls
 
-CloudState CRDTs support handling server streamed calls, that is, when the gRPC service call for a CRDT marks the return type as `streamed`. When a user function receives a streamed message, it is allowed to update the CRDT, on two occasions - when the call is first received, and when the client cancels the stream. If it wishes to make updates at other times, it can do so by @ref:[emitting effects](effects.md) with the streamed messages that it sends down the stream.
+Cloudstate CRDTs support handling server streamed calls, that is, when the gRPC service call for a CRDT marks the return type as `streamed`. When a user function receives a streamed message, it is allowed to update the CRDT, on two occasions - when the call is first received, and when the client cancels the stream. If it wishes to make updates at other times, it can do so by @ref:[emitting effects](effects.md) with the streamed messages that it sends down the stream.
 
-A user function can send a message down a stream in response to anything, however the CloudState supplied support libraries only allow sending messages in response to the CRDT changing. In this way, use cases that require monitoring the state of a CRDT can be implemented.
+A user function can send a message down a stream in response to anything, however the Cloudstate supplied support libraries only allow sending messages in response to the CRDT changing. In this way, use cases that require monitoring the state of a CRDT can be implemented.
 
 ## Write consistency
 
-By default, updates are performed on the local node, and are asynchronously replicated to other nodes. Updates can also be performed at other write consistencies, CloudState supports majority and all. Note that when non local write consistencies are used, then many of the advantages of CRDTs are no longer available, writes will require network communication and can be impacted by failures on other nodes. Hence, non local write consistencies should be used with caution, they are primarily useful in situations where the rare case of a write being lost due to a node crashing before it replicates it to another node is unacceptable.
+By default, updates are performed on the local node, and are asynchronously replicated to other nodes. Updates can also be performed at other write consistencies, Cloudstate supports majority and all. Note that when non local write consistencies are used, then many of the advantages of CRDTs are no longer available, writes will require network communication and can be impacted by failures on other nodes. Hence, non local write consistencies should be used with caution, they are primarily useful in situations where the rare case of a write being lost due to a node crashing before it replicates it to another node is unacceptable.
 
 ## Durability
 
-While CRDTs can be durable, the CloudState Reference Implementation does not yet support durable CRDTs. This feature may be offered in future.
+While CRDTs can be durable, the Cloudstate Reference Implementation does not yet support durable CRDTs. This feature may be offered in future.
 
-Since CloudState CRDTs are not durable, this means scaling to zero and complete cluster crashes will result in a loss of all data.
+Since Cloudstate CRDTs are not durable, this means scaling to zero and complete cluster crashes will result in a loss of all data.
