@@ -140,7 +140,10 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
   import EntityDiscoveryManager.Ready
 
   private[this] final val clientSettings =
-    GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
+    GrpcClientSettings
+      .connectToServiceAt(config.userFunctionInterface, config.userFunctionPort)
+      .withChannelBuilderOverrides(_.maxInboundMessageSize((4 * 1e6).toInt))
+      .withTls(false)
   private[this] final val entityDiscoveryClient = EntityDiscoveryClient(clientSettings)
   private[this] final val autoscaler = {
     val autoscalerSettings = AutoscalerSettings(system)
