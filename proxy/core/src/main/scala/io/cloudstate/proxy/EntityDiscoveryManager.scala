@@ -71,7 +71,7 @@ object EntityDiscoveryManager {
       userFunctionPort: Int,
       relayTimeout: Timeout,
       relayOutputBufferSize: Int,
-      maxInboundMessageSize: Int,
+      maxInboundMessageSize: Long,
       gracefulTerminationTimeout: Timeout,
       passivationTimeout: Timeout,
       numberOfShards: Int,
@@ -89,7 +89,7 @@ object EntityDiscoveryManager {
            userFunctionInterface = config.getString("user-function-interface"),
            userFunctionPort = config.getInt("user-function-port"),
            relayTimeout = Timeout(config.getDuration("relay-timeout").toMillis.millis),
-           maxInboundMessageSize = config.getInt("max-inbound-message-size"),
+           maxInboundMessageSize = config.getBytes("max-inbound-message-size"),
            relayOutputBufferSize = config.getInt("relay-buffer-size"),
            gracefulTerminationTimeout = Timeout(config.getDuration("graceful-termination-timeout").toMillis.millis),
            passivationTimeout = Timeout(config.getDuration("passivation-timeout").toMillis.millis),
@@ -146,7 +146,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
   private[this] final val clientSettings =
     GrpcClientSettings
       .connectToServiceAt(config.userFunctionInterface, config.userFunctionPort)
-      .withChannelBuilderOverrides(_.maxInboundMessageSize(config.maxInboundMessageSize))
+      .withChannelBuilderOverrides(_.maxInboundMessageSize(config.maxInboundMessageSize.toInt))
       .withTls(false)
   private[this] final val entityDiscoveryClient = EntityDiscoveryClient(clientSettings)
   private[this] final val autoscaler = {
