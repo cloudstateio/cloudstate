@@ -25,7 +25,12 @@ import akka.stream.{ActorMaterializer, Materializer}
 import akka.stream.scaladsl.{RunnableGraph, Sink}
 import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
-import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings, ClusterSingletonProxy, ClusterSingletonProxySettings}
+import akka.cluster.singleton.{
+  ClusterSingletonManager,
+  ClusterSingletonManagerSettings,
+  ClusterSingletonProxy,
+  ClusterSingletonProxySettings
+}
 import akka.grpc.GrpcClientSettings
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
@@ -37,7 +42,14 @@ import io.cloudstate.protocol.function.StatelessFunction
 import io.cloudstate.proxy.StatsCollector.StatsCollectorSettings
 import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
 import io.cloudstate.proxy.ConcurrencyEnforcer.ConcurrencyEnforcerSettings
-import io.cloudstate.proxy.autoscaler.{Autoscaler, AutoscalerSettings, ClusterMembershipFacadeImpl, KubernetesDeploymentScaler, NoAutoscaler, NoScaler}
+import io.cloudstate.proxy.autoscaler.{
+  Autoscaler,
+  AutoscalerSettings,
+  ClusterMembershipFacadeImpl,
+  KubernetesDeploymentScaler,
+  NoAutoscaler,
+  NoScaler
+}
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
 import io.cloudstate.proxy.eventing.EventingManager
@@ -132,8 +144,9 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
   import EntityDiscoveryManager.Ready
 
   // We use this to indicate problems with the configuration
-  private final val configError: String => Nothing = s => throw new ConfigurationException("EntityDiscoveryManager Config: " + s)
-  if(config.maxInboundMessageSize > Int.MaxValue){
+  private final val configError: String => Nothing = s =>
+    throw new ConfigurationException("EntityDiscoveryManager Config: " + s)
+  if (config.maxInboundMessageSize > Int.MaxValue) {
     configError(s"max-inbound-message-size exceeds the maximum allowed value of: ${Int.MaxValue}")
   }
 
