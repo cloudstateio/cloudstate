@@ -16,7 +16,7 @@
 
 package io.cloudstate.proxy
 
-import akka.{ConfigurationException, Done, NotUsed}
+import akka.{Done, NotUsed}
 import akka.actor.{Actor, ActorLogging, CoordinatedShutdown, PoisonPill, Props, Status}
 import akka.cluster.Cluster
 import akka.util.Timeout
