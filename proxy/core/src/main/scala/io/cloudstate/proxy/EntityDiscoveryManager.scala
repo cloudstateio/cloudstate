@@ -112,8 +112,10 @@ object EntityDiscoveryManager {
       require(proxyParallelism > 0, s"proxy-parallelism must be greater than 0 but was $proxyParallelism")
       require(numberOfShards > 0, s"number-of-shards must be greater than 0 but was $numberOfShards")
       require(relayOutputBufferSize > 0, "relay-buffer-size must be greater than 0 but was $relayOutputBufferSize")
-      require(maxInboundMessageSize > 0, "max-inbound-message-size must be greater than 0 but was $maxInboundMessageSize")
-      require(maxInboundMessageSize < Int.MaxValue, s"max-inbound-message-size exceeds the maximum allowed value of: ${Int.MaxValue}")
+      require(maxInboundMessageSize > 0,
+              "max-inbound-message-size must be greater than 0 but was $maxInboundMessageSize")
+      require(maxInboundMessageSize < Int.MaxValue,
+              s"max-inbound-message-size exceeds the maximum allowed value of: ${Int.MaxValue}")
     }
   }
 
