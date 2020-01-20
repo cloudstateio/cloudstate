@@ -114,7 +114,7 @@ object EntityDiscoveryManager {
       require(relayOutputBufferSize > 0, "relay-buffer-size must be greater than 0 but was $relayOutputBufferSize")
       require(maxInboundMessageSize > 0,
               "max-inbound-message-size must be greater than 0 but was $maxInboundMessageSize")
-      require(maxInboundMessageSize >= Int.MaxValue,
+      require(maxInboundMessageSize <= Int.MaxValue,
               s"max-inbound-message-size exceeds the maximum allowed value of: ${Int.MaxValue}")
     }
   }
