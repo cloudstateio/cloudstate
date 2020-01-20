@@ -71,6 +71,7 @@ object EntityDiscoveryManager {
       userFunctionPort: Int,
       relayTimeout: Timeout,
       relayOutputBufferSize: Int,
+      maxInboundMessageSize: Long,
       gracefulTerminationTimeout: Timeout,
       passivationTimeout: Timeout,
       numberOfShards: Int,
@@ -88,6 +89,7 @@ object EntityDiscoveryManager {
            userFunctionInterface = config.getString("user-function-interface"),
            userFunctionPort = config.getInt("user-function-port"),
            relayTimeout = Timeout(config.getDuration("relay-timeout").toMillis.millis),
+           maxInboundMessageSize = config.getBytes("max-inbound-message-size"),
            relayOutputBufferSize = config.getInt("relay-buffer-size"),
            gracefulTerminationTimeout = Timeout(config.getDuration("graceful-termination-timeout").toMillis.millis),
            passivationTimeout = Timeout(config.getDuration("passivation-timeout").toMillis.millis),
@@ -110,6 +112,10 @@ object EntityDiscoveryManager {
       require(proxyParallelism > 0, s"proxy-parallelism must be greater than 0 but was $proxyParallelism")
       require(numberOfShards > 0, s"number-of-shards must be greater than 0 but was $numberOfShards")
       require(relayOutputBufferSize > 0, "relay-buffer-size must be greater than 0 but was $relayOutputBufferSize")
+      require(maxInboundMessageSize > 0,
+              "max-inbound-message-size must be greater than 0 but was $maxInboundMessageSize")
+      require(maxInboundMessageSize <= Int.MaxValue,
+              s"max-inbound-message-size exceeds the maximum allowed value of: ${Int.MaxValue}")
     }
   }
 
@@ -140,7 +146,10 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
   import EntityDiscoveryManager.Ready
 
   private[this] final val clientSettings =
-    GrpcClientSettings.connectToServiceAt(config.userFunctionInterface, config.userFunctionPort).withTls(false)
+    GrpcClientSettings
+      .connectToServiceAt(config.userFunctionInterface, config.userFunctionPort)
+      .withChannelBuilderOverrides(_.maxInboundMessageSize(config.maxInboundMessageSize.toInt))
+      .withTls(false)
   private[this] final val entityDiscoveryClient = EntityDiscoveryClient(clientSettings)
   private[this] final val autoscaler = {
     val autoscalerSettings = AutoscalerSettings(system)
