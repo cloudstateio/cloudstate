@@ -112,8 +112,8 @@ object EntityDiscoveryManager {
       require(proxyParallelism > 0, s"proxy-parallelism must be greater than 0 but was $proxyParallelism")
       require(numberOfShards > 0, s"number-of-shards must be greater than 0 but was $numberOfShards")
       require(relayOutputBufferSize > 0, "relay-buffer-size must be greater than 0 but was $relayOutputBufferSize")
-      require(maxInboundMessageSize > 0,
-              "max-inbound-message-size must be greater than 0 but was $maxInboundMessageSize")
+      require(maxInboundMessageSize > 0, "max-inbound-message-size must be greater than 0 but was $maxInboundMessageSize")
+      require(maxInboundMessageSize < Int.MaxValue, s"max-inbound-message-size exceeds the maximum allowed value of: ${Int.MaxValue}")
     }
   }
 
@@ -146,9 +146,6 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
   // We use this to indicate problems with the configuration
   private final val configError: String => Nothing = s =>
     throw new ConfigurationException("EntityDiscoveryManager Config: " + s)
-  if (config.maxInboundMessageSize > Int.MaxValue) {
-    configError(s"max-inbound-message-size exceeds the maximum allowed value of: ${Int.MaxValue}")
-  }
 
   private[this] final val clientSettings =
     GrpcClientSettings
