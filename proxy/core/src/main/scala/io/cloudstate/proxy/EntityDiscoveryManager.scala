@@ -145,10 +145,6 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
   implicit val ec = context.dispatcher
   import EntityDiscoveryManager.Ready
 
-  // We use this to indicate problems with the configuration
-  private final val configError: String => Nothing = s =>
-    throw new ConfigurationException("EntityDiscoveryManager Config: " + s)
-
   private[this] final val clientSettings =
     GrpcClientSettings
       .connectToServiceAt(config.userFunctionInterface, config.userFunctionPort)
