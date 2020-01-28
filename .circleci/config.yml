@@ -108,8 +108,8 @@ jobs:
     machine: true
     resource_class: 2xlarge
     description: it tests
-    environment:
-      SBT_OPTS="-Xms1g -Xmx3g -Xss2g -XX:MaxMetaspaceSize=2g"
+#    environment:
+#      SBT_OPTS="-Xms1g -Xmx3g -Xss2g -XX:MaxMetaspaceSize=2g"
     steps:
       - checkout
       - run:
