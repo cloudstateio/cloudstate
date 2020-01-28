@@ -69,7 +69,6 @@ import com.google.protobuf.Descriptors.{
   MethodDescriptor,
   ServiceDescriptor
 }
-import com.google.protobuf.{descriptor => ScalaPBDescriptorProtos}
 import com.google.protobuf.util.JsonFormat
 import com.google.protobuf.Descriptors.FieldDescriptor.JavaType
 import java.lang.{
@@ -218,12 +217,12 @@ object HttpApi {
 
         rule.pattern match {
           case Empty => configError(s"Pattern missing for rule [$rule]!") // TODO improve error message
-          case p @ Get(pattern) => (GET, pattern)
-          case p @ Put(pattern) => (PUT, pattern)
-          case p @ Post(pattern) => (POST, pattern)
-          case p @ Delete(pattern) => (DELETE, pattern)
-          case p @ Patch(pattern) => (PATCH, pattern)
-          case p @ Custom(chp) =>
+          case Get(pattern) => (GET, pattern)
+          case Put(pattern) => (PUT, pattern)
+          case Post(pattern) => (POST, pattern)
+          case Delete(pattern) => (DELETE, pattern)
+          case Patch(pattern) => (PATCH, pattern)
+          case Custom(chp) =>
             if (chp.kind == "*")
               (ANY_METHOD, chp.path) // FIXME is "path" the same as "pattern" for the other kinds? Is an empty kind valid?
             else configError(s"Only Custom patterns with [*] kind supported but [${chp.kind}] found!")
