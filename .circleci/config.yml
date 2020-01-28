@@ -111,6 +111,7 @@ jobs:
 #    environment:
 #      SBT_OPTS="-Xms1g -Xmx3g -Xss2g -XX:MaxMetaspaceSize=2g"
     steps:
+      - setup_sbt
       - checkout
       - run:
           name: npm debug
