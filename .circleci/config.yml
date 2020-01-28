@@ -124,7 +124,7 @@ jobs:
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
             nvm install v13.7.0
             nvm alias default v13.7.0
-    
+            touch $BASH_ENV
             # Each step uses the same `$BASH_ENV`, so need to modify it
             echo 'export NVM_DIR="/opt/circleci/.nvm"' >> $BASH_ENV
             echo "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"" >> $BASH_ENV
