@@ -115,17 +115,34 @@ jobs:
             node -e "console.log('Running Node.js ' + process.version)"
             npm version
       - run:
-          name: npm upgrade
+          name: Install node@13.7.0
           command: |
             set +e
-            touch $BASH_ENV
+            #curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.5/install.sh | bash
             curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
-            echo 'export NVM_DIR="$HOME/.nvm"' >> $BASH_ENV
-            echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> $BASH_ENV
-            echo 'nvm install node' >> $BASH_ENV
-            # echo 'nvm alias default v6.2.2' >> $BASH_ENV
+            export NVM_DIR="/opt/circleci/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            nvm install v13.7.0
+            nvm alias default v13.7.0
+    
+            # Each step uses the same `$BASH_ENV`, so need to modify it
+            echo 'export NVM_DIR="/opt/circleci/.nvm"' >> $BASH_ENV
+            echo "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"" >> $BASH_ENV
             node -e "console.log('Running Node.js ' + process.version)"
             npm version
+
+#      - run:
+#          name: npm upgrade
+#          command: |
+#            set +e
+#            touch $BASH_ENV
+#            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
+#            echo 'export NVM_DIR="$HOME/.nvm"' >> $BASH_ENV
+#            echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> $BASH_ENV
+#            echo 'nvm install node' >> $BASH_ENV
+#            # echo 'nvm alias default v6.2.2' >> $BASH_ENV
+#            node -e "console.log('Running Node.js ' + process.version)"
+#            npm version
       - run:
           name: after upgrade
           command: |
