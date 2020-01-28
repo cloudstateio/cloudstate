@@ -124,6 +124,8 @@ jobs:
             echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> $BASH_ENV
             echo 'nvm install node' >> $BASH_ENV
             # echo 'nvm alias default v6.2.2' >> $BASH_ENV
+            node -e "console.log('Running Node.js ' + process.version)"
+            npm version
       - run:
           name: after upgrade
           command: |
