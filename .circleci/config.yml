@@ -129,8 +129,8 @@ jobs:
             npm install
             cd "/home/circleci/project"
             ls
-            export _JAVA_OPTIONS="-Xmx4g -Xms1024m"
-            sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
+            #export _JAVA_OPTIONS="-Xmx4g -Xms1024m"
+            SBT_OPTS="-Xms1g -Xmx4g -Xss2g -XX:MaxMetaspaceSize=2g" sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
 workflows:
   version: 2
   build_and_test:
