@@ -1,0 +1,136 @@
+version: 2.1
+# CircleCi Build Config for Cloudstateio
+commands:
+  setup_sbt:
+    description: "Set up SBT"
+    parameters:
+      version:
+        type: string
+        default: "1.3.3"
+    steps:
+      - run:
+          name: Install SBT
+          command: |
+            curl -L -o sbt-<< parameters.version >>.deb https://dl.bintray.com/sbt/debian/sbt-<< parameters.version >>.deb
+            sudo dpkg -i sbt-<< parameters.version >>.deb
+            rm sbt-<< parameters.version >>.deb
+
+  save_sbt_cache:
+    description: "Save SBT cache"
+    steps:
+      - save_cache:
+          key: sbt-cache-23
+          paths:
+            - "~/.ivy2/cache"
+            - "~/.sbt"
+            - "~/.m"
+            - "~/.coursier"
+
+  setup_graalvm:
+    description: "Set up GraalVM for local builds"
+    parameters:
+      graalVersion:
+        default: "19.2.1"
+        type: string
+      graalVMDownloadURL:
+        default: "https://github.com/oracle/graal/releases/download/vm-19.2.1/graalvm-ce-linux-amd64-19.2.1.tar.gz"
+        type: string
+    steps:
+      - run:
+          name: Build Essentials
+          command: |
+            sudo apt install build-essential
+            sudo apt-get install libz-dev
+      - run:
+          name: Download and Setup Graal VM
+          command: |
+            mkdir ~/graal
+            wget << parameters.graalVMDownloadURL >> -O ~/graal/graalvm-ce-linux-amd64-19.2.1.tar.gz
+            tar -xvzf ~/graal/graalvm-ce-linux-amd64-19.2.1.tar.gz -C ~/graal/ > /dev/null 2>&1
+            export PATH="~/graal/graalvm-ce-19.2.1/bin:$PATH"
+            gu install native-image
+            sudo ln -s ~/graal/graalvm-ce-19.2.1/bin/native-image  /usr/bin/native-image
+
+  save_graal_cache:
+    description: Save Graal Downloaded to cache
+    steps:
+      - save_cache:
+          key: graal-vm-cache
+          paths:
+            - ~/.graal
+
+  npm_setup:
+    description: setup npm
+    steps:
+      - run:
+          name: install npm
+          command: |
+            cd samples/js-shopping-cart && rm package-lock.json && npm install
+            cd "$CIRCLE_WORKING_DIRECTORY"
+            cd node-support && rm package-lock.json && npm install
+            cd "$CIRCLE_WORKING_DIRECTORY"
+
+jobs:
+  graal_local_build:
+    machine: true
+    resource_class: large
+    steps:
+      - setup_sbt
+      - setup_graalvm
+      - checkout
+      - run:
+          name: graal build
+          command: sbt "project proxy-core" "set graalVMVersion := None"  graalvm-native-image:packageBin
+          no_output_timeout: 60m
+
+  it_tests:
+    machine: true
+    resource_class: large
+    description: it tests for tagged versions
+#    environment:
+#      CIRCLE_TAG: v0.5.0
+    parameters:
+      tag:
+        type: string
+        default: "v0.5.0"
+    steps:
+#      - setup_sbt
+      - checkout
+      - npm_setup
+      - run:
+          name: debug
+          command: |
+            cd "$CIRCLE_WORKING_DIRECTORY"
+            sbt update
+            sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
+
+  it_tests_debug:
+    machine: true
+    resource_class: xlarge
+    description: debug
+    steps:
+      - checkout
+      - run:
+          name: npm debug
+          command: |
+            node -e "console.log('Running Node.js' + process.version)" || true
+            npm version || true
+            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
+            node -e "console.log('Running Node.js' + process.version)" || true
+            npm version || true
+            cd node-support
+            rm package-lock.json
+            npm install
+            cd "/home/circleci/project"
+            cd samples/js-shopping-cart
+            rm package-lock.json
+            npm install
+            cd "/home/circleci/project"
+            ls
+            export _JAVA_OPTIONS="-Xmx4g -Xms1024m"
+            sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - it_tests_debug
