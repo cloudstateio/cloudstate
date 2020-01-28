@@ -107,7 +107,9 @@ jobs:
   it_tests_debug:
     machine: true
     resource_class: 2xlarge
-    description: debug
+    description: it tests
+    environment:
+      SBT_OPTS="-Xms1g -Xmx3g -Xss2g -XX:MaxMetaspaceSize=2g"
     steps:
       - checkout
       - run:
