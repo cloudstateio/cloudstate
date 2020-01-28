@@ -163,6 +163,10 @@ jobs:
             node -e "console.log('Running Node.js' + process.version)" || true
             npm version || true
             curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
+            export NVM_DIR="/opt/circleci/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            nvm install v13.7.0
+            nvm alias default v13.7.0
             node -e "console.log('Running Node.js' + process.version)" || true
             npm version || true
             cd node-support
@@ -171,7 +175,6 @@ jobs:
             rm package-lock.json
             npm install
             cd "/home/circleci/project"
-            ls
             # export _JAVA_OPTIONS="-Xmx4g -Xms1024m -Xss2g -XX:MaxMetaspaceSize=2g"
             # SBT_OPTS="-Xms1g -Xmx4g -Xss2g -XX:MaxMetaspaceSize=2g"
             sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
@@ -179,4 +182,4 @@ workflows:
   version: 2
   debug_check:
     jobs:
-      - npm_tests
+      - it_tests_debug
