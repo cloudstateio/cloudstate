@@ -122,16 +122,14 @@ jobs:
             node -e "console.log('Running Node.js' + process.version)" || true
             npm version || true
             cd node-support
-            rm package-lock.json
             npm install
-            cd "/home/circleci/project"
-            cd samples/js-shopping-cart
+            cd "/home/circleci/project/samples/js-shopping-cart"
             rm package-lock.json
             npm install
             cd "/home/circleci/project"
             ls
-            export _JAVA_OPTIONS="-Xmx4g -Xms1024m -Xss2g -XX:MaxMetaspaceSize=2g"
-            #SBT_OPTS="-Xms1g -Xmx4g -Xss2g -XX:MaxMetaspaceSize=2g"
+            # export _JAVA_OPTIONS="-Xmx4g -Xms1024m -Xss2g -XX:MaxMetaspaceSize=2g"
+            # SBT_OPTS="-Xms1g -Xmx4g -Xss2g -XX:MaxMetaspaceSize=2g"
             sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
 workflows:
   version: 2
