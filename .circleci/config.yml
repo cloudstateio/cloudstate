@@ -106,7 +106,7 @@ jobs:
 
   it_tests_debug:
     machine: true
-    resource_class: xlarge
+    resource_class: 2xlarge
     description: debug
     steps:
       - checkout
