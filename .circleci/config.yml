@@ -11,13 +11,17 @@ commands:
       - run:
           name: Install SBT
           command: |
+            sudo apt -y install default-jre
             curl -L -o sbt-<< parameters.version >>.deb https://dl.bintray.com/sbt/debian/sbt-<< parameters.version >>.deb
             sudo dpkg -i sbt-<< parameters.version >>.deb
             rm sbt-<< parameters.version >>.deb
-            sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc) universe"
-            sudo apt-get update
-            sudo apt-get install fpc
-            sudo apt-get install libhsdis0-fcml
+#            sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc) universe"
+#            sudo apt-get update
+#            sudo apt-get install fpc
+#            sudo apt-get install libhsdis0-fcml
+            sudo apt -y install build-essential
+            sudo apt -y install libz-dev
+
 
   save_sbt_cache:
     description: "Save SBT cache"
