@@ -150,9 +150,9 @@ jobs:
           command: |
             node -e "console.log('Running Node.js ' + process.version)"
             npm version
-  it_tests_debug:
+  it_tests_main:
     machine: true
-    resource_class: 2xlarge
+    resource_class: xlarge
     description: it tests
 #    environment:
 #      SBT_OPTS="-Xms1g -Xmx3g -Xss2g -XX:MaxMetaspaceSize=2g"
