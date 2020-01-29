@@ -184,4 +184,4 @@ workflows:
   version: 2
   debug_check:
     jobs:
-      - it_tests_debug
+      - it_tests_main
