@@ -11,7 +11,6 @@ commands:
       - run:
           name: Install SBT
           command: |
-            sudo apt -y install default-jre
             curl -L -o sbt-<< parameters.version >>.deb https://dl.bintray.com/sbt/debian/sbt-<< parameters.version >>.deb
             sudo dpkg -i sbt-<< parameters.version >>.deb
             rm sbt-<< parameters.version >>.deb
