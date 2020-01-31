@@ -144,7 +144,6 @@ object Serve {
       createGrpcApi(entities, router, statsCollector, entityDiscoveryClient, eventingSupport)
     val routes = Array(
       GrpcWebSupport.wrapGrpcHandler(grpcProxy),
-      grpcProxy,
       HttpApi.serve(entities.map(_.serviceDescriptor -> grpcProxy).toList),
       handleNetworkProbe(),
       Reflection.serve(fileDescriptors, entities.map(_.serviceName).toList)
