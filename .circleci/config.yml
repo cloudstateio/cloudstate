@@ -34,7 +34,7 @@ commands:
   # Install latest version of node using atp,
   # This will not rely on bash settings
   setup_node_apt:
-    description: install node@v13.7.0 using atp
+    description: "Install node@v13.7.0 using apt"
     steps:
       - run:
           name: Install node@v13.7.0
@@ -43,7 +43,7 @@ commands:
             sudo apt-get install -y nodejs
 
   install_packages:
-    description: "Install Needed Packages"
+    description: "Install needed packages"
     steps:
       - run:
           name: Install necessary packages
@@ -88,7 +88,7 @@ commands:
           paths:
             - ~/.graal
 
-  build_and_test_setup:
+  setup_build_and_test:
     description: list of commands needed to setup build
     steps:
       - setup_sbt
@@ -96,20 +96,18 @@ commands:
       - setup_node_apt
       - checkout
 
-  graalvm_build_and_test_setup:
+  setup_graalvm_build_and_test:
     description: list of commands needed to setup build
     steps:
-      - build_and_test_setup
+      - setup_build_and_test
       - setup_graalvm
 
-
 jobs:
-
   it_test:
     machine: true
     description: Integration test
     steps:
-      - build_and_test_setup
+      - setup_build_and_test
       - run:
           name: execute it tests
           command: |
@@ -121,20 +119,14 @@ jobs:
             rm package-lock.json
             npm install
             cd /home/circleci/project
-            java -version
-            node -v
-            npm version
             sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
-            java -version
-            node -v
-            npm version
 
   graalvm_local_build:
     machine: true
     resource_class: large
-    description: Build native-image package
+    description: "Build native-image package"
     steps:
-      - graalvm_build_and_test_setup
+      - setup_graalvm_build_and_test
       - run:
           name: graal build
           command: |
@@ -144,9 +136,9 @@ jobs:
 
   graalvm_it_test:
     machine: true
-    description: Integration tests with native image
+    description: "Integration tests with native image"
     steps:
-      - graalvm_build_and_test_setup
+      - setup_graalvm_build_and_test
       - run:
           name: Integrations test with native image
           command: |
@@ -160,9 +152,6 @@ jobs:
             cd /home/circleci/project
             cp tck/src/it/resources/graalvm_application.conf tck/src/it/resources/application.conf
             sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
-            java -version
-            node -v
-            npm version
 
 workflows:
   version: 2
