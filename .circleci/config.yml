@@ -93,7 +93,6 @@ commands:
     steps:
       - setup_sbt
       - install_packages
-      - setup_node_apt
       - checkout
 
   setup_graalvm_build_and_test:
@@ -108,6 +107,7 @@ jobs:
     description: Integration test
     steps:
       - setup_build_and_test
+      - setup_node_apt
       - run:
           name: execute it tests
           command: |
@@ -139,6 +139,7 @@ jobs:
     description: "Integration tests with native image"
     steps:
       - setup_graalvm_build_and_test
+      - setup_node_apt
       - run:
           name: Integrations test with native image
           command: |
@@ -158,7 +159,7 @@ workflows:
   build:
     jobs:
       - graalvm_local_build
-  test:
-    jobs:
-      - it_test
-      - graalvm_it_test
+#  test:
+#    jobs:
+#      - it_test
+#      - graalvm_it_test
