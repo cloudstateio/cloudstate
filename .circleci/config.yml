@@ -1,0 +1,175 @@
+version: 2.1
+# CircleCi Build Config for CloudState
+commands:
+  setup_sbt:
+    description: "Set up SBT"
+    parameters:
+      version:
+        type: string
+        default: "1.3.3"
+    steps:
+      - run:
+          name: Install SBT
+          command: |
+            curl -L -o sbt-<< parameters.version >>.deb https://dl.bintray.com/sbt/debian/sbt-<< parameters.version >>.deb
+            sudo dpkg -i sbt-<< parameters.version >>.deb
+            rm sbt-<< parameters.version >>.deb
+
+  # Below are the steps it install node via bash environment...
+  setup_node:
+    description: install node@v13.7.0
+    steps:
+      - run:
+          name: install node@v13.7.0 into Bash Environment
+          command: |
+            set +e
+            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
+            # export NVM_DIR="/opt/circleci/.nvm"
+            # [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            echo 'export NVM_DIR="/opt/circleci/.nvm"' >> $BASH_ENV
+            echo "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"" >> $BASH_ENV
+            echo "nvm install v13.7.0" >> $BASH_ENV
+            echo "nvm alias default v13.7.0"  >> $BASH_ENV
+
+  # Install latest version of node using atp,
+  # This will not rely on bash settings
+  setup_node_apt:
+    description: install node@v13.7.0 using atp
+    steps:
+      - run:
+          name: Install node@v13.7.0
+          command: |
+            curl -sL https://deb.nodesource.com/setup_13.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+
+  install_packages:
+    description: "Install Needed Packages"
+    steps:
+      - run:
+          name: Install necessary packages
+          command: |
+            sudo apt -y install build-essential
+            sudo apt -y install libz-dev
+
+  save_sbt_cache:
+    description: "Save SBT cache"
+    steps:
+      - save_cache:
+          key: sbt-cache-23
+          paths:
+            - "~/.ivy2/cache"
+            - "~/.sbt"
+            - "~/.m"
+            - "~/.coursier"
+
+  setup_graalvm:
+    description: "Set up GraalVM @v19.3.0 for local builds"
+    parameters:
+      graalVMDownloadURL:
+        default: "https://github.com/graalvm/graalvm-ce-builds/releases/download/vm-19.3.0/graalvm-ce-java11-linux-amd64-19.3.0.tar.gz"
+        type: string
+    steps:
+      - run:
+          name: Download and Setup Graal VM
+          command: |
+            mkdir -p ~/graal
+            wget << parameters.graalVMDownloadURL >> -O ~/graal/graalvm-ce-java11-linux-amd64-19.3.0.tar.gz
+            tar -xvzf ~/graal/graalvm-ce-java11-linux-amd64-19.3.0.tar.gz -C ~/graal/ > /dev/null 2>&1
+            export PATH="~/graal/graalvm-ce-java11-19.3.0/bin:$PATH"
+            gu install native-image
+            rm ~/graal/graalvm-ce-java11-19.3.0/bin/node ~/graal/graalvm-ce-java11-19.3.0/bin/npm  || true
+            sudo ln -s ~/graal/graalvm-ce-java11-19.3.0/bin/native-image  /usr/bin/native-image
+
+  save_graal_cache:
+    description: Save Graal Downloaded to cache
+    steps:
+      - save_cache:
+          key: graal-vm-cache
+          paths:
+            - ~/.graal
+
+  build_and_test_setup:
+    description: list of commands needed to setup build
+    steps:
+      - setup_sbt
+      - install_packages
+      - setup_node_apt
+      - checkout
+
+  graalvm_build_and_test_setup:
+    description: list of commands needed to setup build
+    steps:
+      - build_and_test_setup
+      - setup_graalvm
+
+
+jobs:
+
+  it_test:
+    machine: true
+    description: Integration test
+    steps:
+      - build_and_test_setup
+      - run:
+          name: execute it tests
+          command: |
+            # remove nvm from PATH, so that latest node is available
+            PATH=$(echo "$PATH" |awk -F: '{for (i=1; i<=NF; i++) if ($i !~ /nvm/) {printf "%s%s", $i, (i==NF? RS : FS)}}')
+            cd node-support
+            npm install
+            cd /home/circleci/project/samples/js-shopping-cart
+            rm package-lock.json
+            npm install
+            cd /home/circleci/project
+            java -version
+            node -v
+            npm version
+            sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
+            java -version
+            node -v
+            npm version
+
+  graalvm_local_build:
+    machine: true
+    resource_class: large
+    description: Build native-image package
+    steps:
+      - graalvm_build_and_test_setup
+      - run:
+          name: graal build
+          command: |
+            export PATH="~/graal/graalvm-ce-java11-19.3.0/bin:$PATH"
+            sbt "project proxy-core" "set graalVMVersion := None"  graalvm-native-image:packageBin
+          no_output_timeout: 60m
+
+  graalvm_it_test:
+    machine: true
+    description: Integration tests with native image
+    steps:
+      - graalvm_build_and_test_setup
+      - run:
+          name: Integrations test with native image
+          command: |
+            export PATH=$(echo "$PATH" |awk -F: '{for (i=1; i<=NF; i++) if ($i !~ /nvm/) {printf "%s%s", $i, (i==NF? RS : FS)}}')
+            export PATH="/home/circleci/graal/graalvm-ce-java11-19.3.0/bin:$PATH"
+            cd node-support
+            npm install
+            cd /home/circleci/project/samples/js-shopping-cart
+            rm package-lock.json
+            npm install
+            cd /home/circleci/project
+            cp tck/src/it/resources/graalvm_application.conf tck/src/it/resources/application.conf
+            sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
+            java -version
+            node -v
+            npm version
+
+workflows:
+  version: 2
+  build:
+    jobs:
+      - graalvm_local_build
+  test:
+    jobs:
+      - it_test
+      - graalvm_it_test
