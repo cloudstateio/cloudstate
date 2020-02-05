@@ -159,7 +159,7 @@ workflows:
   build:
     jobs:
       - graalvm_local_build
-#  test:
-#    jobs:
-#      - it_test
-#      - graalvm_it_test
+  test:
+    jobs:
+      - it_test
+      - graalvm_it_test
