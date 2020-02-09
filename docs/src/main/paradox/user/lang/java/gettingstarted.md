@@ -19,11 +19,11 @@ In addition to the above, you will need to install the Cloudstate java support l
 Maven
 : @@@vars
 ```xml
-<depependency>
+<dependency>
   <groupId>io.cloudstate</groupId>
   <artifactId>cloudstate-java-support</artifactId>
   <version>$cloudstate.java-support.version$</version>
-</depependency>
+</dependency>
 ```
 @@@
   
