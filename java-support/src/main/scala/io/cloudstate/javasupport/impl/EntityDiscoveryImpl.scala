@@ -25,11 +25,13 @@ import io.cloudstate.javasupport.{BuildInfo, StatefulService}
 
 class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, StatefulService]) extends EntityDiscovery {
 
+  private val config = system.settings.config.getConfig("cloudstate")
+
   private val serviceInfo = ServiceInfo(
     serviceRuntime = sys.props.getOrElse("java.runtime.name", "") + " " + sys.props.getOrElse("java.runtime.version",
                                                                                               ""),
-    supportLibraryName = sys.env.getOrElse("SUPPORT_LIBRARY_NAME", BuildInfo.name),
-    supportLibraryVersion = sys.env.getOrElse("SUPPORT_LIBRARY_VERSION", BuildInfo.version)
+    supportLibraryName = config.getString("library.name"),
+    supportLibraryVersion = config.getString("library.version")
   )
 
   /**
