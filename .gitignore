@@ -35,7 +35,6 @@ node_modules
 null
 null/*
 project/plugins/project
-protocols/*.zip
 src_managed
 storage
 tags
