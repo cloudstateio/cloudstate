@@ -338,13 +338,13 @@ Native Image
 ---
 ## Samples
 
-We have created a sample application in each supported client languages. They are all speaking the same protocol, and use the same datatypes, and can therefore be used in concert in a polyglot fashion. 
+We have created a sample application in each of the supported client languages. They are all speaking the same protocol, and use the same datatypes, and can therefore be used in concert in a polyglot fashion. 
 
-The sample application implemenents a simple chat application, and currently there's only one feature: user presence. But in future we will add chat room support, push notifications for chat messages, etc.
+The sample application implements a simple chat application, and currently there's only one feature: user presence. But in future we will add chat room support, push notifications for chat messages, etc.
 
 The application has two components, a presence stateful function, which uses a vote CRDT to store whether a user is currently online or not, and a gateway, which is an express/ws application, that serves a UI.
 
-The UI is designed to allow connecting as multiple users in one browser window, this is for demonstration purposes, to make it straightforward to see real time interactions, serverside pushes etc, without needing to open many browser tabs.
+The UI is designed to allow connecting multiple users in one browser window, this is for demonstration purposes, to make it straightforward to see real time interactions, serverside pushes etc, without needing to open many browser tabs.
 
 Check out the samples project here, with instructions how to run them on Kubernetes: 
 - [JavaScript sample](https://github.com/cloudstateio/samples-js-chat)
