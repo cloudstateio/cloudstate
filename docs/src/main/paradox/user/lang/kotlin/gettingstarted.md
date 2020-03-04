@@ -55,7 +55,7 @@ A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffer
 
     <groupId>io.cloudstate</groupId>
     <artifactId>shopping-cart</artifactId>
-    <version>0.4.3T</version>
+    <version>0.4.3</version>
 
     <properties>
         <main.class>com.example.shoppingcart.MainKt</main.class>
