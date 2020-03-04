@@ -247,7 +247,7 @@ Now if you run `mvn compile`, you'll find your generated protobuf files in `targ
 
 Your main class will be responsible for creating the Cloudstate gRPC server, registering the entities for it to serve, and starting it. To do this, you can use the @javadoc[`CloudState`](io.cloudstate.javasupport.CloudState) server builder, for example:
 
-@@snip [Main.kt](/docs/src/test/java/docs/user/gettingstarted/Main.kt) { #shopping-cart-main }
+@@snip [Main.kt](/docs/src/test/kotlin/docs/user/gettingstarted/Main.kt) { #shopping-cart-main }
 
 We will see more details on registering entities in the coming pages.
 
