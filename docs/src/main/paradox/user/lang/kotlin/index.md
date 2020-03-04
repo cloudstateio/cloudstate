@@ -1,6 +1,6 @@
 # Kotlin
 
-Cloudstate offers an idiomatic, annotation based Kotlin, and an idiomatic dsl support library for writing stateful services.
+Cloudstate offers an idiomatic, annotation based Kotlin, and an idiomatic Kotlin DSL support library for writing stateful services.
 
 @@toc { depth=1 }
 
@@ -8,7 +8,7 @@ Cloudstate offers an idiomatic, annotation based Kotlin, and an idiomatic dsl su
 
 * [Getting started](gettingstarted.md)
 * [Event sourcing](eventsourced.md)
-* [Forwarding and effects](effects.md)
-* [API docs](api.md)
+* [Conflict-free Replicated Data Types](crdt.md)
+* [DSL](dsl.md)
 
 @@@
