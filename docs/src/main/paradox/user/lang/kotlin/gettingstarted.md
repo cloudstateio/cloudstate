@@ -263,6 +263,4 @@ Exactly which context parameters are available depend on the type of entity and 
 | `java.lang.String` | @javadoc[`@EntityId`](io.cloudstate.javasupport.EntityId) | The ID of the entity. |
 
 
-Você quis dizer: Cloud State Kotlin suporte permite que você utilize tanto as anotações da biblioteca java-support quanto suas próprias anotações contidas no pacote io.cloudstate.kotlinsupport.annotations
-186/5000
-Cloudstate Kotlin support allows you to use both annotations from the java-support library and your own annotations contained in the io.cloudstate.kotlinsupport.annotations package
+Cloudstate Kotlin support allows you to use both annotations from the java-support library and your own kotlin annotations contained in the io.cloudstate.kotlinsupport.annotations package
