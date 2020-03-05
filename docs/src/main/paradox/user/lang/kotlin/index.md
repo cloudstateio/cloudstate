@@ -11,5 +11,6 @@ Cloudstate offers an idiomatic, annotation based Kotlin, and an idiomatic Kotlin
 * [Conflict-free Replicated Data Types](crdt.md)
 * [DSL](dsl.md)
 * [Examples](examples.md)
+* [Serialization](serialization.md)
 
 @@@
