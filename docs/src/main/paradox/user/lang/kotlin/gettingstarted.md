@@ -6,7 +6,7 @@ Kotlin version
 : Cloudstate Kotlin support requires at least Java 8, though we recommend using Java 11, which has better support for running in containers. While it is possible to build a GraalVM native image for Cloudstate Kotlin user functions, at this stage Cloudstate offers no specific assistance or configuration to aid in doing that.
 
 Build tool
-: Cloudstate does not require any particular build tool, you can select your own. Or use [Cloudstate CLI](https://github.com/sleipnir/cloudstate-cli)
+: Cloudstate does not require any particular build tool, you can select your own. Or use the [Cloudstate CLI](https://github.com/sleipnir/cloudstate-cli)
 
 protoc
 : Since Cloudstate is based on gRPC, you need a protoc compiler to compile gRPC protobuf descriptors. While this can be done by downloading, installing and running protoc manually, most popular build tools have a protoc plugin which will automatically compile protobuf descriptors during your build for you.
@@ -45,7 +45,9 @@ compile group: 'io.cloudstate', name: 'cloudstate-kotlin-support', version: '$cl
 
 A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffers Plugin](https://www.xolstice.org/protobuf-maven-plugin/) and the [Google Jib Docker Maven Plugin](https://github.com/GoogleContainerTools/jib/), for a shopping cart service, is shown below:
 
-Remember to change the values of the main.class, repo.name, and version tags to their respective values
+@@@ note {title = Important}
+Remember to change the values of the **main.class**, **repo.name**, and **version** tags to their respective values
+@@@
 
 @@@vars
 ```xml
@@ -233,26 +235,6 @@ Remember to change the values of the main.class, repo.name, and version tags to 
 
 Subsequent source locations and build commands will assume the above Maven project, and may need to be adapted to your particular build tool and setup.
 
-## Cloudstate CLI example
-
-If you are a Linux or MacOS user and have [Cloudstate CLI](https://github.com/sleipnir/cloudstate-cli) version 0.5.0 or higher installed, you can generate the project scaffold with the commands below:
-
-@@@vars
-```shell script
-cloudstate init && \
-cloudstate create \
-  --name=shopping-cart \
-  --profile=kotlin \
-  --registry=docker.io/some-repo \
-  --set-user=some-user \
-  --set-pass=***** \
-  --tag=1.0.0 \
-  --set-editor=idea
-```
-@@@
-
-The above command will create the directories, generate the artifacts declared in the proto files and build the project for you. 
-
 ## Protobuf files
 
 The Xolstice Maven plugin assumes a location of `src/main/proto` for your protobuf files. In addition, it includes any protobuf files from your Kotlin dependencies in the protoc include path, so there's nothing you need to do to pull in either the Cloudstate protobuf types, or any of the Google standard protobuf types, they are all automatically available for import.
@@ -279,10 +261,10 @@ Cloudstate entities work by annotating classes and functions to be instantiated 
 
 Exactly which context parameters are available depend on the type of entity and the type of handler, in subsequent pages we'll detail which parameters are available in which circumstances. The order of the parameters in the function signature can be anything, parameters are matched by type and sometimes by annotation. The following context parameters are available in every context:
 
-| Type                                 | Annotation  | Qualifier                                | Description                                                                                                                                                                                                                     |
-|--------------------------------------|--------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `io.cloudstate.javasupport.Context`  |             |                                          | The super type of all Cloudstate contexts. Every invoker makes a subtype of this available for injection, and function or constructor may accept that sub type, or any super type of that subtype that is a subtype of `Context`. |
-| `java.lang.String`                   | `@EntityId` | io.cloudstate.kotlinsupport.api.EntityId | The ID of the entity.                                                                                                                                                                                                           |
+| Type                                 | Annotation  | Description                                                                                                                                                                                                                                               |
+|--------------------------------------|-------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `io.cloudstate.javasupport.Context`  |             |                       | The super type of all Cloudstate contexts. Every invoker makes a subtype of this available for injection, and function or constructor may accept that sub type, or any super type of that subtype that is a subtype of `Context`. |
+| `java.lang.String`                   | `@EntityId` | The ID of the entity. |                                                                                                                                                                                                                                   |
 
 
 Cloudstate Kotlin support allows you to use both annotations from the java-support library and your own kotlin annotations contained in the io.cloudstate.kotlinsupport.api.* package
