@@ -131,7 +131,7 @@ jobs:
           name: graal build
           command: |
             export PATH="~/graal/graalvm-ce-java11-19.3.0/bin:$PATH"
-            sbt "project proxy-core" "set graalVMVersion := None"  graalvm-native-image:packageBin
+            sbt "project proxy-core" "set graalVMVersion := None" "set scalafmtOnCompile := false" graalvm-native-image:packageBin
           no_output_timeout: 60m
 
   graalvm_it_test:
