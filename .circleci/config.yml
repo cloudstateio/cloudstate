@@ -1,9 +1,5 @@
 version: 2.1
-<<<<<<< HEAD
-# CircleCi Build Config for Cloudstateio
-=======
 # CircleCi Build Config for CloudState
->>>>>>> 92480163ced27088f2636f37c98417e3d2af8b9c
 commands:
   setup_sbt:
     description: "Set up SBT"
@@ -18,8 +14,6 @@ commands:
             curl -L -o sbt-<< parameters.version >>.deb https://dl.bintray.com/sbt/debian/sbt-<< parameters.version >>.deb
             sudo dpkg -i sbt-<< parameters.version >>.deb
             rm sbt-<< parameters.version >>.deb
-<<<<<<< HEAD
-=======
 
   # Below are the steps it install node via bash environment...
   setup_node:
@@ -54,7 +48,6 @@ commands:
       - run:
           name: Install necessary packages
           command: |
->>>>>>> 92480163ced27088f2636f37c98417e3d2af8b9c
             sudo apt -y install build-essential
             sudo apt -y install libz-dev
 
@@ -70,31 +63,6 @@ commands:
             - "~/.coursier"
 
   setup_graalvm:
-<<<<<<< HEAD
-    description: "Set up GraalVM for local builds"
-    parameters:
-      graalVersion:
-        default: "19.2.1"
-        type: string
-      graalVMDownloadURL:
-        default: "https://github.com/oracle/graal/releases/download/vm-19.2.1/graalvm-ce-linux-amd64-19.2.1.tar.gz"
-        type: string
-    steps:
-      - run:
-          name: Build Essentials
-          command: |
-            sudo apt install build-essential
-            sudo apt-get install libz-dev
-      - run:
-          name: Download and Setup Graal VM
-          command: |
-            mkdir ~/graal
-            wget << parameters.graalVMDownloadURL >> -O ~/graal/graalvm-ce-linux-amd64-19.2.1.tar.gz
-            tar -xvzf ~/graal/graalvm-ce-linux-amd64-19.2.1.tar.gz -C ~/graal/ > /dev/null 2>&1
-            export PATH="~/graal/graalvm-ce-19.2.1/bin:$PATH"
-            gu install native-image
-            sudo ln -s ~/graal/graalvm-ce-19.2.1/bin/native-image  /usr/bin/native-image
-=======
     description: "Set up GraalVM @v19.3.0 for local builds"
     parameters:
       graalVMDownloadURL:
@@ -111,7 +79,6 @@ commands:
             gu install native-image
             rm ~/graal/graalvm-ce-java11-19.3.0/bin/node ~/graal/graalvm-ce-java11-19.3.0/bin/npm  || true
             sudo ln -s ~/graal/graalvm-ce-java11-19.3.0/bin/native-image  /usr/bin/native-image
->>>>>>> 92480163ced27088f2636f37c98417e3d2af8b9c
 
   save_graal_cache:
     description: Save Graal Downloaded to cache
@@ -121,132 +88,6 @@ commands:
           paths:
             - ~/.graal
 
-<<<<<<< HEAD
-  npm_setup:
-    description: setup npm
-    steps:
-      - run:
-          name: install npm
-          command: |
-            cd samples/js-shopping-cart && rm package-lock.json && npm install
-            cd "$CIRCLE_WORKING_DIRECTORY"
-            cd node-support && rm package-lock.json && npm install
-            cd "$CIRCLE_WORKING_DIRECTORY"
-
-jobs:
-  graal_local_build:
-    machine: true
-    resource_class: large
-    steps:
-      - setup_sbt
-      - setup_graalvm
-      - checkout
-      - run:
-          name: graal build
-          command: sbt "project proxy-core" "set graalVMVersion := None"  graalvm-native-image:packageBin
-          no_output_timeout: 60m
-
-  it_tests:
-    machine: true
-    resource_class: large
-    description: it tests for tagged versions
-#    environment:
-#      CIRCLE_TAG: v0.5.0
-    parameters:
-      tag:
-        type: string
-        default: "v0.5.0"
-    steps:
-#      - setup_sbt
-      - checkout
-      - npm_setup
-      - run:
-          name: debug
-          command: |
-            cd "$CIRCLE_WORKING_DIRECTORY"
-            sbt update
-            sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
-
-  npm_tests:
-    machine: true
-    resource_class: large
-    description: npm upgrade tests
-    steps:
-      - run:
-          name: current nvm
-          command: |
-            node -e "console.log('Running Node.js ' + process.version)"
-            npm version
-      - run:
-          name: Install node@13.7.0
-          command: |
-            set +e
-            #curl -o- https://raw.githubusercontent.com/creationix/nvm/v0.33.5/install.sh | bash
-            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
-            export NVM_DIR="/opt/circleci/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-            nvm install v13.7.0
-            nvm alias default v13.7.0
-            touch $BASH_ENV
-            # Each step uses the same `$BASH_ENV`, so need to modify it
-            echo 'export NVM_DIR="/opt/circleci/.nvm"' >> $BASH_ENV
-            echo "[ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"" >> $BASH_ENV
-            node -e "console.log('Running Node.js ' + process.version)"
-            npm version
-
-#      - run:
-#          name: npm upgrade
-#          command: |
-#            set +e
-#            touch $BASH_ENV
-#            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
-#            echo 'export NVM_DIR="$HOME/.nvm"' >> $BASH_ENV
-#            echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> $BASH_ENV
-#            echo 'nvm install node' >> $BASH_ENV
-#            # echo 'nvm alias default v6.2.2' >> $BASH_ENV
-#            node -e "console.log('Running Node.js ' + process.version)"
-#            npm version
-      - run:
-          name: after upgrade
-          command: |
-            node -e "console.log('Running Node.js ' + process.version)"
-            npm version
-  it_tests_main:
-    machine: true
-    resource_class: xlarge
-    description: it tests
-#    environment:
-#      SBT_OPTS="-Xms1g -Xmx3g -Xss2g -XX:MaxMetaspaceSize=2g"
-    steps:
-      - setup_sbt
-      - checkout
-      - run:
-          name: npm debug
-          command: |
-            node -e "console.log('Running Node.js' + process.version)" || true
-            npm version || true
-            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.34.0/install.sh | bash
-            export NVM_DIR="/opt/circleci/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-            nvm install v13.7.0
-            nvm alias default v13.7.0
-            node -e "console.log('Running Node.js' + process.version)" || true
-            npm version || true
-            cd node-support
-            npm install
-            cd "/home/circleci/project/samples/js-shopping-cart"
-            rm package-lock.json
-            npm install
-            cd "/home/circleci/project"
-            # export _JAVA_OPTIONS="-Xmx4g -Xms1024m -Xss2g -XX:MaxMetaspaceSize=2g"
-            # SBT_OPTS="-Xms1g -Xmx4g -Xss2g -XX:MaxMetaspaceSize=2g"
-            sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
-workflows:
-  version: 2
-  debug_check:
-    jobs:
-      - it_tests_main
-=======
   setup_build_and_test:
     description: list of commands needed to setup build
     steps:
@@ -322,4 +163,3 @@ workflows:
     jobs:
       - it_test
       - graalvm_it_test
->>>>>>> 92480163ced27088f2636f37c98417e3d2af8b9c
