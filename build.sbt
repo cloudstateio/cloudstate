@@ -52,14 +52,14 @@ name := "cloudstate"
 
 val GrpcJavaVersion = "1.22.1"
 val GraalAkkaVersion = "0.4.1"
-val AkkaVersion = "2.5.26"
+val AkkaVersion = "2.5.29"
 val AkkaHttpVersion = "10.1.11"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
-val GraalVersion = "19.2.1"
+val GraalVersion = "19.3.0"
 
 val svmGroupId = if (GraalVersion startsWith "19.2") "com.oracle.substratevm" else "org.graalvm.nativeimage"
 
