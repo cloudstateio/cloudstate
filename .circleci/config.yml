@@ -123,6 +123,7 @@ jobs:
 
   graalvm_local_build:
     machine: true
+    resource_class: large
     description: "Build native-image package"
     steps:
       - setup_graalvm_build_and_test
