@@ -131,6 +131,7 @@ jobs:
           name: graal build
           command: |
             export PATH="~/graal/graalvm-ce-java11-19.3.0/bin:$PATH"
+            # disabling sclalaformating, observed some incompatabilities between graalvm version and scalafmt version.
             sbt "project proxy-core" "set graalVMVersion := None" "set scalafmtOnCompile := false" graalvm-native-image:packageBin
           no_output_timeout: 60m
 
@@ -156,10 +157,11 @@ jobs:
 
 workflows:
   version: 2
-  build:
-    jobs:
-      - graalvm_local_build
-# test:
-#   jobs:
-#     - it_test
-#     - graalvm_it_test
+# Disabling build as it requires resource_class : large machine.
+#  build:
+#    jobs:
+#      - graalvm_local_build
+ test:
+   jobs:
+     - it_test
+     - graalvm_it_test
