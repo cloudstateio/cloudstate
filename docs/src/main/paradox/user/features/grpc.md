@@ -55,4 +55,4 @@ Cloudstate entity keys must be strings. When a non string type is specified as t
 
 ## Transcoding HTTP
 
-Cloudstate proxies support transcoding gRPC to HTTP/JSON, using the Google transcoding annotations described [here](https://cloud.google.com/endpoints/docs/grpc/transcoding). Using this, you can consume your entities gRPC interfaces using HTTP/JSON.
+Cloudstate proxies support transcoding gRPC to HTTP/JSON, using the Google transcoding annotations described [here](https://cloud.google.com/endpoints/docs/grpc/transcoding). Using this, you can consume your entities' gRPC interfaces using HTTP/JSON.
