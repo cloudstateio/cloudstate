@@ -8,6 +8,7 @@ This is achieved by having a gRPC based protocol between the Proxy and the User 
 * Java
 * JavaScript
 * Go
+* Kotlin
 
 ## Creating language support libraries
 
