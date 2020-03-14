@@ -10,7 +10,7 @@ inThisBuild(
     organization := "io.cloudstate",
     version := dynverGitDescribeOutput.value.mkVersion(versionFmt, "latest"),
     dynver := sbtdynver.DynVer.getGitDescribeOutput(new Date).mkVersion(versionFmt, "latest"),
-    scalaVersion := "2.12.9",
+    scalaVersion := "2.12.10",
     // Needed for our fork of skuber
     resolvers += Resolver.bintrayRepo("jroper", "maven"), // TODO: Remove once skuber has the required functionality
     // Needed for the fixed HTTP/2 connection cleanup version of akka-http
