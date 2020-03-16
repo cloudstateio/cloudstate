@@ -249,11 +249,7 @@ Now if you run `mvn compile`, you'll find your generated protobuf files in `targ
 
 ## Creating a main function
 
-<<<<<<< HEAD
 Your main class will be responsible for creating the Cloudstate gRPC server, registering the entities for it to serve, and starting it. To do this, you can use the `cloudstate` function server builder, for example:
-=======
-Your main class will be responsible for creating the Cloudstate gRPC server, registering the entities for it to serve, and starting it. To do this, you can use the `CloudState` function server builder, for example:
->>>>>>> upstream/master
 
 @@snip [Main.kt](/docs/src/test/kotlin/docs/user/gettingstarted/Main.kt) { #shopping-cart-main }
 
@@ -265,10 +261,10 @@ Cloudstate entities work by annotating classes and functions to be instantiated 
 
 Exactly which context parameters are available depend on the type of entity and the type of handler, in subsequent pages we'll detail which parameters are available in which circumstances. The order of the parameters in the function signature can be anything, parameters are matched by type and sometimes by annotation. The following context parameters are available in every context:
 
-| Type                                 | Annotation  | Description                                                                                                                                                                                                                                               |
-|--------------------------------------|-------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `io.cloudstate.javasupport.Context`  |             |                       | The super type of all Cloudstate contexts. Every invoker makes a subtype of this available for injection, and function or constructor may accept that sub type, or any super type of that subtype that is a subtype of `Context`. |
-| `java.lang.String`                   | `@EntityId` | The ID of the entity. |                                                                                                                                                                                                                                   |
+| Type                                | Annotation   | Description           |
+|-------------------------------------|--------------|-----------------------|
+| `io.cloudstate.javasupport.Context` |              | The super type of all Cloudstate contexts. Every invoker makes a subtype of this available for injection, and method or constructor may accept that sub type, or any super type of that subtype that is a subtype of `Context`. |
+| `java.lang.String`                  | `@EntityId`  | The ID of the entity. |  
 
 
 Cloudstate Kotlin support allows you to use both annotations from the java-support library and your own kotlin annotations contained in the io.cloudstate.kotlinsupport.api.* package
