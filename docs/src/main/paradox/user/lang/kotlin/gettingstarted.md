@@ -229,7 +229,7 @@ A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffer
 ```
 @@@
 
-@@@ warning
+@@@ note { title=Important }
 Remember to change the values of the **main.class**, **repo.name**, and **version** tags to their respective values
 @@@
 
