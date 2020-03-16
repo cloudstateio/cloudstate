@@ -45,10 +45,6 @@ compile group: 'io.cloudstate', name: 'cloudstate-kotlin-support', version: '$cl
 
 A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffers Plugin](https://www.xolstice.org/protobuf-maven-plugin/) and the [Google Jib Docker Maven Plugin](https://github.com/GoogleContainerTools/jib/), for a shopping cart service, is shown below:
 
-@@@note {title = Important}
-Remember to change the values of the **main.class**, **repo.name**, and **version** tags to their respective values
-@@@
-
 @@@vars
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -233,6 +229,10 @@ Remember to change the values of the **main.class**, **repo.name**, and **versio
 ```
 @@@
 
+@@@ warning
+Remember to change the values of the **main.class**, **repo.name**, and **version** tags to their respective values
+@@@
+
 Subsequent source locations and build commands will assume the above Maven project, and may need to be adapted to your particular build tool and setup.
 
 ## Protobuf files
@@ -249,7 +249,11 @@ Now if you run `mvn compile`, you'll find your generated protobuf files in `targ
 
 ## Creating a main function
 
+<<<<<<< HEAD
 Your main class will be responsible for creating the Cloudstate gRPC server, registering the entities for it to serve, and starting it. To do this, you can use the `cloudstate` function server builder, for example:
+=======
+Your main class will be responsible for creating the Cloudstate gRPC server, registering the entities for it to serve, and starting it. To do this, you can use the `CloudState` function server builder, for example:
+>>>>>>> upstream/master
 
 @@snip [Main.kt](/docs/src/test/kotlin/docs/user/gettingstarted/Main.kt) { #shopping-cart-main }
 

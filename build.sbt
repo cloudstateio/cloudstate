@@ -236,7 +236,7 @@ def dockerSettings: Seq[Setting[_]] = Seq(
 def buildProxyHelp(commandName: String, name: String) =
   Help(
     (s"$commandName <task>",
-     s"Execute the given docker scoped task (eg, publishLocal or publish) for the the $name build of the proxy.")
+     s"Execute the given docker scoped task (eg, publishLocal or publish) for the $name build of the proxy.")
   )
 
 def buildProxyCommand(commandName: String,

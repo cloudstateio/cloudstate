@@ -132,7 +132,7 @@ module.exports = class StatelessServices {
   handleStreamedIn(call, callback){
     call.on("data", data => {
       const service = this.services[data.serviceName];
-      if (tservice && service.commandHandlers.hasOwnProperty(data.name)) {
+      if (service && service.commandHandlers.hasOwnProperty(data.name)) {
         const userReturn = service.commandHandlers[data.name](service.deserialize(data.payload));
         const grpcReturn = service.service.methods[data.name].resolvedResponseType.fromObject(userReturn);
         const requireJsonType =true;
