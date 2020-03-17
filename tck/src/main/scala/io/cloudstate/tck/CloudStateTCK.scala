@@ -312,20 +312,20 @@ class CloudStateTCK(private[this] final val config: TckConfiguration)
       val productName2 = "Test Product 2"
 
       for {
-        Cart(Nil) <- getCart(GetShoppingCart(userId)) // Test initial state
-        Empty() <- addItem(AddLineItem(userId, productId1, productName1, 1)) // Test add the first product
-        Empty() <- addItem(AddLineItem(userId, productId2, productName2, 2)) // Test add the second product
-        Empty() <- addItem(AddLineItem(userId, productId1, productName1, 11)) // Test increase quantity
-        Empty() <- addItem(AddLineItem(userId, productId2, productName2, 31)) // Test increase quantity
-        Cart(items1) <- getCart(GetShoppingCart(userId)) // Test intermediate state
-        Empty() <- removeItem(RemoveLineItem(userId, productId1)) // Test removal of first product
+        Cart(Nil, _) <- getCart(GetShoppingCart(userId)) // Test initial state
+        Empty(_) <- addItem(AddLineItem(userId, productId1, productName1, 1)) // Test add the first product
+        Empty(_) <- addItem(AddLineItem(userId, productId2, productName2, 2)) // Test add the second product
+        Empty(_) <- addItem(AddLineItem(userId, productId1, productName1, 11)) // Test increase quantity
+        Empty(_) <- addItem(AddLineItem(userId, productId2, productName2, 31)) // Test increase quantity
+        Cart(items1, _) <- getCart(GetShoppingCart(userId)) // Test intermediate state
+        Empty(_) <- removeItem(RemoveLineItem(userId, productId1)) // Test removal of first product
         addNeg <- addItem(AddLineItem(userId, productId2, productName2, -7))
           .transform(scala.util.Success(_)) // Test decrement quantity of second product
         add0 <- addItem(AddLineItem(userId, productId1, productName1, 0))
           .transform(scala.util.Success(_)) // Test add 0 of new product
         removeNone <- removeItem(RemoveLineItem(userId, productId1))
           .transform(scala.util.Success(_)) // Test remove non-exiting product
-        Cart(items2) <- getCart(GetShoppingCart(userId)) // Test end state
+        Cart(items2, _) <- getCart(GetShoppingCart(userId)) // Test end state
       } yield {
         val init = fromBackend_expectInit(noWait)
         init.entityId must not be (empty)

@@ -36,14 +36,14 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
     Flow[UserFunctionReply].flatMapConcat { response =>
       val sideEffects = Source(response.sideEffects.toList)
         .flatMapConcat {
-          case SideEffect(serviceName, commandName, payload, synchronous) =>
+          case SideEffect(serviceName, commandName, payload, synchronous, _) =>
             routeMessage(trace, RouteReason.SideEffect, serviceName, commandName, payload, synchronous)
         }
 
       val nextAction = response.clientAction match {
-        case Some(ClientAction(ClientAction.Action.Forward(Forward(serviceName, commandName, payload)))) =>
+        case Some(ClientAction(ClientAction.Action.Forward(Forward(serviceName, commandName, payload, _)), _)) =>
           routeMessage(trace, RouteReason.Forwarded, serviceName, commandName, payload, synchronous = true)
-        case None | Some(ClientAction(ClientAction.Action.Empty)) =>
+        case None | Some(ClientAction(ClientAction.Action.Empty, _)) =>
           Source.empty
         case _ =>
           Source.single(response)
@@ -72,7 +72,7 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
       }
     } flatMap { _ =>
       response.clientAction match {
-        case Some(ClientAction(ClientAction.Action.Forward(Forward(serviceName, commandName, payload)))) =>
+        case Some(ClientAction(ClientAction.Action.Forward(Forward(serviceName, commandName, payload, _)), _)) =>
           routeMessageUnary(trace, RouteReason.Forwarded, serviceName, commandName, payload)
         case _ =>
           Future.successful(response)

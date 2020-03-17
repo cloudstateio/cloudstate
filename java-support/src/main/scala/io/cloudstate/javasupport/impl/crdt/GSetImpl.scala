@@ -48,12 +48,12 @@ private[crdt] final class GSetImpl[T](anySupport: AnySupport)
   override def state: CrdtState.State = CrdtState.State.Gset(GSetState(value.asScala.toSeq.map(anySupport.encodeScala)))
 
   override val applyDelta = {
-    case CrdtDelta.Delta.Gset(GSetDelta(added)) =>
+    case CrdtDelta.Delta.Gset(GSetDelta(added, _)) =>
       value.addAll(added.map(e => anySupport.decode(e).asInstanceOf[T]).asJava)
   }
 
   override val applyState = {
-    case CrdtState.State.Gset(GSetState(value)) =>
+    case CrdtState.State.Gset(GSetState(value, _)) =>
       this.value.clear()
       this.value.addAll(value.map(e => anySupport.decode(e).asInstanceOf[T]).asJava)
   }
