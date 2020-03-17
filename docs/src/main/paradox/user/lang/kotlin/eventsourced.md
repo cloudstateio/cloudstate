@@ -2,7 +2,7 @@
 
 This page documents how to implement Cloudstate event sourced entities in Kotlin. For information on what Cloudstate event sourced entities are, please read the general @ref[Event sourcing](../../features/eventsourced.md) documentation first.
 
-An event sourced entity can be created by annotating it with the `@EventSourcedEntity` (**io.cloudstate.kotlinsupport.api.eventsourced.EventSourcedEntity**) annotation.
+An event sourced entity can be created by annotating it with the `@EventSourcedEntity` (io.cloudstate.kotlinsupport.api.eventsourced.EventSourcedEntity) annotation.
 
 @@snip [ShoppingCartEntity.kt](/docs/src/test/kotlin/docs/user/eventsourced/ShoppingCartEntity.kt) { #entity-class }
 
@@ -34,7 +34,7 @@ The context available for injection into the constructor is a `EventSourcedEntit
 
 ## Handling commands
 
-Command handlers can be declared by annotating a method with `@CommandHandler` (**io.cloudstate.kotlinsupport.api.eventsourced.CommandHandler**). They take a context class of type `CommandContext`.
+Command handlers can be declared by annotating a method with `@CommandHandler` (io.cloudstate.kotlinsupport.api.eventsourced.CommandHandler). They take a context class of type `CommandContext`.
 
 By default, the name of the command that the method handles will be the name of the method with the first letter capitalized. So, a method called `getCart` will handle gRPC service call command named `GetCart`. This can be overridden by setting the `name` parameter on the `@CommandHandler` annotation.
 
@@ -66,7 +66,7 @@ This command handler also validates the command, ensuring the quantity items add
 
 Event handlers are invoked at two points, when restoring entities from the journal, before any commands are handled, and each time a new event is emitted. An event handlers responsibility is to update the state of the entity according to the event. Event handlers are the only place where its safe to mutate the state of the entity at all.
 
-Event handlers are declared by annotating a method with `@EventHandler` (**io.cloudstate.kotlinsupport.api.eventsourced.EventHandler**). They take a context class of type `EventContext`.
+Event handlers are declared by annotating a method with `@EventHandler` (io.cloudstate.kotlinsupport.api.eventsourced.EventHandler). They take a context class of type `EventContext`.
 
 Event handlers are differentiated by the type of event they handle. By default, the type of event an event handler handles will be determined by looking for a single non context parameter that the event handler takes. If for any reason this needs to be overridden, or if the event handler method doesn't take any non context parameter (because the event type may be all that needs to be known to handle the event), the type of event the handler handles can be specified using the `eventClass` parameter on the `@EventHandler` annotation.
 
@@ -90,7 +90,7 @@ Multiple snapshot handlers may be defined to handle multiple different types of 
 
 ## Registering the entity
 
-Once you've created your entity, you can register it with the `cloudState` (**io.cloudstate.kotlinsupport.cloudState**) server, by invoking the `registerEventSourcedEntity` function. In addition to passing your entity class and service descriptor, you also need to pass any descriptors that you use for persisting events, for example, the `domain.proto` descriptor.
+Once you've created your entity, you can register it with the `cloudState` (io.cloudstate.kotlinsupport.cloudState) server, by invoking the `registerEventSourcedEntity` function. In addition to passing your entity class and service descriptor, you also need to pass any descriptors that you use for persisting events, for example, the `domain.proto` descriptor.
 
 @@snip [ShoppingCartEntity.kt](/docs/src/test/kotlin/docs/user/eventsourced/ShoppingCartEntity.kt) { #register }
 
