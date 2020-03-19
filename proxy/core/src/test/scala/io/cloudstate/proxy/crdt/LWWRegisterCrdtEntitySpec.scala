@@ -86,6 +86,7 @@ class LWWRegisterCrdtEntitySpec extends AbstractCrdtEntitySpec {
       expectDelta().value.value shouldBe element1
     }
 
+    // Walsh: failing test
     "handle change deltas with custom clock" in {
       val start = System.currentTimeMillis() + 1000000
       update(identity)
@@ -97,12 +98,16 @@ class LWWRegisterCrdtEntitySpec extends AbstractCrdtEntitySpec {
       expectNoMessage(200.millis)
 
       val cid2 = sendAndExpectCommand("cmd", command)
+
+      // Walsh: failing line
       sendAndExpectReply(cid2, updateRegister(element3, clock = CrdtClock.CUSTOM, customClockValue = start))
+
       Thread.sleep(200)
       get().value shouldBe element2
       expectDelta().value.value shouldBe element2
     }
 
+    // Walsh: failing test
     "handle change deltas with custom auto incrementing clock" in {
       val start = System.currentTimeMillis() + 1000000
       update(identity)
