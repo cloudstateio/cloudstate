@@ -669,8 +669,7 @@ object HttpApi {
             body = "*", // Parse all input
             responseBody = "", // Include all output
             additionalBindings = Nil, // No need for additional bindings
-            pattern = HttpRule.Pattern.Post((Path / "v1" / method.getName).toString),
-            unknownFields = UnknownFieldSet.empty
+            pattern = HttpRule.Pattern.Post((Path / "v1" / method.getName).toString)
           )
           log.info(s"Using generated HTTP API endpoint using [$rule]")
           rule
