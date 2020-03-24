@@ -52,7 +52,7 @@ name := "cloudstate"
 
 val GrpcJavaVersion = "1.22.1"
 val GraalAkkaVersion = "0.4.1"
-val AkkaVersion = "2.5.26"
+val AkkaVersion = "2.5.29"
 val AkkaHttpVersion = "10.1.11"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
@@ -188,7 +188,8 @@ lazy val docs = (project in file("docs"))
         "cloudstate.java-support.version" -> "0.4.3",
         "cloudstate.node-support.version" -> "0.0.1",
         "cloudstate.go-support.version" -> "0.1.0",
-        "cloudstate.go.version" -> "1.13"
+        "cloudstate.go.version" -> "1.13",
+        "cloudstate.kotlin-support.version" -> "0.4.3"
       ),
     paradoxNavigationDepth := 3,
     inConfig(Test)(
@@ -235,7 +236,7 @@ def dockerSettings: Seq[Setting[_]] = Seq(
 def buildProxyHelp(commandName: String, name: String) =
   Help(
     (s"$commandName <task>",
-     s"Execute the given docker scoped task (eg, publishLocal or publish) for the the $name build of the proxy.")
+     s"Execute the given docker scoped task (eg, publishLocal or publish) for the $name build of the proxy.")
   )
 
 def buildProxyCommand(commandName: String,

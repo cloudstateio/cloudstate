@@ -8,7 +8,7 @@ Bringing _stateful_ services, fast data/streaming, and the power of reactive tec
 
 The Serverless movement today is very focused on the automation of the underlying infrastructure, but it has to some extent ignored the equally complicated requirements at the application layer, where the move towards Fast Data, streaming, and event-driven stateful architectures creates all sorts of new challenges for operating systems in production.
 
-Stateless functions is a great tool that has its place in the cloud computing toolkit, but for Serverless to reach the grand vision that the industry is demanding of a Serverless world while allowing us to build modern data-centric real-time applications, we can't continue to ignore the hardest problem in distributed systems: managing state—your data. 
+Stateless functions are a great tool that has its place in the cloud computing toolkit, but for Serverless to reach the grand vision that the industry is demanding of a Serverless world while allowing us to build modern data-centric real-time applications, we can't continue to ignore the hardest problem in distributed systems: managing state—your data. 
 
 The [Cloudstate](https://cloudstate.io) project takes on this challenge and paves the way for Serverless 2.0. It consists of two things: 
 
@@ -43,7 +43,7 @@ Join us in making this vision a reality!
     + [Java API](#java-api)
 - [Run Cloudstate](#run-cloudstate)
 - [Knative Integration](#knative-integration)
-- [GraalVM Integration](#graal-integration)
+- [GraalVM Integration](#graalvm-integration)
 - [Testing Strategy](#testing-strategy)
 - [Get involved](#get-involved)
 
@@ -55,10 +55,10 @@ Join us in making this vision a reality!
 *   The Serverless Developer Experience, from development to production, is revolutionary and will grow to dominate the future of Cloud Computing
     *   FaaS is—with its ephemeral, stateless, and short-lived functions—merely the first step and implementation of the Serverless Developer Experience. 
     *   FaaS is great for processing intensive, parallelizable workloads, moving data from A to B providing enrichment and transformation along the way. But it is quite limited and constrained in terms of the use-cases it addresses well, which makes it difficult and inefficient to carry out traditional application development and to implement distributed systems protocols. 
-*   What's needed is a next generation Serverless platform (Serverless 2.0) and programming model for  general-purpose application development (e.g. microservices, streaming pipelines, AI/ML, etc.). 
+*   What's needed is a next-generation Serverless platform (Serverless 2.0) and programming model for general-purpose application development (e.g. microservices, streaming pipelines, AI/ML, etc.). 
     *   One that lets us implement common use-cases such as: shopping carts, user sessions, transactions, ML models training, low-latency prediction serving, job scheduling, and much more.  
     *   What is missing is support for long-lived virtual stateful services, a way to manage distributed state in a scalable and available fashion, and options for choosing the right consistency model for the job. 
-*   We are tackling these problems by building this next generation Serverless on Knative/Kubernetes, gRPC, and Akka (Cluster, Persistence, etc.), with a rich set of client APIs (JavaScript, Go, Python, Java, Scala, PHP, etc.)   
+*   We are tackling these problems by building this next-generation Serverless on Knative/Kubernetes, gRPC, and Akka (Cluster, Persistence, etc.), with a rich set of client APIs (JavaScript, Go, Python, Java, Scala, PHP, etc.)   
 
 ### Limitations of current Serverless implementations 
 
@@ -93,7 +93,7 @@ What we need support for is:
 *   End-to-end correctness and consistency—be able to reason about streaming pipelines and the properties[^5] and guarantees it has as a whole.
 *   Predictable performance, latency, and throughput—in startup time, communication, coordination, and durable storage/access of data. 
 
-End-to-end correctness, consistency, and safety mean different things for different services. It's totally dependent on the use-case, and can't be outsourced completely to the infrastructure. The next generation serverless implementations need to provide programming models and a holistic Developer Experience working in concert with the underlying infrastructure maintaining these properties, without continuing to ignore the hardest, and most important problem: how to manage your data in the cloud—reliably at scale.
+End-to-end correctness, consistency, and safety mean different things for different services. It's totally dependent on the use-case, and can't be outsourced completely to the infrastructure. The next-generation serverless implementations need to provide programming models and a holistic Developer Experience working in concert with the underlying infrastructure maintaining these properties, without continuing to ignore the hardest, and most important problem: how to manage your data in the cloud—reliably at scale.
 
 ### Enter Cloudstate
 
@@ -258,7 +258,7 @@ When a command for an entity arrives, the following messages are sent using this
 1. If there is no existing `handle` stream for that entity, the `handle` streamed call is invoked. This stream will be kept open as long as more commands arrive for that entity, after a period of inactivity, the stream will be shut down.
 2. The sidecar loads the event journal for that entity, and passes each event to the user function using the `EventSourcedEvent` message.
 3. Once the entities event journal has been replayed, the command is sent to the user function.
-4. The user function processes the command, and responds with an `EventSourcedReply`. This contains one of two responses, a `Reply` to send to the orginial source, or a `Forward` to forward processing to another entity. It also contains zero or more events to be persisted. These events will be persisted before the reply or forward is sent.
+4. The user function processes the command, and responds with an `EventSourcedReply`. This contains one of two responses, a `Reply` to send to the original source, or a `Forward` to forward processing to another entity. It also contains zero or more events to be persisted. These events will be persisted before the reply or forward is sent.
 5. Subsequent commands may be received while the entity stream is still active, these can be processed without replaying the event journal.
 
 The user function is expected to hold the current state of the entity in the context of the streamed function call.
@@ -292,7 +292,7 @@ Experiments with the Knative autoscaler have found that it is not suitable for s
 
 For these reasons, we have implemented our own autoscaler. For simplicity, this autoscaler is implemented as a cluster singleton in the Akka sidecar cluster - Akka cluster remoting makes propagation of metrics from all nodes to the autoscaler singleton trivial. We collect the following metrics:
 
-* Average request concurrency per pod - this is the number of simultaneous requests being handled from outside the service. This includes requests currently being handled by user functions, requests being routed through other nodes for sharding, and requests currently interacting the the database.
+* Average request concurrency per pod - this is the number of simultaneous requests being handled from outside the service. This includes requests currently being handled by user functions, requests being routed through other nodes for sharding, and requests currently interacting with the database.
 * Average user function concurrency per pod - this is the number of simultaneous requests that the user function is handling.
 * Average database concurrency per pod - this is the number of simultaneous operations being performed on the database at any one time. This is typically subtracted from request concurrency so that database performance does not impact decisions made based on request concurrency.
 * Request rate - this is the rate at which incoming requests are arriving.
@@ -305,7 +305,7 @@ In general, scaling decisions are made when user function concurrency and reques
 
 After a scaling decision has been made, the autoscaler enters a configurable stable waiting period. During this period, no concurrency based scaling decisions will be made - since it can take time for a new node to start and warm up, and therefore it will take time for concurrency to stabilise. Without the stable waiting period, a sudden increase in load will cause concurrency to increase linearly, and the autoscaler will start more and more nodes to handle this increasing concurrency. The new nodes will initially cause performance to degrade, as they warm up and have shards rebalanced to them, causing further scaling, which causes a feedback loop that sees nodes scaled to impractical numbers.
 
-During the waiting period however, load may continue to increase, and we want to be able to respond to that. To detect increases in load, the incoming request rate is recorded when the autoscaler first enters the stable waiting period when scaling up. If this incoming request rate increases by a configurable threshold, further scaling decisions are made.
+During the waiting period, however, load may continue to increase, and we want to be able to respond to that. To detect increases in load, the incoming request rate is recorded when the autoscaler first enters the stable waiting period when scaling up. If this incoming request rate increases by a configurable threshold, further scaling decisions are made.
 
 This request rate based scaling is not used when scaling down, since the request rate when scaling down may be very low (for example, 0), making it impossible to reason about what an appropriate number of nodes to handle that request rate is. Instead, scaling down stable periods are much shorter than scaling up stable periods.
 
@@ -322,7 +322,7 @@ The Akka sidecar supports serving the gRPC user functions services both as gRPC,
 The Cloudstate Proxy Reference Implementation supports a number of databases. The table below indicates the range of support, the columns are explained as follows:
 
 Journal
-: Whether event sourced journals are supported with this databases. The RI event sourcing support is built using [Akka Persistence](https://doc.akka.io/docs/akka/current/persistence.html) for the durable storage, which has support for a [wide range](https://index.scala-lang.org/search?topics=akka-persistence) of NoSQL and SQL databases.
+: Whether event sourced journals are supported with this database. The RI event sourcing support is built using [Akka Persistence](https://doc.akka.io/docs/akka/current/persistence.html) for the durable storage, which has support for a [wide range](https://index.scala-lang.org/search?topics=akka-persistence) of NoSQL and SQL databases.
 
 Key-Value
 : Whether Key-Value support is implemented for this database. Key-Value support is not yet provided by the Cloudstate proxy, but will be in future.
@@ -338,15 +338,15 @@ Native Image
 ---
 ## Samples
 
-We have created a sample application in each supported client languages. They are all speaking the same protocol, and use the same datatypes, and can therefore be used in concert in a polyglot fashion. 
+We have created a sample application in each of the supported client languages. They are all speaking the same protocol, and use the same datatypes, and can therefore be used in concert in a polyglot fashion. 
 
-The sample application implemenents a simple chat application, and currently there's only one feature: user presence. But in future we will add chat room support, push notifications for chat messages, etc.
+The sample application implements a simple chat application, and currently there's only one feature: user presence. But in future we will add chat room support, push notifications for chat messages, etc.
 
 The application has two components, a presence stateful function, which uses a vote CRDT to store whether a user is currently online or not, and a gateway, which is an express/ws application, that serves a UI.
 
-The UI is designed to allow connecting as multiple users in one browser window, this is for demonstration purposes, to make it straightforward to see real time interactions, serverside pushes etc, without needing to open many browser tabs.
+The UI is designed to allow connecting multiple users in one browser window, this is for demonstration purposes, to make it straightforward to see real time interactions, serverside pushes etc, without needing to open many browser tabs.
 
-Check out the samples project here, with instructions how to run them on Kubernetes: 
+Check out the samples project here, with instructions on how to run them on Kubernetes: 
 - [JavaScript sample](https://github.com/cloudstateio/samples-js-chat)
 - [Java sample](https://github.com/cloudstateio/samples-java-chat)
 
@@ -448,7 +448,7 @@ One configuration mechanism that would work today for supplying custom configura
 
 However, this isn't ideal, as such configuration may be better described, from the developers perspective, in structured YAML/json, as shown [here](https://github.com/lightbend/stateful-serverless/blob/f9da1a2b7272733cba94e504c76bd7fca3355c68/src/samples/js-shopping-cart/eventsourced.yaml##L12-L23). To support this, Knative would need to ensure that the custom configuration is passed from Service to `Configuration` to `Revision`. Here are two ideas for how this could be done:
 
-1. Any unknown top level properties on the Service or `Configuration` specs should not be ignored, instead, they should be read and passed as is down to the `Configuration`/`Revision`. Any changes to top level properties, including additons/removals, or changes in the nested structures, would result in a new `Revision` being created.
+1. Any unknown top level properties on the Service or `Configuration` specs should not be ignored, instead, they should be read and passed as is down to the `Configuration`/`Revision`. Any changes to top level properties, including additions/removals, or changes in the nested structures, would result in a new `Revision` being created.
 2. A custom configuration property, eg `customConfig`, could be defined, which Knative treats as an opaque YAML/json object that it passes as is from Service to `Configuration`, and any changes to it results in a new `Revision` with that config in it. `customConfig` may be a bad name, another name could be `module`, with a convention that any custom modules (eg stateful serverless) selects a name under that, and puts all its configuration under that name.
 
 Option 1 may feel more natural from the developers perspective (they don't care if the config is custom or not), however, it does mean that typos will be harder to diagnose, as they will be passed as is down the chain, and it will be less obvious that the typos are being ignored. Option 2 is more future proofed, since it contains all custom configuration to the custom config namespace, thereby ensuring future changes to the serving CRDs will not conflict with any custom configuration.
@@ -482,7 +482,7 @@ A custom Akka cluster sharding rebalancing strategy may be able to be used to tr
 
 By default, we build a GraalVM native image for Linux. This is done inside a Docker container and so can be done on any platform with Docker installed. We also generate Docker images containing the native image, so the native image can be run on any platform using Docker too.
 
-For further informatoin about setting up the build environment, see [The Cloudstate Build](https://cloudstate.io/docs/developer/thebuild.html#the-cloudstate-build) documentation.
+For further information about setting up the build environment, see [The Cloudstate Build](https://cloudstate.io/docs/developer/thebuild.html#the-cloudstate-build) documentation.
 
 ### Building the native image
 
@@ -627,7 +627,7 @@ cloudstate/proxy/cassandra/target/graalvm-native-image/./cloudstate-proxy-cassan
 
 ### Compliance Testing
 
-The [TCK](tck/src/test/resources/application.conf) makes it possible to verify that combinations of backends and frontends behaves as expected. In order to make a frontend eligible for testing in the TCK a sample application, implementing a simple [Shopping Cart](samples/js-shopping-cart) (here showcased with the Node.js frontend) is required.
+The [TCK](tck/src/test/resources/application.conf) makes it possible to verify that combinations of backends and frontends behave as expected. In order to make a frontend eligible for testing in the TCK a sample application, implementing a simple [Shopping Cart](samples/js-shopping-cart) (here showcased with the Node.js frontend) is required.
 
 In order to make sure that each individual component performs its duties, and when combined has the expected outcome, the following categories need to be considered.
 
@@ -698,7 +698,7 @@ Implementation details:
 
 ### User function testing
 
-Answers the question: How does the users test their user functions?
+Answers the question: How does the user test their user functions?
 
 Solution:
 
