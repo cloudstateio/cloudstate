@@ -48,7 +48,7 @@
 				</div>
 
 				<div class="off-canvas-content" data-off-canvas-content>
-
+					$oss-banner()$
 					<header class="site-header expanded row">
 						<div class="small-12 column">
 							<a href="#" class="off-canvas-toggle hide-for-medium" data-toggle="off-canvas-menu">$menu()$</a>
