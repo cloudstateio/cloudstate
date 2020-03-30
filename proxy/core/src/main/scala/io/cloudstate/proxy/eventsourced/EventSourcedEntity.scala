@@ -306,10 +306,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
       throw error
 
     case SaveSnapshotSuccess(metadata) =>
-      // TODO: is it he right place delete the oldest snapshots and events?
-      // TODO ideally we want a one to one mapping between event and snapshot.
-      deleteSnapshots(SnapshotSelectionCriteria().copy(maxSequenceNr = metadata.sequenceNr - 1))
-      deleteMessages(metadata.sequenceNr - 1)
+    // Nothing to do
 
     case SaveSnapshotFailure(metadata, cause) =>
       log.error("Error saving snapshot", cause)
@@ -352,6 +349,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
 
     case event: pbAny =>
       maybeInit(None)
+      relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Event(EventSourcedEvent(lastSequenceNr, Some(event))))
   }
 
   private def reportDatabaseOperationStarted(): Unit =

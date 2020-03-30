@@ -131,10 +131,9 @@ final class EventSourcedImpl(_system: ActorSystem,
       .map(_.message)
       .scan[(Long, Option[EventSourcedStreamOut.Message])]((startingSequenceNumber, None)) {
         case (_, InEvent(event)) =>
-          // No needed here because the UserFunction does not deal with events
-          //val context = new EventContextImpl(entityId, event.sequence)
-          //val ev = ScalaPbAny.toJavaProto(event.payload.get) // FIXME empty?
-          //handler.handleEvent(ev, context)
+          val context = new EventContextImpl(entityId, event.sequence)
+          val ev = ScalaPbAny.toJavaProto(event.payload.get) // FIXME empty?
+          handler.handleEvent(ev, context)
           (event.sequence, None)
         case ((sequence, _), InCommand(command)) =>
           if (entityId != command.entityId)
@@ -227,12 +226,9 @@ final class EventSourcedImpl(_system: ActorSystem,
 
     override def emit(event: AnyRef): Unit = {
       checkActive()
-      //TODO: we need some kind of abstraction here between Event Sourcing and CRUD
-      //TODO: investigate to do compression here because it is the whole object graph which can be big
       val encoded = anySupport.encodeScala(event)
       val nextSequenceNumber = sequenceNumber + events.size + 1
-      // No needed here because the UserFunction does not deal with events
-      //handler.handleEvent(ScalaPbAny.toJavaProto(encoded), new EventContextImpl(entityId, nextSequenceNumber))
+      handler.handleEvent(ScalaPbAny.toJavaProto(encoded), new EventContextImpl(entityId, nextSequenceNumber))
       events :+= encoded
       performSnapshot = (snapshotEvery > 0) && (performSnapshot || (nextSequenceNumber % snapshotEvery == 0))
     }

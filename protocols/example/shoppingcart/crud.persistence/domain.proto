@@ -1,0 +1,23 @@
+// These are the messages that get persisted - the events, plus the current state (Cart) for snapshots.
+syntax = "proto3";
+
+package com.example.shoppingcart.crud.persistence;
+
+option go_package = "crud.persistence";
+
+message LineItem {
+    string productId = 1;
+    string name = 2;
+    int32 quantity = 3;
+}
+
+// The shopping cart state.
+message Cart {
+    repeated LineItem items = 1;
+}
+
+// The car modification event.
+message CartModification {
+    repeated LineItem items = 1;
+}
+
