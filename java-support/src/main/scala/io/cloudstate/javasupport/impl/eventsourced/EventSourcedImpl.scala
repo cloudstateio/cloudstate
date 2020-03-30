@@ -132,9 +132,9 @@ final class EventSourcedImpl(_system: ActorSystem,
       .scan[(Long, Option[EventSourcedStreamOut.Message])]((startingSequenceNumber, None)) {
         case (_, InEvent(event)) =>
           // No needed here because the UserFunction does not deal with events
-          val context = new EventContextImpl(entityId, event.sequence)
-          val ev = ScalaPbAny.toJavaProto(event.payload.get) // FIXME empty?
-          handler.handleEvent(ev, context)
+          //val context = new EventContextImpl(entityId, event.sequence)
+          //val ev = ScalaPbAny.toJavaProto(event.payload.get) // FIXME empty?
+          //handler.handleEvent(ev, context)
           (event.sequence, None)
         case ((sequence, _), InCommand(command)) =>
           if (entityId != command.entityId)
