@@ -16,7 +16,7 @@ message Cart {
     repeated LineItem items = 1;
 }
 
-// The car modification event.
+// The shopping cart modification event.
 message CartModification {
     repeated LineItem items = 1;
 }

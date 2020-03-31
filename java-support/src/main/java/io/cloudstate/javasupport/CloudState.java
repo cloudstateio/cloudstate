@@ -4,6 +4,7 @@ import com.typesafe.config.Config;
 import com.google.protobuf.Descriptors;
 import io.cloudstate.javasupport.crdt.CrdtEntity;
 import io.cloudstate.javasupport.crdt.CrdtEntityFactory;
+import io.cloudstate.javasupport.crud.CrudEntity;
 import io.cloudstate.javasupport.eventsourced.EventSourcedEntity;
 import io.cloudstate.javasupport.eventsourced.EventSourcedEntityFactory;
 import io.cloudstate.javasupport.impl.AnySupport;
@@ -150,6 +151,50 @@ public final class CloudState {
             newAnySupport(additionalDescriptors),
             persistenceId,
             snapshotEvery));
+
+    return this;
+  }
+
+  /**
+   * Register an annotated crud entity.
+   *
+   * <p>The entity class must be annotated with {@link io.cloudstate.javasupport.crud.CrudEntity}.
+   *
+   * @param entityClass The entity class.
+   * @param descriptor The descriptor for the service that this entity implements.
+   * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
+   *     types when needed.
+   * @return This stateful service builder.
+   */
+  public CloudState registerCrudEntity(
+          Class<?> entityClass,
+          Descriptors.ServiceDescriptor descriptor,
+          Descriptors.FileDescriptor... additionalDescriptors) {
+
+    CrudEntity entity = entityClass.getAnnotation(CrudEntity.class);
+    if (entity == null) {
+      throw new IllegalArgumentException(
+              entityClass + " does not declare an " + CrudEntity.class + " annotation!");
+    }
+
+    final String persistenceId;
+    final int snapshotEvery = 1;
+    if (entity.persistenceId().isEmpty()) {
+      persistenceId = entityClass.getSimpleName();
+    } else {
+      persistenceId = entity.persistenceId();
+    }
+
+    final AnySupport anySupport = newAnySupport(additionalDescriptors);
+
+    services.put(
+            descriptor.getFullName(),
+            new EventSourcedStatefulService(
+                    new AnnotationBasedEventSourcedSupport(entityClass, anySupport, descriptor),
+                    descriptor,
+                    anySupport,
+                    persistenceId,
+                    snapshotEvery));
 
     return this;
   }
