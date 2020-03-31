@@ -55,13 +55,14 @@ object Reflection {
         val responseCodec = Codecs.negotiate(req)
         GrpcMarshalling
           .unmarshalStream(req)(ServerReflectionRequestSerializer, mat)
-          .map(_ via handler)
           .map(
             e =>
-              GrpcMarshalling.marshalStream(e, GrpcExceptionHandler.defaultMapper)(ServerReflectionResponseSerializer,
-                                                                                   mat,
-                                                                                   responseCodec,
-                                                                                   sys)
+              GrpcMarshalling.marshalStream(e via handler, GrpcExceptionHandler.defaultMapper)(
+                ServerReflectionResponseSerializer,
+                mat,
+                responseCodec,
+                sys
+              )
           )
     }
   }
