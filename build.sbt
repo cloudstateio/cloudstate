@@ -52,7 +52,7 @@ name := "cloudstate"
 
 val GrpcJavaVersion = "1.22.1"
 val GraalAkkaVersion = "0.4.1"
-val AkkaVersion = "2.5.29"
+val AkkaVersion = "2.6.4"
 val AkkaHttpVersion = "10.1.11"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
@@ -859,6 +859,7 @@ lazy val `akka-client` = (project in file("samples/akka-client"))
         "io.grpc" % "grpc-core" % GrpcJavaVersion,
         "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
         "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
         "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http-core" % AkkaHttpVersion,
@@ -895,6 +896,7 @@ lazy val `tck` = (project in file("tck"))
         "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
         "io.grpc" % "grpc-core" % GrpcJavaVersion,
         "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
         "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
