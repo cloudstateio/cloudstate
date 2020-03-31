@@ -119,8 +119,8 @@ class ShoppingCartEntity(@param:EntityId private val entityId: String) {
     // #register
     fun main() {
         cloudstate {
-            registerEventSourcedEntity {
-                entityService = ShoppingCartEntity::class.java
+            eventsourced {
+                entityService = ShoppingCartEntity::class
                 descriptor = Shoppingcart.getDescriptor().findServiceByName("ShoppingCart")
                 additionalDescriptors = arrayOf( Domain.getDescriptor() )
             }
@@ -134,12 +134,14 @@ class ShoppingCartEntity(@param:EntityId private val entityId: String) {
     fun main() {
         cloudstate {
 
-            host = "0.0.0.0"
-            port = 8080
-            loglevel = "DEBUG"
+            config {
+                host = "0.0.0.0"
+                port = 8080
+                loglevel = "INFO"
+            }
 
-            registerEventSourcedEntity {
-                entityService = ShoppingCartEntity::class.java
+            eventsourced {
+                entityService = ShoppingCartEntity::class
                 descriptor = Shoppingcart.getDescriptor().findServiceByName("ShoppingCart")
                 additionalDescriptors = arrayOf( Domain.getDescriptor() )
 

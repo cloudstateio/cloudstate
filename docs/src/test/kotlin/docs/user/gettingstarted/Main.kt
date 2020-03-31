@@ -7,8 +7,8 @@ import com.example.shoppingcart.persistence.Domain
 
 fun main() {
     cloudstate {
-        registerEventSourcedEntity {
-            entityService = ShoppingCartEntity::class.java
+        eventsourced {
+            entityService = ShoppingCartEntity::class
             descriptor = Shoppingcart.getDescriptor().findServiceByName("ShoppingCart")
             additionalDescriptors = arrayOf( Domain.getDescriptor() )
         }
