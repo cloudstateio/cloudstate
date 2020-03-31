@@ -38,7 +38,7 @@
 						<div class="cloudstate current">
 							<img class="cloudstate-full-color-logo" src="https://downloads.lightbend.com/website/project-sites-lb-banner/dist/images/cloudstate-full-color.svg" alt="Cloudstate by Lightbend" title="Cloudstate by Lightbend">
 							<span>From the creators of <strong>Cloudstate</strong>, get developer assistance and expert support from Lightbend.</span>
-							<a class="oss-track-link-label" data-category="OSS Lightbend Banner Clicks" data-label="Learn More [Button] - Cloudstate Banner" href="https://www.lightbend.com/cloustate-by-lightbend?r=oss-banner-cloudstate" target="_blank">Learn More</a>
+							<a class="oss-track-link-label" data-category="OSS Lightbend Banner Clicks" data-label="Learn More [Button] - Cloudstate Banner" href="https://www.lightbend.com/cloudstate-by-lightbend?r=oss-banner-cloudstate" target="_blank">Learn More</a>
 						</div>
 					</div>
 					<div class="title">The Lightbend Family</div>
