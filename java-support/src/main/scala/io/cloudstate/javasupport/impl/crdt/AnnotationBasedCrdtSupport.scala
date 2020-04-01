@@ -1,51 +1,14 @@
 package io.cloudstate.javasupport.impl.crdt
 
 import java.lang.reflect.{Constructor, Executable, InvocationTargetException}
-import java.util.{function, Optional}
 import java.util.function.Consumer
-
-import scala.annotation.unchecked
+import java.util.{function, Optional}
 
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
-import io.cloudstate.javasupport.{Context, ServiceCall, ServiceCallFactory}
-import io.cloudstate.javasupport.crdt.{
-  CommandContext,
-  CommandHandler,
-  Crdt,
-  CrdtContext,
-  CrdtCreationContext,
-  CrdtEntity,
-  CrdtEntityFactory,
-  CrdtEntityHandler,
-  CrdtFactory,
-  Flag,
-  GCounter,
-  GSet,
-  LWWRegister,
-  LWWRegisterMap,
-  ORMap,
-  ORSet,
-  PNCounter,
-  PNCounterMap,
-  StreamCancelledContext,
-  StreamedCommandContext,
-  SubscriptionContext,
-  Vote
-}
-import io.cloudstate.javasupport.impl.ReflectionHelper.{
-  CommandHandlerInvoker,
-  InvocationContext,
-  MainArgumentParameterHandler,
-  MethodParameter,
-  ParameterHandler
-}
-import io.cloudstate.javasupport.impl.{
-  AnySupport,
-  ReflectionHelper,
-  ResolvedEntityFactory,
-  ResolvedServiceMethod,
-  ResolvedType
-}
+import io.cloudstate.javasupport.crdt._
+import io.cloudstate.javasupport.impl.ReflectionHelper._
+import io.cloudstate.javasupport.impl._
+import io.cloudstate.javasupport.{ServiceCall, ServiceCallFactory}
 
 import scala.reflect.ClassTag
 

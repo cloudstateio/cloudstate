@@ -1,48 +1,39 @@
 package io.cloudstate.javasupport.impl.eventsourced
 
-import java.lang.reflect.{Constructor, InvocationTargetException}
+import java.lang.reflect.InvocationTargetException
 import java.util.Optional
 
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
-import io.cloudstate.javasupport.ServiceCallFactory
 import io.cloudstate.javasupport.eventsourced._
-import io.cloudstate.javasupport.impl.ReflectionHelper.{InvocationContext, MainArgumentParameterHandler}
-import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEntityFactory, ResolvedServiceMethod}
+import io.cloudstate.javasupport.impl.{AnySupport, ResolvedEntityFactory, ResolvedServiceMethod}
+import io.cloudstate.javasupport.{EntitySupportFactory, ServiceCallFactory}
 
 /**
  * Annotation based implementation of the [[EventSourcedEntityFactory]].
  */
-private[impl] class AnnotationBasedEventSourcedSupport(
-    entityClass: Class[_],
+private[impl] class AnnotationBasedEventSourcedExtensionSupport(
+    entitySupportFactory: EntitySupportFactory,
     anySupport: AnySupport,
     override val resolvedMethods: Map[String, ResolvedServiceMethod[_, _]],
     factory: Option[EventSourcedEntityCreationContext => AnyRef] = None
 ) extends EventSourcedEntityFactory
     with ResolvedEntityFactory {
 
-  def this(entityClass: Class[_], anySupport: AnySupport, serviceDescriptor: Descriptors.ServiceDescriptor) =
-    this(entityClass, anySupport, anySupport.resolveServiceDescriptor(serviceDescriptor))
+  def this(entitySupportFactory: EntitySupportFactory,
+           anySupport: AnySupport,
+           serviceDescriptor: Descriptors.ServiceDescriptor) =
+    this(entitySupportFactory, anySupport, anySupport.resolveServiceDescriptor(serviceDescriptor))
 
-  private val behavior = EventBehaviorReflection(entityClass, resolvedMethods)
+  private val behavior = EventBehaviorReflection(entitySupportFactory.typeClass(), resolvedMethods)
 
   override def create(context: EventSourcedContext): EventSourcedEntityHandler =
-    new EntityHandler(context)
+    new EntityHandler(this.entitySupportFactory, context)
 
-  private val constructor: EventSourcedEntityCreationContext => AnyRef = factory.getOrElse {
-    entityClass.getConstructors match {
-      case Array(single) =>
-        new EntityConstructorInvoker(ReflectionHelper.ensureAccessible(single))
-      case _ =>
-        throw new RuntimeException(s"Only a single constructor is allowed on event sourced entities: $entityClass")
-    }
-  }
-
-  private class EntityHandler(context: EventSourcedContext) extends EventSourcedEntityHandler {
-    private val entity = {
-      constructor(new DelegatingEventSourcedContext(context) with EventSourcedEntityCreationContext {
-        override def entityId(): String = context.entityId()
-      })
-    }
+  private class EntityHandler(entitySupportFactory: EntitySupportFactory, context: EventSourcedContext)
+      extends EventSourcedEntityHandler {
+    private val entity = entitySupportFactory.create(new DelegatingEventSourcedContext(context)
+                                                     with EventSourcedEntityCreationContext,
+                                                     context.entityId())
 
     override def handleEvent(anyEvent: JavaPbAny, context: EventContext): Unit = unwrap {
       val event = anySupport.decode(anyEvent).asInstanceOf[AnyRef]
@@ -109,20 +100,5 @@ private[impl] class AnnotationBasedEventSourcedSupport(
   private abstract class DelegatingEventSourcedContext(delegate: EventSourcedContext) extends EventSourcedContext {
     override def entityId(): String = delegate.entityId()
     override def serviceCallFactory(): ServiceCallFactory = delegate.serviceCallFactory()
-  }
-}
-
-private class EntityConstructorInvoker(constructor: Constructor[_])
-    extends (EventSourcedEntityCreationContext => AnyRef) {
-  private val parameters = ReflectionHelper.getParameterHandlers[EventSourcedEntityCreationContext](constructor)()
-  parameters.foreach {
-    case MainArgumentParameterHandler(clazz) =>
-      throw new RuntimeException(s"Don't know how to handle argument of type $clazz in constructor")
-    case _ =>
-  }
-
-  def apply(context: EventSourcedEntityCreationContext): AnyRef = {
-    val ctx = InvocationContext("", context)
-    constructor.newInstance(parameters.map(_.apply(ctx)): _*).asInstanceOf[AnyRef]
   }
 }
