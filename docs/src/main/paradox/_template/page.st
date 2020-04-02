@@ -15,7 +15,7 @@
 		<!-- OneTrust Cookies Consent Notice start -->
 		<script type="text/javascript">
 		(function(w,d,s){if(w.location.protocol!="file:"){var f=d.getElementsByTagName(s)[0],j=d.createElement(s);
-		j.async=true;j.src="https://optanon.blob.core.windows.net/consent/a14b53db-7715-45da-be81-7fd0cafc385d.js";
+		j.async=true;j.src="https://cdn.cookielaw.org/consent/a14b53db-7715-45da-be81-7fd0cafc385d.js";
 		j.charset="UTF-8";f.parentNode.insertBefore(j,f);}})(window,document,"script");</script>
 		<!-- OneTrust Cookies Consent Notice end -->
 
@@ -48,7 +48,7 @@
 				</div>
 
 				<div class="off-canvas-content" data-off-canvas-content>
-
+					$oss-banner()$
 					<header class="site-header expanded row">
 						<div class="small-12 column">
 							<a href="#" class="off-canvas-toggle hide-for-medium" data-toggle="off-canvas-menu">$menu()$</a>
@@ -111,7 +111,7 @@
 				<footer class="site-footer">
 
 					<a href="$page.base$.."><img src="$page.base$images/cloudstate-stacked-white.svg"></a>
-					<p>© Cloudstate 2019 | <a href="$page.base$../privacy/">Privacy Policy</a> | <a class="optanon-toggle-display">Cookie Settings</a></p>
+					<p>© Cloudstate <script>document.write(new Date().getFullYear());</script> | <a href="$page.base$../privacy/">Privacy Policy</a> | <a class="optanon-toggle-display">Cookie Settings</a></p>
 
 				</footer>
 
