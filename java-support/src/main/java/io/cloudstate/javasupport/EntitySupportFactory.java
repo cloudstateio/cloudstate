@@ -7,7 +7,7 @@ public interface EntitySupportFactory {
    *
    * @return The reference to the Entity.
    */
-  Object create(Context context, String enittyId);
+  Object create(Context context, String entity);
 
   /**
    * Return Class of Etity.
