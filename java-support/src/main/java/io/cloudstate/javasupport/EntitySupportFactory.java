@@ -12,7 +12,7 @@ public interface EntitySupportFactory {
   /**
    * Return Class of Etity.
    *
-   * @return The Class of Etity.
+   * @return The Class of Entity.
    */
   Class<?> typeClass();
 }
