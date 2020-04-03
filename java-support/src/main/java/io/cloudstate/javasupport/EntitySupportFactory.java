@@ -10,7 +10,7 @@ public interface EntitySupportFactory {
   Object create(Context context, String enittyId);
 
   /**
-   * Return Class of Etity.
+   * Return Class of Entity.
    *
    * @return The Class of Entity.
    */
