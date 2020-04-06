@@ -574,7 +574,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
     case Deleted(_) =>
     // Ignore, we know.
 
-    case EntityCommand(_, _, _, streamed, _) =>
+    case EntityCommand(_, _, _, streamed, metadata, _) =>
       val reply = UserFunctionReply(
         Some(ClientAction(ClientAction.Action.Failure(Failure(description = "Entity deleted"))))
       )

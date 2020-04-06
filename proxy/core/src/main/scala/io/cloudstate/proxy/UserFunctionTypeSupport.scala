@@ -2,15 +2,16 @@ package io.cloudstate.proxy
 
 import akka.NotUsed
 import akka.stream.scaladsl.Flow
-import com.google.protobuf.Descriptors.{FieldDescriptor, MethodDescriptor, ServiceDescriptor}
+import com.google.protobuf.Descriptors.{MethodDescriptor, ServiceDescriptor}
 import com.google.protobuf.{ByteString, DynamicMessage}
 import io.cloudstate.protocol.entity.Entity
 import io.cloudstate.entity_key.EntityKeyProto
+import io.cloudstate.legacy_entity_key.LegacyEntityKeyProto
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionCommand, UserFunctionReply}
 import io.cloudstate.proxy.protobuf.Options
 
 import scala.collection.JavaConverters._
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future}
 
 trait UserFunctionTypeSupport {
 
@@ -27,7 +28,7 @@ trait UserFunctionTypeSupportFactory {
 /**
  * Abstract support for any user function type that is entity based (ie, has entity id keys).
  */
-abstract class EntityTypeSupportFactory extends UserFunctionTypeSupportFactory {
+abstract class EntityTypeSupportFactory(implicit ec: ExecutionContext) extends UserFunctionTypeSupportFactory {
   override final def build(entity: Entity, serviceDescriptor: ServiceDescriptor): UserFunctionTypeSupport = {
     require(serviceDescriptor != null,
             "ServiceDescriptor not found, please verify the spelling and package name provided when looking it up")
@@ -53,7 +54,11 @@ private object EntityMethodDescriptor {
 
 final class EntityMethodDescriptor(val method: MethodDescriptor) {
   private[this] val keyFields = method.getInputType.getFields.iterator.asScala
-    .filter(field => EntityKeyProto.entityKey.get(Options.convertFieldOptions(field)))
+    .filter(
+      field =>
+        EntityKeyProto.entityKey.get(Options.convertFieldOptions(field)) ||
+        LegacyEntityKeyProto.legacyEntityKey.get(Options.convertFieldOptions(field))
+    )
     .toArray
     .sortBy(_.getIndex)
 
@@ -75,7 +80,7 @@ final class EntityMethodDescriptor(val method: MethodDescriptor) {
 
 private final class EntityUserFunctionTypeSupport(serviceDescriptor: ServiceDescriptor,
                                                   methodDescriptors: Map[String, EntityMethodDescriptor],
-                                                  entityTypeSupport: EntityTypeSupport)
+                                                  entityTypeSupport: EntityTypeSupport)(implicit ec: ExecutionContext)
     extends UserFunctionTypeSupport {
 
   override def handler(name: String): Flow[UserFunctionCommand, UserFunctionReply, NotUsed] = {
@@ -91,7 +96,8 @@ private final class EntityUserFunctionTypeSupport(serviceDescriptor: ServiceDesc
     EntityCommand(entityId = entityId,
                   name = command.name,
                   payload = command.payload,
-                  streamed = method.method.isServerStreaming)
+                  streamed = method.method.isServerStreaming,
+                  metadata = command.metadata)
   }
 
   private def methodDescriptor(name: String): EntityMethodDescriptor =

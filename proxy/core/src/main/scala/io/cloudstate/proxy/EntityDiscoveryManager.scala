@@ -21,8 +21,7 @@ import akka.actor.{Actor, ActorLogging, CoordinatedShutdown, PoisonPill, Props, 
 import akka.cluster.Cluster
 import akka.util.Timeout
 import akka.pattern.pipe
-import akka.stream.scaladsl.RunnableGraph
-import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
+import akka.http.scaladsl.Http
 import akka.http.scaladsl.Http.ServerBinding
 import akka.cluster.singleton.{
   ClusterSingletonManager,
@@ -31,36 +30,26 @@ import akka.cluster.singleton.{
   ClusterSingletonProxySettings
 }
 import akka.grpc.GrpcClientSettings
+import akka.persistence.query.PersistenceQuery
+import akka.persistence.query.scaladsl.EventsByTagQuery
 import akka.stream.Materializer
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.typesafe.config.Config
-import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.crdt.Crdt
+import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.event_sourced.EventSourced
 import io.cloudstate.protocol.function.StatelessFunction
+import io.cloudstate.proxy.ConcurrencyEnforcer.ConcurrencyEnforcerSettings
 import io.cloudstate.proxy.StatsCollector.StatsCollectorSettings
 import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
-import io.cloudstate.proxy.ConcurrencyEnforcer.ConcurrencyEnforcerSettings
-import io.cloudstate.proxy.autoscaler.{
-  Autoscaler,
-  AutoscalerSettings,
-  ClusterMembershipFacadeImpl,
-  KubernetesDeploymentScaler,
-  NoAutoscaler,
-  NoScaler
-}
+import io.cloudstate.proxy.autoscaler._
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
+import io.cloudstate.proxy.eventing.{EventLogEventing, EventingManager, EventingSupport, OffsetTracking}
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
-import io.cloudstate.proxy.eventing.EventingManager
 import io.cloudstate.proxy.function.StatelessFunctionSupportFactory
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
-
-//import io.cloudstate.protocol.entity.{ClientAction, EntityDiscovery, Failure, Reply, UserFunctionError}
-import io.cloudstate.protocol.entity.EntityDiscovery
-import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 
 object EntityDiscoveryManager {
   final case class Configuration(
@@ -78,7 +67,7 @@ object EntityDiscoveryManager {
       proxyParallelism: Int,
       concurrencySettings: ConcurrencyEnforcerSettings,
       statsCollectorSettings: StatsCollectorSettings,
-      journalEnabled: Boolean,
+      journal: Option[JournalConfig],
       config: Config
   ) {
     validate()
@@ -101,7 +90,7 @@ object EntityDiscoveryManager {
              cleanupPeriod = config.getDuration("action-timeout-poll-period").toMillis.millis
            ),
            statsCollectorSettings = new StatsCollectorSettings(config.getConfig("stats")),
-           journalEnabled = config.getBoolean("journal-enabled"),
+           journal = JournalConfig.fromConfig(config.getConfig("journal")),
            config = config)
     }
 
@@ -117,6 +106,24 @@ object EntityDiscoveryManager {
       require(maxInboundMessageSize <= Int.MaxValue,
               s"max-inbound-message-size exceeds the maximum allowed value of: ${Int.MaxValue}")
     }
+  }
+
+  final case class JournalConfig(
+      readJournal: String,
+      offsetStore: String
+  )
+
+  object JournalConfig {
+    def fromConfig(config: Config): Option[JournalConfig] =
+      if (config.getBoolean("enabled")) {
+        Some(
+          JournalConfig(
+            readJournal = config.getString("read-journal"),
+            offsetStore = config.getString("offset-store")
+          )
+        )
+      } else None
+
   }
 
   def props(config: Configuration)(implicit mat: Materializer): Props =
@@ -196,7 +203,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
                                                                     concurrencyEnforcer = concurrencyEnforcer,
                                                                     statsCollector = statsCollector)
     ) ++ {
-      if (config.journalEnabled)
+      if (config.journal.isDefined)
         Map(
           EventSourced.name -> new EventSourcedSupportFactory(context.system,
                                                               config,
@@ -206,6 +213,18 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
         )
       else Map.empty
     }
+
+  private final val eventLogEventingSupport: Option[EventingSupport] = config.journal.map { journal =>
+    // todo probably want to pass in things like an actor system
+    val offsetTracking: OffsetTracking =
+      getClass.getClassLoader
+        .loadClass(journal.offsetStore)
+        .asSubclass(classOf[OffsetTracking])
+        .newInstance()
+
+    val query = PersistenceQuery(system).readJournalFor[EventsByTagQuery](journal.readJournal)
+    new EventLogEventing(offsetTracking, query, system)
+  }
 
   entityDiscoveryClient.discover(EntityDiscoveryManager.proxyInfo(supportFactories.keys.toSeq)) pipeTo self
 
@@ -241,14 +260,14 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
                   .mkString(",")}"
               )
           }
-        }
+        }.toList
 
         val router = new UserFunctionRouter(entities, entityDiscoveryClient)
 
-        val eventSupport = EventingManager.createSupport(config.getConfig("eventing"))
+        val topicSupport = EventingManager.createSupport(config.getConfig("eventing"))
+        val emitters = EventingManager.createEmitters(entities, topicSupport)
 
-        val (route, eventingGraph) =
-          Serve.createRoute(entities, router, statsCollector, entityDiscoveryClient, descriptors, eventSupport)
+        val route = Serve.createRoute(entities, router, statsCollector, entityDiscoveryClient, descriptors, emitters)
 
         log.debug("Starting gRPC proxy")
 
@@ -259,12 +278,14 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
             interface = config.httpInterface,
             port = config.httpPort
           ) pipeTo self
+
+          EventingManager.startConsumers(router, entities, topicSupport, eventLogEventingSupport)
         }
 
         // Start warmup
         system.actorOf(Warmup.props(spec.entities.exists(_.entityType == EventSourced.name)), "state-manager-warm-up")
 
-        context.become(binding(eventingGraph))
+        context.become(binding)
 
       } catch {
         case e @ EntityDiscoveryException(message) =>
@@ -280,10 +301,10 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
 
   private[this] final def extractService(serviceName: String, descriptor: FileDescriptor): Option[ServiceDescriptor] = {
     val (pkg, name) = Names.splitPrev(serviceName)
-    Some(descriptor).filter(_.getPackage == pkg).map(_.findServiceByName(name))
+    Some(descriptor).filter(_.getPackage == pkg).flatMap(d => Option(d.findServiceByName(name)))
   }
 
-  private[this] final def binding(eventManager: Option[RunnableGraph[Future[Done]]]): Receive = {
+  private[this] final def binding: Receive = {
     case sb: ServerBinding =>
       log.info(s"CloudState proxy online at ${sb.localAddress}")
 
@@ -302,8 +323,6 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
         Http().shutdownAllConnectionPools().map(_ => Done)
       }
 
-      eventManager.foreach(_.run() pipeTo self)
-
       context.become(running)
 
     case Status.Failure(cause) => // Failure to bind the HTTP server is fatal, terminate
@@ -317,9 +336,6 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
   private[this] final def running: Receive = {
     case Ready =>
       sender ! true
-    case Status.Failure(cause) => // Failure in the eventing subsystem, terminate
-      log.error(cause, "Eventing failed")
-      system.terminate()
     case Done =>
       system.terminate() // FIXME context.become(dead)
   }

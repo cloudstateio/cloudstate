@@ -1,0 +1,29 @@
+// This is the public API offered by the shopping cart entity.
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "cloudstate/eventing.proto";
+import "shoppingcart/persistence/domain.proto";
+
+package com.example.shoppingcart;
+
+option go_package = "tck/shoppingcart";
+
+service ShoppingCartProjection {
+    rpc HandleItemAdded (com.example.shoppingcart.persistence.ItemAdded) returns (google.protobuf.Empty) {
+        option (.cloudstate.eventing) = {
+            in: {
+                event_log: "shopping-cart"
+            }
+        };
+    }
+
+    rpc HandleItemRemoved (com.example.shoppingcart.persistence.ItemRemoved) returns (google.protobuf.Empty) {
+        option (.cloudstate.eventing) = {
+            in: {
+                event_log: "shopping-cart"
+            }
+        };
+    }
+
+}

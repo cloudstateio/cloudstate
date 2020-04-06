@@ -15,16 +15,8 @@
  */
 
 const AnySupport = require("./protobuf-any");
-
-class ContextFailure extends Error {
-  constructor(msg) {
-    super(msg);
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, ContextFailure);
-    }
-    this.name = "ContextFailure";
-  }
-}
+const EffectSerializer = require("./effect-serializer");
+const ContextFailure = require("./context-failure");
 
 /**
  * Creates the base for context objects.
@@ -37,7 +29,7 @@ module.exports = class CommandHelper {
     this.service = service;
     this.streamId = streamId;
     this.call = call;
-    this.allEntities = allEntities;
+    this.effectSerializer = new EffectSerializer(allEntities);
     this.debug = debug;
     this.handlerFactory = handlerFactory;
   }
@@ -215,7 +207,7 @@ module.exports = class CommandHelper {
        */
       effect: (method, message, synchronous = false) => {
         accessor.ensureActive();
-        accessor.effects.push(this.serializeSideEffect(method, message, synchronous))
+        accessor.effects.push(this.effectSerializer.serializeSideEffect(method, message, synchronous))
       },
 
       /**
@@ -227,7 +219,7 @@ module.exports = class CommandHelper {
        */
       thenForward: (method, message) => {
         accessor.ensureActive();
-        accessor.forward = this.serializeEffect(method, message);
+        accessor.forward = this.effectSerializer.serializeEffect(method, message);
       },
 
       /**
@@ -249,45 +241,4 @@ module.exports = class CommandHelper {
     };
     return accessor;
   }
-
-  serializeEffect(method, message) {
-    let serviceName, commandName;
-    // We support either the grpc method, or a protobufjs method being passed
-    if (typeof method.path === "string") {
-      const r = new RegExp("^/([^/]+)/([^/]+)$").exec(method.path);
-      if (r == null) {
-        throw new Error(util.format("Not a valid gRPC method path '%s' on object '%o'", method.path, method));
-      }
-      serviceName = r[1];
-      commandName = r[2];
-    } else if (method.type === "rpc") {
-      serviceName = method.parent.name;
-      commandName = method.name;
-    }
-
-    const service = this.allEntities[serviceName];
-
-    if (service !== undefined) {
-      const command = service.methods[commandName];
-      if (command !== undefined) {
-        const payload = AnySupport.serialize(command.resolvedRequestType.create(message), false, false);
-        return {
-          serviceName: serviceName,
-          commandName: commandName,
-          payload: payload
-        };
-      } else {
-        throw new Error(util.format("Command [%s] unknown on service [%s].", commandName, serviceName))
-      }
-    } else {
-      throw new Error(util.format("Service [%s] has not been registered as an entity in this user function, and so can't be used as a side effect or forward.", service))
-    }
-  }
-
-  serializeSideEffect(method, message, synchronous) {
-    const msg = this.serializeEffect(method, message);
-    msg.synchronous = synchronous;
-    return msg;
-  }
-
 };

@@ -18,32 +18,13 @@
 
 syntax = "proto3";
 
-package cloudstate.proxy;
+import "google/protobuf/descriptor.proto";
 
-import "google/protobuf/any.proto";
-import "cloudstate/entity.proto";
-import "scalapb/scalapb.proto";
+package cloudstate;
 
-option java_package = "io.cloudstate.proxy.entity";
-option (scalapb.options) = {
-    flat_package: true
-};
+option java_package = "io.cloudstate";
+option go_package = "github.com/cloudstateio/go-support/cloudstate/;cloudstate";
 
-message UserFunctionCommand {
-    string name = 1;
-    google.protobuf.Any payload = 2;
-    cloudstate.Metadata metadata = 3;
-}
-
-message EntityCommand {
-    string entity_id = 1;
-    string name = 2;
-    google.protobuf.Any payload = 3;
-    bool streamed = 4;
-    cloudstate.Metadata metadata = 5;
-}
-
-message UserFunctionReply {
-    ClientAction client_action = 1;
-    repeated cloudstate.SideEffect side_effects = 2;
+extend google.protobuf.FieldOptions {
+    bool legacy_entity_key = 50002;
 }

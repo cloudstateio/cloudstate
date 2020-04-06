@@ -17,35 +17,31 @@
 package io.cloudstate.proxy
 
 import scala.collection.JavaConverters._
-import scala.concurrent.{ExecutionContext, Future, Promise}
-import scala.util.Success
+import scala.concurrent.{ExecutionContext, Future}
 import scala.annotation.tailrec
-import akka.grpc.scaladsl.{GrpcExceptionHandler, GrpcMarshalling}
-import GrpcMarshalling.{marshalStream, unmarshalStream}
 import akka.grpc.internal.{
   CancellationBarrierGraphStage,
   Codecs,
   GrpcProtocolNative,
   GrpcResponseHelpers,
-  Identity,
   ServerReflectionImpl
 }
 import akka.grpc.scaladsl.headers.`Message-Encoding`
-import akka.{Done, NotUsed}
+import akka.NotUsed
 import akka.grpc.{ProtobufSerializer, Trailers}
-import akka.grpc.javadsl.ServerReflection
-import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes}
+import akka.http.scaladsl.model.{HttpEntity, HttpHeader, HttpRequest, HttpResponse, StatusCodes}
 import akka.http.scaladsl.model.Uri.Path
 import akka.actor.{ActorRef, ActorSystem}
+import akka.http.scaladsl.model.headers.RawHeader
 import akka.util.ByteString
 import akka.stream.Materializer
-import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Source}
+import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import com.google.protobuf.{ByteString => ProtobufByteString}
 import com.google.protobuf.any.{Any => ProtobufAny}
 import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor, MethodDescriptor}
 import grpc.reflection.v1alpha.reflection.ServerReflectionHandler
 import io.cloudstate.protocol.entity._
-import io.cloudstate.proxy.eventing.{Emitter, Emitters, EventingManager, EventingSupport}
+import io.cloudstate.proxy.eventing.Emitter
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
 import io.cloudstate.proxy.protobuf.Types
@@ -56,6 +52,7 @@ object Serve {
   private final val log = LoggerFactory.getLogger(getClass)
 
   private[this] final val fallback: Any => Any = _ => fallback
+
   private final def checkFallback[B] = fallback.asInstanceOf[Any => B]
 
   private final val Http404Response: Future[HttpResponse] =
@@ -77,7 +74,7 @@ object Serve {
       throw new UnsupportedOperationException("operation not supported")
   }
 
-  final class CommandSerializer(val commandName: String, desc: Descriptor)
+  final class CommandSerializer(val commandName: String, desc: Descriptor, metadata: Metadata)
       extends ProtobufSerializer[UserFunctionCommand] {
     final val commandTypeUrl = Types.AnyTypeUrlHostName + desc.getFullName
 
@@ -87,68 +84,75 @@ object Serve {
     }
 
     override final def deserialize(bytes: ByteString): UserFunctionCommand =
-      parse(ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer)))
+      parse(ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer)), metadata)
 
-    final def parse(any: ProtobufAny): UserFunctionCommand =
-      UserFunctionCommand(name = commandName, payload = Some(any))
+    final def parse(any: ProtobufAny, metadata: Metadata): UserFunctionCommand =
+      UserFunctionCommand(name = commandName, payload = Some(any), metadata = Some(metadata))
   }
 
   final class CommandHandler(final val entity: ServableEntity,
                              final val method: MethodDescriptor,
                              final val router: UserFunctionRouter,
-                             final val emitter: Future[Emitter],
+                             final val emitter: Option[Emitter],
                              final val entityDiscoveryClient: EntityDiscoveryClient,
-                             final val log: Logger) {
+                             final val log: Logger)(implicit ec: ExecutionContext) {
 
     final val fullCommandName: String = entity.serviceName + "." + method.getName
-    final val serializer: CommandSerializer = new CommandSerializer(method.getName, method.getInputType)
     final val unary: Boolean = !method.toProto.getClientStreaming && !method.toProto.getServerStreaming
     final val expectedReplyTypeUrl: String = Types.AnyTypeUrlHostName + method.getOutputType.getFullName
+    final val commandTypeUrl = Types.AnyTypeUrlHostName + method.getInputType.getFullName
 
-    final val flow: Flow[UserFunctionCommand, ProtobufAny, NotUsed] = {
-      val handler = router.handle(entity.serviceName)
+    final def deserialize(metadata: Metadata)(bytes: ByteString): UserFunctionCommand = {
+      val payload = ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer))
+      UserFunctionCommand(name = method.getName, payload = Some(payload), metadata = Some(metadata))
+    }
 
-      val zipWithEmitter = emitter.value match {
-        case Some(Success(e)) => handler.map(v => (e, v)) // Cheaper than mapAsync if already completed
-        case _ => handler.mapAsync(1)(reply => emitter.zip(Future.successful(reply)))
-      }
+    final val handler: Flow[UserFunctionCommand, UserFunctionReply, NotUsed] =
+      router.handle(entity.serviceName)
 
-      zipWithEmitter
+    final val processReplies: Flow[UserFunctionReply, ProtobufAny, NotUsed] = {
+      val handler = Flow[UserFunctionReply]
         .map({
-          case (
-              emitter,
-              UserFunctionReply(Some(ClientAction(ClientAction.Action.Reply(Reply(some @ Some(payload), _)), _)), _, _)
-              ) =>
+          case UserFunctionReply(Some(ClientAction(ClientAction.Action.Reply(reply @ Reply(Some(payload), _, _)), _)),
+                                 _,
+                                 _) =>
             if (payload.typeUrl != expectedReplyTypeUrl) {
               val msg =
-                s"${fullCommandName}: Expected reply type_url to be [${expectedReplyTypeUrl}] but was [${payload.typeUrl}]."
+                s"$fullCommandName: Expected reply type_url to be [$expectedReplyTypeUrl] but was [${payload.typeUrl}]."
               log.warn(msg)
               entityDiscoveryClient.reportError(UserFunctionError(s"Warning: $msg"))
-            } else {
-              val _ = emitter.emit(payload, method) // TODO: check returned boolean?
             }
-            some
-          case (_, UserFunctionReply(Some(ClientAction(ClientAction.Action.Forward(_), _)), _, _)) =>
+            Some(reply)
+          case UserFunctionReply(Some(ClientAction(ClientAction.Action.Forward(_), _)), _, _) =>
             log.error("Cannot serialize forward reply, this should have been handled by the UserFunctionRouter")
             None
-          case (_,
-                UserFunctionReply(Some(ClientAction(ClientAction.Action.Failure(Failure(_, message, _)), _)), _, _)) =>
+          case UserFunctionReply(Some(ClientAction(ClientAction.Action.Failure(Failure(_, message, _)), _)), _, _) =>
             log.error("User Function responded with a failure: {}", message)
             None
           case _ =>
             None
         })
         .collect(Function.unlift(identity))
+
+      emitter match {
+        case Some(e) =>
+          handler.mapAsync(4) {
+            case Reply(Some(payload), metadata, _) =>
+              e.emit(payload, method, metadata).map(_ => payload)
+          }
+        case None => handler.map(_.payload.get)
+      }
+
     }
   }
 
-  private[proxy] def createResponse(request: HttpRequest, protobufs: Source[ProtobufAny, NotUsed])(
+  private def createResponse(request: HttpRequest, headers: List[HttpHeader], protobufs: Source[ProtobufAny, NotUsed])(
       implicit system: ActorSystem
-  ): Future[HttpResponse] = {
+  ): HttpResponse = {
     val responseWriter = GrpcProtocolNative.newWriter(Codecs.negotiate(request))
-    Future.successful(
+    val response =
       GrpcResponseHelpers(protobufs, Serve.mapRequestFailureExceptions)(Serve.ReplySerializer, responseWriter, system)
-    )
+    response.withHeaders(response.headers ++ headers)
   }
 
   def createRoute(entities: Seq[ServableEntity],
@@ -156,15 +160,23 @@ object Serve {
                   statsCollector: ActorRef,
                   entityDiscoveryClient: EntityDiscoveryClient,
                   fileDescriptors: Seq[FileDescriptor],
-                  eventingSupport: Option[EventingSupport])(
+                  emitters: Map[String, Emitter])(
       implicit sys: ActorSystem,
       mat: Materializer,
       ec: ExecutionContext
-  ): (PartialFunction[HttpRequest, Future[HttpResponse]], Option[RunnableGraph[Future[Done]]]) = {
-    val (grpcProxy, eventingGraph) =
-      createGrpcApi(entities, router, statsCollector, entityDiscoveryClient, eventingSupport)
+  ): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+    val grpcProxy = createGrpcApi(entities, router, statsCollector, entityDiscoveryClient, emitters)
+    val grpcHandler = Function.unlift { request: HttpRequest =>
+      val asResponse = grpcProxy.andThen { futureResult =>
+        Some(futureResult.map {
+          case (headers, messages) =>
+            createResponse(request, headers, messages)
+        })
+      }
+      asResponse.applyOrElse(request, (_: HttpRequest) => None)
+    }
     val routes = Array(
-      GrpcWebSupport.wrapGrpcHandler(grpcProxy),
+      GrpcWebSupport.wrapGrpcHandler(grpcHandler),
       HttpApi.serve(entities.map(_.serviceDescriptor -> grpcProxy).toList),
       handleNetworkProbe(),
       ServerReflectionHandler.partial(
@@ -172,7 +184,7 @@ object Serve {
       )
     )
 
-    ({ // Creates a fast implementation of multi-PartialFunction composition
+    { // Creates a fast implementation of multi-PartialFunction composition
       case req =>
         @tailrec def matchRoutes(req: HttpRequest, idx: Int): Future[HttpResponse] =
           if (idx < routes.length) {
@@ -183,8 +195,9 @@ object Serve {
             log.debug("Not found request: " + req.getUri())
             Http404Response
           }
+
         matchRoutes(req, 0)
-    }, eventingGraph)
+    }
   }
 
   /**
@@ -206,64 +219,62 @@ object Serve {
                                         router: UserFunctionRouter,
                                         statsCollector: ActorRef,
                                         entityDiscoveryClient: EntityDiscoveryClient,
-                                        eventingSupport: Option[EventingSupport])(
+                                        emitters: Map[String, Emitter])(
       implicit sys: ActorSystem,
       mat: Materializer,
       ec: ExecutionContext
-  ): (PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]], Option[RunnableGraph[Future[Done]]]) = {
-    val p = Promise[Emitter]
-    val eventingGraph =
-      eventingSupport.flatMap(
-        support =>
-          EventingManager
-            .createStreams(router, entityDiscoveryClient, entities, support)
-            .map(_.mapMaterializedValue({ case (emitter, done) => p.success(emitter); done }))
-      ) match {
-        case None =>
-          p.success(Emitters.ignore)
-          None
-        case some =>
-          some
-      }
+  ): PartialFunction[HttpRequest, Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]] = {
 
     val rpcMethodSerializers = (for {
       entity <- entities.iterator
       method <- entity.serviceDescriptor.getMethods.iterator.asScala
     } yield {
-      val handler = new CommandHandler(entity, method, router, p.future, entityDiscoveryClient, log)
+      val handler =
+        new CommandHandler(entity, method, router, emitters.get(method.getFullName), entityDiscoveryClient, log)
       (Path / entity.serviceName / method.getName, handler)
     }).toMap
 
-    val routes: PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]] = {
+    val routes: PartialFunction[HttpRequest, Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]] = {
       case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
-        val startTime = System.nanoTime()
         val handler = rpcMethodSerializers(req.uri.path)
 
-        // Only report request stats for unary commands, doesn't make sense for streamed
-        val processRequest =
-          if (handler.unary) {
-            statsCollector ! StatsCollector.RequestReceived
-            handler.flow.watchTermination() { (_, complete) =>
-              complete.onComplete { _ =>
-                statsCollector ! StatsCollector.ResponseSent(System.nanoTime() - startTime)
-              }
-              NotUsed
-            }
-          } else {
-            handler.flow
-          }
+        val metadata = Metadata(req.headers.map { header =>
+          MetadataEntry(header.name(), header.value)
+        })
 
         val reader = GrpcProtocolNative.newReader(Codecs.detect(req).get)
 
         req.entity.dataBytes
           .viaMat(reader.dataFrameDecoder)(Keep.none)
-          .map(handler.serializer.deserialize)
+          .map(handler.deserialize(metadata))
           .via(new CancellationBarrierGraphStage) // In gRPC we signal failure by returning an error code, so we don't want the cancellation bubbled out
-          .via(processRequest)
+          .via(handler.handler)
+          .prefixAndTail(1)
+          .runWith(Sink.head)
+          .map {
+            case (maybeFirstReply, rest) =>
+              val (metadata, replies) = maybeFirstReply match {
+                case Seq(
+                    reply @ UserFunctionReply(Some(ClientAction(ClientAction.Action.Reply(Reply(_, metadata, _)), _)),
+                                              _,
+                                              _)
+                    ) =>
+                  (metadata.getOrElse(Metadata.defaultInstance), Source.single(reply).concat(rest))
+                case other =>
+                  (Metadata.defaultInstance, Source(other).concat(rest))
+              }
+
+              val headers = metadata.entries.map {
+                case MetadataEntry(key, value, _) => RawHeader(key, value)
+              }.toList
+
+              (headers, replies.via(handler.processReplies))
+          }
     }
 
-    (routes, eventingGraph)
+    routes
   }
 
   private case class CommandException(msg: String) extends RuntimeException(msg, null, false, false)
+
 }

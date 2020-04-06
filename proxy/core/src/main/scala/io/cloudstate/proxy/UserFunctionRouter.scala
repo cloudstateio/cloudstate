@@ -3,7 +3,7 @@ package io.cloudstate.proxy
 import akka.NotUsed
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Sink, Source}
-import io.cloudstate.protocol.entity.{ClientAction, EntityDiscovery, Forward, SideEffect, UserFunctionError}
+import io.cloudstate.protocol.entity.{ClientAction, EntityDiscovery, Forward, Metadata, SideEffect, UserFunctionError}
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
 
@@ -24,11 +24,17 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
 
   final def handle(serviceName: String): Flow[UserFunctionCommand, UserFunctionReply, NotUsed] =
     Flow[UserFunctionCommand].flatMapConcat { command =>
-      routeMessage(Nil, RouteReason.Initial, serviceName, command.name, command.payload, synchronous = true)
+      routeMessage(Nil,
+                   RouteReason.Initial,
+                   serviceName,
+                   command.name,
+                   command.payload,
+                   synchronous = true,
+                   command.metadata)
     }
 
   final def handleUnary(serviceName: String, command: UserFunctionCommand): Future[UserFunctionReply] =
-    routeMessageUnary(Nil, RouteReason.Initial, serviceName, command.name, command.payload)
+    routeMessageUnary(Nil, RouteReason.Initial, serviceName, command.name, command.payload, command.metadata)
 
   private final def route(
       trace: List[(RouteReason, String, String)]
@@ -36,13 +42,15 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
     Flow[UserFunctionReply].flatMapConcat { response =>
       val sideEffects = Source(response.sideEffects.toList)
         .flatMapConcat {
-          case SideEffect(serviceName, commandName, payload, synchronous, _) =>
-            routeMessage(trace, RouteReason.SideEffect, serviceName, commandName, payload, synchronous)
+          case SideEffect(serviceName, commandName, payload, synchronous, metadata, _) =>
+            routeMessage(trace, RouteReason.SideEffect, serviceName, commandName, payload, synchronous, metadata)
         }
 
       val nextAction = response.clientAction match {
-        case Some(ClientAction(ClientAction.Action.Forward(Forward(serviceName, commandName, payload, _)), _)) =>
-          routeMessage(trace, RouteReason.Forwarded, serviceName, commandName, payload, synchronous = true)
+        case Some(
+            ClientAction(ClientAction.Action.Forward(Forward(serviceName, commandName, payload, metadata, _)), _)
+            ) =>
+          routeMessage(trace, RouteReason.Forwarded, serviceName, commandName, payload, synchronous = true, metadata)
         case None | Some(ClientAction(ClientAction.Action.Empty, _)) =>
           Source.empty
         case _ =>
@@ -63,7 +71,8 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
                                                  RouteReason.SideEffect,
                                                  sideEffect.serviceName,
                                                  sideEffect.commandName,
-                                                 sideEffect.payload)
+                                                 sideEffect.payload,
+                                                 sideEffect.metadata)
         if (sideEffect.synchronous) {
           sideEffectFuture
         } else {
@@ -72,8 +81,10 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
       }
     } flatMap { _ =>
       response.clientAction match {
-        case Some(ClientAction(ClientAction.Action.Forward(Forward(serviceName, commandName, payload, _)), _)) =>
-          routeMessageUnary(trace, RouteReason.Forwarded, serviceName, commandName, payload)
+        case Some(
+            ClientAction(ClientAction.Action.Forward(Forward(serviceName, commandName, payload, metadata, _)), _)
+            ) =>
+          routeMessageUnary(trace, RouteReason.Forwarded, serviceName, commandName, payload, metadata)
         case _ =>
           Future.successful(response)
       }
@@ -84,13 +95,14 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
                                  serviceName: String,
                                  commandName: String,
                                  payload: Option[com.google.protobuf.any.Any],
-                                 synchronous: Boolean): Source[UserFunctionReply, NotUsed] = {
+                                 synchronous: Boolean,
+                                 metadata: Option[Metadata]): Source[UserFunctionReply, NotUsed] = {
 
     val source = entityCommands.get(serviceName) match {
       case Some(EntityCommands(_, entitySupport, commands)) =>
         if (commands(commandName)) {
           Source
-            .single(UserFunctionCommand(commandName, payload))
+            .single(UserFunctionCommand(commandName, payload, metadata))
             .via(entitySupport.handler(commandName))
             .via(route((routeReason, serviceName, commandName) :: trace))
         } else {
@@ -115,11 +127,12 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
                                       routeReason: RouteReason,
                                       serviceName: String,
                                       commandName: String,
-                                      payload: Option[com.google.protobuf.any.Any]): Future[UserFunctionReply] =
+                                      payload: Option[com.google.protobuf.any.Any],
+                                      metadata: Option[Metadata]): Future[UserFunctionReply] =
     entityCommands.get(serviceName) match {
       case Some(EntityCommands(_, entitySupport, commands)) =>
         if (commands(commandName)) {
-          entitySupport.handleUnary(UserFunctionCommand(commandName, payload)).flatMap { result =>
+          entitySupport.handleUnary(UserFunctionCommand(commandName, payload, metadata)).flatMap { result =>
             routeUnary((routeReason, serviceName, commandName) :: trace, result)
           }
         } else {

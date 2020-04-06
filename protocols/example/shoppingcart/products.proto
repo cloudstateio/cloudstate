@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "cloudstate/entity_key.proto";
+
+package com.example.shoppingcart;
+
+option go_package = "tck/shoppingcart";
+
+message UpdateCartQuantityRequest {
+    string product_id = 1 [(.cloudstate.entity_key) = true];
+    string user_id = 2;
+    int32 quantity = 3;
+}
+
+message RemoveProductFromCartRequest {
+    string product_id = 1 [(.cloudstate.entity_key) = true];
+    string user_id = 2;
+}
+
+message GetProductRequest {
+    string product_id = 1 [(.cloudstate.entity_key) = true];
+}
+
+message Product {
+    int32 total_quantities = 1;
+    int32 total_carts = 2;
+}
+
+service ShoppingCartProducts {
+    rpc UpdateCartQuantity (UpdateCartQuantityRequest) returns (google.protobuf.Empty);
+    rpc RemoveProductFromCart (RemoveProductFromCartRequest) returns (google.protobuf.Empty);
+    rpc GetProduct (GetProductRequest) returns (Product);
+}

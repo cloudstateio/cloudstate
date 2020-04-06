@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-const CloudState = require("cloudstate").CloudState;
-
-const server = new CloudState();
-server.addEntity(require("./shoppingcart"));
-server.addEntity(require("./products"));
-server.addEntity(require("./projection"));
-
-server.start();
+module.exports = class ContextFailure extends Error {
+  constructor(msg) {
+    super(msg);
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, ContextFailure);
+    }
+    this.name = "ContextFailure";
+  }
+};

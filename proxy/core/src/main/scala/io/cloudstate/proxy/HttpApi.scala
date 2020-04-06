@@ -85,7 +85,7 @@ import java.net.URLDecoder
 import java.util.regex.{Matcher, Pattern}
 
 import akka.grpc.GrpcProtocol
-import akka.grpc.internal.{GrpcProtocolNative, Identity}
+import akka.grpc.internal.{Codecs, GrpcProtocolNative, Identity}
 import akka.grpc.scaladsl.headers.`Message-Accept-Encoding`
 import akka.http.scaladsl.model.HttpEntity.LastChunk
 import akka.stream.scaladsl.{Sink, Source}
@@ -178,7 +178,7 @@ object HttpApi {
   final class HttpEndpoint(
       final val methDesc: MethodDescriptor,
       final val rule: HttpRule,
-      final val handler: PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]]
+      final val handler: PartialFunction[HttpRequest, Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]]
   )(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext)
       extends PartialFunction[HttpRequest, Future[HttpResponse]] {
     private[this] final val log = Logging(sys, rule.pattern.toString) // TODO use other name?
@@ -493,7 +493,9 @@ object HttpApi {
       result.build()
     }
 
-    private[this] final def transformResponse(data: Source[ProtobufAny, NotUsed]): Future[HttpResponse] = {
+    private[this] final def transformResponse(
+        futureResponse: Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]
+    ): Future[HttpResponse] = {
       def extractContentTypeFromHttpBody(entityMessage: MessageOrBuilder): ContentType =
         entityMessage
           .getField(entityMessage.getDescriptorForType.findFieldByName("content_type")) match {
@@ -523,10 +525,11 @@ object HttpApi {
             else ByteString(jsonPrinter.print(entityMessage)) ++ NEWLINE_BYTES
           )
 
-        data
-          .prefixAndTail(1)
-          .runWith(Sink.head)
-          .map {
+        for {
+          (headers, data) <- futureResponse
+          firstMessage <- data.prefixAndTail(1).runWith(Sink.head)
+        } yield {
+          firstMessage match {
             case (Seq(protobuf: ProtobufAny), rest) =>
               val entityMessage: MessageOrBuilder = parseResponseBody(protobuf)
               val contentType =
@@ -544,22 +547,28 @@ object HttpApi {
                 entity = HttpEntity.Chunked(
                   contentType,
                   first.concat(following)
-                )
+                ),
+                headers = headers
               )
             case (Seq(), _) =>
               throw new IllegalStateException("Empty response")
           }
+        }
       } else {
-        data
-          .runWith(Sink.head)
-          .map { protobuf: ProtobufAny =>
-            val entityMessage = parseResponseBody(protobuf)
-            HttpResponse(entity = if (isHttpBodyResponse) {
+        for {
+          (headers, data) <- futureResponse
+          protobuf <- data.runWith(Sink.head)
+        } yield {
+          val entityMessage = parseResponseBody(protobuf)
+          HttpResponse(
+            entity = if (isHttpBodyResponse) {
               HttpEntity(extractContentTypeFromHttpBody(entityMessage), extractDataFromHttpBody(entityMessage))
             } else {
               HttpEntity(ContentTypes.`application/json`, ByteString(jsonPrinter.print(entityMessage)))
-            })
-          }
+            },
+            headers = headers
+          )
+        }
       }
     }
 
@@ -620,7 +629,11 @@ object HttpApi {
     }
   }
 
-  final def serve(services: List[(ServiceDescriptor, PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]])])(
+  final def serve(
+      services: List[
+        (ServiceDescriptor, PartialFunction[HttpRequest, Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]])
+      ]
+  )(
       implicit sys: ActorSystem,
       mat: Materializer,
       ec: ExecutionContext

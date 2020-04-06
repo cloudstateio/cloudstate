@@ -23,6 +23,7 @@ import akka.NotUsed
 import akka.actor._
 import akka.cluster.sharding.ShardRegion
 import akka.persistence._
+import akka.persistence.journal.Tagged
 import akka.stream.scaladsl._
 import akka.stream.{Materializer, OverflowStrategy}
 import akka.util.Timeout
@@ -115,7 +116,7 @@ object EventSourcedEntity {
 
   final case class Configuration(
       serviceName: String,
-      userFunctionName: String,
+      entityTypeName: String,
       passivationTimeout: Timeout,
       sendQueueSize: Int
   )
@@ -146,7 +147,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
                                statsCollector: ActorRef)
     extends PersistentActor
     with ActorLogging {
-  override final def persistenceId: String = configuration.userFunctionName + entityId
+  override final def persistenceId: String = configuration.entityTypeName + "|" + entityId
 
   private val actorId = EventSourcedEntity.actorCounter.incrementAndGet()
 
@@ -262,7 +263,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
           } else {
             reportDatabaseOperationStarted()
             var eventsLeft = events.size
-            persistAll(events) { _ =>
+            persistAll(events.map(payload => Tagged(payload, Set(configuration.entityTypeName)))) { _ =>
               eventsLeft -= 1
               if (eventsLeft <= 0) { // Remove this hack when switching to Akka Persistence Typed
                 reportDatabaseOperationFinished()

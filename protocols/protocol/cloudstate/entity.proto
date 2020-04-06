@@ -27,10 +27,25 @@ import "google/protobuf/descriptor.proto";
 option java_package = "io.cloudstate.protocol";
 option go_package = "cloudstate/protocol";
 
+message Metadata {
+    repeated MetadataEntry entries = 1;
+}
+
+message MetadataEntry {
+    string key = 1;
+    string value = 2;
+}
+
 // A reply to the sender.
 message Reply {
     // The reply payload
     google.protobuf.Any payload = 1;
+
+    // Metadata for the reply
+    //
+    // Metadata attached to a reply will only be propagated if the underlying protocol supports per reply metadata.
+    // For example, message brokers may support this, but gRPC does not.
+    cloudstate.Metadata metadata = 2;
 }
 
 // Forwards handling of this request to another entity.
@@ -41,6 +56,8 @@ message Forward {
     string command_name = 2;
     // The payload.
     google.protobuf.Any payload = 3;
+    // The metadata to include with the forward
+    Metadata metadata = 4;
 }
 
 // An action for the client
@@ -73,6 +90,9 @@ message SideEffect {
     // Whether this side effect should be performed synchronously, ie, before the reply is eventually
     // sent, or not.
     bool synchronous = 4;
+
+    // The metadata to include with the side effect
+    Metadata metadata = 5;
 }
 
 // A command. For each command received, a reply must be sent with a matching command id.
@@ -92,6 +112,9 @@ message Command {
 
     // Whether the command is streamed or not
     bool streamed = 5;
+
+    // The command metadata
+    Metadata metadata = 6;
 }
 
 message StreamCancelled {
