@@ -1,48 +1,39 @@
 package io.cloudstate.proxy.eventing
 
 import com.typesafe.config.{Config, ConfigFactory}
-
 import akka.{Done, NotUsed}
 import akka.actor.{ActorSystem, Cancellable}
 import akka.grpc.GrpcClientSettings
-import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
-
-import io.cloudstate.proxy.Serve.CommandHandler
-import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
-import io.cloudstate.proxy.entity.{UserFunctionCommand}
-
-import io.cloudstate.eventing.Eventing
-
+import akka.stream.{ActorMaterializer, KillSwitch, KillSwitches, Materializer, OverflowStrategy, SourceShape}
+import akka.stream.scaladsl.{Broadcast, Concat, Flow, GraphDSL, Keep, Merge, RestartSink, RestartSource, Sink, Source}
+import io.cloudstate.eventing.{EventSource => EventSourceProto, EventDestination => EventDestinationProto}
 import com.google.protobuf.any.{Any => ProtobufAny}
-import com.google.protobuf.{ByteString => ProtobufByteString}
-import com.google.protobuf.Descriptors.MethodDescriptor
-
 import io.grpc.{
   CallCredentials => gRPCCallCredentials,
   Status => gRPCStatus,
   StatusRuntimeException => gRPCStatusRuntimeException
 }
 import io.grpc.auth.MoreCallCredentials
-
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.pubsub.v1.pubsub.{
-  AcknowledgeRequest,
   PublishRequest,
-  PublishResponse,
   PubsubMessage,
   ReceivedMessage,
   StreamingPullRequest,
+  StreamingPullResponse,
   Subscription,
+  Topic,
   PublisherClient => ScalaPublisherClient,
-  SubscriberClient => ScalaSubscriberClient,
-  Topic
+  SubscriberClient => ScalaSubscriberClient
 }
-
 import java.util.Collections
 
+import akka.http.scaladsl.model.{ContentType, ContentTypes, HttpEntity}
+import akka.util.ByteString
+import io.cloudstate.eventing
+
 import scala.util.Try
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.concurrent.duration._
 
 /**
@@ -106,22 +97,23 @@ final class PubSubSettings private (
   def createClientSettings()(implicit sys: ActorSystem): GrpcClientSettings = {
     val sslConfig = rootCa.fold("") { rootCa =>
       s"""
-      |ssl-config {
-      |  disabledKeyAlgorithms = []
-      |  trustManager = {
-      |    stores = [
-      |      { type = "PEM", path = "$rootCa", classpath = true }
-      |    ]
-      |  }
-      |}""".stripMargin
+         |ssl-config {
+         |  disabledKeyAlgorithms = []
+         |  trustManager = {
+         |    stores = [
+         |      { type = "PEM", path = "$rootCa", classpath = true }
+         |    ]
+         |  }
+         |}""".stripMargin
     }
 
-    val akkaGrpcConfig = s"""
-      |host = "$host"
-      |port = $port
-      |
+    val akkaGrpcConfig =
+      s"""
+         |host = "$host"
+         |port = $port
+         |
       |$sslConfig
-      |""".stripMargin
+         |""".stripMargin
 
     val settings = //TODO consider using Discovery and/or other settings from: https://github.com/akka/akka-grpc/blob/master/runtime/src/main/resources/reference.conf#L36
       GrpcClientSettings.fromConfig(
@@ -142,8 +134,11 @@ object GCPubsubEventingSupport {
   final val USING_CRD = "using-crd"
 }
 
-class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) extends EventingSupport {
+class GCPubsubEventingSupport(config: Config)(implicit materializer: Materializer, system: ActorSystem)
+    extends EventingSupport {
+
   import GCPubsubEventingSupport._
+  import system.dispatcher
 
   final val projectId: String = config.getString("project-id")
   final val pollInterval: FiniteDuration = config.getDuration("poll-interval").toMillis.millis
@@ -179,10 +174,6 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
 
   // Create the gRPC clients used to communicate with Google Pubsub
   final val (subscriberClient, publisherClient) = {
-    implicit val m = materializer
-    implicit val s = materializer.system
-    implicit val d = s.dispatcher
-
     val clientSettings = settings.createClientSettings()
 
     // We're reusing the same clients for all communication
@@ -190,111 +181,196 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
     val publisherClient = ScalaPublisherClient(clientSettings)
 
     // Make sure that we don't leak connections
-    s.registerOnTermination(subscriberClient.close())
-    s.registerOnTermination(publisherClient.close())
+    system.registerOnTermination(subscriberClient.close())
+    system.registerOnTermination(publisherClient.close())
 
     (subscriberClient, publisherClient)
   }
 
   private[this] val batchResults =
     if (downstreamBatchDeadline > 0.seconds || downstreamBatchSize > 1) {
-      Flow[ProtobufAny]
+      Flow[DestinationEvent]
         .map(any => PubsubMessage(data = any.toByteString))
         .groupedWithin(downstreamBatchSize, downstreamBatchDeadline)
     } else Flow[ProtobufAny].map(any => PubsubMessage(data = any.toByteString) :: Nil)
 
-  private[this] final def createManualSource(
+  private def sourceToSourceToFlow[In, Out, MOut](f: Source[In, NotUsed] => Source[Out, MOut]): Flow[In, Out, NotUsed] =
+    Flow[In].prefixAndTail(0).flatMapConcat { case (Nil, in) => f(in) }
+
+  private[this] final def runManualFlow(
       subscription: String,
-      commandHandler: CommandHandler
-  ): Source[UserFunctionCommand, Future[Cancellable]] = {
-    val cancellable = Promise[Cancellable]
+      processingFlow: Flow[SourceEvent[String], String, _]
+  ): KillSwitch = {
 
     val request =
       StreamingPullRequest(subscription = subscription, streamAckDeadlineSeconds = upstreamAckDeadlineSeconds)
 
-    val pull = Source
-      .single(request)
-      .concat(
-        Source.tick(0.seconds, pollInterval, request.withSubscription("")).mapMaterializedValue(cancellable.success)
-      )
+    val streamingPull: Flow[StreamingPullRequest, StreamingPullResponse, NotUsed] =
+      sourceToSourceToFlow(subscriberClient.streamingPull)
 
-    val ackSink =
-      Flow[ReceivedMessage]
-        .map(_.ackId)
-        .groupedWithin(10, upstreamAckDeadline / 2) // TODO adjust these
-        .mapAsyncUnordered(1 /*parallelism*/ )(
-          ackIds => subscriberClient.acknowledge(AcknowledgeRequest(subscription = subscription, ackIds = ackIds))
-        )
-        .toMat(Sink.ignore)(Keep.right)
+    val source = RestartSource.withBackoff(3.seconds, 30.seconds, 0.2) { () =>
+      Source.fromGraph(GraphDSL.create[SourceShape[Nothing]]() { implicit builder =>
+        import GraphDSL.Implicits._
 
-    subscriberClient // FIXME add retries, backoff etc
-      .streamingPull(pull) // TODO Consider Source.repeat(()).flatMapConcat(_ => subscriberClient.streamingPull(pull))
-      .mapConcat(_.receivedMessages.toVector) // Note: receivedMessages is most likely a Vector already due to impl, so should be a noop
-      .alsoTo(ackSink) // at-most-once // FIXME Add stats generation/collection so we can track progress here
-      .collect({
-        case ReceivedMessage(_, Some(msg)) =>
-          commandHandler.serializer.parse(ProtobufAny.parseFrom(msg.data.newCodedInput))
-      }) // TODO - investigate ProtobufAny.fromJavaAny(PbAnyJava.parseFrom(msg.data))
-      .mapMaterializedValue(_ => cancellable.future)
+        val concat = builder.add(Concat[StreamingPullRequest](2))
+        val outSplitter = builder.add(Broadcast[StreamingPullResponse](2, eagerCancel = true))
+
+        val responseToEvents = Flow[StreamingPullResponse]
+          .mapConcat(_.receivedMessages.toVector) // Note: receivedMessages is most likely a Vector already due to impl, so should be a noop
+          .map(transformReceivedMessage)
+
+        val acksToRequest = Flow[String]
+          .groupedWithin(10, upstreamAckDeadline / 2)
+          .map(ackIds => StreamingPullRequest(ackIds = ackIds))
+
+        val circularDeadlockBreaker = Flow[StreamingPullRequest].buffer(1, OverflowStrategy.backpressure)
+
+        // This is the main line through the graph, where we send our pull request for the subscription down the
+        // streaming pull gRPC request, convert to events, process, convert acks to requests (which acknowledge them),
+        // then send those back to the streaming pull via the concat
+        // In the middle we have the outSplitter, it's positioned after the streamingPull, so that when it cancels,
+        // it immediately cancels the pull, but allows the events in progress to continue to be processed.
+        Source.single(request) ~>
+        concat ~>
+        streamingPull ~>
+        outSplitter ~>
+        responseToEvents ~>
+        processingFlow ~>
+        acksToRequest ~>
+        circularDeadlockBreaker ~>
+        concat
+
+        // Meanwhile, we peel off the output using outSplitter, and ignore everything in it.
+        // This allows us to return a Source that when a failure occurs anywhere in the stream, will emit a failure,
+        // so the RestartSource can handle it and restart. It also allows us to cancel the stream via that source when
+        // we shutdown.
+        val out = outSplitter.collect(PartialFunction.empty)
+
+        SourceShape(out.outlet)
+      })
+    }
+
+    source
+      .viaMat(KillSwitches.single)(Keep.right)
+      .to(Sink.ignore)
+      .run()
   }
 
-  private[this] final def createByProxyManagedSource(
+  private[this] final def runByProxyManagedFlow(
       sourceName: String,
       subscription: String,
-      commandHandler: CommandHandler
-  ): Source[UserFunctionCommand, Future[Cancellable]] =
-    Source
-      .setup { (mat, attrs) =>
-        val topic = s"projects/${projectId}/topics/${sourceName}"
-        implicit val ec = mat.system.dispatcher
-        val t = Topic(topic)
-        val s = Subscription(
-          name = subscription,
-          topic = topic,
-          pushConfig = None,
-          ackDeadlineSeconds = upstreamAckDeadlineSeconds,
-          retainAckedMessages = false,
-          messageRetentionDuration = None // TODO configure this?
-        )
+      processingFlow: Flow[SourceEvent[String], String, _]
+  ): Future[KillSwitch] = {
+    val topic = s"projects/${projectId}/topics/${sourceName}"
+    val t = Topic(topic)
+    val s = Subscription(
+      name = subscription,
+      topic = topic,
+      pushConfig = None,
+      ackDeadlineSeconds = upstreamAckDeadlineSeconds,
+      retainAckedMessages = false,
+      messageRetentionDuration = None // TODO configure this?
+    )
 
-        Source
-          .fromFutureSource(
-            for {
-              _ <- publisherClient
-                .createTopic(t)
-                .recover({
-                  case ex: gRPCStatusRuntimeException if ex.getStatus.getCode == gRPCStatus.Code.ALREADY_EXISTS =>
-                    t
-                })
-              _ <- subscriberClient
-                .createSubscription(s)
-                .recover({
-                  case ex: gRPCStatusRuntimeException if ex.getStatus.getCode == gRPCStatus.Code.ALREADY_EXISTS =>
-                    s
-                })
-            } yield createManualSource(subscription, commandHandler)
-          )
-      }
-      .mapMaterializedValue(_.flatten.flatten)
+    for {
+      _ <- publisherClient
+        .createTopic(t)
+        .recover({
+          case ex: gRPCStatusRuntimeException if ex.getStatus.getCode == gRPCStatus.Code.ALREADY_EXISTS =>
+            t
+        })
+      _ <- subscriberClient
+        .createSubscription(s)
+        .recover({
+          case ex: gRPCStatusRuntimeException if ex.getStatus.getCode == gRPCStatus.Code.ALREADY_EXISTS =>
+            s
+        })
+    } yield runManualFlow(subscription, processingFlow)
+  }
 
-  private[this] final def createUsingCrdManagedSource(
+  private[this] final def createUsingCrdManagedFlow(
       sourceName: String,
       subscription: String,
-      commandHandler: CommandHandler
-  ): Source[UserFunctionCommand, Future[Cancellable]] =
+      processingFlow: Flow[SourceEvent[String], String, _]
+  ): Future[KillSwitch] =
     throw new IllegalStateException("NOT IMPLEMENTED YET") // FIXME IMPLEMENT THIS: create CRD-requests
 
-  override final def createSource(sourceName: String,
-                                  commandHandler: CommandHandler): Source[UserFunctionCommand, Future[Cancellable]] = {
-    val subscription = s"projects/${projectId}/subscriptions/${sourceName}_${commandHandler.fullCommandName}"
-    manageTopicsAndSubscriptions match {
-      case MANUALLY => createManualSource(subscription, commandHandler)
-      case USING_CRD => createUsingCrdManagedSource(sourceName, subscription, commandHandler)
-      case BY_PROXY => createByProxyManagedSource(sourceName, subscription, commandHandler)
+  override def name: String = "Google PubSub"
+
+  override def supportsSource: Boolean = true
+
+  override def createSource(source: EventSourceProto, serviceName: String): EventSource = new EventSource {
+    override type SourceEventRef = String
+
+    override def run(flow: Flow[SourceEvent[String], String, _]): KillSwitch = {
+      val consumerGroup = source.consumerGroup match {
+        case "" => serviceName
+        case cg => cg
+      }
+      val subscription = source.source match {
+        case EventSourceProto.Source.Topic(topic) =>
+          s"projects/$projectId/subscriptions/${topic}_$consumerGroup"
+        case other =>
+          throw new IllegalArgumentException(s"Google PubSub source unable to be used to server $other")
+
+      }
+      manageTopicsAndSubscriptions match {
+        case MANUALLY => runManualFlow(subscription, flow)
+        case USING_CRD => futureKillSwitch(createUsingCrdManagedFlow(consumerGroup, subscription, flow))
+        case BY_PROXY => futureKillSwitch(runByProxyManagedFlow(consumerGroup, subscription, flow))
+      }
     }
   }
 
-  private[this] final def createDestination(topic: String): Flow[ProtobufAny, AnyRef, NotUsed] =
+  private def transformReceivedMessage(receivedMessage: ReceivedMessage): SourceEvent[String] = {
+    val message =
+      receivedMessage.message.getOrElse(throw new IllegalArgumentException("Received message has no message"))
+    // Using the spec here, which was not merged, to handle cloudevents:
+    // https://github.com/google/knative-gcp/pull/1
+    // case sensitivity?
+    val contentType = message.attributes.get("Content-Type") match {
+      case Some("application/cloudevents+json") =>
+        // Todo: handle structured cloudevents
+        throw new UnsupportedOperationException("CloudEvents structured binding not yet supported")
+
+      case defaultCt if message.attributes.contains("ce-specversion") =>
+        // This is a CloudEvents binary message
+        message.attributes
+          .get("ce-datacontenttype")
+          .orElse(defaultCt)
+          .flatMap(ct => ContentType.parse(ct).toOption)
+          .getOrElse(ContentTypes.`application/octet-stream`)
+
+      case Some(other) => ContentType.parse(other).right.getOrElse(ContentTypes.`application/octet-stream`)
+      case None => ContentTypes.`application/octet-stream`
+    }
+
+    val body = ByteString.fromByteBuffer(message.data.asReadOnlyByteBuffer())
+
+    SourceEvent(HttpEntity.Strict(contentType, body), receivedMessage.ackId)
+  }
+
+  override def supportsDestination: Boolean = true
+
+  override def createDestination(destination: eventing.EventDestination): EventDestination = new EventDestination {
+    override def eventStreamOut: Flow[DestinationEvent, AnyRef, NotUsed] = {
+      val topic = destination.destination match {
+        case EventDestinationProto.Destination.Topic(topic) =>
+          s"projects/$projectId/topic/$topic"
+        case other =>
+          throw new IllegalArgumentException(s"Google PubSub source unable to be used to server $other")
+      }
+
+      manageTopicsAndSubscriptions match {
+        case MANUALLY => createDestination(topic = topic)
+        case USING_CRD => createUsingCrdManagedDestination(topic = topic)
+        case BY_PROXY => createByProxyManagedDestination(topic = topic)
+      }
+    }
+    override def emitSingle(destinationEvent: DestinationEvent): Future[Done] = ???
+  }
+
+  private[this] final def createDestination(topic: String): Flow[DestinationEvent, AnyRef, NotUsed] =
     batchResults
       .mapAsyncUnordered(1 /*parallelism*/ )(
         batch =>
@@ -304,7 +380,6 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
   private[this] final def createByProxyManagedDestination(topic: String): Flow[ProtobufAny, AnyRef, NotUsed] =
     Flow
       .setup { (mat, attrs) =>
-        implicit val ec = mat.system.dispatcher
         val destination = createDestination(topic = topic)
         val t = Topic(topic)
         val f = publisherClient
@@ -322,17 +397,8 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
   private[this] final def createUsingCrdManagedDestination(topic: String): Flow[ProtobufAny, AnyRef, NotUsed] =
     throw new IllegalStateException("NOT IMPLEMENTED YET") // FIXME IMPLEMENT THIS: create CRD-requests
 
-  //FIXME Add stats generation/collection so we can track progress here
-  override final def createDestination(destinationName: String,
-                                       handler: CommandHandler): Flow[ProtobufAny, AnyRef, NotUsed] =
-    if (destinationName == "")
-      Flow[ProtobufAny]
-    else {
-      val topic = s"projects/${projectId}/topics/${destinationName}"
-      manageTopicsAndSubscriptions match {
-        case MANUALLY => createDestination(topic = topic)
-        case USING_CRD => createUsingCrdManagedDestination(topic = topic)
-        case BY_PROXY => createByProxyManagedDestination(topic = topic)
-      }
-    }
+  private def futureKillSwitch(future: Future[KillSwitch])(implicit ec: ExecutionContext): KillSwitch = new KillSwitch {
+    override def shutdown(): Unit = future.foreach(_.shutdown())
+    override def abort(ex: Throwable): Unit = future.foreach(_.abort(ex))
+  }
 }

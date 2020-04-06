@@ -29,7 +29,7 @@ import akka.{Done, NotUsed}
 import akka.grpc.{Codecs, ProtobufSerializer}
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes}
 import akka.http.scaladsl.model.Uri.Path
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ActorRef, ActorSystem, Cancellable}
 import akka.util.ByteString
 import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Source}
@@ -189,19 +189,8 @@ object Serve {
       ec: ExecutionContext
   ): (PartialFunction[HttpRequest, Future[HttpResponse]], Option[RunnableGraph[Future[Done]]]) = {
     val p = Promise[Emitter]
-    val eventingGraph =
-      eventingSupport.flatMap(
-        support =>
-          EventingManager
-            .createStreams(router, entityDiscoveryClient, entities, support)
-            .map(_.mapMaterializedValue({ case (emitter, done) => p.success(emitter); done }))
-      ) match {
-        case None =>
-          p.success(Emitters.ignore)
-          None
-        case some =>
-          some
-      }
+    p.success(Emitters.ignore)
+    val eventingGraph: Option[RunnableGraph[Future[Done]]] = None
 
     val rpcMethodSerializers = (for {
       entity <- entities.iterator
