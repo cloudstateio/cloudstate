@@ -39,10 +39,10 @@
   },
   "scripts": {
     "test": "mocha",
-    "prestart": "compile-descriptor ../../protocols/example/shoppingcart/shoppingcart.proto",
-    "pretest": "compile-descriptor ../../protocols/example/shoppingcart/shoppingcart.proto",
-    "postinstall": "compile-descriptor ../../protocols/example/shoppingcart/shoppingcart.proto",
     "prepare-node-support": "cd ../../node-support && npm install && cd ../samples/js-shopping-cart",
+    "prestart": "compile-descriptor -I../../protocols/example ../../protocols/example/shoppingcart/shoppingcart.proto",
+    "pretest": "compile-descriptor -I../../protocols/example ../../protocols/example/shoppingcart/shoppingcart.proto",
+    "postinstall": "compile-descriptor -I../../protocols/example ../../protocols/example/shoppingcart/shoppingcart.proto",
     "start": "node index.js",
     "start-no-prestart": "node index.js",
     "dockerbuild": "npm run prepare-node-support && docker build -f ../../Dockerfile.js-shopping-cart -t ${DOCKER_PUBLISH_TO:-cloudstateio}/js-shopping-cart:latest ../..",

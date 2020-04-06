@@ -116,13 +116,11 @@ object Serve {
         .collect(Function.unlift(identity))
 
       emitter match {
-        /*
         case Some(e) =>
           handler.mapAsync(4) {
             case Reply(Some(payload), metadata, _) =>
               e.emit(payload, method, metadata).map(_ => payload)
           }
-         */
         case _ => handler.map(_.payload.get)
       }
 

@@ -23,6 +23,7 @@ import akka.testkit.{TestKit, TestProbe}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.testkit.InterceptService.InterceptorSettings
 import io.cloudstate.testkit.crdt.InterceptCrdtService
+import io.cloudstate.testkit.action.InterceptActionService
 import io.cloudstate.testkit.discovery.InterceptEntityDiscovery
 import io.cloudstate.testkit.eventsourced.InterceptEventSourcedService
 import io.cloudstate.testkit.valueentity.InterceptValueEntityService
@@ -40,6 +41,7 @@ final class InterceptService(settings: InterceptorSettings) {
   private val crdt = new InterceptCrdtService(context)
   private val eventSourced = new InterceptEventSourcedService(context)
   private val valueBased = new InterceptValueEntityService(context)
+  private val action = new InterceptActionService(context)
 
   import context.system
 
@@ -47,7 +49,8 @@ final class InterceptService(settings: InterceptorSettings) {
 
   Await.result(
     Http().bindAndHandleAsync(
-      handler = entityDiscovery.handler orElse crdt.handler orElse eventSourced.handler orElse valueBased.handler,
+      handler = entityDiscovery.handler orElse crdt.handler orElse eventSourced.handler orElse valueBased.handler
+        orElse action.handler,
       interface = settings.bind.host,
       port = settings.bind.port
     ),
@@ -62,12 +65,26 @@ final class InterceptService(settings: InterceptorSettings) {
 
   def expectValueBasedConnection(): InterceptValueEntityService.Connection = valueBased.expectConnection()
 
+  def expectActionUnaryConnection(): InterceptActionService.UnaryConnection = action.expectUnaryConnection()
+
+  def expectActionStreamedInConnection(): InterceptActionService.StreamedInConnection =
+    action.expectStreamedInConnection()
+
+  def expectActionStreamedOutConnection(): InterceptActionService.StreamedOutConnection =
+    action.expectStreamedOutConnection()
+
+  def expectActionStreamedConnection(): InterceptActionService.StreamedConnection = action.expectStreamedConnection()
+
+  def verifyNoMoreInteractions(): Unit =
+    context.probe.expectNoMessage(10.millis)
+
   def terminate(): Unit = {
     entityDiscovery.terminate()
     crdt.terminate()
     eventSourced.terminate()
     valueBased.terminate()
     context.terminate()
+    action.terminate()
   }
 }
 

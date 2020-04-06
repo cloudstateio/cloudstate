@@ -69,7 +69,6 @@ service ShoppingCart {
             post: "/ve/cart/{user_id}/items/add",
             body: "*",
         };
-        option (.cloudstate.eventing).in = "items";
     }
 
     rpc RemoveItem(RemoveLineItem) returns (google.protobuf.Empty) {

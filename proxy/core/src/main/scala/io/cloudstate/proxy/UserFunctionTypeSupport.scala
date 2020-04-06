@@ -22,6 +22,7 @@ import com.google.protobuf.Descriptors.{MethodDescriptor, ServiceDescriptor}
 import com.google.protobuf.{ByteString, DynamicMessage}
 import io.cloudstate.protocol.entity.{Entity, Metadata}
 import io.cloudstate.entity_key.EntityKeyProto
+import io.cloudstate.legacy_entity_key.LegacyEntityKeyProto
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.protobuf.Options
 
@@ -100,7 +101,9 @@ private object EntityMethodDescriptor {
 final class EntityMethodDescriptor(val method: MethodDescriptor) {
   private[this] val keyFields = method.getInputType.getFields.iterator.asScala
     .filter(
-      field => EntityKeyProto.entityKey.get(Options.convertFieldOptions(field))
+      field =>
+        EntityKeyProto.entityKey.get(Options.convertFieldOptions(field)) ||
+        LegacyEntityKeyProto.legacyEntityKey.get(Options.convertFieldOptions(field))
     )
     .toArray
     .sortBy(_.getIndex)

@@ -25,6 +25,7 @@ import akka.actor._
 import akka.cloudstate.EntityStash
 import akka.cluster.sharding.ShardRegion
 import akka.persistence._
+import akka.persistence.journal.Tagged
 import akka.stream.scaladsl._
 import akka.stream.{CompletionStrategy, Materializer, OverflowStrategy}
 import akka.util.Timeout
@@ -184,7 +185,7 @@ object EventSourcedEntity {
 
   final case class Configuration(
       serviceName: String,
-      userFunctionName: String,
+      entityTypeName: String,
       passivationTimeout: Timeout,
       sendQueueSize: Int
   )
@@ -212,7 +213,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
 
   import io.cloudstate.proxy.telemetry.EventSourcedInstrumentation.StashContext
 
-  override final def persistenceId: String = configuration.userFunctionName + entityId
+  override final def persistenceId: String = configuration.entityTypeName + "|" + entityId
 
   private val actorId = EventSourcedEntity.actorCounter.incrementAndGet()
 
@@ -224,7 +225,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
   private[this] final var commandStartTime = 0L
 
   private[this] val instrumentation =
-    CloudstateTelemetry(context.system).eventSourcedEntityInstrumentation(configuration.userFunctionName)
+    CloudstateTelemetry(context.system).eventSourcedEntityInstrumentation(configuration.entityTypeName)
 
   instrumentation.entityActivated()
   instrumentation.recoveryStarted()
@@ -346,9 +347,9 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
           } else {
             instrumentation.persistStarted()
             var eventsLeft = events.size
-            persistAll(events) { event =>
+            persistAll(events.map(payload => Tagged(payload, Set(configuration.entityTypeName)))) { event =>
               eventsLeft -= 1
-              instrumentation.eventPersisted(event.serializedSize)
+              instrumentation.eventPersisted(event.payload.asInstanceOf[pbAny].serializedSize)
               if (eventsLeft <= 0) { // Remove this hack when switching to Akka Persistence Typed
                 instrumentation.persistCompleted() // note: this doesn't include saving snapshots
                 r.snapshot.foreach { snapshot =>
@@ -447,5 +448,13 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
       instrumentation.eventLoaded(event.serializedSize)
       maybeInit(None)
       relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Event(EventSourcedEvent(lastSequenceNr, Some(event))))
+  }
+
+  override final def onRecoveryFailure(cause: Throwable, event: Option[Any]): Unit = {
+    // This just logs it
+    super.onRecoveryFailure(cause, event)
+    notifyOutstandingRequests("Error recovering event log")
+    currentCommand = null
+    stashedCommands = Queue.empty
   }
 }

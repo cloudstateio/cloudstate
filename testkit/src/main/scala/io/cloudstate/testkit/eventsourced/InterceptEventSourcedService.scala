@@ -71,6 +71,13 @@ object InterceptEventSourcedService {
       this
     }
 
+    def expectClientMessage[T](implicit classTag: ClassTag[T]): T = {
+      val message = in.expectMsgType[EventSourcedStreamIn].message
+      assert(classTag.runtimeClass.isInstance(message),
+             s"expected message ${classTag.runtimeClass}, found ${message.getClass} ($message)")
+      message.asInstanceOf[T]
+    }
+
     def expectService(message: EventSourcedStreamOut.Message): Connection = {
       out.expectMsg(EventSourcedStreamOut(message))
       this

@@ -122,7 +122,7 @@ object AnySupport {
     .asInstanceOf[Seq[(String, Primitive[Any])]]
     .toMap
 
-  private final val objectMapper = new ObjectMapper()
+  final val objectMapper = new ObjectMapper()
 
   private def primitiveToBytes[T](primitive: Primitive[T], value: T): ByteString =
     if (value != primitive.defaultValue) {
@@ -178,6 +178,8 @@ object AnySupport {
                              descriptor.getDependencies.asScala.toSeq ++ descriptor.getPublicDependencies.asScala)
         }
     }
+
+  def extractBytes(bytes: ByteString): ByteString = bytesToPrimitive(BytesPrimitive, bytes)
 }
 
 class AnySupport(descriptors: Array[Descriptors.FileDescriptor],
