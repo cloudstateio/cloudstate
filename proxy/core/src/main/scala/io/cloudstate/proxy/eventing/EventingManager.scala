@@ -1,22 +1,20 @@
 package io.cloudstate.proxy.eventing
 
+import java.time.Instant
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicBoolean
 
 import akka.{Done, NotUsed}
 import akka.actor.{ActorSystem, Cancellable}
-import akka.http.scaladsl.model.{HttpCharsets, MediaTypes}
+import akka.http.scaladsl.model.{MediaType, MediaTypes}
 import akka.stream.scaladsl.{Broadcast, Flow, GraphDSL, Partition, Source, Zip}
-import akka.stream.{ActorMaterializer, FlowShape, KillSwitch, Materializer}
+import akka.stream.{ActorMaterializer, FlowShape, Materializer}
 import com.google.protobuf.Descriptors.MethodDescriptor
+import com.google.protobuf.TextFormat.ParseException
 import com.google.protobuf.any.{Any => ProtobufAny}
-import com.google.protobuf.{ByteString, CodedOutputStream, UnsafeByteOperations}
+import com.google.protobuf.{ByteString, CodedOutputStream, UnsafeByteOperations, WireFormat}
 import com.typesafe.config.Config
-import io.cloudstate.eventing.{
-  Eventing,
-  EventingProto,
-  EventDestination => EventDestinationProto,
-  EventSource => EventSourceProto
-}
+import io.cloudstate.eventing.{Eventing, EventingProto, EventDestination => EventDestinationProto, EventSource => EventSourceProto}
 import io.cloudstate.protocol.entity.ClientAction
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.UserFunctionRouter
@@ -40,7 +38,7 @@ object Emitters {
 
   private class EventDestinationEmitter(eventDestination: EventDestination) extends Emitter {
     override def emit(payload: ProtobufAny, method: MethodDescriptor): Future[Done] =
-      eventDestination.emitSingle(DestinationEvent(payload))
+      eventDestination.emitSingle(EventingManager.createDesintationEvent(payload, method.getService.getFullName))
   }
 }
 
@@ -257,57 +255,37 @@ object EventingManager {
    */
   private def entityToCommand[Ref](consumer: EventConsumer): Flow[SourceEvent[Ref], CommandIn[Ref], NotUsed] = {
 
-    val defaultProtobufType = consumer.methods match {
-      case single if single.size == 1 => Some(single.head._1)
-      case multiple if multiple.contains(ProtobufAny.scalaDescriptor.fullName) =>
-        Some(ProtobufAny.scalaDescriptor.fullName)
-      case _ => None
-    }
-
     Flow[SourceEvent[Ref]].map { sourceEvent =>
-      val entity = sourceEvent.entity
+      val cloudEvent = sourceEvent.event
 
-      val messageAny = entity.contentType.mediaType match {
-        case protobuf if protobuf.isApplication && ProtobufMediaSubTypes(protobuf.subType) =>
+
+      val messageAny = MediaType.parse(cloudEvent.datacontenttype) match {
+        case Right(protobuf) if protobuf.isApplication && ProtobufMediaSubTypes(protobuf.subType) =>
           val messageType = protobuf.params
             .get("proto")
             .orElse(protobuf.params.get("messageType"))
-            .orElse(defaultProtobufType) match {
-            case Some(mt) => mt
-            case None =>
-              throw new IllegalArgumentException(
-                s"Incoming protobuf message on consumer ${consumer.eventSource} does not declare a protobuf type, and there is more than one method on the consuming entity to handle messages for it, and none of them accept the default type of google.protobuf.Any."
-              )
-          }
-          ProtobufAny("type.googleapis.com/" + messageType, UnsafeByteOperations.unsafeWrap(entity.data.toByteBuffer))
+            .getOrElse(cloudEvent.`type`)
+          ProtobufAny("type.googleapis.com/" + messageType, cloudEvent.data.getOrElse(ByteString.EMPTY))
 
-        case any if any.isApplication && any.subType == ProtobufAnyMediaSubType =>
+        case Right(any) if any.isApplication && any.subType == ProtobufAnyMediaSubType =>
           // This is the content type that event logging will use
-          any.params.get("typeUrl") match {
-            case Some(typeUrl) =>
-              ProtobufAny(typeUrl, UnsafeByteOperations.unsafeWrap(entity.data.toByteBuffer))
-            case None =>
-              throw new IllegalStateException(
-                s"Message content type [${entity.contentType} does not contain a type url parameter."
-              )
-          }
+          ProtobufAny(cloudEvent.`type`, cloudEvent.data.getOrElse(ByteString.EMPTY))
 
-        case MediaTypes.`application/json` =>
-          // Todo: the type could come from CloudEvents
-          encodeJsonToAny(entity.data, "object")
+        case Right(MediaTypes.`application/json`) =>
+          encodeJsonToAny(cloudEvent.data, cloudEvent.`type`)
 
-        case typedJson if typedJson.isApplication && typedJson.subType.endsWith("+json") =>
-          encodeJsonToAny(entity.data, typedJson.subType.stripSuffix("+json"))
+        case Right(typedJson) if typedJson.isApplication && typedJson.subType.endsWith("+json") =>
+          encodeJsonToAny(cloudEvent.data, cloudEvent.`type`)
 
-        case utf8 if utf8.isText && entity.contentType.charsetOption.forall(_ == HttpCharsets.`UTF-8`) =>
+        case Right(utf8) if utf8.isText && utf8.params.get("charset").forall(_ == "utf-8") =>
           // Fast case for UTF-8 so we don't have to decode and reencode it
-          encodeUtf8StringBytesToAny(entity.data)
+          encodeUtf8StringBytesToAny(cloudEvent.data)
 
-        case string if string.isText =>
-          encodeStringToAny(entity.data.decodeString(entity.contentType.charsetOption.get.value))
+        case Right(string) if string.isText =>
+          encodeStringToAny(cloudEvent.data.getOrElse(ByteString.EMPTY).toString(string.params("charset")))
 
         case _ =>
-          encodeBytesToAny(entity.data)
+          encodeBytesToAny(cloudEvent.data)
       }
 
       // Select a method
@@ -396,7 +374,7 @@ object EventingManager {
 
               split.out(0).collect {
                 case (ResultPart(_, UserFunctionReply(Some(ClientAction(ClientAction.Action.Reply(reply))), _)), _) =>
-                  DestinationEvent(reply.payload.get)
+                  createDesintationEvent(reply.payload.get, consumer.entity.serviceName)
                 case (ResultPart(_, other), _) =>
                   throw new IllegalStateException(s"Reply from router did not have a reply client action: $other")
                 // Shouldn't happen:
@@ -415,6 +393,31 @@ object EventingManager {
         }
     }
 
+  def createDesintationEvent(payload: ProtobufAny, serviceName: String) = {
+    val (ceType, contentType, bytes) = payload.typeUrl match {
+      case json if json.startsWith("json.cloudstate.io/") =>
+        (json.stripPrefix("json.cloudstate.io/"), "application/json", decodeBytes(payload))
+      case "p.cloudstate.io/string" =>
+        ("", "text/plain; charset=utf-8", decodeBytes(payload))
+      case "p.cloudstate.io/bytes" =>
+        ("", "application/octet-stream", decodeBytes(payload))
+      case generic =>
+        (generic.dropWhile(_ != '/').drop(1), "application/protobuf", payload.value)
+    }
+
+    DestinationEvent(CloudEvent(
+      id = UUID.randomUUID().toString,
+      source = serviceName,
+      specversion = "1.0",
+      `type` = ceType,
+      datacontenttype = contentType,
+      dataschema = None,
+      subject = None,
+      time = Some(Instant.now()),
+      data = Some(bytes)
+    ))
+  }
+
   private case class CommandIn[Ref](eventSourceRef: Ref,
                                     consumerMethod: EventConsumerMethod,
                                     command: UserFunctionCommand)
@@ -428,27 +431,27 @@ object EventingManager {
   private val ProtobufMediaSubTypes = Set("protobuf", "x-protobuf", "vnd.google.protobuf")
   val ProtobufAnyMediaSubType = "vnd.cloudstate.protobuf.any"
 
-  private def encodeByteArray(bytes: akka.util.ByteString) =
-    if (bytes.isEmpty) {
-      ByteString.EMPTY
-    } else {
-      // Create a byte array the right size. It needs to have the tag, enough space to hold the length of the data
-      // (up to 5 bytes), and the data itself.
+  private def encodeByteArray(maybeBytes: Option[ByteString]) = maybeBytes match {
+    case None => ByteString.EMPTY
+    case Some(bytes) if bytes.isEmpty => ByteString.EMPTY
+      // Create a byte array the right size. It needs to have the tag and enough space to hold the length of the data
+      // (up to 5 bytes).
       // Length encoding consumes 1 byte for every 7 bits of the field
-      val bytesLengthFieldSize = ((31 - Integer.numberOfLeadingZeros(bytes.length)) / 7) + 1
-      val byteArray = new Array[Byte](1 + bytesLengthFieldSize + bytes.length)
+      val bytesLengthFieldSize = ((31 - Integer.numberOfLeadingZeros(bytes.size())) / 7) + 1
+      val byteArray = new Array[Byte](1 + bytesLengthFieldSize)
       val stream = CodedOutputStream.newInstance(byteArray)
-      stream.writeBytes(1, UnsafeByteOperations.unsafeWrap(bytes.toByteBuffer))
-      UnsafeByteOperations.unsafeWrap(byteArray)
+      stream.writeTag(1, WireFormat.WIRETYPE_LENGTH_DELIMITED)
+      stream.writeUInt32NoTag(bytes.size())
+      UnsafeByteOperations.unsafeWrap(byteArray).concat(bytes)
     }
 
-  private def encodeBytesToAny(bytes: akka.util.ByteString): ProtobufAny =
+  private def encodeBytesToAny(bytes: Option[ByteString]): ProtobufAny =
     ProtobufAny("p.cloudstate.io/bytes", encodeByteArray(bytes))
 
-  private def encodeJsonToAny(bytes: akka.util.ByteString, jsonType: String): ProtobufAny =
+  private def encodeJsonToAny(bytes: Option[ByteString], jsonType: String): ProtobufAny =
     ProtobufAny("json.cloudstate.io/" + jsonType, encodeByteArray(bytes))
 
-  private def encodeUtf8StringBytesToAny(bytes: akka.util.ByteString): ProtobufAny =
+  private def encodeUtf8StringBytesToAny(bytes: Option[ByteString]): ProtobufAny =
     ProtobufAny("p.cloudstate.io/string", encodeByteArray(bytes))
 
   private def encodeStringToAny(string: String): ProtobufAny = {
@@ -456,6 +459,28 @@ object EventingManager {
     val stream = CodedOutputStream.newInstance(builder)
     stream.writeString(1, string)
     ProtobufAny("p.cloudstate.io/string", builder.toByteString)
+  }
+
+  private def decodeBytes(payload: ProtobufAny): ByteString = {
+    val stream = payload.value.newCodedInput()
+    @annotation.tailrec
+    def findField(): ByteString = {
+      stream.readTag() match {
+        case 0 =>
+          // 0 means EOF
+          ByteString.EMPTY
+        case feild1 if WireFormat.getTagFieldNumber(feild1) == 1 =>
+          if (WireFormat.getTagWireType(feild1) == WireFormat.WIRETYPE_LENGTH_DELIMITED) {
+            stream.readBytes()
+          } else {
+            throw new ParseException("Expected length delimited field, tag was: " + feild1)
+          }
+        case other =>
+          stream.skipField(other)
+          findField()
+      }
+    }
+    findField()
   }
 
 }

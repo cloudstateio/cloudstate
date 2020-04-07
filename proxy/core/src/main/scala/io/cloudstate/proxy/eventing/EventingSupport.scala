@@ -1,19 +1,21 @@
 package io.cloudstate.proxy.eventing
 
+import java.time.Instant
+
 import akka.{Done, NotUsed}
 import akka.http.scaladsl.model.HttpEntity
 import akka.stream.KillSwitch
 import akka.stream.scaladsl.Flow
-import com.google.protobuf.any.{Any => ProtobufAny}
+import com.google.protobuf.ByteString
 import io.cloudstate.eventing.{EventDestination => EventDestinationProto, EventSource => EventSourceProto}
 
 import scala.concurrent.Future
 
 /**
- * Eventing support.
- *
- * Different eventing implementations should implement this.
- */
+  * Eventing support.
+  *
+  * Different eventing implementations should implement this.
+  */
 trait EventingSupport {
   def name: String
 
@@ -34,10 +36,10 @@ trait EventingSupport {
 trait EventSource {
 
   /**
-   * A type used to refer to the source event. The type of this and what it contains depends on the eventing
-   * implementation, it could be the whole event, or it could just be an identifier. The purpose for this is to
-   * allow the reference to be emitted from the flow to run the stream, so that it can be acknowledged.
-   */
+    * A type used to refer to the source event. The type of this and what it contains depends on the eventing
+    * implementation, it could be the whole event, or it could just be an identifier. The purpose for this is to
+    * allow the reference to be emitted from the flow to run the stream, so that it can be acknowledged.
+    */
   type SourceEventRef
 
   /** Run this event source with the given flow. */
@@ -48,35 +50,48 @@ trait EventSource {
 trait EventDestination {
 
   /**
-   * The flow that consumes events to publish.
-   *
-   * This flow must produce one element for each event consumed, that message signals the acknowledgement that the
-   * corresponding consumed element has been successfully published, hence the upstream source can now be acknowledged.
-   * Order matters, the flow should now emit elements for events received later in the stream until the earlier events
-   * in the stream have been successfully published with corresponding events emitted for acknowledgement.
-   *
-   * In general, implementations should not attempt to retry when publishing fails. Rather, if a failure in publishing
-   * occurs, the stream should be terminated with an error. Cloudstate will then handle retries, using exponential
-   * backoffs, or routing to dead letters, etc.
-   */
+    * The flow that consumes events to publish.
+    *
+    * This flow must produce one element for each event consumed, that message signals the acknowledgement that the
+    * corresponding consumed element has been successfully published, hence the upstream source can now be acknowledged.
+    * Order matters, the flow should now emit elements for events received later in the stream until the earlier events
+    * in the stream have been successfully published with corresponding events emitted for acknowledgement.
+    *
+    * In general, implementations should not attempt to retry when publishing fails. Rather, if a failure in publishing
+    * occurs, the stream should be terminated with an error. Cloudstate will then handle retries, using exponential
+    * backoffs, or routing to dead letters, etc.
+    */
   def eventStreamOut: Flow[DestinationEvent, AnyRef, NotUsed]
 
   /**
-   * Emit a single destination event.
-   *
-   * This is used when emitting events from a service call that have not come from another event source, eg, they
-   * have come from a gRPC call.
-   */
+    * Emit a single destination event.
+    *
+    * This is used when emitting events from a service call that have not come from another event source, eg, they
+    * have come from a gRPC call.
+    */
   def emitSingle(destinationEvent: DestinationEvent): Future[Done]
 }
 
 /** An event produced by an event source. */
 case class SourceEvent[Ref](
-    /** The entity that should be sent to the user function for this event. */
-    entity: HttpEntity.Strict,
-    /** A reference to this source event */
-    ref: Ref
+  event: CloudEvent,
+  /** A reference to this source event */
+  ref: Ref
 )
 
 /** An event to be published to a destination */
-case class DestinationEvent(payload: ProtobufAny)
+case class DestinationEvent(
+  event: CloudEvent
+)
+
+case class CloudEvent(
+  id: String,
+  source: String,
+  specversion: String,
+  `type`: String,
+  datacontenttype: String,
+  dataschema: Option[String],
+  subject: Option[String],
+  time: Option[Instant],
+  data: Option[ByteString],
+)
