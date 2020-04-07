@@ -36,8 +36,7 @@ private[impl] class AnnotationBasedCrdtExtensionSupport(
 
     ReflectionHelper.validateNoBadMethods(allMethods, classOf[CrdtEntity], Set(classOf[CommandHandler]))
     val handlers = allMethods
-      .filter(_.getAnnotation(classOf[CommandHandler]) != null)
-      .map { method =>
+      .collect { case method if method.getAnnotation(classOf[CommandHandler]) != null =>
         val annotation = method.getAnnotation(classOf[CommandHandler])
         val name: String = if (annotation.name().isEmpty) {
           ReflectionHelper.getCapitalizedName(method)
