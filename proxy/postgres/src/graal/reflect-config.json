@@ -1239,8 +1239,8 @@
 {
   "name":"sun.nio.ch.SelectorImpl",
   "fields":[
-    {"name":"publicSelectedKeys"}, 
-    {"name":"selectedKeys"}
+    {"name":"publicSelectedKeys", "allowUnsafeAccess": true},
+    {"name":"selectedKeys", "allowUnsafeAccess": true}
   ]
 },
 {
