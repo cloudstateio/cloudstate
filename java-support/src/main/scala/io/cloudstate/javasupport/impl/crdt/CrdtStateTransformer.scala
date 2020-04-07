@@ -23,6 +23,8 @@ private[crdt] object CrdtStateTransformer {
         new ORMapImpl[Any, InternalCrdt](anySupport)
       case CrdtState.State.Vote(_) =>
         new VoteImpl
+      case CrdtState.State.Empty =>
+        throw new IllegalArgumentException("Empty not allowed")
     }
     crdt.applyState(state.state)
     crdt

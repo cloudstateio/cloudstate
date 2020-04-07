@@ -11,10 +11,24 @@ import akka.stream.{ActorMaterializer, KillSwitch, KillSwitches, Materializer, O
 import akka.stream.scaladsl.{Broadcast, Concat, Flow, GraphDSL, Keep, Merge, RestartSink, RestartSource, Sink, Source}
 import io.cloudstate.eventing.{EventDestination => EventDestinationProto, EventSource => EventSourceProto}
 import com.google.protobuf.any.{Any => ProtobufAny}
-import io.grpc.{CallCredentials => gRPCCallCredentials, Status => gRPCStatus, StatusRuntimeException => gRPCStatusRuntimeException}
+import io.grpc.{
+  CallCredentials => gRPCCallCredentials,
+  Status => gRPCStatus,
+  StatusRuntimeException => gRPCStatusRuntimeException
+}
 import io.grpc.auth.MoreCallCredentials
 import com.google.auth.oauth2.GoogleCredentials
-import com.google.pubsub.v1.pubsub.{PublishRequest, PubsubMessage, ReceivedMessage, StreamingPullRequest, StreamingPullResponse, Subscription, Topic, PublisherClient => ScalaPublisherClient, SubscriberClient => ScalaSubscriberClient}
+import com.google.pubsub.v1.pubsub.{
+  PublishRequest,
+  PubsubMessage,
+  ReceivedMessage,
+  StreamingPullRequest,
+  StreamingPullResponse,
+  Subscription,
+  Topic,
+  PublisherClient => ScalaPublisherClient,
+  SubscriberClient => ScalaSubscriberClient
+}
 import java.util.Collections
 
 import akka.http.scaladsl.model.{ContentType, ContentTypes, HttpEntity}
@@ -27,13 +41,13 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.concurrent.duration._
 
 /**
-  * Connection settings used to establish Pub/Sub connection.
-  */
-final class PubSubSettings private(
-  val host: String,
-  val port: Int,
-  val rootCa: Option[String] = None,
-  val callCredentials: Option[gRPCCallCredentials] = None
+ * Connection settings used to establish Pub/Sub connection.
+ */
+final class PubSubSettings private (
+    val host: String,
+    val port: Int,
+    val rootCa: Option[String] = None,
+    val callCredentials: Option[gRPCCallCredentials] = None
 ) {
 
   def this(config: Config) = {
@@ -54,36 +68,36 @@ final class PubSubSettings private(
   }
 
   /**
-    * Endpoint hostname where the gRPC connection is made.
-    */
+   * Endpoint hostname where the gRPC connection is made.
+   */
   def withHost(host: String): PubSubSettings = copy(host = host)
 
   /**
-    * Endpoint port where the gRPC connection is made.
-    */
+   * Endpoint port where the gRPC connection is made.
+   */
   def withPort(port: Int): PubSubSettings = copy(port = port)
 
   /**
-    * A filename on the classpath which contains the root certificate authority
-    * that is going to be used to verify certificate presented by the gRPC endpoint.
-    */
+   * A filename on the classpath which contains the root certificate authority
+   * that is going to be used to verify certificate presented by the gRPC endpoint.
+   */
   def withRootCa(rootCa: String): PubSubSettings = copy(rootCa = Some(rootCa))
 
   /**
-    * Credentials that are going to be used for gRPC call authorization.
-    */
+   * Credentials that are going to be used for gRPC call authorization.
+   */
   def withCallCredentials(callCredentials: gRPCCallCredentials): PubSubSettings =
     copy(callCredentials = Some(callCredentials))
 
   private[this] final def copy(host: String = host,
-    port: Int = port,
-    rootCa: Option[String] = rootCa,
-    callCredentials: Option[gRPCCallCredentials] = callCredentials) =
+                               port: Int = port,
+                               rootCa: Option[String] = rootCa,
+                               callCredentials: Option[gRPCCallCredentials] = callCredentials) =
     new PubSubSettings(host, port, rootCa, callCredentials)
 
   /**
-    * Creates a GrpcClientSettings from this PubSubSettings
-    */
+   * Creates a GrpcClientSettings from this PubSubSettings
+   */
   def createClientSettings()(implicit sys: ActorSystem): GrpcClientSettings = {
     val sslConfig = rootCa.fold("") { rootCa =>
       s"""
@@ -125,7 +139,7 @@ object GCPubsubEventingSupport {
 }
 
 class GCPubsubEventingSupport(config: Config)(implicit materializer: Materializer, system: ActorSystem)
-  extends EventingSupport {
+    extends EventingSupport {
 
   import GCPubsubEventingSupport._
   import system.dispatcher
@@ -141,7 +155,7 @@ class GCPubsubEventingSupport(config: Config)(implicit materializer: Materialize
   private[this] final val upstreamAckDeadlineSeconds = upstreamAckDeadline.toSeconds.toInt
 
   final val manageTopicsAndSubscriptions = config.getString("manage-topics-and-subscriptions") match {
-    case mode@(MANUALLY | USING_CRD | BY_PROXY) => mode
+    case mode @ (MANUALLY | USING_CRD | BY_PROXY) => mode
     case other =>
       require(
         false,
@@ -154,9 +168,9 @@ class GCPubsubEventingSupport(config: Config)(implicit materializer: Materialize
   private def validate(): Unit = {
     require(!projectId.isEmpty, s"project-id cannot be empty")
     require(upstreamAckDeadline >= 10.seconds,
-      s"upstream-ack-deadline must be at least 10 seconds but was ${upstreamAckDeadline}")
+            s"upstream-ack-deadline must be at least 10 seconds but was ${upstreamAckDeadline}")
     require(upstreamAckDeadline <= 600.seconds,
-      s"upstream-ack-deadline must be at most 600 seconds but was ${upstreamAckDeadline}")
+            s"upstream-ack-deadline must be at most 600 seconds but was ${upstreamAckDeadline}")
     require(downstreamBatchSize > 0, s"downstream-batch-size must be at least 1 but was ${downstreamBatchSize}")
   }
 
@@ -188,8 +202,8 @@ class GCPubsubEventingSupport(config: Config)(implicit materializer: Materialize
     Flow[In].prefixAndTail(0).flatMapConcat { case (Nil, in) => f(in) }
 
   private[this] final def runManualFlow(
-    subscription: String,
-    processingFlow: Flow[SourceEvent[String], String, _]
+      subscription: String,
+      processingFlow: Flow[SourceEvent[String], String, _]
   ): KillSwitch = {
 
     val request =
@@ -221,14 +235,14 @@ class GCPubsubEventingSupport(config: Config)(implicit materializer: Materialize
         // In the middle we have the outSplitter, it's positioned after the streamingPull, so that when it cancels,
         // it immediately cancels the pull, but allows the events in progress to continue to be processed.
         Source.single(request) ~>
-          concat ~>
-          streamingPull ~>
-          outSplitter ~>
-          responseToEvents ~>
-          processingFlow ~>
-          acksToRequest ~>
-          circularDeadlockBreaker ~>
-          concat
+        concat ~>
+        streamingPull ~>
+        outSplitter ~>
+        responseToEvents ~>
+        processingFlow ~>
+        acksToRequest ~>
+        circularDeadlockBreaker ~>
+        concat
 
         // Meanwhile, we peel off the output using outSplitter, and ignore everything in it.
         // This allows us to return a Source that when a failure occurs anywhere in the stream, will emit a failure,
@@ -247,9 +261,9 @@ class GCPubsubEventingSupport(config: Config)(implicit materializer: Materialize
   }
 
   private[this] final def runByProxyManagedFlow(
-    sourceName: String,
-    subscription: String,
-    processingFlow: Flow[SourceEvent[String], String, _]
+      sourceName: String,
+      subscription: String,
+      processingFlow: Flow[SourceEvent[String], String, _]
   ): Future[KillSwitch] = {
     val topic = s"projects/${projectId}/topics/${sourceName}"
     val t = Topic(topic)
@@ -279,9 +293,9 @@ class GCPubsubEventingSupport(config: Config)(implicit materializer: Materialize
   }
 
   private[this] final def createUsingCrdManagedFlow(
-    sourceName: String,
-    subscription: String,
-    processingFlow: Flow[SourceEvent[String], String, _]
+      sourceName: String,
+      subscription: String,
+      processingFlow: Flow[SourceEvent[String], String, _]
   ): Future[KillSwitch] =
     throw new IllegalStateException("NOT IMPLEMENTED YET") // FIXME IMPLEMENT THIS: create CRD-requests
 
@@ -330,10 +344,13 @@ class GCPubsubEventingSupport(config: Config)(implicit materializer: Materialize
           source = message.attributes.getOrElse("ce-source", source),
           specversion = message.attributes("ce-specversion"),
           `type` = message.attributes.getOrElse("ce-type", ""),
-          datacontenttype = message.attributes.get("ce-datacontenttype").orElse(defaultCt).getOrElse("application/octet-stream"),
+          datacontenttype =
+            message.attributes.get("ce-datacontenttype").orElse(defaultCt).getOrElse("application/octet-stream"),
           dataschema = message.attributes.get("ce-dataschema"),
           subject = message.attributes.get("ce-subject"),
-          time = message.attributes.get("ce-time").flatMap(t => Try(Instant.from(DateTimeFormatter.ISO_OFFSET_DATE_TIME.parse(t))).toOption),
+          time = message.attributes
+            .get("ce-time")
+            .flatMap(t => Try(Instant.from(DateTimeFormatter.ISO_OFFSET_DATE_TIME.parse(t))).toOption),
           data = Some(message.data)
         )
 
@@ -373,25 +390,26 @@ class GCPubsubEventingSupport(config: Config)(implicit materializer: Materialize
 
     private val destinationFlow: Flow[DestinationEvent, AnyRef, NotUsed] =
       batchResults
-        .mapAsyncUnordered(1 /*parallelism*/)(
-          batch =>
-            publisherClient.publish(PublishRequest(topic = topic, messages = batch))
-        ).mapConcat(_.messageIds.to[immutable.Seq])
+        .mapAsyncUnordered(1 /*parallelism*/ )(
+          batch => publisherClient.publish(PublishRequest(topic = topic, messages = batch))
+        )
+        .mapConcat(_.messageIds.to[immutable.Seq])
 
-    override def eventStreamOut: Flow[DestinationEvent, AnyRef, NotUsed] = {
+    override def eventStreamOut: Flow[DestinationEvent, AnyRef, NotUsed] =
       topicReady.value match {
         case Some(Success(_)) =>
           destinationFlow
         case _ =>
-          Flow.lazyInitAsync(() => topicReady.map(_ => destinationFlow))
+          Flow
+            .lazyInitAsync(() => topicReady.map(_ => destinationFlow))
             .mapMaterializedValue(_ => NotUsed)
       }
-    }
 
-    override def emitSingle(destinationEvent: DestinationEvent): Future[Done] = {
+    override def emitSingle(destinationEvent: DestinationEvent): Future[Done] =
       topicReady.value match {
         case Some(Success(_)) =>
-          publisherClient.publish(PublishRequest(topic, Seq(transformDestinationEvent(destinationEvent))))
+          publisherClient
+            .publish(PublishRequest(topic, Seq(transformDestinationEvent(destinationEvent))))
             .map(_ => Done)
         case _ =>
           for {
@@ -399,7 +417,6 @@ class GCPubsubEventingSupport(config: Config)(implicit materializer: Materialize
             _ <- publisherClient.publish(PublishRequest(topic, Seq(transformDestinationEvent(destinationEvent))))
           } yield Done
       }
-    }
   }
 
   private[this] final def createByProxyManagedDestination(topic: String): Future[Done] =
@@ -413,12 +430,12 @@ class GCPubsubEventingSupport(config: Config)(implicit materializer: Materialize
 
   private def transformDestinationEvent(destinationEvent: DestinationEvent): PubsubMessage = {
     val attributes = Map(
-      "ce-id" -> destinationEvent.event.id,
-      "ce-source" -> destinationEvent.event.source,
-      "ce-specversion" -> destinationEvent.event.specversion,
-      "ce-type" -> destinationEvent.event.`type`,
-      "ce-datacontenttype" -> destinationEvent.event.datacontenttype,
-    ) ++
+        "ce-id" -> destinationEvent.event.id,
+        "ce-source" -> destinationEvent.event.source,
+        "ce-specversion" -> destinationEvent.event.specversion,
+        "ce-type" -> destinationEvent.event.`type`,
+        "ce-datacontenttype" -> destinationEvent.event.datacontenttype
+      ) ++
       destinationEvent.event.subject.map(s => "ce-subject" -> s) ++
       destinationEvent.event.dataschema.map(d => "ce-dataschema" -> d) ++
       destinationEvent.event.time.map(t => "ce-time" -> DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(t))

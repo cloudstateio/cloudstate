@@ -14,7 +14,12 @@ import com.google.protobuf.TextFormat.ParseException
 import com.google.protobuf.any.{Any => ProtobufAny}
 import com.google.protobuf.{ByteString, CodedOutputStream, UnsafeByteOperations, WireFormat}
 import com.typesafe.config.Config
-import io.cloudstate.eventing.{Eventing, EventingProto, EventDestination => EventDestinationProto, EventSource => EventSourceProto}
+import io.cloudstate.eventing.{
+  Eventing,
+  EventingProto,
+  EventDestination => EventDestinationProto,
+  EventSource => EventSourceProto
+}
 import io.cloudstate.protocol.entity.ClientAction
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.UserFunctionRouter
@@ -31,13 +36,16 @@ trait Emitter {
 }
 
 object Emitters {
-  val ignore: Emitter = (payload: ProtobufAny, method: MethodDescriptor) => Future.successful(Done)
+  val ignore: Emitter = {
+    val futDone = Future.successful(Done)
+    (payload: ProtobufAny, method: MethodDescriptor) => futDone
+  }
 
   def eventDestinationEmitter(eventDestination: EventDestination): Emitter =
     new EventDestinationEmitter(eventDestination)
 
   private class EventDestinationEmitter(eventDestination: EventDestination) extends Emitter {
-    override def emit(payload: ProtobufAny, method: MethodDescriptor): Future[Done] =
+    override final def emit(payload: ProtobufAny, method: MethodDescriptor): Future[Done] =
       eventDestination.emitSingle(EventingManager.createDesintationEvent(payload, method.getService.getFullName))
   }
 }
@@ -119,14 +127,8 @@ object EventingManager {
       .foldLeft(Map.empty[EventDestinationProto, List[MethodDescriptor]]) {
         case (map, method) =>
           EventingProto.eventing.get(Options.convertMethodOptions(method)) match {
-            case None => map
-            case Some(Eventing(_, Some(out))) =>
-              map.get(out) match {
-                case Some(methods) =>
-                  map.updated(out, method :: methods)
-                case None =>
-                  map.updated(out, method :: Nil)
-              }
+            case Some(Eventing(_, Some(out))) => map.updated(out, method :: map.get(out).getOrElse(Nil))
+            case _ => map
           }
       }
 
@@ -232,18 +234,17 @@ object EventingManager {
       forwardToOutputs(consumer, eventDestinations)
     )
 
-    new Cancellable {
-      private val cancelled = new AtomicBoolean()
+    new AtomicBoolean with Cancellable {
+      override final def cancel(): Boolean = {
+        val wasCancelled = getAndSet(true)
 
-      override def cancel(): Boolean =
-        if (cancelled.compareAndSet(false, true)) {
+        if (!wasCancelled)
           killSwitch.shutdown()
-          true
-        } else {
-          false
-        }
 
-      override def isCancelled: Boolean = cancelled.get()
+        !wasCancelled
+      }
+
+      override final def isCancelled: Boolean = get()
     }
   }
 
@@ -253,11 +254,9 @@ object EventingManager {
    * The command is paired with information about which method it should be routed to, and where the result should be
    * output to.
    */
-  private def entityToCommand[Ref](consumer: EventConsumer): Flow[SourceEvent[Ref], CommandIn[Ref], NotUsed] = {
-
+  private def entityToCommand[Ref](consumer: EventConsumer): Flow[SourceEvent[Ref], CommandIn[Ref], NotUsed] =
     Flow[SourceEvent[Ref]].map { sourceEvent =>
       val cloudEvent = sourceEvent.event
-
 
       val messageAny = MediaType.parse(cloudEvent.datacontenttype) match {
         case Right(protobuf) if protobuf.isApplication && ProtobufMediaSubTypes(protobuf.subType) =>
@@ -289,22 +288,19 @@ object EventingManager {
       }
 
       // Select a method
-      val maybeConsumerMethod =
-        if (messageAny.typeUrl.startsWith("p.cloudstate.io/") || messageAny.typeUrl.startsWith("json.cloudstate.io/")) {
+      val maybeConsumerMethod = messageAny.typeUrl match {
+        case url if url.startsWith("p.cloudstate.io/") || url.startsWith("json.cloudstate.io/") =>
           consumer.methods.get(ProtobufAny.scalaDescriptor.fullName)
-        } else {
-          val desiredType = messageAny.typeUrl.split("/", 2).last
+        case url =>
+          val desiredType = url.split("/", 2).last
           consumer.methods.get(desiredType).orElse(consumer.methods.get(ProtobufAny.scalaDescriptor.fullName))
-        }
-
-      val consumerMethod = maybeConsumerMethod match {
-        case Some(method) =>
-          method
-        case None =>
-          throw new IllegalArgumentException(
-            s"No method can be found to handle protobuf type of [${messageAny.typeUrl}] on input ${consumer.eventSource}. Either declare a method for this type, or declare a method that accepts google.protobuf.Any."
-          )
       }
+
+      val consumerMethod = maybeConsumerMethod.getOrElse(
+        throw new IllegalArgumentException(
+          s"No method can be found to handle protobuf type of [${messageAny.typeUrl}] on input ${consumer.eventSource}. Either declare a method for this type, or declare a method that accepts google.protobuf.Any."
+        )
+      )
 
       val command = UserFunctionCommand(
         name = consumerMethod.methodDescriptor.getName,
@@ -313,7 +309,6 @@ object EventingManager {
 
       CommandIn(sourceEvent.ref, consumerMethod, command)
     }
-  }
 
   /**
    * This flow is responsible for routing commands through the router.
@@ -405,17 +400,19 @@ object EventingManager {
         (generic.dropWhile(_ != '/').drop(1), "application/protobuf", payload.value)
     }
 
-    DestinationEvent(CloudEvent(
-      id = UUID.randomUUID().toString,
-      source = serviceName,
-      specversion = "1.0",
-      `type` = ceType,
-      datacontenttype = contentType,
-      dataschema = None,
-      subject = None,
-      time = Some(Instant.now()),
-      data = Some(bytes)
-    ))
+    DestinationEvent(
+      CloudEvent(
+        id = UUID.randomUUID().toString,
+        source = serviceName,
+        specversion = "1.0",
+        `type` = ceType,
+        datacontenttype = contentType,
+        dataschema = None,
+        subject = None,
+        time = Some(Instant.now()),
+        data = Some(bytes)
+      )
+    )
   }
 
   private case class CommandIn[Ref](eventSourceRef: Ref,
@@ -434,6 +431,7 @@ object EventingManager {
   private def encodeByteArray(maybeBytes: Option[ByteString]) = maybeBytes match {
     case None => ByteString.EMPTY
     case Some(bytes) if bytes.isEmpty => ByteString.EMPTY
+    case Some(bytes) =>
       // Create a byte array the right size. It needs to have the tag and enough space to hold the length of the data
       // (up to 5 bytes).
       // Length encoding consumes 1 byte for every 7 bits of the field
@@ -443,7 +441,7 @@ object EventingManager {
       stream.writeTag(1, WireFormat.WIRETYPE_LENGTH_DELIMITED)
       stream.writeUInt32NoTag(bytes.size())
       UnsafeByteOperations.unsafeWrap(byteArray).concat(bytes)
-    }
+  }
 
   private def encodeBytesToAny(bytes: Option[ByteString]): ProtobufAny =
     ProtobufAny("p.cloudstate.io/bytes", encodeByteArray(bytes))
@@ -464,7 +462,7 @@ object EventingManager {
   private def decodeBytes(payload: ProtobufAny): ByteString = {
     val stream = payload.value.newCodedInput()
     @annotation.tailrec
-    def findField(): ByteString = {
+    def findField(): ByteString =
       stream.readTag() match {
         case 0 =>
           // 0 means EOF
@@ -479,7 +477,6 @@ object EventingManager {
           stream.skipField(other)
           findField()
       }
-    }
     findField()
   }
 
