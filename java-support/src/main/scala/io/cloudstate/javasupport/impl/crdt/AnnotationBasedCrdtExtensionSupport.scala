@@ -36,7 +36,8 @@ private[impl] class AnnotationBasedCrdtExtensionSupport(
 
     ReflectionHelper.validateNoBadMethods(allMethods, classOf[CrdtEntity], Set(classOf[CommandHandler]))
     val handlers = allMethods
-      .collect { case method if method.getAnnotation(classOf[CommandHandler]) != null =>
+      .filter(_.getAnnotation(classOf[CommandHandler]) != null)
+      .map { method =>
         val annotation = method.getAnnotation(classOf[CommandHandler])
         val name: String = if (annotation.name().isEmpty) {
           ReflectionHelper.getCapitalizedName(method)
@@ -105,9 +106,13 @@ private[impl] class AnnotationBasedCrdtExtensionSupport(
       }
     }
 
-    val andUnwrap: PartialFunction[Throwable, Nothing] = {
+    private def unwrap[T](block: => T): T =
+      try {
+        block
+      } catch {
         case ite: InvocationTargetException if ite.getCause != null =>
           throw ite.getCause
       }
+  }
 
 }
