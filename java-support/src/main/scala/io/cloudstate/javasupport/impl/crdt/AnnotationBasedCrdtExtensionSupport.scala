@@ -105,13 +105,9 @@ private[impl] class AnnotationBasedCrdtExtensionSupport(
       }
     }
 
-    private def unwrap[T](block: => T): T =
-      try {
-        block
-      } catch {
+    val andUnwrap: PartialFunction[Throwable, Nothing] = {
         case ite: InvocationTargetException if ite.getCause != null =>
           throw ite.getCause
       }
-  }
 
 }
