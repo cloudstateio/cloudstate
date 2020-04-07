@@ -17,7 +17,7 @@ import io.cloudstate.javasupport.{ServiceCall, ServiceCallFactory}
 
 import scala.reflect.ClassTag
 
-class CrdtHelper {
+object CrdtHelper {
   object CrdtAnnotationHelper {
     private case class CrdtInjector[C <: Crdt, T](crdtClass: Class[C], create: CrdtFactory => T, wrap: C => T)
     private def simple[C <: Crdt: ClassTag](create: CrdtFactory => C)() = {
