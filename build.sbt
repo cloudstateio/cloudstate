@@ -297,13 +297,10 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   nativeImageDockerBuild := false,
   // If this is Some(…): run the native-image generation inside a Docker image
   // If this is None: run the native-image generation using a local GraalVM installation
-  graalVMVersion := Some(GraalVersion),
-  graalVMNativeImageOptions ++= sharedNativeImageSettings({
-      graalVMVersion.value match {
-        case Some(_) => new File("/opt/graalvm/stage/resources/")
-        case None => baseDirectory.value / "src" / "graal"
-      }
-    }),
+  graalVMVersion := None,//Some(GraalVersion),
+  graalVMNativeImageOptions ++= sharedNativeImageSettings(
+      graalVMVersion.value.map(_ => new File("/opt/graalvm/stage/resources/")).getOrElse(baseDirectory.value / "src" / "graal")
+    ),
   (mappings in Docker) := Def.taskDyn {
       if (nativeImageDockerBuild.value) {
         Def.task {
