@@ -1,6 +1,6 @@
 <div class="nav-home">
 <a href="$page.home.href$" $if(page.home.active)$class="active"$endif$>
-<img src="$page.base$images/cloudstate-horizontal-color.svg" alt="$page.home.title$"/>
+Cloudstate Documentation
 </a>
 </div>
 $groups()$
