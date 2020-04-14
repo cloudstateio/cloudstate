@@ -2,13 +2,13 @@
 	<div class="wrapper">
 		<div class="brand">
 			<a class="oss-track-link-label" data-category="OSS Lightbend Banner Clicks" data-label="Lightbend Logo - Cloudstate Banner" href="https://www.lightbend.com?r=oss-banner-cloudstate" target="_blank">
-				<img class="lightbend-logo" src="https://downloads.lightbend.com/website/project-sites-lb-banner/dist/images/lightbend-reverse.svg" alt="Lightbend" title="Lightbend">
+				<img class="lightbend-logo" src="$page.base$images/banner-logos/lightbend-reverse.svg" alt="Lightbend" title="Lightbend">
 			</a>
 		</div>
 		<div class="nav">
 			<a class="banner-btn oss-track-link-label" data-category="OSS Lightbend Banner Clicks" data-label="Enhance your Cloudstate app with Lightbend [Button] - Cloudstate Banner" href="https://www.lightbend.com/cloudstate-by-lightbend?r=oss-banner-cloudstate" target="_blank">
 				<span>Enhance your Cloudstate app with</span>
-				<img class="lightbend-logo" src="https://downloads.lightbend.com/website/project-sites-lb-banner/dist/images/lightbend-reverse.svg" alt="Lightbend" title="Lightbend">
+				<img class="lightbend-logo" src="$page.base$images/banner-logos/lightbend-reverse.svg" alt="Lightbend" title="Lightbend">
 			</a>
 			<div class="drop-down">
 				<svg class="svg-chevon-circle-down" version="1.1" id="Chevron_circled_down" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 20 20" enable-background="new 0 0 20 20" xml:space="preserve">
@@ -21,22 +21,22 @@
 				<div class="drop-down-content">
 					<div class="lightbend-family">
 						<a href="https://akka.io" class="akka oss-track-link-label" data-category="OSS Lightbend Banner Clicks" data-label="Akka - Logo Tag Line - Cloudstate Banner">
-							<img class="akka-full-color-logo" src="https://downloads.lightbend.com/website/project-sites-lb-banner/dist/images/akka-full-color.svg" alt="Akka by Lightbend" title="Akka by Lightbend">
+							<img class="akka-full-color-logo" src="$page.base$images/banner-logos/akka-full-color.svg" alt="Akka by Lightbend" title="Akka by Lightbend">
 						</a>
 						<a href="https://cloudflow.io" class="cloudflow oss-track-link-label" data-category="OSS Lightbend Banner Clicks" data-label="Cloudflow - Logo Tag Line - Cloudstate Banner">
-							<img class="cloudflow-full-color-logo" src="https://downloads.lightbend.com/website/project-sites-lb-banner/dist/images/cloudflow-full-color.svg" alt="Cloudflow by Lightbend" title="Cloudflow by Lightbend">
+							<img class="cloudflow-full-color-logo" src="$page.base$images/banner-logos/cloudflow-full-color.svg" alt="Cloudflow by Lightbend" title="Cloudflow by Lightbend">
 						</a>
 						<a href="https://www.lagomframework.com" class="lagom oss-track-link-label" data-category="OSS Lightbend Banner Clicks" data-label="Lagom - Logo Tag Line - Cloudstate Banner">
-							<img class="lagom-full-color-logo" src="https://downloads.lightbend.com/website/project-sites-lb-banner/dist/images/lagom-full-color.svg" alt="Lagom Framework by Lightbend" title="Lagom Framework by Lightbend">
+							<img class="lagom-full-color-logo" src="$page.base$images/banner-logos/lagom-full-color.svg" alt="Lagom Framework by Lightbend" title="Lagom Framework by Lightbend">
 						</a>
 						<a href="https://www.playframework.com" class="play oss-track-link-label" data-category="OSS Lightbend Banner Clicks" data-label="Play - Logo Tag Line - Cloudstate Banner">
-							<img class="play-full-color-logo" src="https://downloads.lightbend.com/website/project-sites-lb-banner/dist/images/play-full-color.svg" alt="Play Framework by Lightbend" title="Play Framework by Lightbend">
+							<img class="play-full-color-logo" src="$page.base$images/banner-logos/play-full-color.svg" alt="Play Framework by Lightbend" title="Play Framework by Lightbend">
 						</a>
 						<a href="https://www.scala-lang.org" class="scala oss-track-link-label" data-category="OSS Lightbend Banner Clicks" data-label="Scala - Logo Tag Line - Cloudstate Banner">
-							<img class="scala-full-color-logo" src="https://downloads.lightbend.com/website/project-sites-lb-banner/dist/images/scala-full-color.svg" alt="Scala by Lightbend" title="Scala by Lightbend">
+							<img class="scala-full-color-logo" src="$page.base$images/banner-logos/scala-full-color.svg" alt="Scala by Lightbend" title="Scala by Lightbend">
 						</a>
 						<div class="cloudstate current">
-							<img class="cloudstate-full-color-logo" src="https://downloads.lightbend.com/website/project-sites-lb-banner/dist/images/cloudstate-full-color.svg" alt="Cloudstate by Lightbend" title="Cloudstate by Lightbend">
+							<img class="cloudstate-full-color-logo" src="$page.base$images/banner-logos/cloudstate-full-color.svg" alt="Cloudstate by Lightbend" title="Cloudstate by Lightbend">
 							<span>From the creators of <strong>Cloudstate</strong>, get developer assistance and expert support from Lightbend.</span>
 							<a class="oss-track-link-label" data-category="OSS Lightbend Banner Clicks" data-label="Learn More [Button] - Cloudstate Banner" href="https://www.lightbend.com/cloudstate-by-lightbend?r=oss-banner-cloudstate" target="_blank">Learn More</a>
 						</div>
