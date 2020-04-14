@@ -124,7 +124,7 @@ object GraalVMPlugin extends AutoPlugin {
       }
       Seq(NativeImageCommand) ++ nativeImageArguments
     }
-    sys.process.Process(command, targetDirectory) ! log match {
+    sys.process.Process(command, targetDirectory).run(log).exitValue() match {
       case 0 => targetDirectory / binaryName
       case x => sys.error(s"Failed to run $command, exit status: " + x)
     }
