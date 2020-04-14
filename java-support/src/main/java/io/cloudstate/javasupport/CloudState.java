@@ -14,6 +14,9 @@ import io.cloudstate.javasupport.impl.eventsourced.AnnotationBasedEventSourcedSu
 import io.cloudstate.javasupport.impl.eventsourced.EventSourcedStatefulService;
 
 import akka.Done;
+
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.CompletionStage;
 import java.util.HashMap;
 import java.util.Map;
@@ -167,34 +170,36 @@ public final class CloudState {
    * @return This stateful service builder.
    */
   public CloudState registerCrudEntity(
-          Class<?> entityClass,
-          Descriptors.ServiceDescriptor descriptor,
-          Descriptors.FileDescriptor... additionalDescriptors) {
+      Class<?> entityClass,
+      Descriptors.ServiceDescriptor descriptor,
+      Descriptors.FileDescriptor... additionalDescriptors) {
 
     CrudEntity entity = entityClass.getAnnotation(CrudEntity.class);
     if (entity == null) {
       throw new IllegalArgumentException(
-              entityClass + " does not declare an " + CrudEntity.class + " annotation!");
+          entityClass + " does not declare an " + CrudEntity.class + " annotation!");
     }
 
     final String persistenceId;
-    final int snapshotEvery = 1;
+    final int snapshotEvery;
     if (entity.persistenceId().isEmpty()) {
       persistenceId = entityClass.getSimpleName();
+      snapshotEvery = 0; // Default
     } else {
       persistenceId = entity.persistenceId();
+      snapshotEvery = entity.snapshotEvery();
     }
 
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
 
     services.put(
-            descriptor.getFullName(),
-            new EventSourcedStatefulService(
-                    new AnnotationBasedEventSourcedSupport(entityClass, anySupport, descriptor),
-                    descriptor,
-                    anySupport,
-                    persistenceId,
-                    snapshotEvery));
+        descriptor.getFullName(),
+        new EventSourcedStatefulService(
+            new AnnotationBasedEventSourcedSupport(entityClass, anySupport, descriptor),
+            descriptor,
+            anySupport,
+            persistenceId,
+            snapshotEvery));
 
     return this;
   }

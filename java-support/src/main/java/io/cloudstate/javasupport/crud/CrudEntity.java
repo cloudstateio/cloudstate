@@ -15,8 +15,15 @@ public @interface CrudEntity {
   /**
    * The name of the persistence id.
    *
-   * <p>If not specifed, defaults to the entities unqualified classname. It's strongly recommended
+   * <p>If not specified, defaults to the entities unqualified classname. It's strongly recommended
    * that you specify it explicitly.
    */
   String persistenceId() default "";
+
+  /**
+   * Specifies how snapshots of the entity state should be made: Zero means use default from
+   * configuration file. (Default) Any negative value means never snapshot. Any positive value means
+   * snapshot at-or-after that number of events.
+   */
+  int snapshotEvery() default 0;
 }
