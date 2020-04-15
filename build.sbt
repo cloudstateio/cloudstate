@@ -57,9 +57,9 @@ val AkkaPersistenceCassandraVersion = "0.102"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
-val GraalVersion = "19.3.0"
-val DockerBaseImageVersion = "openjdk:8-jre-slim-buster"
-val svmGroupId = if (GraalVersion startsWith "19.2") "com.oracle.substratevm" else "org.graalvm.nativeimage"
+val GraalVersion = "20.0.0"
+
+val DockerBaseImageVersion = "adoptopenjdk/openjdk8:debian"
 
 def excludeTheseDependencies = Seq(
   ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
@@ -297,9 +297,11 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   nativeImageDockerBuild := false,
   // If this is Some(…): run the native-image generation inside a Docker image
   // If this is None: run the native-image generation using a local GraalVM installation
-  graalVMVersion := None,//Some(GraalVersion),
+  graalVMVersion := Some(GraalVersion),
   graalVMNativeImageOptions ++= sharedNativeImageSettings(
-      graalVMVersion.value.map(_ => new File("/opt/graalvm/stage/resources/")).getOrElse(baseDirectory.value / "src" / "graal")
+      graalVMVersion.value
+        .map(_ => new File("/opt/graalvm/stage/resources/"))
+        .getOrElse(baseDirectory.value / "src" / "graal")
     ),
   (mappings in Docker) := Def.taskDyn {
       if (nativeImageDockerBuild.value) {
@@ -334,9 +336,7 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   },
   dockerEntrypoint := {
     val old = dockerEntrypoint.value
-    val withLibraryPath = if (nativeImageDockerBuild.value) {
-      old :+ "-Djava.library.path=/opt/bitnami/java/lib"
-    } else old
+    val withLibraryPath = if (nativeImageDockerBuild.value) old :+ "-Djava.library.path=/opt/bitnami/java/lib" else old
     proxyDockerBuild.value match {
       case Some((_, Some(configResource))) => withLibraryPath :+ s"-Dconfig.resource=$configResource"
       case _ => withLibraryPath
@@ -354,13 +354,16 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
   "-H:+AllowVMInspection",
   "-H:-RuntimeAssertions",
   "-H:+ReportExceptionStackTraces",
+  "-H:-TraceClassInitialization", // if "+" prints out all trace information about class initialization
   "-H:-PrintUniverse", // if "+" prints out all classes which are included
   "-H:-NativeArchitecture", // if "+" Compiles the native image to customize to the local CPU arch
   "-H:Class=" + "io.cloudstate.proxy.CloudStateProxyMain",
   "--verbose",
   //"--no-server", // Uncomment to not use the native-image build server, to avoid potential cache problems with builds
-  //"--report-unsupported-elements-at-runtime", // Hopefully a self-explanatory flag
+  //"--debug-attach=5005", // Debugger makes a ton of sense to use to debug SubstrateVM
+  "--report-unsupported-elements-at-runtime", // Hopefully a self-explanatory flag
   "--enable-url-protocols=http,https",
+  "--enable-all-security-services",
   "--allow-incomplete-classpath",
   "--no-fallback",
   "--initialize-at-build-time"
@@ -369,13 +372,16 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
     "scala",
     "akka.dispatch.affinity",
     "akka.util",
-    "com.google.Protobuf"
+    "com.google.Protobuf",
+    "java.lang.ref.SoftReference",
+    "java.lang.invoke.MethodHandleImpl" // https://github.com/oracle/graal/issues/2345
   ).mkString("=", ",", ""),
   "--initialize-at-run-time=" +
   Seq(
     // We want to delay initialization of these to load the config at runtime
     "com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder",
     "com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder",
+    "com.typesafe.sslconfig.ssl.tracing.TracingSSLContext",
     // These are to make up for the lack of shaded configuration for svm/native-image in grpc-netty-shaded
     "com.sun.jndi.dns.DnsClient",
     "io.grpc.netty.shaded.io.netty.handler.codec.http2.Http2CodecUtil",
@@ -409,9 +415,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         // Since we exclude Aeron, we also exclude its transitive Agrona dependency, so we need to manually add it HERE
         "org.agrona" % "agrona" % "0.9.29",
         // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        svmGroupId % "svm" % GraalVersion % "provided", // Only needed for compilation
-
+        "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided", // Only needed for compilation
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
         "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion % "provided", // Only needed for compilation
@@ -500,9 +504,7 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
         ),
         "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test,
         // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        svmGroupId % "svm" % GraalVersion % "provided", // Only needed for compilation
-
+        "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided", // Only needed for compilation
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
         "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion % "provided", // Only needed for compilation
@@ -537,9 +539,7 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
     libraryDependencies ++= Seq(
         "org.postgresql" % "postgresql" % "42.2.6",
         // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        svmGroupId % "svm" % GraalVersion % "provided", // Only needed for compilation
-
+        "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided", // Only needed for compilation
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
         "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion % "provided", // Only needed for compilation

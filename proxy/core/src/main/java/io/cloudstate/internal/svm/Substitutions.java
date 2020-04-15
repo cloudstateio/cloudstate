@@ -16,16 +16,6 @@ class Target_io_grpc_netty_shaded_io_netty_util_internal_shaded_org_jctools_util
   public static int REF_ELEMENT_SHIFT;
 }
 
-@TargetClass(className = "io.grpc.netty.shaded.io.netty.util.internal.CleanerJava6")
-final class Target_io_grpc_netty_shaded_io_netty_util_internal_CleanerJava6 {
-  @Alias
-  @RecomputeFieldValue(
-      kind = RecomputeFieldValue.Kind.FieldOffset,
-      declClassName = "java.nio.DirectByteBuffer",
-      name = "cleaner")
-  private static long CLEANER_FIELD_OFFSET;
-}
-
 @TargetClass(className = "io.grpc.netty.shaded.io.netty.util.internal.PlatformDependent")
 final class Target_io_grpc_netty_shaded_io_netty_util_internal_PlatformDependent {
   @Alias
