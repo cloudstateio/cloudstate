@@ -153,20 +153,7 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
-  "name":"akka.cluster.OnMemberStatusChangedListener",
-  "fields" : [
-      { "name" : "context", "allowWrite" : true },
-      { "name" : "self", "allowWrite" : true }
-    ],
-  "allDeclaredFields":true,
-  "allDeclaredConstructors":true
-},
-{
   "name":"akka.cluster.client.ClusterClientMessage"
-},
-{
-  "name":"akka.cluster.client.protobuf.ClusterClientMessageSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
 },
 {
   "name":"akka.cluster.ddata.ReplicatedDataSerialization"
@@ -179,14 +166,6 @@
   "name":"akka.cluster.ddata.Replicator$ReplicatorMessage"
 },
 {
-  "name":"akka.cluster.ddata.protobuf.ReplicatedDataSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
-  "name":"akka.cluster.ddata.protobuf.ReplicatorMessageSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
   "name": "akka.cluster.ddata.protobuf.msg.ReplicatorMessages$OtherMessage",
   "allPublicMethods":true
 },
@@ -195,18 +174,10 @@
   "allPublicMethods":true
 },
 {
-  "name":"akka.cluster.protobuf.ClusterMessageSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
   "name":"akka.cluster.pubsub.DistributedPubSubMediator$Internal$SendToOneSubscriber"
 },
 {
   "name":"akka.cluster.pubsub.DistributedPubSubMessage"
-},
-{
-  "name":"akka.cluster.pubsub.protobuf.DistributedPubSubMessageSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
 },
 {
   "name":"akka.cluster.routing.ClusterRouterPool"
@@ -248,10 +219,6 @@
   "allDeclaredFields":true
 },
 {
-  "name":"akka.cluster.sharding.protobuf.ClusterShardingMessageSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
   "name":"akka.cluster.singleton.ClusterSingletonManager",
   "allDeclaredFields":true
 },
@@ -266,10 +233,6 @@
 {
   "name":"akka.cluster.singleton.ClusterSingletonProxy",
   "allDeclaredFields":true
-},
-{
-  "name":"akka.cluster.singleton.protobuf.ClusterSingletonMessageSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
 },
 {
   "name":"akka.dispatch.AbstractNodeQueue",
@@ -442,14 +405,6 @@
   "allDeclaredFields":true
 },
 {
-  "name":"akka.persistence.journal.ReplayFilter",
-  "fields" : [
-      { "name" : "context", "allowWrite" : true },
-      { "name" : "self", "allowWrite" : true }
-    ],
-  "allDeclaredFields":true
-},
-{
   "name":"akka.persistence.journal.AsyncWriteJournal$Resequencer",
   "allDeclaredFields":true,
   "methods":[{"name":"<init>","parameterTypes":[] }]
@@ -463,15 +418,7 @@
   "name":"akka.persistence.serialization.Message"
 },
 {
-  "name":"akka.persistence.serialization.MessageSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
   "name":"akka.persistence.serialization.Snapshot"
-},
-{
-  "name":"akka.persistence.serialization.SnapshotSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
 },
 {
   "name":"akka.protobuf.GeneratedMessage"
@@ -507,46 +454,6 @@
 },
 {
   "name":"akka.remote.routing.RemoteRouterConfig"
-},
-{
-  "name":"akka.remote.serialization.ArteryMessageSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
-  "name":"akka.remote.serialization.ByteStringSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
-  "name":"akka.remote.serialization.DaemonMsgCreateSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
-  "name":"akka.remote.serialization.IntSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
-  "name":"akka.remote.serialization.LongSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
-  "name":"akka.remote.serialization.MessageContainerSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
-  "name":"akka.remote.serialization.MiscMessageSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
-  "name":"akka.remote.serialization.ProtobufSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
-  "name":"akka.remote.serialization.StringSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
-  "name":"akka.remote.serialization.SystemMessageSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
 },
 {
   "name":"akka.routing.BalancingPool"
@@ -608,18 +515,6 @@
   "name":"akka.routing.TailChoppingPool"
 },
 {
-  "name":"akka.serialization.BooleanSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
-  "name":"akka.serialization.ByteArraySerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
-  "name":"akka.serialization.JavaSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
-},
-{
   "name":"akka.serialization.SerializationExtension$",
   "fields":[{"name":"MODULE$"}]
 },
@@ -643,10 +538,6 @@
 },
 {
   "name":"akka.stream.impl.streamref.StreamRefsProtocol"
-},
-{
-  "name":"akka.stream.serialization.StreamRefSerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"] }]
 },
 {
   "name":"akka.util.ByteString$ByteString1"
@@ -893,22 +784,6 @@
 },
 {
   "name":"io.cloudstate.proxy.autoscaler.NoScaler",
-  "allDeclaredFields":true
-},
-{
-  "name":"io.cloudstate.proxy.crdt.CrdtEntity",
-  "fields" : [
-    { "name" : "context", "allowWrite" : true },
-    { "name" : "self", "allowWrite" : true }
-  ],
-  "allDeclaredFields":true
-},
-{
-  "name":"io.cloudstate.proxy.eventsourced.EventSourcedEntity",
-  "fields" : [
-      { "name" : "context", "allowWrite" : true },
-      { "name" : "self", "allowWrite" : true }
-    ],
   "allDeclaredFields":true
 },
 {
@@ -1225,8 +1100,8 @@
 {
   "name":"sun.nio.ch.SelectorImpl",
   "fields":[
-    {"name":"publicSelectedKeys"}, 
-    {"name":"selectedKeys"}
+    {"name":"publicSelectedKeys", "allowUnsafeAccess": true},
+    {"name":"selectedKeys", "allowUnsafeAccess": true}
   ]
 },
 {
@@ -1240,14 +1115,6 @@
 {
   "name":"io.cloudstate.proxy.HealthCheckLive",
   "methods":[{"name":"<init>","parameterTypes":["akka.actor.ActorSystem"] }]
-},
-{
-  "name":"io.cloudstate.proxy.crdt.CrdtSerializers",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"]}]
-},
-{
-  "name":"io.cloudstate.proxy.ProtobufAnySerializer",
-  "methods":[{"name":"<init>","parameterTypes":["akka.actor.ExtendedActorSystem"]}]
 },
 {
   "name":"io.cloudstate.proxy.crdt.Vote"
