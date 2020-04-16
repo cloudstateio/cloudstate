@@ -759,10 +759,6 @@
   "name":"com.typesafe.config.impl.SimpleConfig"
 },
 {
-  "name":"com.typesafe.sslconfig.ssl.DefaultHostnameVerifier",
-  "methods":[{"name":"<init>","parameterTypes":["com.typesafe.sslconfig.util.LoggerFactory"] }]
-},
-{
   "name":"io.cloudstate.proxy.ConcurrencyEnforcer",
   "allDeclaredFields":true
 },
