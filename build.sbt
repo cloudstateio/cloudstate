@@ -58,7 +58,7 @@ val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
 val GraalVersion = "19.3.0"
-
+val DockerBaseImageVersion = "openjdk:8-jre-slim-buster"
 val svmGroupId = if (GraalVersion startsWith "19.2") "com.oracle.substratevm" else "org.graalvm.nativeimage"
 
 def excludeTheseDependencies = Seq(
@@ -209,6 +209,9 @@ def dockerSettings: Seq[Setting[_]] = Seq(
   dockerUpdateLatest := true,
   dockerRepository := sys.props.get("docker.registry"),
   dockerUsername := sys.props.get("docker.username").orElse(Some("cloudstateio")).filter(_ != ""),
+  dockerBaseImage := DockerBaseImageVersion,
+  // when using tags like latest, uncomment below line, so that local cache will not be used.
+  //  dockerBuildOptions += "--no-cache",
   dockerAlias := {
     val old = dockerAlias.value
     proxyDockerBuild.value match {
@@ -322,7 +325,6 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
         }
       }
     }.value,
-  dockerBaseImage := "bitnami/java:11-prod",
   // Need to make sure it has group execute permission
   // Note I think this is leading to quite large docker images :(
   dockerChmodType := {
@@ -600,7 +602,6 @@ lazy val operator = (project in file("operator"))
         "ch.qos.logback" % "logback-classic" % "1.2.3" // Doesn't work well with SubstrateVM, use "org.slf4j"           % "slf4j-simple"     % "1.7.26" instead
       ),
     dockerSettings,
-    dockerBaseImage := "adoptopenjdk/openjdk8",
     dockerExposedPorts := Nil,
     compileK8sDescriptors := {
       val tag = version.value
@@ -764,7 +765,6 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
   .settings(
     name := "java-shopping-cart",
     dockerSettings,
-    dockerBaseImage := "adoptopenjdk/openjdk8",
     mainClass in Compile := Some("io.cloudstate.samples.shoppingcart.Main"),
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
@@ -795,7 +795,6 @@ lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
   .settings(
     name := "java-pingpong",
     dockerSettings,
-    dockerBaseImage := "adoptopenjdk/openjdk8",
     mainClass in Compile := Some("io.cloudstate.samples.pingpong.Main"),
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
