@@ -20,7 +20,7 @@ import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.atomic.AtomicLong
 
 import com.typesafe.config.Config
-import akka.actor.{ActorSelection, ActorSystem, Props}
+import akka.actor.{ActorSelection, ActorSystem}
 import akka.pattern.ask
 import akka.util.Timeout
 import akka.cluster.Cluster

@@ -48,6 +48,7 @@ class ShoppingCartClient(hostname: String, port: Int, hostnameOverride: Option[S
     this(hostname, port, hostnameOverride, ActorSystem())
   private implicit val system = sys
   private implicit val materializer = ActorMaterializer()
+
   import sys.dispatcher
 
   val settings = {
