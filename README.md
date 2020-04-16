@@ -358,7 +358,7 @@ For building and pushing the application (in this example the Scala shopping car
 
     sbt scala-shopping-cart/docker:publish
 
-Building and pushing the application and overriding the repository path.
+Building and pushing the application, overriding the repository path.
 
     sbt scala-shopping-cart/docker:publish -Ddocker.registry=<MY-REGISTRY> -Ddocker.username=<MY-REPOSITORY>
 
