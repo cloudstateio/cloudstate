@@ -826,9 +826,11 @@ lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
 
 lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart"))
   .dependsOn(`scala-support`)
-  .enablePlugins(AkkaGrpcPlugin)
+  .enablePlugins(AkkaGrpcPlugin, DockerPlugin, JavaAppPackaging)
   .settings(
     name := "scala-shopping-cart",
+    dockerSettings,
+    dockerBaseImage := "adoptopenjdk/openjdk8",
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`scala-support`, Compile)).value,
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"

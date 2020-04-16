@@ -46,7 +46,8 @@ object GraalVMPlugin extends AutoPlugin {
       graalVMVersion := None,
       resourceDirectory in GraalVMNativeImage := sourceDirectory.value / "graal",
       mainClass in GraalVMNativeImage := (mainClass in Compile).value
-    ) ++ inConfig(GraalVMNativeImage)(scopedSettings)
+    ) ++ inConfig(GraalVMNativeImage)(scopedSettings) ++
+    inConfig(Compile)(resourceGenerators += hocon2json)
 
   private lazy val scopedSettings = Seq[Setting[_]](
     resourceDirectories := Seq(resourceDirectory.value),
@@ -108,6 +109,26 @@ object GraalVMPlugin extends AutoPlugin {
       }))
     }
   )
+
+  private val hocon2json = Def.task {
+    val dirs = unmanagedResourceDirectories.value
+    val files = dirs.descendantsExcept("*.json.conf", HiddenFileFilter).get()
+    val destDir = resourceManaged.value
+    (files --- dirs).pair(Path.relativeTo(dirs)).map {
+      case (confFile, relativePath) =>
+        import com.typesafe.config._
+        import com.typesafe.config.impl.Parseable
+        val parseable = Parseable.newFile(confFile, ConfigParseOptions.defaults())
+        val parseValue = classOf[Parseable].getDeclaredMethod("parseValue")
+        parseValue.setAccessible(true) // from lightbend/config#460#issuecomment-285662952
+        val conf = parseValue.invoke(parseable).asInstanceOf[ConfigValue]
+        // Not resolving (yet?) as it's only a config value, not a config (object).
+        val json = conf.render(ConfigRenderOptions.concise().setFormatted(true))
+        val dest = destDir / relativePath.stripSuffix(".conf")
+        IO.write(dest, json)
+        dest
+    }
+  }
 
   private def buildLocal(targetDirectory: File,
                          binaryName: String,
