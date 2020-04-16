@@ -166,14 +166,6 @@
   "name":"akka.cluster.ddata.Replicator$ReplicatorMessage"
 },
 {
-  "name": "akka.cluster.ddata.protobuf.msg.ReplicatorMessages$OtherMessage",
-  "allPublicMethods":true
-},
-{
-  "name": "akka.cluster.ddata.protobuf.msg.ReplicatorMessages$OtherMessage$Builder",
-  "allPublicMethods":true
-},
-{
   "name":"akka.cluster.pubsub.DistributedPubSubMediator$Internal$SendToOneSubscriber"
 },
 {
@@ -421,9 +413,6 @@
   "name":"akka.persistence.serialization.Snapshot"
 },
 {
-  "name":"akka.protobuf.GeneratedMessage"
-},
-{
   "name":"akka.remote.DaemonMsgCreate"
 },
 {
@@ -549,119 +538,6 @@
   "name":"akka.util.ByteString$ByteStrings"
 },
 {
-  "name":"com.google.protobuf.DescriptorProtos$FieldOptions",
-  "methods":[
-    {"name":"getCtype","parameterTypes":[] }, 
-    {"name":"getDeprecated","parameterTypes":[] }, 
-    {"name":"getJstype","parameterTypes":[] }, 
-    {"name":"getLazy","parameterTypes":[] }, 
-    {"name":"getPacked","parameterTypes":[] }, 
-    {"name":"getUninterpretedOption","parameterTypes":["int"] }, 
-    {"name":"getUninterpretedOptionCount","parameterTypes":[] }, 
-    {"name":"getUninterpretedOptionList","parameterTypes":[] }, 
-    {"name":"getWeak","parameterTypes":[] }, 
-    {"name":"hasCtype","parameterTypes":[] }, 
-    {"name":"hasDeprecated","parameterTypes":[] }, 
-    {"name":"hasJstype","parameterTypes":[] }, 
-    {"name":"hasLazy","parameterTypes":[] }, 
-    {"name":"hasPacked","parameterTypes":[] }, 
-    {"name":"hasWeak","parameterTypes":[] }
-  ]
-},
-{
-  "name":"com.google.protobuf.DescriptorProtos$FieldOptions$Builder",
-  "methods":[
-    {"name":"addUninterpretedOption","parameterTypes":["com.google.protobuf.DescriptorProtos$UninterpretedOption"] }, 
-    {"name":"clearCtype","parameterTypes":[] }, 
-    {"name":"clearDeprecated","parameterTypes":[] }, 
-    {"name":"clearJstype","parameterTypes":[] }, 
-    {"name":"clearLazy","parameterTypes":[] }, 
-    {"name":"clearPacked","parameterTypes":[] }, 
-    {"name":"clearUninterpretedOption","parameterTypes":[] }, 
-    {"name":"clearWeak","parameterTypes":[] }, 
-    {"name":"getCtype","parameterTypes":[] }, 
-    {"name":"getDeprecated","parameterTypes":[] }, 
-    {"name":"getJstype","parameterTypes":[] }, 
-    {"name":"getLazy","parameterTypes":[] }, 
-    {"name":"getPacked","parameterTypes":[] }, 
-    {"name":"getUninterpretedOption","parameterTypes":["int"] }, 
-    {"name":"getUninterpretedOptionBuilder","parameterTypes":["int"] }, 
-    {"name":"getUninterpretedOptionCount","parameterTypes":[] }, 
-    {"name":"getUninterpretedOptionList","parameterTypes":[] }, 
-    {"name":"getWeak","parameterTypes":[] }, 
-    {"name":"hasCtype","parameterTypes":[] }, 
-    {"name":"hasDeprecated","parameterTypes":[] }, 
-    {"name":"hasJstype","parameterTypes":[] }, 
-    {"name":"hasLazy","parameterTypes":[] }, 
-    {"name":"hasPacked","parameterTypes":[] }, 
-    {"name":"hasWeak","parameterTypes":[] }, 
-    {"name":"setCtype","parameterTypes":["com.google.protobuf.DescriptorProtos$FieldOptions$CType"] }, 
-    {"name":"setDeprecated","parameterTypes":["boolean"] }, 
-    {"name":"setJstype","parameterTypes":["com.google.protobuf.DescriptorProtos$FieldOptions$JSType"] }, 
-    {"name":"setLazy","parameterTypes":["boolean"] }, 
-    {"name":"setPacked","parameterTypes":["boolean"] }, 
-    {"name":"setUninterpretedOption","parameterTypes":["int","com.google.protobuf.DescriptorProtos$UninterpretedOption"] }, 
-    {"name":"setWeak","parameterTypes":["boolean"] }
-  ]
-},
-{
-  "name":"com.google.protobuf.DescriptorProtos$FieldOptions$CType",
-  "methods":[
-    {"name":"getValueDescriptor","parameterTypes":[] }, 
-    {"name":"valueOf","parameterTypes":["com.google.protobuf.Descriptors$EnumValueDescriptor"] }
-  ]
-},
-{
-  "name":"com.google.protobuf.DescriptorProtos$FieldOptions$JSType",
-  "methods":[
-    {"name":"getValueDescriptor","parameterTypes":[] }, 
-    {"name":"valueOf","parameterTypes":["com.google.protobuf.Descriptors$EnumValueDescriptor"] }
-  ]
-},
-{
-  "name":"com.google.protobuf.DescriptorProtos$MethodOptions",
-  "methods":[
-    {"name":"getDeprecated","parameterTypes":[] }, 
-    {"name":"getIdempotencyLevel","parameterTypes":[] }, 
-    {"name":"getUninterpretedOption","parameterTypes":["int"] }, 
-    {"name":"getUninterpretedOptionCount","parameterTypes":[] }, 
-    {"name":"getUninterpretedOptionList","parameterTypes":[] }, 
-    {"name":"hasDeprecated","parameterTypes":[] }, 
-    {"name":"hasIdempotencyLevel","parameterTypes":[] }
-  ]
-},
-{
-  "name":"com.google.protobuf.DescriptorProtos$MethodOptions$Builder",
-  "methods":[
-    {"name":"addUninterpretedOption","parameterTypes":["com.google.protobuf.DescriptorProtos$UninterpretedOption"] }, 
-    {"name":"clearDeprecated","parameterTypes":[] }, 
-    {"name":"clearIdempotencyLevel","parameterTypes":[] }, 
-    {"name":"clearUninterpretedOption","parameterTypes":[] }, 
-    {"name":"getDeprecated","parameterTypes":[] }, 
-    {"name":"getIdempotencyLevel","parameterTypes":[] }, 
-    {"name":"getUninterpretedOption","parameterTypes":["int"] }, 
-    {"name":"getUninterpretedOptionBuilder","parameterTypes":["int"] }, 
-    {"name":"getUninterpretedOptionCount","parameterTypes":[] }, 
-    {"name":"getUninterpretedOptionList","parameterTypes":[] }, 
-    {"name":"hasDeprecated","parameterTypes":[] }, 
-    {"name":"hasIdempotencyLevel","parameterTypes":[] }, 
-    {"name":"setDeprecated","parameterTypes":["boolean"] }, 
-    {"name":"setIdempotencyLevel","parameterTypes":["com.google.protobuf.DescriptorProtos$MethodOptions$IdempotencyLevel"] }, 
-    {"name":"setUninterpretedOption","parameterTypes":["int","com.google.protobuf.DescriptorProtos$UninterpretedOption"] }
-  ]
-},
-{
-  "name":"com.google.protobuf.DescriptorProtos$MethodOptions$IdempotencyLevel",
-  "methods":[
-    {"name":"getValueDescriptor","parameterTypes":[] }, 
-    {"name":"valueOf","parameterTypes":["com.google.protobuf.Descriptors$EnumValueDescriptor"] }
-  ]
-},
-{
-  "name":"com.google.protobuf.DescriptorProtos$UninterpretedOption",
-  "methods":[{"name":"newBuilder","parameterTypes":[] }]
-},
-{
   "name":"com.google.protobuf.Extension"
 },
 {
@@ -669,98 +545,10 @@
   "methods":[{"name":"getEmptyRegistry","parameterTypes":[] }]
 },
 {
-  "name":"com.google.protobuf.GeneratedMessage"
-},
-{
-  "name":"com.google.protobuf.ListValue",
-  "methods":[
-    {"name":"getValues","parameterTypes":["int"] }, 
-    {"name":"getValuesCount","parameterTypes":[] }, 
-    {"name":"getValuesList","parameterTypes":[] }, 
-    {"name":"newBuilder","parameterTypes":[] }
-  ]
-},
-{
-  "name":"com.google.protobuf.ListValue$Builder",
-  "methods":[
-    {"name":"addValues","parameterTypes":["com.google.protobuf.Value"] }, 
-    {"name":"clearValues","parameterTypes":[] }, 
-    {"name":"getValues","parameterTypes":["int"] }, 
-    {"name":"getValuesBuilder","parameterTypes":["int"] }, 
-    {"name":"getValuesCount","parameterTypes":[] }, 
-    {"name":"getValuesList","parameterTypes":[] }, 
-    {"name":"setValues","parameterTypes":["int","com.google.protobuf.Value"] }
-  ]
-},
-{
-  "name":"com.google.protobuf.NullValue",
-  "methods":[
-    {"name":"getValueDescriptor","parameterTypes":[] }, 
-    {"name":"valueOf","parameterTypes":["com.google.protobuf.Descriptors$EnumValueDescriptor"] }
-  ]
-},
-{
-  "name":"com.google.protobuf.Struct",
-  "methods":[
-    {"name":"getDefaultInstance","parameterTypes":[] }, 
-    {"name":"newBuilder","parameterTypes":[] }
-  ]
-},
-{
-  "name":"com.google.protobuf.Value",
-  "methods":[
-    {"name":"getBoolValue","parameterTypes":[] }, 
-    {"name":"getKindCase","parameterTypes":[] }, 
-    {"name":"getListValue","parameterTypes":[] }, 
-    {"name":"getNullValue","parameterTypes":[] }, 
-    {"name":"getNullValueValue","parameterTypes":[] }, 
-    {"name":"getNumberValue","parameterTypes":[] }, 
-    {"name":"getStringValue","parameterTypes":[] }, 
-    {"name":"getStringValueBytes","parameterTypes":[] }, 
-    {"name":"getStructValue","parameterTypes":[] }, 
-    {"name":"newBuilder","parameterTypes":[] }
-  ]
-},
-{
-  "name":"com.google.protobuf.Value$Builder",
-  "methods":[
-    {"name":"clearBoolValue","parameterTypes":[] }, 
-    {"name":"clearKind","parameterTypes":[] }, 
-    {"name":"clearListValue","parameterTypes":[] }, 
-    {"name":"clearNullValue","parameterTypes":[] }, 
-    {"name":"clearNumberValue","parameterTypes":[] }, 
-    {"name":"clearStringValue","parameterTypes":[] }, 
-    {"name":"clearStructValue","parameterTypes":[] }, 
-    {"name":"getBoolValue","parameterTypes":[] }, 
-    {"name":"getKindCase","parameterTypes":[] }, 
-    {"name":"getListValue","parameterTypes":[] }, 
-    {"name":"getListValueBuilder","parameterTypes":[] }, 
-    {"name":"getNullValue","parameterTypes":[] }, 
-    {"name":"getNullValueValue","parameterTypes":[] }, 
-    {"name":"getNumberValue","parameterTypes":[] }, 
-    {"name":"getStringValue","parameterTypes":[] }, 
-    {"name":"getStringValueBytes","parameterTypes":[] }, 
-    {"name":"getStructValue","parameterTypes":[] }, 
-    {"name":"getStructValueBuilder","parameterTypes":[] }, 
-    {"name":"setBoolValue","parameterTypes":["boolean"] }, 
-    {"name":"setListValue","parameterTypes":["com.google.protobuf.ListValue"] }, 
-    {"name":"setNullValue","parameterTypes":["com.google.protobuf.NullValue"] }, 
-    {"name":"setNullValueValue","parameterTypes":["int"] }, 
-    {"name":"setNumberValue","parameterTypes":["double"] }, 
-    {"name":"setStringValue","parameterTypes":["java.lang.String"] }, 
-    {"name":"setStringValueBytes","parameterTypes":["com.google.protobuf.ByteString"] }, 
-    {"name":"setStructValue","parameterTypes":["com.google.protobuf.Struct"] }
-  ]
-},
-{
   "name":"com.typesafe.config.Config"
 },
 {
   "name":"com.typesafe.config.impl.SimpleConfig"
-},
-{
-  "name":"com.typesafe.sslconfig.ssl.DefaultHostnameVerifier",
-  "methods":[{"name":"<init>","parameterTypes":["com.typesafe.sslconfig.util.LoggerFactory"] }]
 },
 {
   "name":"io.cloudstate.proxy.ConcurrencyEnforcer",
@@ -1209,10 +997,5 @@
 {
   "name":"com.zaxxer.hikari.HikariConfig",
   "allDeclaredFields":true
-},
-{
-  "name":"com.google.protobuf.any.Any",
-  "allDeclaredMethods":true,
-  "allPublicMethods":true
 }
 ]

@@ -1,6 +1,6 @@
 package io.cloudstate.proxy.crdt
 
-import akka.{Done, NotUsed}
+import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem, PoisonPill}
 import akka.cluster.Cluster
 import akka.cluster.ddata.Replicator._
@@ -28,6 +28,8 @@ object AbstractCrdtEntitySpec {
       |akka.actor.provider = cluster
       |# Make the tests run faster
       |akka.cluster.distributed-data.notify-subscribers-interval = 50ms
+      |akka.actor.allow-java-serialization = on
+      |akka.actor.warn-about-java-serializer-usage = off
       |akka.remote {
       |  enabled-transports = []
       |  artery {

@@ -49,8 +49,8 @@ def versionFmt(out: sbtdynver.GitDescribeOutput): String = {
 name := "cloudstate"
 
 val GrpcJavaVersion = "1.22.1"
-val GraalAkkaVersion = "0.4.1"
-val AkkaVersion = "2.5.31"
+val GraalAkkaVersion = "0.5.0"
+val AkkaVersion = "2.6.4"
 val AkkaHttpVersion = "10.1.11"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
@@ -374,7 +374,6 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
   ).mkString("=", ",", ""),
   "--initialize-at-run-time=" +
   Seq(
-    "akka.protobuf.DescriptorProtos",
     // We want to delay initialization of these to load the config at runtime
     "com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder",
     "com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder",
