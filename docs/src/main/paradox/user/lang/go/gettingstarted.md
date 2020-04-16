@@ -47,7 +47,7 @@ go $cloudstate.go.version$
 
 The Cloudstate Go Support Library provides no dedicated tool beside the protoc compiler to build your protobuf files. The Cloudstate protocol protobuf files as well as the shopping cart example application protobuf files are provided by the Cloudstate Repository.
 
-In addition to the protoc compiler, the gRPC Go plugin is needed to compile the protobuf file to *.pb.go files. Please follow the instructions at the [Go support for Protocol Buffers](https://github.com/golang/protobuf) project page to install the protoc compiler as well as the `protoc-gen-go` plugin which also includes the Google standard protobuf types.
+In addition to the `protoc` compiler, the gRPC Go plugin is needed to compile the protobuf file to *.pb.go files. Please follow the instructions at the [Go support for Protocol Buffers](https://github.com/golang/protobuf) project page to install the protoc compiler as well as the `protoc-gen-go` plugin which also includes the Google standard protobuf types.
 
 To build the example shopping cart application shown earlier in @ref:[gRPC descriptors](../../features/grpc.md), you could simply paste that protobuf into `protos/shoppingcart.proto`. You may wish to also define the Go package using the `go_package` proto option, to ensure the package name used conforms to Go package naming conventions
 

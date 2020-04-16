@@ -153,15 +153,6 @@
   "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
-  "name":"akka.cluster.OnMemberStatusChangedListener",
-  "fields" : [
-      { "name" : "context", "allowWrite" : true },
-      { "name" : "self", "allowWrite" : true }
-    ],
-  "allDeclaredFields":true,
-  "allDeclaredConstructors":true
-},
-{
   "name":"akka.cluster.client.ClusterClientMessage"
 },
 {
@@ -411,14 +402,6 @@
 },
 {
   "name":"akka.persistence.RecoveryPermitter",
-  "allDeclaredFields":true
-},
-{
-  "name":"akka.persistence.journal.ReplayFilter",
-  "fields" : [
-      { "name" : "context", "allowWrite" : true },
-      { "name" : "self", "allowWrite" : true }
-    ],
   "allDeclaredFields":true
 },
 {
@@ -801,22 +784,6 @@
 },
 {
   "name":"io.cloudstate.proxy.autoscaler.NoScaler",
-  "allDeclaredFields":true
-},
-{
-  "name":"io.cloudstate.proxy.crdt.CrdtEntity",
-  "fields" : [
-    { "name" : "context", "allowWrite" : true },
-    { "name" : "self", "allowWrite" : true }
-  ],
-  "allDeclaredFields":true
-},
-{
-  "name":"io.cloudstate.proxy.eventsourced.EventSourcedEntity",
-  "fields" : [
-      { "name" : "context", "allowWrite" : true },
-      { "name" : "self", "allowWrite" : true }
-    ],
   "allDeclaredFields":true
 },
 {
