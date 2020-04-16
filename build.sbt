@@ -374,7 +374,6 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
   ).mkString("=", ",", ""),
   "--initialize-at-run-time=" +
   Seq(
-    "akka.protobuf.DescriptorProtos",
     // We want to delay initialization of these to load the config at runtime
     "com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder",
     "com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder",
