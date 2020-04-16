@@ -11,8 +11,6 @@ inThisBuild(
     version := dynverGitDescribeOutput.value.mkVersion(versionFmt, "latest"),
     dynver := sbtdynver.DynVer.getGitDescribeOutput(new Date).mkVersion(versionFmt, "latest"),
     scalaVersion := "2.12.11",
-    // Needed for our fork of skuber
-    resolvers += Resolver.bintrayRepo("jroper", "maven"), // TODO: Remove once skuber has the required functionality
     // Needed for the fixed HTTP/2 connection cleanup version of akka-http
     resolvers += Resolver.bintrayRepo("akka", "snapshots"), // TODO: Remove once we're switching to akka-http 10.1.11
     organizationName := "Lightbend Inc.",
@@ -595,12 +593,11 @@ lazy val operator = (project in file("operator"))
   .settings(
     common,
     name := "cloudstate-operator",
-    // This is a publishLocal build of this PR https://github.com/doriordan/skuber/pull/268
     libraryDependencies ++= Seq(
         "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
         "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
         "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
-        "io.skuber" %% "skuber" % "2.2.0-jroper-1",
+        "io.skuber" %% "skuber" % "2.4.0",
         "ch.qos.logback" % "logback-classic" % "1.2.3" // Doesn't work well with SubstrateVM, use "org.slf4j"           % "slf4j-simple"     % "1.7.26" instead
       ),
     dockerSettings,
