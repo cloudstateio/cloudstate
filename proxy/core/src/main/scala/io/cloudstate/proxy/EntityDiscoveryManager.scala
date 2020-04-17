@@ -16,12 +16,13 @@
 
 package io.cloudstate.proxy
 
-import akka.Done
+import akka.{Done, NotUsed}
 import akka.actor.{Actor, ActorLogging, CoordinatedShutdown, PoisonPill, Props, Status}
 import akka.cluster.Cluster
 import akka.util.Timeout
 import akka.pattern.pipe
-import akka.stream.scaladsl.RunnableGraph
+import akka.stream.{ActorMaterializer, Materializer}
+import akka.stream.scaladsl.{RunnableGraph, Sink}
 import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
 import akka.cluster.singleton.{
@@ -31,7 +32,6 @@ import akka.cluster.singleton.{
   ClusterSingletonProxySettings
 }
 import akka.grpc.GrpcClientSettings
-import akka.stream.ActorMaterializer
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.typesafe.config.Config
@@ -141,7 +141,6 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
     implicit mat: ActorMaterializer
 ) extends Actor
     with ActorLogging {
-
   implicit val system = context.system
   implicit val ec = context.dispatcher
   import EntityDiscoveryManager.Ready

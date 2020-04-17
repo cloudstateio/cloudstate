@@ -1,24 +1,30 @@
 package io.cloudstate.proxy.eventing
 
 import com.typesafe.config.{Config, ConfigFactory}
-import akka.NotUsed
+
+import akka.{Done, NotUsed}
 import akka.actor.{ActorSystem, Cancellable}
 import akka.grpc.GrpcClientSettings
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
+
 import io.cloudstate.proxy.Serve.CommandHandler
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
-import io.cloudstate.proxy.entity.UserFunctionCommand
+import io.cloudstate.proxy.entity.{UserFunctionCommand}
+
 import io.cloudstate.eventing.Eventing
+
 import com.google.protobuf.any.{Any => ProtobufAny}
 import com.google.protobuf.{ByteString => ProtobufByteString}
 import com.google.protobuf.Descriptors.MethodDescriptor
+
 import io.grpc.{
   CallCredentials => gRPCCallCredentials,
   Status => gRPCStatus,
   StatusRuntimeException => gRPCStatusRuntimeException
 }
 import io.grpc.auth.MoreCallCredentials
+
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.pubsub.v1.pubsub.{
   AcknowledgeRequest,
@@ -28,10 +34,11 @@ import com.google.pubsub.v1.pubsub.{
   ReceivedMessage,
   StreamingPullRequest,
   Subscription,
-  Topic,
   PublisherClient => ScalaPublisherClient,
-  SubscriberClient => ScalaSubscriberClient
+  SubscriberClient => ScalaSubscriberClient,
+  Topic
 }
+
 import java.util.Collections
 
 import scala.util.Try
@@ -109,8 +116,7 @@ final class PubSubSettings private (
       |}""".stripMargin
     }
 
-    val akkaGrpcConfig =
-      s"""
+    val akkaGrpcConfig = s"""
       |host = "$host"
       |port = $port
       |

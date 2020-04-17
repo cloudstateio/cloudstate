@@ -50,7 +50,7 @@ name := "cloudstate"
 
 val GrpcJavaVersion = "1.22.1"
 val GraalAkkaVersion = "0.5.0"
-val AkkaVersion = "2.6.4"
+val AkkaVersion = "2.5.31"
 val AkkaHttpVersion = "10.1.11"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
