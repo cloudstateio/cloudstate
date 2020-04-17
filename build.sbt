@@ -58,7 +58,7 @@ val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
 val GraalVersion = "19.3.0"
-val DockerBaseImageVersion = "openjdk:8-jre-slim-buster"
+val DockerBaseImageVersion = "adoptopenjdk/openjdk8:debian"
 val svmGroupId = if (GraalVersion startsWith "19.2") "com.oracle.substratevm" else "org.graalvm.nativeimage"
 
 def excludeTheseDependencies = Seq(
