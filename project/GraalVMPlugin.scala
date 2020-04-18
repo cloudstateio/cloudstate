@@ -29,6 +29,8 @@ object GraalVMPlugin extends AutoPlugin {
     )
     val graalVMContainerBuildImage =
       taskKey[Option[String]]("Docker image to use for the container to build the native-image in.")
+
+    val splitByJar = inputKey[Seq[File]]("")
   }
 
   import autoImport._
@@ -45,7 +47,8 @@ object GraalVMPlugin extends AutoPlugin {
       graalVMNativeImageOptions := Seq.empty,
       graalVMVersion := None,
       resourceDirectory in GraalVMNativeImage := sourceDirectory.value / "graal",
-      mainClass in GraalVMNativeImage := (mainClass in Compile).value
+      mainClass in GraalVMNativeImage := (mainClass in Compile).value,
+      splitByJar := splitByJarImpl.evaluated,
     ) ++ inConfig(GraalVMNativeImage)(scopedSettings) ++
     inConfig(Compile)(resourceGenerators += hocon2json)
 
@@ -307,4 +310,98 @@ object GraalVMPlugin extends AutoPlugin {
     artifactClassifier.filterNot(_.isEmpty).map("-" + _).getOrElse("") +
     ".jar"
 
+  val splitByJarImpl: Def.Initialize[InputTask[Seq[File]]] = Def.inputTask {
+    import sbt.complete._
+    import scala.collection.JavaConverters._
+    import com.typesafe.config._
+    val files = Parsers.spaceDelimited("<file(s)...>").parsed.map(file(_))
+    val resDir = (Compile / resourceDirectory).value
+    val cp1 = (LocalProject("proxy-core") / Compile / fullClasspath).value
+    val cp2 = (LocalProject("proxy-cassandra") / Compile / fullClasspath).value
+    val cp3 = (LocalProject("proxy-postgres") / Compile / fullClasspath).value
+    val cp = (cp1 ++ cp2 ++ cp3).distinct
+
+    def abort(s: String) = throw new MessageOnlyException(s)
+
+    val classLoaderToModuleId = cp.map { attributedJar =>
+      val moduleId = attributedJar.get(Keys.moduleID.key).get
+      val gid = moduleId.organization
+      val aid = moduleId.name
+      val jar = attributedJar.data
+      val parent = null //  ClassLoader.getSystemClassLoader
+      val cl = new java.net.URLClassLoader(s"CL-for-$jar", Array(jar.toURI.toURL), parent)
+      cl -> (gid, aid)
+    }
+
+    def loadCl(name: String) = classLoaderToModuleId.flatMap { case (cl, coords) =>
+      try {
+        cl.loadClass(name)
+        Some(coords)
+      }
+      catch {
+        case _: ClassNotFoundException => Nil
+        case _: NoClassDefFoundError   => Some(coords) // found but no definition found (wat)
+      }
+    }.distinct match {
+      case List(coords) => coords
+      case Nil          => abort(s"Unexpected name $name")
+      case coordss      => abort(s"Name $name found in multiple jars: $coordss")
+    }
+
+    val res = files.flatMap { f =>
+      val configValue = parseConfigValue(f)
+
+      val configListJ = configValue.atPath("root").getList("root")
+      val configList  = configListJ.asScala.toList
+
+      val configList2 = configList.map {
+        case x: ConfigObject => x
+        case x               => abort(s"Expected class ConfigObject (${x.getClass})")
+      }
+
+      val map = configList2.groupBy { obj =>
+        val name = obj.get("name").unwrapped() match {
+          case s: String => s
+          case x         => abort(s"Expected name: String (${x.getClass})")
+        }
+
+        name match {
+          case "float" | "int" | "long" | "short" | "void"  => "net.java.openjdk"  -> "base"
+          case s if s.startsWith("[")                       => "net.java.openjdk"  -> "base"
+          case s if s.startsWith("java.")                   => "net.java.openjdk"  -> "base"
+          case s if s.startsWith("sun.")                    => "net.java.openjdk"  -> "base"
+          case "akka.cluster.AutoDown"                      => "com.typesafe.akka" -> "akka-cluster"
+          case "akka.cluster.AutoDownBase"                  => "com.typesafe.akka" -> "akka-cluster"
+          case "akka.cluster.AutoDowning"                   => "com.typesafe.akka" -> "akka-cluster"
+          case s if s.startsWith("akka.dispatch.forkjoin.") => "com.typesafe.akka" -> "akka-actor"
+          case "akka.stream.impl.ActorRefSinkActor"         => "com.typesafe.akka" -> "akka-stream"
+          case _ => loadCl(name)
+        }
+      }
+
+      val renderOpts = ConfigRenderOptions.defaults().setComments(false).setOriginComments(false)
+
+      map.map { case ((gid, aid0), classes) =>
+        val aid = aid0.stripSuffix("_2.12")
+        val dest = resDir / s"META-INF/native-image/$gid/$aid/reflect-config.json.conf"
+        val list = ConfigValueFactory.fromIterable(classes.asJava)
+        val json = list.render(renderOpts)
+        IO.write(dest, json, append = true)
+        dest
+      }
+    }
+
+    res
+  }
+
+  private def parseConfigValue(f: File) = {
+    import com.typesafe.config._
+    import com.typesafe.config.impl.Parseable
+    val parseable = Parseable.newFile(f, ConfigParseOptions.defaults())
+    val parseValue = classOf[Parseable].getDeclaredMethod("parseValue")
+    parseValue.setAccessible(true) // from lightbend/config#460#issuecomment-285662952
+    val res = parseValue.invoke(parseable).asInstanceOf[ConfigValue]
+    // Not resolving (yet?) as it's only a config value, not a config (object).
+    res
+  }
 }
