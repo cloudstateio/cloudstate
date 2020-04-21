@@ -1,5 +1,10 @@
 [
   {
+    "name":"akka.cluster.ClusterActorRefProvider",
+    "allDeclaredConstructors":true,
+    "allPublicMethods":true
+  },
+  {
     "name":"akka.cluster.JoinSeedNodeProcess",
     "methods":[{"name":"<init>","parameterTypes":["scala.collection.immutable.IndexedSeq","akka.cluster.JoinConfigCompatChecker"]}]
   },

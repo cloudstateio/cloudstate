@@ -8,26 +8,25 @@ import scala.collection.JavaConverters._
 
 @AutomaticFeature
 final class AkkaActorRegisterFeature extends Feature {
-
+  val akkaActorClass = classOf[akka.actor.Actor]
   override def duringAnalysis(access: Feature.DuringAnalysisAccess) =
-    reachableSubtypes(access, access.findClassByName("akka.akka.Actor")).foreach { cls =>
-      for {
-        context <- getDeclaredField(cls, "context")
-        self <- getDeclaredField(cls, "self")
-      } {
-        RuntimeReflection.register(cls)
-        RuntimeReflection.register( /* finalIsWritable = */ true, context, self)
-        RuntimeReflection.register(cls.getDeclaredFields: _*)
-        RuntimeReflection.register(cls.getDeclaredConstructors: _*)
+    if (access.isReachable(akkaActorClass)) {
+      access.reachableSubtypes(akkaActorClass).iterator.asScala.filter(_ != null).foreach { subtype =>
+        if (subtype.getInterfaces.exists(_ == akkaActorClass)) {
+          for {
+            context <- getDeclaredField(subtype, "context")
+            self <- getDeclaredField(subtype, "self")
+          } {
+            RuntimeReflection.register(subtype)
+            RuntimeReflection.register( /* finalIsWritable = */ true, context, self)
+            //RuntimeReflection.register(subtype.getDeclaredFields: _*)
+            RuntimeReflection.register(subtype.getDeclaredConstructors: _*)
+          }
+        }
       }
     }
 
-  private def reachableSubtypes(access: QueryReachabilityAccess, cls: Class[_]) =
-    try access.reachableSubtypes(cls).asScala
-    catch { case _: NullPointerException => Nil }
-
   private def getDeclaredField(cls: Class[_], name: String) =
-    try Some(cls.getDeclaredField(name))
+    try Option(cls.getDeclaredField(name))
     catch { case _: NoSuchFieldException => None }
-
 }
