@@ -8,21 +8,18 @@ import scala.collection.JavaConverters._
 
 @AutomaticFeature
 final class AkkaSerializerRegisterFeature extends Feature {
-
+  val akkaSerializerClass = classOf[akka.serialization.Serializer]
   override def duringAnalysis(access: Feature.DuringAnalysisAccess) =
-    reachableSubtypes(access, access.findClassByName("akka.serialization.Serializer")).foreach { cls =>
-      getDeclaredConstructor(cls, classOf[akka.actor.ExtendedActorSystem]).foreach { ctor =>
-        RuntimeReflection.register(cls)
-        RuntimeReflection.register(ctor)
+    if (access.isReachable(akkaSerializerClass)) {
+      access.reachableSubtypes(akkaSerializerClass).iterator.asScala.filter(_ != null).foreach { subtype =>
+        try {
+          val ctor = subtype.getDeclaredConstructor(classOf[akka.actor.ExtendedActorSystem])
+          RuntimeReflection.register(subtype)
+          RuntimeReflection.register(ctor)
+        } catch {
+          case nsme: NoSuchMethodException =>
+          // Ignore?
+        }
       }
     }
-
-  private def reachableSubtypes(access: QueryReachabilityAccess, cls: Class[_]) =
-    try access.reachableSubtypes(cls).asScala
-    catch { case _: NullPointerException => Nil }
-
-  private def getDeclaredConstructor(cls: Class[_], parameterTypes: Class[_]*) =
-    try Some(cls.getDeclaredConstructor(parameterTypes: _*))
-    catch { case _: NoSuchMethodException => None }
-
 }

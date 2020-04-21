@@ -8,26 +8,24 @@ import scala.collection.JavaConverters._
 
 @AutomaticFeature
 final class ProtobufGeneratedMessageRegisterFeature extends Feature {
-
-  override def duringAnalysis(access: Feature.DuringAnalysisAccess) =
-    List(
-      "akka.protobuf.GeneratedMessage",
-      "akka.protobuf.GeneratedMessage$Builder",
-      "akka.protobuf.ProtocolMessageEnum",
-      "com.google.protobuf.GeneratedMessageV3",
-      "com.google.protobuf.GeneratedMessageV3$Builder",
-      "com.google.protobuf.ProtocolMessageEnum",
-      "scalapb.GeneratedMessage"
-    ).foreach { className =>
-      val cls = access.findClassByName(className)
-      if (cls != null) reachableSubtypes(access, cls).foreach { cls =>
-        RuntimeReflection.register(cls)
-        RuntimeReflection.register(cls.getMethods: _*)
-      }
+  val messageClasses = Vector(
+    classOf[akka.protobuf.GeneratedMessage],
+    classOf[akka.protobuf.GeneratedMessage.Builder[_]],
+    classOf[akka.protobuf.ProtocolMessageEnum],
+    classOf[com.google.protobuf.GeneratedMessageV3],
+    classOf[com.google.protobuf.GeneratedMessageV3.Builder[_]],
+    classOf[com.google.protobuf.ProtocolMessageEnum],
+    classOf[scalapb.GeneratedMessage]
+  )
+  override final def duringAnalysis(access: Feature.DuringAnalysisAccess) =
+    messageClasses.foreach { cls =>
+      if (access.isReachable(cls)) {
+        access.reachableSubtypes(cls).iterator.asScala.filter(_ != null) foreach {
+          case null => // Java…
+          case subtype =>
+            RuntimeReflection.register(subtype)
+            RuntimeReflection.register(subtype.getMethods: _*)
+        }
+      } else println("Could not register [" + cls.getName + "] because it was not found.")
     }
-
-  private def reachableSubtypes(access: QueryReachabilityAccess, cls: Class[_]) =
-    try access.reachableSubtypes(cls).asScala
-    catch { case _: NullPointerException => Nil }
-
 }
