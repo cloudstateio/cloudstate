@@ -49,7 +49,7 @@ def versionFmt(out: sbtdynver.GitDescribeOutput): String = {
 name := "cloudstate"
 
 val GrpcJavaVersion = "1.22.1"
-val GraalAkkaVersion = "0.4.1"
+val GraalAkkaVersion = "0.5.0"
 val AkkaVersion = "2.6.4"
 val AkkaHttpVersion = "10.1.11"
 val AkkaManagementVersion = "1.0.5"
@@ -58,7 +58,7 @@ val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
 val GraalVersion = "19.3.0"
-
+val DockerBaseImageVersion = "adoptopenjdk/openjdk8:debian"
 val svmGroupId = if (GraalVersion startsWith "19.2") "com.oracle.substratevm" else "org.graalvm.nativeimage"
 
 def excludeTheseDependencies = Seq(
@@ -209,6 +209,9 @@ def dockerSettings: Seq[Setting[_]] = Seq(
   dockerUpdateLatest := true,
   dockerRepository := sys.props.get("docker.registry"),
   dockerUsername := sys.props.get("docker.username").orElse(Some("cloudstateio")).filter(_ != ""),
+  dockerBaseImage := DockerBaseImageVersion,
+  // when using tags like latest, uncomment below line, so that local cache will not be used.
+  //  dockerBuildOptions += "--no-cache",
   dockerAlias := {
     val old = dockerAlias.value
     proxyDockerBuild.value match {
@@ -322,7 +325,6 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
         }
       }
     }.value,
-  dockerBaseImage := "bitnami/java:11-prod",
   // Need to make sure it has group execute permission
   // Note I think this is leading to quite large docker images :(
   dockerChmodType := {
@@ -374,7 +376,6 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
   ).mkString("=", ",", ""),
   "--initialize-at-run-time=" +
   Seq(
-    "akka.protobuf.DescriptorProtos",
     // We want to delay initialization of these to load the config at runtime
     "com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder",
     "com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder",
@@ -601,7 +602,6 @@ lazy val operator = (project in file("operator"))
         "ch.qos.logback" % "logback-classic" % "1.2.3" // Doesn't work well with SubstrateVM, use "org.slf4j"           % "slf4j-simple"     % "1.7.26" instead
       ),
     dockerSettings,
-    dockerBaseImage := "adoptopenjdk/openjdk8",
     dockerExposedPorts := Nil,
     compileK8sDescriptors := {
       val tag = version.value
@@ -765,7 +765,6 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
   .settings(
     name := "java-shopping-cart",
     dockerSettings,
-    dockerBaseImage := "adoptopenjdk/openjdk8",
     mainClass in Compile := Some("io.cloudstate.samples.shoppingcart.Main"),
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
@@ -796,7 +795,6 @@ lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
   .settings(
     name := "java-pingpong",
     dockerSettings,
-    dockerBaseImage := "adoptopenjdk/openjdk8",
     mainClass in Compile := Some("io.cloudstate.samples.pingpong.Main"),
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
