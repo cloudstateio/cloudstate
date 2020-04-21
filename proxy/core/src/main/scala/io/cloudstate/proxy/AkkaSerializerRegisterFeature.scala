@@ -8,9 +8,10 @@ import scala.collection.JavaConverters._
 
 @AutomaticFeature
 final class AkkaSerializerRegisterFeature extends Feature {
-  final val akkaSerializerClass = classOf[akka.serialization.Serializer]
-  override final def duringAnalysis(access: Feature.DuringAnalysisAccess) =
-    if (access.isReachable(akkaSerializerClass)) {
+  override final def duringAnalysis(access: Feature.DuringAnalysisAccess): Unit = {
+    val akkaSerializerClass =
+      access.findClassByName(classOf[akka.serialization.Serializer].getName) // We do this to get compile-time safety of the classes, and allow graalvm to resolve their names
+    if (akkaSerializerClass != null && access.isReachable(akkaSerializerClass)) {
       for {
         subtype <- access.reachableSubtypes(akkaSerializerClass).iterator.asScala
         if subtype != null
@@ -20,6 +21,8 @@ final class AkkaSerializerRegisterFeature extends Feature {
         RuntimeReflection.register(ctor)
       }
     }
+  }
+
   private[this] final def getDeclaredConstructor(cls: Class[_]) =
     try Option(cls.getDeclaredConstructor(classOf[akka.actor.ExtendedActorSystem]))
     catch { case _: NoSuchMethodException => None }

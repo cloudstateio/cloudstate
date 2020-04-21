@@ -8,21 +8,24 @@ import scala.collection.JavaConverters._
 
 @AutomaticFeature
 final class AkkaActorRegisterFeature extends Feature {
-  final val akkaActorClass = classOf[akka.actor.Actor]
-  override final def duringAnalysis(access: Feature.DuringAnalysisAccess) =
-    if (access.isReachable(akkaActorClass)) {
+  override final def duringAnalysis(access: Feature.DuringAnalysisAccess): Unit = {
+    val akkaActorClass =
+      access.findClassByName(classOf[akka.actor.Actor].getName) // We do this to get compile-time safety of the classes, and allow graalvm to resolve their names
+    if (akkaActorClass != null && access.isReachable(akkaActorClass)) {
       for {
         subtype <- access.reachableSubtypes(akkaActorClass).iterator.asScala
-        if subtype != null && subtype.getInterfaces.exists(_ == akkaActorClass)
+        if subtype != null
+        _ = RuntimeReflection.register(subtype)
+        _ = RuntimeReflection.register(subtype.getDeclaredConstructors: _*)
+        //_ = RuntimeReflection.register(subtype.getDeclaredFields: _*)
+        if subtype.getInterfaces.exists(_ == akkaActorClass)
         context <- getDeclaredField(subtype, "context")
         self <- getDeclaredField(subtype, "self")
       } {
-        RuntimeReflection.register(subtype)
         RuntimeReflection.register( /* finalIsWritable = */ true, context, self)
-        //RuntimeReflection.register(subtype.getDeclaredFields: _*)
-        RuntimeReflection.register(subtype.getDeclaredConstructors: _*)
       }
     }
+  }
 
   private[this] final def getDeclaredField(cls: Class[_], name: String) =
     try Option(cls.getDeclaredField(name))

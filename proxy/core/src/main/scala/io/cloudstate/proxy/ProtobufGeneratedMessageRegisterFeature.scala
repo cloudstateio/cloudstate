@@ -16,11 +16,12 @@ final class ProtobufGeneratedMessageRegisterFeature extends Feature {
     classOf[com.google.protobuf.GeneratedMessageV3.Builder[_]],
     classOf[com.google.protobuf.ProtocolMessageEnum],
     classOf[scalapb.GeneratedMessage]
-  )
-  override final def duringAnalysis(access: Feature.DuringAnalysisAccess) =
+  ).map(_.getName) // We do this to get compile-time safety of the classes, and allow graalvm to resolve their names
+  override final def duringAnalysis(access: Feature.DuringAnalysisAccess): Unit =
     for {
-      cls <- messageClasses.iterator
-      if access.isReachable(cls)
+      className <- messageClasses.iterator
+      cls = access.findClassByName(className)
+      if cls != null && access.isReachable(cls)
       subtype <- access.reachableSubtypes(cls).iterator.asScala
       if subtype != null
     } {
