@@ -374,7 +374,7 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
     "akka.dispatch.affinity",
     "akka.util",
     "com.google.Protobuf",
-    "java.lang.ref.SoftReference",      // https://github.com/oracle/graal/issues/2345
+    "java.lang.ref.SoftReference", // https://github.com/oracle/graal/issues/2345
     "java.lang.invoke.MethodHandleImpl" // https://github.com/oracle/graal/issues/2345
   ).mkString("=", ",", ""),
   "--initialize-at-run-time=" +
