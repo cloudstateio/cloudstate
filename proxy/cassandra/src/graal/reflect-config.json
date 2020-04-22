@@ -38,9 +38,7 @@
   "allDeclaredConstructors":true
 },
 {
-  "name":"akka.persistence.journal.AsyncWriteJournal$Resequencer",
-  "allDeclaredFields":true,
-  "methods":[{"name":"<init>","parameterTypes":[] }]
+  "name":"akka.persistence.journal.AsyncWriteJournal$Resequencer"
 },
 {
   "name":"com.datastax.driver.core.Connection$Dispatcher",

@@ -9,9 +9,7 @@
   "name":"akka.cluster.pubsub.DistributedPubSubMessage"
 },
 {
-  "name":"akka.persistence.journal.AsyncWriteJournal$Resequencer",
-  "allDeclaredFields":true,
-  "methods":[{"name":"<init>","parameterTypes":[] }]
+  "name":"akka.persistence.journal.AsyncWriteJournal$Resequencer"
 },
 {
   "name":"akka.persistence.journal.inmem.InmemJournal",
@@ -95,11 +93,6 @@
 {
   "name":"akka.persistence.jdbc.util.DefaultSlickDatabaseProvider",
   "methods":[{"name":"<init>","parameterTypes":["akka.actor.ActorSystem"] }]
-},
-{
-  "name":"akka.persistence.journal.AsyncWriteJournal$Resequencer",
-  "allDeclaredFields":true,
-  "methods":[{"name":"<init>","parameterTypes":[] }]
 },
 {
   "name":"akka.persistence.journal.ReplayFilter",

@@ -359,7 +359,7 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
   "-H:-PrintUniverse", // if "+" prints out all classes which are included
   "-H:-NativeArchitecture", // if "+" Compiles the native image to customize to the local CPU arch
   "-H:Class=" + "io.cloudstate.proxy.CloudStateProxyMain",
-  "-J-Xmx10g", // native-image is hungry
+  //"-J-Xmx10g", // native-image is hungry
   "--verbose",
   //"--no-server", // Uncomment to not use the native-image build server, to avoid potential cache problems with builds
   //"--debug-attach=5005", // Debugger makes a ton of sense to use to debug SubstrateVM
