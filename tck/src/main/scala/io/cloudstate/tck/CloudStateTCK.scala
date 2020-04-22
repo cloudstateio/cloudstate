@@ -59,65 +59,9 @@ import io.cloudstate.protocol.event_sourced.{
   EventSourcedStreamIn,
   EventSourcedStreamOut
 }
+import io.grpc.netty.shaded.io.grpc.netty.NegotiationType
 
 object CloudStateTCK {
-  private[this] final val PROXY = "proxy"
-  private[this] final val FRONTEND = "frontend"
-  private[this] final val TCK = "tck"
-  private[this] final val HOSTNAME = "hostname"
-  private[this] final val PORT = "port"
-  private[this] final val NAME = "name"
-
-  final case class ProcSpec private (
-      hostname: String,
-      port: Int,
-      directory: File,
-      command: Array[String],
-      stopCommand: Option[Array[String]],
-      envVars: JMap[String, Object]
-  ) {
-    def this(config: Config) = this(
-      hostname = config.getString(HOSTNAME),
-      port = config.getInt(PORT),
-      directory = new File(config.getString("directory")),
-      command = config.getList("command").unwrapped.toArray.map(_.toString),
-      stopCommand = Some(config.getList("stop-command").unwrapped().toArray.map(_.toString)).filter(_.nonEmpty),
-      envVars = config.getConfig("env-vars").root.unwrapped
-    )
-    def validate(): Unit = {
-      require(directory.exists, s"Configured directory (${directory}) does not exist")
-      require(directory.isDirectory, s"Configured directory (${directory}) is not a directory")
-      require(command.nonEmpty, "Configured command missing")
-    }
-  }
-
-  final case class Configuration private (name: String,
-                                          proxy: ProcSpec,
-                                          frontend: ProcSpec,
-                                          tckHostname: String,
-                                          tckPort: Int) {
-
-    def validate(): Unit = {
-      proxy.validate()
-      frontend.validate()
-      // FIXME implement
-    }
-  }
-
-  object Configuration {
-    def apply(config: Config): Configuration = {
-      val reference = ConfigFactory.defaultReference().getConfig("cloudstate-tck")
-      val c = config.withFallback(reference)
-      Configuration(
-        name = c.getString(NAME),
-        proxy = new ProcSpec(c.getConfig(PROXY)),
-        frontend = new ProcSpec(c.getConfig(FRONTEND)),
-        tckHostname = c.getString(TCK + "." + HOSTNAME),
-        tckPort = c.getInt(TCK + "." + PORT)
-      )
-    }
-  }
-
   final val noWait = 0.seconds
 
   // FIXME add interception to enable asserting exchanges
@@ -172,13 +116,13 @@ object CloudStateTCK {
   )
 }
 
-class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
+class CloudStateTCK(private[this] final val config: TckConfiguration)
     extends AsyncWordSpec
     with MustMatchers
     with BeforeAndAfterAll {
   import CloudStateTCK._
 
-  private[this] final val system = ActorSystem("CloudStateTCK")
+  private[this] final val system = ActorSystem("CloudStateTCK", ConfigFactory.load("tck"))
   private[this] final val mat = ActorMaterializer()(system)
   private[this] final val discoveryFromBackend = TestProbe("discoveryFromBackend")(system)
   private[this] final val discoveryFromFrontend = TestProbe("discoveryFromFrontend")(system)
@@ -187,25 +131,8 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
   @volatile private[this] final var shoppingClient: ShoppingCartClient = _
   @volatile private[this] final var entityDiscoveryClient: EntityDiscoveryClient = _
   @volatile private[this] final var eventSourcedClient: EventSourcedClient = _
-  @volatile private[this] final var backendProcess: Process = _
-  @volatile private[this] final var frontendProcess: Process = _
+  @volatile private[this] final var processes: TckProcesses = _
   @volatile private[this] final var tckProxy: ServerBinding = _
-
-  def process(ps: ProcSpec): ProcessBuilder = {
-    val localhost = InetAddress.getLocalHost.getHostAddress
-    val pb =
-      new ProcessBuilder(ps.command.map(_.replace("%LOCALHOST%", localhost)): _*).inheritIO().directory(ps.directory)
-
-    val env = pb.environment
-
-    ps.envVars.entrySet.forEach { e =>
-      e.getValue match {
-        case value: String => env.put(e.getKey, value)
-        case _ => // Ignore
-      }
-    }
-    pb
-  }
 
   def buildTCKProxy(entityDiscovery: EntityDiscovery, eventSourced: EventSourced): Future[ServerBinding] = {
     implicit val s = system
@@ -213,8 +140,7 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     Http().bindAndHandleAsync(
       handler = EntityDiscoveryHandler.partial(entityDiscovery) orElse EventSourcedHandler.partial(eventSourced),
       interface = config.tckHostname,
-      port = config.tckPort,
-      connectionContext = HttpConnectionContext(http2 = UseHttp2.Always)
+      port = config.tckPort
     )
   }
 
@@ -222,11 +148,8 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
 
     config.validate()
 
-    val fp = process(config.frontend).start()
-
-    require(fp.isAlive())
-
-    frontendProcess = fp
+    processes = TckProcesses.create(config)
+    processes.frontend.start()
 
     val clientSettings =
       GrpcClientSettings.connectToServiceAt(config.frontend.hostname, config.frontend.port)(system).withTls(false)
@@ -254,11 +177,7 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
     Await.ready(attempt(entityDiscoveryClient.discover(proxyInfo), 4.seconds, 10)(system.dispatcher, system.scheduler),
                 1.minute)
 
-    val bp = process(config.proxy).start()
-
-    require(bp.isAlive())
-
-    backendProcess = bp
+    processes.proxy.start()
 
     val sc = ShoppingCartClient(
       GrpcClientSettings.connectToServiceAt(config.proxy.hostname, config.proxy.port)(system).withTls(false)
@@ -268,20 +187,13 @@ class CloudStateTCK(private[this] final val config: CloudStateTCK.Configuration)
   }
 
   override final def afterAll(): Unit = {
-    def destroy(spec: ProcSpec)(p: Process): Unit = while (p.isAlive) {
-      spec.stopCommand match {
-        case Some(stopCommand) => new ProcessBuilder(stopCommand: _*).inheritIO().directory(spec.directory).start()
-        case None => p.destroy()
-      }
-      p.waitFor(5, TimeUnit.SECONDS) || {
-        p.destroyForcibly()
-        true // todo revisit this
-      } // todo make configurable
-    }
     try Option(shoppingClient).foreach(c => Await.result(c.close(), 10.seconds))
-    finally try Option(backendProcess).foreach(destroy(config.proxy))
-    finally Seq(entityDiscoveryClient, eventSourcedClient).foreach(c => Await.result(c.close(), 10.seconds))
-    try Option(frontendProcess).foreach(destroy(config.frontend))
+    finally try {
+      Option(processes).foreach(_.proxy.stop())
+    } finally {
+      Seq(entityDiscoveryClient, eventSourcedClient).foreach(c => Await.result(c.close(), 10.seconds))
+    }
+    try Option(processes).foreach(_.frontend.stop())
     finally Await.ready(tckProxy.unbind().transformWith(_ => system.terminate())(system.dispatcher), 30.seconds)
   }
 
