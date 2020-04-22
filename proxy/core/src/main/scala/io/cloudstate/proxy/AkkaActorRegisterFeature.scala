@@ -5,6 +5,7 @@ import org.graalvm.nativeimage.hosted.Feature.QueryReachabilityAccess
 import org.graalvm.nativeimage.hosted.{Feature, RuntimeReflection}
 
 import scala.collection.JavaConverters._
+import java.lang.reflect.Modifier.isAbstract
 
 @AutomaticFeature
 final class AkkaActorRegisterFeature extends Feature {
@@ -22,7 +23,7 @@ final class AkkaActorRegisterFeature extends Feature {
     if (akkaActorClass != null && access.isReachable(akkaActorClass)) {
       for {
         subtype <- access.reachableSubtypes(akkaActorClass).iterator.asScala
-        if subtype != null && !subtype.isInterface && !cache(subtype.getName)
+        if subtype != null && !subtype.isInterface && !isAbstract(subtype.getModifiers) && !cache(subtype.getName)
         _ = println("Automatically registering actor class for reflection purposes: " + subtype.getName)
         _ = RuntimeReflection.register(subtype)
         _ = RuntimeReflection.register(subtype.getDeclaredConstructors: _*)

@@ -8,6 +8,7 @@ import scala.collection.JavaConverters._
 
 @AutomaticFeature
 final class ProtobufGeneratedMessageRegisterFeature extends Feature {
+  private[this] final var cache: Set[String] = Set.empty
   final val messageClasses = Vector(
     classOf[akka.protobuf.GeneratedMessage],
     classOf[akka.protobuf.GeneratedMessage.Builder[_]],
@@ -21,11 +22,11 @@ final class ProtobufGeneratedMessageRegisterFeature extends Feature {
     for {
       className <- messageClasses.iterator
       cls = access.findClassByName(className)
-      if cls != null && access.isReachable(cls)
-      subtype <- access.reachableSubtypes(cls).iterator.asScala
-      if subtype != null
+      if cls != null && access.isReachable(cls) && !cache(cls.getName)
+      _ = println("Automatically registering protobuf message class for reflection purposes: " + cls.getName)
     } {
-      RuntimeReflection.register(subtype)
-      RuntimeReflection.register(subtype.getMethods: _*)
+      RuntimeReflection.register(cls)
+      RuntimeReflection.register(cls.getMethods: _*)
+      cache += cls.getName
     }
 }
