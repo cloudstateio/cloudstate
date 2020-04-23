@@ -51,7 +51,7 @@ object GraalVMPlugin extends AutoPlugin {
 
   private lazy val scopedSettings = Seq[Setting[_]](
     resourceDirectories := Seq(resourceDirectory.value),
-    includeFilter := "*",
+    includeFilter := "*.json",
     resources := resourceDirectories.value.descendantsExcept(includeFilter.value, excludeFilter.value).get,
     graalVMContainerBuildImage := Def.taskDyn {
         graalVMVersion.value match {
@@ -111,7 +111,7 @@ object GraalVMPlugin extends AutoPlugin {
   )
 
   private val hocon2json = Def.task {
-    val dirs = unmanagedResourceDirectories.value
+    val dirs = List((resourceDirectory in GraalVMNativeImage).value)
     val files = dirs.descendantsExcept("*.json.conf", HiddenFileFilter).get()
     val destDir = resourceManaged.value
     (files --- dirs).pair(Path.relativeTo(dirs)).map {
