@@ -58,7 +58,7 @@ val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
 val GraalVersion = "20.0.0"
-val DockerBaseImageVersion = "adoptopenjdk/openjdk8:debian"
+val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debian"
 val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
 
 def excludeTheseDependencies = Seq(
@@ -763,7 +763,6 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
   .settings(
     name := "java-shopping-cart",
     dockerSettings,
-    dockerBaseImage := "adoptopenjdk/openjdk11:debian",
     mainClass in Compile := Some("io.cloudstate.samples.shoppingcart.Main"),
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
