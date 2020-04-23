@@ -8,26 +8,36 @@ import scala.collection.JavaConverters._
 
 @AutomaticFeature
 final class AkkaActorRegisterFeature extends Feature {
+  private[this] final var cache: Set[String] =
+    Set(
+      // FIXME the following are configured in akka-graal-config, remove this when migrating from it
+      "akka.io.TcpConnection",
+      "akka.io.TcpListener",
+      "akka.stream.impl.fusing.ActorGraphInterpreter"
+    )
 
-  override def duringAnalysis(access: Feature.DuringAnalysisAccess) =
-    reachableSubtypes(access, access.findClassByName("akka.akka.Actor")).foreach { cls =>
+  override final def duringAnalysis(access: Feature.DuringAnalysisAccess): Unit = {
+    val akkaActorClass =
+      access.findClassByName(classOf[akka.actor.Actor].getName) // We do this to get compile-time safety of the classes, and allow graalvm to resolve their names
+    if (akkaActorClass != null && access.isReachable(akkaActorClass)) {
       for {
-        context <- getDeclaredField(cls, "context")
-        self <- getDeclaredField(cls, "self")
+        subtype <- access.reachableSubtypes(akkaActorClass).iterator.asScala
+        if subtype != null && !subtype.isInterface && !cache(subtype.getName)
+        _ = println("Automatically registering actor class for reflection purposes: " + subtype.getName)
+        _ = RuntimeReflection.register(subtype)
+        _ = RuntimeReflection.register(subtype.getDeclaredConstructors: _*)
+        _ = RuntimeReflection.register(subtype.getDeclaredFields: _*)
+        _ = cache += subtype.getName
+        if subtype.getInterfaces.exists(_ == akkaActorClass)
+        context <- getDeclaredField(subtype, "context")
+        self <- getDeclaredField(subtype, "self")
       } {
-        RuntimeReflection.register(cls)
         RuntimeReflection.register( /* finalIsWritable = */ true, context, self)
-        RuntimeReflection.register(cls.getDeclaredFields: _*)
-        RuntimeReflection.register(cls.getDeclaredConstructors: _*)
       }
     }
+  }
 
-  private def reachableSubtypes(access: QueryReachabilityAccess, cls: Class[_]) =
-    try access.reachableSubtypes(cls).asScala
-    catch { case _: NullPointerException => Nil }
-
-  private def getDeclaredField(cls: Class[_], name: String) =
-    try Some(cls.getDeclaredField(name))
+  private[this] final def getDeclaredField(cls: Class[_], name: String) =
+    try Option(cls.getDeclaredField(name))
     catch { case _: NoSuchFieldException => None }
-
 }
