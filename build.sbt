@@ -762,6 +762,7 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
   .settings(
     name := "java-shopping-cart",
     dockerSettings,
+    dockerBaseImage := "adoptopenjdk/openjdk11:debian",
     mainClass in Compile := Some("io.cloudstate.samples.shoppingcart.Main"),
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
