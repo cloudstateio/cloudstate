@@ -30,8 +30,7 @@ final class AkkaActorRegisterFeature extends Feature {
         _ = RuntimeReflection.register(subtype.getDeclaredConstructors: _*)
         _ = RuntimeReflection.register(subtype.getDeclaredFields: _*)
         if subtype.getInterfaces.exists(_ == akkaActorClass)
-        context <- getDeclaredField(subtype, "context")
-        self <- getDeclaredField(subtype, "self")
+        (context, self) <- getDeclaredField(subtype, "context") zip getDeclaredField(subtype, "self")
       } {
         RuntimeReflection.register( /* finalIsWritable = */ true, context, self)
       }
