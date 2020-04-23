@@ -6,23 +6,23 @@ import org.graalvm.nativeimage.hosted.{Feature, RuntimeReflection}
 
 import scala.collection.JavaConverters._
 import java.lang.reflect.Modifier.isAbstract
+import java.util.concurrent.ConcurrentHashMap
 
 @AutomaticFeature
 final class AkkaSerializerRegisterFeature extends Feature {
-  private[this] final var cache: Set[String] = Set.empty
+  private[this] final val cache = ConcurrentHashMap.newKeySet[String]
   override final def duringAnalysis(access: Feature.DuringAnalysisAccess): Unit = {
     val akkaSerializerClass =
       access.findClassByName(classOf[akka.serialization.Serializer].getName) // We do this to get compile-time safety of the classes, and allow graalvm to resolve their names
     if (akkaSerializerClass != null && access.isReachable(akkaSerializerClass)) {
       for {
         subtype <- access.reachableSubtypes(akkaSerializerClass).iterator.asScala
-        if subtype != null && !subtype.isInterface && !isAbstract(subtype.getModifiers) && !cache(subtype.getName)
+        if subtype != null && !subtype.isInterface && !isAbstract(subtype.getModifiers) && cache.add(subtype.getName)
         ctor <- getDeclaredConstructor(subtype)
         _ = println("Automatically registering serializer class for reflection purposes: " + subtype.getName)
       } {
         RuntimeReflection.register(subtype)
         RuntimeReflection.register(ctor)
-        cache += subtype.getName
       }
     }
   }
