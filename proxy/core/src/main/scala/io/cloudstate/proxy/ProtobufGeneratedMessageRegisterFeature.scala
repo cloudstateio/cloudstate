@@ -8,26 +8,25 @@ import scala.collection.JavaConverters._
 
 @AutomaticFeature
 final class ProtobufGeneratedMessageRegisterFeature extends Feature {
-
-  override def duringAnalysis(access: Feature.DuringAnalysisAccess) =
-    List(
-      "akka.protobuf.GeneratedMessage",
-      "akka.protobuf.GeneratedMessage$Builder",
-      "akka.protobuf.ProtocolMessageEnum",
-      "com.google.protobuf.GeneratedMessageV3",
-      "com.google.protobuf.GeneratedMessageV3$Builder",
-      "com.google.protobuf.ProtocolMessageEnum",
-      "scalapb.GeneratedMessage"
-    ).foreach { className =>
-      val cls = access.findClassByName(className)
-      if (cls != null) reachableSubtypes(access, cls).foreach { cls =>
-        RuntimeReflection.register(cls)
-        RuntimeReflection.register(cls.getMethods: _*)
-      }
+  private[this] final var cache: Set[String] = Set.empty
+  final val messageClasses = Vector(
+    classOf[akka.protobuf.GeneratedMessage],
+    classOf[akka.protobuf.GeneratedMessage.Builder[_]],
+    classOf[akka.protobuf.ProtocolMessageEnum],
+    classOf[com.google.protobuf.GeneratedMessageV3],
+    classOf[com.google.protobuf.GeneratedMessageV3.Builder[_]],
+    classOf[com.google.protobuf.ProtocolMessageEnum],
+    classOf[scalapb.GeneratedMessage]
+  ).map(_.getName) // We do this to get compile-time safety of the classes, and allow graalvm to resolve their names
+  override final def duringAnalysis(access: Feature.DuringAnalysisAccess): Unit =
+    for {
+      className <- messageClasses.iterator
+      cls = access.findClassByName(className)
+      if cls != null && access.isReachable(cls) && !cache(cls.getName)
+      _ = println("Automatically registering protobuf message class for reflection purposes: " + cls.getName)
+    } {
+      RuntimeReflection.register(cls)
+      RuntimeReflection.register(cls.getMethods: _*)
+      cache += cls.getName
     }
-
-  private def reachableSubtypes(access: QueryReachabilityAccess, cls: Class[_]) =
-    try access.reachableSubtypes(cls).asScala
-    catch { case _: NullPointerException => Nil }
-
 }
