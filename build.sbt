@@ -59,6 +59,7 @@ val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
 val GraalVersion = "20.0.0"
 val DockerBaseImageVersion = "adoptopenjdk/openjdk8:debian"
+val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
 
 def excludeTheseDependencies = Seq(
   ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
@@ -337,7 +338,7 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   dockerEntrypoint := {
     val old = dockerEntrypoint.value
     val withLibraryPath = if (nativeImageDockerBuild.value) {
-      old :+ "-Djava.library.path=/opt/bitnami/java/lib"
+      old :+ s"-Djava.library.path=${DockerBaseImageJavaLibraryPath}"
     } else old
     proxyDockerBuild.value match {
       case Some((_, Some(configResource))) => withLibraryPath :+ s"-Dconfig.resource=$configResource"
@@ -823,7 +824,6 @@ lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart")
   .settings(
     name := "scala-shopping-cart",
     dockerSettings,
-    dockerBaseImage := "adoptopenjdk/openjdk8",
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`scala-support`, Compile)).value,
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
