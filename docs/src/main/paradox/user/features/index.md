@@ -55,7 +55,7 @@ A command is a message received by a user function. Commands may come from outsi
 
 ### Entity
 
-A @ref:[User function](#user-function) implements one or more entities. An entity is conceptually equivalent to a class, or a type of state. An entity will have multiple @ref:[instances](#entity-instance) of it which can handle commands. For example, a user function may implement a chat room entity, encompassing the logic associated with chat rooms, and a particular chat room may be an instance of that entity, containing a list of the users currently in the room and a history of the messages sent to it. Each entity has a particular @ref:[Entity type](#entity-type), which defines how the entities' state is persisted, shared, and what its capabilities are.
+A @ref:[User function](#user-function) implements one or more entities. An entity is conceptually equivalent to a class, or a type of state. An entity will have multiple @ref:[instances](#entity-instance) of it which can handle commands. For example, a user function may implement a chat room entity, encompassing the logic associated with chat rooms, and a particular chat room may be an instance of that entity, containing a list of the users currently in the room and a history of the messages sent to it. Each entity has a particular @ref:[Entity type](#entity-type), which defines how the entity's state is persisted, shared, and what its capabilities are.
 
 #### Entity instance
 
