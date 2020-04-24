@@ -29,7 +29,7 @@ Changes to the config map will be picked up immediately by the operator, and if 
 
 ### Configuring namespaces to watch
 
-The namespaces that the operator should watch are configured using the `cloudstate.operator.watch.namespaces` list. If any of the namespaces in the list is `*`, then all namespaces will be watched. Otherwise, just the namespaces specified in the list are watched. To watch the namespaces `my-namespcae-1` and `my-namespace-2`, it can be configured like so:
+The namespaces that the operator should watch are configured using the `cloudstate.operator.watch.namespaces` list. If any of the namespaces in the list is `*`, then all namespaces will be watched. Otherwise, just the namespaces specified in the list are watched. To watch the namespaces `my-namespace-1` and `my-namespace-2`, it can be configured like so:
 
 ```hocon
 cloudstate.operator.watch.namespaces = ["my-namespace-1", "my-namespace-2"]
