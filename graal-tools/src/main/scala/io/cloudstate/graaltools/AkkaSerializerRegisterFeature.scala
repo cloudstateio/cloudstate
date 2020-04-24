@@ -1,4 +1,4 @@
-package io.cloudstate.proxy
+package io.cloudstate.graaltools
 
 import com.oracle.svm.core.annotate.AutomaticFeature
 import org.graalvm.nativeimage.hosted.Feature.QueryReachabilityAccess
