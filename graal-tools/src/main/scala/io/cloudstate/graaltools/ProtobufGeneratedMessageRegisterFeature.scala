@@ -23,10 +23,12 @@ final class ProtobufGeneratedMessageRegisterFeature extends Feature {
     for {
       className <- messageClasses.iterator
       cls = access.findClassByName(className)
-      if cls != null && access.isReachable(cls) && cache.add(cls.getName)
-      _ = println("Automatically registering protobuf message class for reflection purposes: " + cls.getName)
+      if cls != null && access.isReachable(cls)
+      subtype <- access.reachableSubtypes(cls).iterator.asScala.filter(_ != null)
+      if subtype != null && cache.add(subtype.getName)
+      _ = println("Automatically registering protobuf message class for reflection purposes: " + subtype.getName)
     } {
-      RuntimeReflection.register(cls)
-      RuntimeReflection.register(cls.getMethods: _*)
+      RuntimeReflection.register(subtype)
+      RuntimeReflection.register(subtype.getMethods: _*)
     }
 }
