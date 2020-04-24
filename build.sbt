@@ -50,16 +50,16 @@ name := "cloudstate"
 
 val GrpcJavaVersion = "1.22.1"
 val GraalAkkaVersion = "0.5.0"
-val AkkaVersion = "2.6.4"
+val AkkaVersion = "2.5.31"
 val AkkaHttpVersion = "10.1.11"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
-val GraalVersion = "19.3.0"
-val DockerBaseImageVersion = "adoptopenjdk/openjdk8:debian"
-val svmGroupId = if (GraalVersion startsWith "19.2") "com.oracle.substratevm" else "org.graalvm.nativeimage"
+val GraalVersion = "20.0.0"
+val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debian"
+val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
 
 def excludeTheseDependencies = Seq(
   ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
@@ -338,7 +338,7 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   dockerEntrypoint := {
     val old = dockerEntrypoint.value
     val withLibraryPath = if (nativeImageDockerBuild.value) {
-      old :+ "-Djava.library.path=/opt/bitnami/java/lib"
+      old :+ s"-Djava.library.path=${DockerBaseImageJavaLibraryPath}"
     } else old
     proxyDockerBuild.value match {
       case Some((_, Some(configResource))) => withLibraryPath :+ s"-Dconfig.resource=$configResource"
@@ -360,9 +360,11 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
   "-H:-PrintUniverse", // if "+" prints out all classes which are included
   "-H:-NativeArchitecture", // if "+" Compiles the native image to customize to the local CPU arch
   "-H:Class=" + "io.cloudstate.proxy.CloudStateProxyMain",
+  //"-J-Xmx10g", // native-image is hungry
   "--verbose",
   //"--no-server", // Uncomment to not use the native-image build server, to avoid potential cache problems with builds
-  //"--report-unsupported-elements-at-runtime", // Hopefully a self-explanatory flag
+  //"--debug-attach=5005", // Debugger makes a ton of sense to use to debug SubstrateVM
+  "--report-unsupported-elements-at-runtime", // Hopefully a self-explanatory flag FIXME comment this option out once AffinityPool is gone
   "--enable-url-protocols=http,https",
   "--allow-incomplete-classpath",
   "--no-fallback",
@@ -372,7 +374,9 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
     "scala",
     "akka.dispatch.affinity",
     "akka.util",
-    "com.google.Protobuf"
+    "com.google.Protobuf",
+    "java.lang.ref.SoftReference", // https://github.com/oracle/graal/issues/2345
+    "java.lang.invoke.MethodHandleImpl" // https://github.com/oracle/graal/issues/2345
   ).mkString("=", ",", ""),
   "--initialize-at-run-time=" +
   Seq(
@@ -411,9 +415,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
         // Since we exclude Aeron, we also exclude its transitive Agrona dependency, so we need to manually add it HERE
         "org.agrona" % "agrona" % "0.9.29",
-        // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        svmGroupId % "svm" % GraalVersion % "provided", // Only needed for compilation
+        "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided", // Only needed for compilation
 
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
@@ -502,9 +504,7 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
           (excludeTheseDependencies :+ ExclusionRule("com.github.jnr")): _* // Can't native-image this, so we don't need this either
         ),
         "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test,
-        // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        svmGroupId % "svm" % GraalVersion % "provided", // Only needed for compilation
+        "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided", // Only needed for compilation
 
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
@@ -539,9 +539,7 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
     name := "cloudstate-proxy-postgres",
     libraryDependencies ++= Seq(
         "org.postgresql" % "postgresql" % "42.2.6",
-        // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        svmGroupId % "svm" % GraalVersion % "provided", // Only needed for compilation
+        "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided", // Only needed for compilation
 
         // Adds configuration to let Graal Native Image (SubstrateVM) work
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
@@ -825,7 +823,6 @@ lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart")
   .settings(
     name := "scala-shopping-cart",
     dockerSettings,
-    dockerBaseImage := "adoptopenjdk/openjdk8",
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`scala-support`, Compile)).value,
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"

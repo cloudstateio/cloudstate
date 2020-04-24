@@ -41,7 +41,7 @@ import io.cloudstate.proxy.eventing.{Emitter, Emitters, EventingManager, Eventin
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
 import io.cloudstate.proxy.protobuf.Types
-import io.grpc.Status
+import io.grpc.{Status, StatusRuntimeException}
 import org.slf4j.{Logger, LoggerFactory}
 
 object Serve {
@@ -56,6 +56,7 @@ object Serve {
   val mapRequestFailureExceptions: ActorSystem => PartialFunction[Throwable, Status] = { _ =>
     {
       case CommandException(msg) => Status.UNKNOWN.augmentDescription(msg)
+      case e: StatusRuntimeException => e.getStatus
     }
   }
 
