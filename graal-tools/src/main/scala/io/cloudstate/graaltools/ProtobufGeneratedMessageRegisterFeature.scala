@@ -24,11 +24,19 @@ final class ProtobufGeneratedMessageRegisterFeature extends Feature {
       className <- messageClasses.iterator
       cls = access.findClassByName(className)
       if cls != null && access.isReachable(cls)
-      subtype <- access.reachableSubtypes(cls).iterator.asScala.filter(_ != null)
+      subtype <- access.reachableSubtypes(cls).iterator.asScala
       if subtype != null && cache.add(subtype.getName)
-      _ = println("Automatically registering protobuf message class for reflection purposes: " + subtype.getName)
     } {
       RuntimeReflection.register(subtype)
-      RuntimeReflection.register(subtype.getMethods: _*)
+      subtype.getPackage.getName match {
+        case "akka.cluster.protobuf.msg" | "com.google.protobuf" | "akka.cluster.ddata.protobuf"
+            if !subtype.isInterface =>
+          RuntimeReflection.register(subtype.getMethods: _*)
+          println(
+            "Automatically registering protobuf message class with all methods for reflection purposes: " + subtype.getName
+          )
+        case _ =>
+          println("Automatically registering protobuf message class for reflection purposes: " + subtype.getName)
+      }
     }
 }
