@@ -13,38 +13,23 @@ final class AkkaSerializerRegisterFeature extends Feature {
   private[this] final val cache = ConcurrentHashMap.newKeySet[String]
   private[this] final val registerTheseSerializers = {
     val c = ConcurrentHashMap.newKeySet[String]
-    // FIXME OBTAIN THIS LIST DYNAMICALLY BY GETTING:
-    // SerializationExtension(system).serializerByIdentity.values.map(_.getClass.getName)
     c.add("akka.serialization.NullSerializer$")
-    c.add("akka.cluster.protobuf.ClusterMessageSerializer")
-    c.add("io.cloudstate.proxy.ProtobufAnySerializer")
-    c.add("akka.cluster.singleton.protobuf.ClusterSingletonMessageSerializer")
-    c.add("akka.remote.serialization.StringSerializer")
-    c.add("akka.serialization.JavaSerializer")
-    c.add("akka.remote.serialization.MessageContainerSerializer")
-    c.add("akka.remote.serialization.ByteStringSerializer")
-    c.add("akka.cluster.pubsub.protobuf.DistributedPubSubMessageSerializer")
-    c.add("akka.cluster.sharding.protobuf.ClusterShardingMessageSerializer")
-    c.add("akka.remote.serialization.ProtobufSerializer")
-    c.add("akka.remote.serialization.ArteryMessageSerializer")
-    c.add("akka.remote.serialization.SystemMessageSerializer")
-    c.add("akka.cluster.ddata.protobuf.ReplicatorMessageSerializer")
-    c.add("akka.persistence.serialization.MessageSerializer")
-    c.add("akka.remote.serialization.DaemonMsgCreateSerializer")
-    c.add("akka.serialization.BooleanSerializer")
-    c.add("akka.remote.serialization.LongSerializer")
-    c.add("akka.remote.serialization.MiscMessageSerializer")
-    c.add("akka.cluster.ddata.protobuf.ReplicatedDataSerializer")
-    c.add("akka.persistence.serialization.SnapshotSerializer")
-    c.add("io.cloudstate.proxy.crdt.CrdtSerializers")
-    c.add("akka.stream.serialization.StreamRefSerializer")
-    c.add("akka.remote.serialization.IntSerializer")
-    c.add("akka.serialization.ByteArraySerializer")
-    c.add("akka.cluster.client.protobuf.ClusterClientMessageSerializer")
     c
   }
 
-  override final def isInConfiguration(access: Feature.IsInConfigurationAccess): Boolean = false
+  override final def beforeAnalysis(access: Feature.BeforeAnalysisAccess): Unit = {
+    val config = com.typesafe.config.ConfigFactory.load()
+    config
+      .getConfig("akka.actor.serializers")
+      .root
+      .unwrapped
+      .values
+      .iterator
+      .asScala
+      .map(_.toString)
+      .foreach(registerTheseSerializers.add)
+    com.typesafe.config.ConfigFactory.invalidateCaches()
+  }
 
   override final def duringAnalysis(access: Feature.DuringAnalysisAccess): Unit =
     registerTheseSerializers.forEach { className =>
@@ -71,7 +56,7 @@ final class AkkaSerializerRegisterFeature extends Feature {
   final def registerSubtypesOf(access: Feature.DuringAnalysisAccess, className: String): Unit = {
     val akkaSerializerClass = access.findClassByName(className)
     if (akkaSerializerClass != null && access.isReachable(akkaSerializerClass)) {
-      access.reachableSubtypes(akkaSerializerClass).iterator.asScala.foreach { subtype =>
+      access.reachableSubtypes(akkaSerializerClass).iterator.asScala.filter(_ != null).foreach { subtype =>
         registerSerializerClass(access, subtype)
       }
     }

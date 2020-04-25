@@ -361,10 +361,10 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
   "-H:-PrintUniverse", // if "+" prints out all classes which are included
   "-H:-NativeArchitecture", // if "+" Compiles the native image to customize to the local CPU arch
   "-H:Class=" + "io.cloudstate.proxy.CloudStateProxyMain",
-  //"-J-Xmx10g", // native-image is hungry
-  "--verbose",
+  //"-J-Xmx10g", // native-image is hungry FIXME I don't believe this is properly applied even when --no-server is enabled!
   //"--no-server", // Uncomment to not use the native-image build server, to avoid potential cache problems with builds
   //"--debug-attach=5005", // Debugger makes a ton of sense to use to debug SubstrateVM
+  "--verbose",
   "--report-unsupported-elements-at-runtime", // Hopefully a self-explanatory flag FIXME comment this option out once AffinityPool is gone
   "--enable-url-protocols=http,https",
   "--allow-incomplete-classpath",
@@ -376,14 +376,14 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
     "akka.dispatch.affinity",
     "akka.util",
     "com.google.Protobuf",
+    "com.typesafe.config",
     "java.lang.ref.SoftReference", // https://github.com/oracle/graal/issues/2345
     "java.lang.invoke.MethodHandleImpl" // https://github.com/oracle/graal/issues/2345
   ).mkString("=", ",", ""),
-  "--initialize-at-run-time=" +
+  "-H:ClassInitialization=com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder:rerun",
+  "-H:ClassInitialization=com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder:rerun",
+  "--initialize-at-run-time" +
   Seq(
-    // We want to delay initialization of these to load the config at runtime
-    "com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder",
-    "com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder",
     // These are to make up for the lack of shaded configuration for svm/native-image in grpc-netty-shaded
     "com.sun.jndi.dns.DnsClient",
     "io.grpc.netty.shaded.io.netty.handler.codec.http2.Http2CodecUtil",
@@ -400,7 +400,7 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
     "io.grpc.netty.shaded.io.netty.handler.ssl.util.BouncyCastleSelfSignedCertGenerator",
     "io.grpc.netty.shaded.io.netty.handler.ssl.ReferenceCountedOpenSslContext",
     "io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel"
-  ).mkString(",")
+  ).mkString("=", ",", "")
 )
 
 lazy val `proxy-core` = (project in file("proxy/core"))
