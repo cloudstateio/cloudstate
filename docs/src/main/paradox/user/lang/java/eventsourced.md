@@ -6,15 +6,15 @@ An event sourced entity can be created by annotating it with the @javadoc[`@Even
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #entity-class }
 
-The `persistenceId` is used to namespace events in the journal, useful for when you share the same database between multiple entities. It defaults to the simple name for the entity class (in this case, `ShoppingCartEntity`), it's good practice to select one explicitly, this means your database isn't depend on classnames in your code.
+The `persistenceId` is used to namespace events in the journal, useful when you share the same database between multiple entities. It defaults to the simple name for the entity class (in this case, `ShoppingCartEntity`). It is a good practice to define an explicit persistenceId. This helps to decouple the journal data from the classnames in your code. ie. the events journal remain coherent, even if the underlying entity classname may have changed.
 
-The `snapshotEvery` parameter controls how often snapshots are taken, so that the entity doesn't need to be recovered from the whole journal each time it's loaded. If left unset, it defaults to 100. Setting it to a negative number will result in snapshots never being taken.
+The `snapshotEvery` parameter controls how often snapshots are taken, so that the entity doesn't need to be recovered from the entire history of the journal each time it is loaded. If left unset, it defaults to 100. To disable snapshot, set `snapshotEvery` to a negative value.
 
 ## Persistence types and serialization
 
 Event sourced entities persist events and snapshots, and these need to be serialized when persisted. The most straight forward way to persist events and snapshots is to use protobufs. Cloudstate will automatically detect if an emitted event is a protobuf, and serialize it as such. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
 
-While protobufs are the recommended format for persisting events, it is recommended that you do not persist your services protobuf messages, rather, you should create new messages, even if they are identical to the services. While this may introduce some overhead in needing to convert from one type to the other, the reason for doing this is that it will allow the services public interface to evolve independently from its data storage format, which should be private.
+While protobufs are the recommended format for persisting events, it is recommended that you do not persist your services protobuf messages. Rather, you should create new messages, even if they are identical to those of the services. While this may introduce some overhead in needing to convert from one type to the other, the reason for doing this is that it will allow the services public interface to evolve independently from its data storage format, which should be private.
 
 For our shopping cart example, we'll create a new file called `domain.proto`, the name domain is selected to indicate that these are my applications domain objects:
 
@@ -28,7 +28,7 @@ Each entity should store its state locally in a mutable variable, either a mutab
 
 ## Constructing
 
-The context available for injection into the constructor is a @javadoc[`EventSourcedEntityCreationContext`](io.cloudstate.javasupport.eventsourced.EventSourcedEntityCreationContext). While you don't necessarily need to define a constructor, you can define one and have that context injected in. The constructor below shows having the entity id injected:
+The context available for injection into the constructor is a @javadoc[`EventSourcedEntityCreationContext`](io.cloudstate.javasupport.eventsourced.EventSourcedEntityCreationContext). While you don't necessarily need to define a constructor, you can define one and have that context injected in. The constructor below shows how the `entityId` is injected:
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #constructing }
 
