@@ -112,6 +112,7 @@ lazy val root = (project in file("."))
     `akka-client`,
     operator,
     `tck`,
+    `graal-tools`,
     docs
   )
   .settings(common)
@@ -360,10 +361,10 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
   "-H:-PrintUniverse", // if "+" prints out all classes which are included
   "-H:-NativeArchitecture", // if "+" Compiles the native image to customize to the local CPU arch
   "-H:Class=" + "io.cloudstate.proxy.CloudStateProxyMain",
-  //"-J-Xmx10g", // native-image is hungry
-  "--verbose",
+  //"-J-Xmx10g", // native-image is hungry FIXME I don't believe this is properly applied even when --no-server is enabled!
   //"--no-server", // Uncomment to not use the native-image build server, to avoid potential cache problems with builds
   //"--debug-attach=5005", // Debugger makes a ton of sense to use to debug SubstrateVM
+  "--verbose",
   "--report-unsupported-elements-at-runtime", // Hopefully a self-explanatory flag FIXME comment this option out once AffinityPool is gone
   "--enable-url-protocols=http,https",
   "--allow-incomplete-classpath",
@@ -375,14 +376,14 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
     "akka.dispatch.affinity",
     "akka.util",
     "com.google.Protobuf",
+    "com.typesafe.config",
     "java.lang.ref.SoftReference", // https://github.com/oracle/graal/issues/2345
     "java.lang.invoke.MethodHandleImpl" // https://github.com/oracle/graal/issues/2345
   ).mkString("=", ",", ""),
-  "--initialize-at-run-time=" +
+  "-H:ClassInitialization=com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder:rerun",
+  "-H:ClassInitialization=com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder:rerun",
+  "--initialize-at-run-time" +
   Seq(
-    // We want to delay initialization of these to load the config at runtime
-    "com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder",
-    "com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder",
     // These are to make up for the lack of shaded configuration for svm/native-image in grpc-netty-shaded
     "com.sun.jndi.dns.DnsClient",
     "io.grpc.netty.shaded.io.netty.handler.codec.http2.Http2CodecUtil",
@@ -399,11 +400,12 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
     "io.grpc.netty.shaded.io.netty.handler.ssl.util.BouncyCastleSelfSignedCertGenerator",
     "io.grpc.netty.shaded.io.netty.handler.ssl.ReferenceCountedOpenSslContext",
     "io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel"
-  ).mkString(",")
+  ).mkString("=", ",", "")
 )
 
 lazy val `proxy-core` = (project in file("proxy/core"))
   .enablePlugins(DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin, GraalVMPlugin, BuildInfoPlugin)
+  .dependsOn(`graal-tools` % Provided) // Only needed for compilation
   .settings(
     common,
     name := "cloudstate-proxy-core",
@@ -415,12 +417,6 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
         // Since we exclude Aeron, we also exclude its transitive Agrona dependency, so we need to manually add it HERE
         "org.agrona" % "agrona" % "0.9.29",
-        "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided", // Only needed for compilation
-
-        // Adds configuration to let Graal Native Image (SubstrateVM) work
-        "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion % "provided", // Only needed for compilation
         "com.typesafe.akka" %% "akka-remote" % AkkaVersion excludeAll (excludeTheseDependencies: _*),
         // For Eventing support of Google Pubsub
         "com.google.api.grpc" % "grpc-google-cloud-pubsub-v1" % "0.12.0" % "protobuf", // ApacheV2
@@ -503,13 +499,7 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
         "com.typesafe.akka" %% "akka-persistence-cassandra" % AkkaPersistenceCassandraVersion excludeAll (
           (excludeTheseDependencies :+ ExclusionRule("com.github.jnr")): _* // Can't native-image this, so we don't need this either
         ),
-        "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test,
-        "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided", // Only needed for compilation
-
-        // Adds configuration to let Graal Native Image (SubstrateVM) work
-        "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion % "provided" // Only needed for compilation
+        "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test
       ),
     fork in run := true,
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
@@ -538,13 +528,7 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
     common,
     name := "cloudstate-proxy-postgres",
     libraryDependencies ++= Seq(
-        "org.postgresql" % "postgresql" % "42.2.6",
-        "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided", // Only needed for compilation
-
-        // Adds configuration to let Graal Native Image (SubstrateVM) work
-        "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion % "provided" // Only needed for compilation
+        "org.postgresql" % "postgresql" % "42.2.6"
       ),
     fork in run := true,
     mainClass in Compile := Some("io.cloudstate.proxy.jdbc.CloudStateJdbcProxyMain"),
@@ -906,6 +890,22 @@ lazy val `tck` = (project in file("tck"))
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
         .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly, `scala-shopping-cart` / assembly)
         .value
+  )
+
+lazy val `graal-tools` = (project in file("graal-tools"))
+  .enablePlugins(GraalVMPlugin)
+  .settings(
+    libraryDependencies ++= List(
+        "org.graalvm.nativeimage" % "svm" % GraalVersion,
+        // Adds configuration to let Graal Native Image (SubstrateVM) work
+        "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion,
+        "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion,
+        "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion,
+        "com.typesafe.akka" %% "akka-actor" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-protobuf" % AkkaVersion,
+        "com.google.protobuf" % "protobuf-java" % ProtobufVersion,
+        "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion
+      )
   )
 
 def doCompileK8sDescriptors(dir: File,
