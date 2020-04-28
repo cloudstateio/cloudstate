@@ -49,10 +49,11 @@ name := "cloudstate"
 
 val GrpcJavaVersion = "1.22.1"
 val GraalAkkaVersion = "0.5.0"
-val AkkaVersion = "2.5.31"
+val AkkaVersion = "2.6.4"
 val AkkaHttpVersion = "10.1.11"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
+val AkkaPersistenceSpannerVersion = "0.1"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
@@ -96,6 +97,7 @@ lazy val root = (project in file("."))
   .aggregate(
     `protocols`,
     `proxy-core`,
+    `proxy-spanner`,
     `proxy-cassandra`,
     `proxy-postgres`,
     `proxy-tests`,
@@ -270,15 +272,17 @@ commands ++= Seq(
   buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), false),
   buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, true),
   buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, false),
+  buildProxyCommand("Spanner", `proxy-spanner`, "spanner", None, true),
+  buildProxyCommand("Spanner", `proxy-spanner`, "spanner", None, false),
   buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, true),
   buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, false),
   Command.single("dockerBuildAllNonNative", buildProxyHelp("dockerBuildAllNonNative", "all non native")) {
     (state, command) =>
-      List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres")
+      List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres", "Spanner")
         .map(c => s"dockerBuild$c $command") ::: state
   },
   Command.single("dockerBuildAllNative", buildProxyHelp("dockerBuildAllNative", "all native")) { (state, command) =>
-    List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres")
+    List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres", "Spanner")
       .map(c => s"dockerBuildNative$c $command") ::: state
   }
 )
@@ -444,6 +448,33 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     nativeImageDockerSettings
   )
 
+lazy val `proxy-spanner` = (project in file("proxy/spanner"))
+  .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin)
+  .dependsOn(`proxy-core`)
+  .settings(
+    common,
+    name := "cloudstate-proxy-spanner",
+    libraryDependencies ++= Seq(
+      "com.lightbend.akka" %% "akka-persistence-spanner" % AkkaPersistenceSpannerVersion,
+    ),
+    fork in run := true,
+    mainClass in Compile := Some("io.cloudstate.proxy.CloudstateSpannerProxyMain"),
+    mainClass in assembly := (mainClass in Compile).value,
+    assemblyJarName in assembly := "akka-proxy-spanner.jar",
+    test in assembly := {},
+    // logLevel in assembly := Level.Debug,
+    assemblyMergeStrategy in assembly := {
+      /*ADD CUSTOMIZATIONS HERE*/
+      case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    },
+    nativeImageDockerSettings,
+    graalVMNativeImageOptions ++= Seq(
+    )
+  )
+
 lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
   .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin)
   .dependsOn(`proxy-core`)
@@ -451,17 +482,17 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
     common,
     name := "cloudstate-proxy-cassandra",
     libraryDependencies ++= Seq(
-        "com.typesafe.akka" %% "akka-persistence-cassandra" % AkkaPersistenceCassandraVersion excludeAll (
-          (excludeTheseDependencies :+ ExclusionRule("com.github.jnr")): _* // Can't native-image this, so we don't need this either
+      "com.typesafe.akka" %% "akka-persistence-cassandra" % AkkaPersistenceCassandraVersion excludeAll (
+        (excludeTheseDependencies :+ ExclusionRule("com.github.jnr")): _* // Can't native-image this, so we don't need this either
         ),
-        "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test
-      ),
+      "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test
+    ),
     fork in run := true,
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
     nativeImageDockerSettings,
     graalVMNativeImageOptions ++= Seq(
-        "-H:IncludeResourceBundles=com.datastax.driver.core.Driver"
-      )
+      "-H:IncludeResourceBundles=com.datastax.driver.core.Driver"
+    )
   )
 
 lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
