@@ -37,7 +37,7 @@ func main() {
 		ServiceVersion: "0.1.0",
 	})
 //#register
-	err := server.Register(
+	err = server.RegisterEventSourcedEntity(
 		&cloudstate.EventSourcedEntity{
 			ServiceName:   "com.example.shoppingcart.ShoppingCart",
 			PersistenceID: "ShoppingCart",

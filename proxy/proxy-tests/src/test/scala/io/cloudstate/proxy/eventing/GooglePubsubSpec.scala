@@ -1,30 +1,20 @@
 package io.cloudstate.proxy.eventing
 
-import java.io.File
 import java.net.ServerSocket
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
 import java.util.concurrent.{CompletionStage, TimeUnit}
-import com.typesafe.config.Config
 
-import akka.{Done, NotUsed}
-import akka.actor.{ActorRef, ActorSystem, ExtendedActorSystem}
-import akka.cluster.Cluster
-import akka.grpc.GrpcClientSettings
-import akka.pattern.{BackoffOpts, BackoffSupervisor}
+import com.typesafe.config.Config
+import akka.Done
+import akka.actor.{ActorSystem, ExtendedActorSystem}
 import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{Flow, Sink, Source}
 import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
 import io.cloudstate.proxy.{CloudStateProxyMain, EntityDiscoveryManager}
-import org.scalatest.concurrent.{Eventually, Futures, ScalaFutures}
-import org.scalatest.time.{Millis, Second, Seconds, Span}
+import org.scalatest.concurrent.{Eventually, ScalaFutures}
+import org.scalatest.time.{Second, Seconds, Span}
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpec}
 
-import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
-import scala.sys.process.Process
-import scala.util.Random
-
 import io.cloudstate.pingpong._
 import io.cloudstate.samples.pingpong._
 import io.cloudstate.javasupport.{CloudState, CloudStateRunner}

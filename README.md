@@ -350,6 +350,22 @@ Check out the samples project here, with instructions on how to run them on Kube
 - [JavaScript sample](https://github.com/cloudstateio/samples-js-chat)
 - [Java sample](https://github.com/cloudstateio/samples-java-chat)
 
+### Building and publishing a sample application
+
+The sample application is packaged in a Docker container and pushed to the Docker repository path formed using the system properties `docker.registry` and `docker.username`. The default repository path is `cloudstateio/<application-name>:tag`
+
+For building and pushing the application (in this example the Scala shopping cart sample) to the configured docker repository:
+
+    sbt scala-shopping-cart/docker:publish
+
+Building and pushing the application, overriding the repository path.
+
+    sbt scala-shopping-cart/docker:publish -Ddocker.registry=<MY-REGISTRY> -Ddocker.username=<MY-REPOSITORY>
+
+Building the application without pushing it to the remote repository.
+
+    sbt scala-shopping-cart/docker:publishLocal
+
 
 ---
 ## Client API

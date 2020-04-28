@@ -10,9 +10,7 @@ inThisBuild(
     organization := "io.cloudstate",
     version := dynverGitDescribeOutput.value.mkVersion(versionFmt, "latest"),
     dynver := sbtdynver.DynVer.getGitDescribeOutput(new Date).mkVersion(versionFmt, "latest"),
-    scalaVersion := "2.12.9",
-    // Needed for our fork of skuber
-    resolvers += Resolver.bintrayRepo("jroper", "maven"), // TODO: Remove once skuber has the required functionality
+    scalaVersion := "2.12.11",
     // Needed for the fixed HTTP/2 connection cleanup version of akka-http
     resolvers += Resolver.bintrayRepo("akka", "snapshots"), // TODO: Remove once we're switching to akka-http 10.1.11
     organizationName := "Lightbend Inc.",
@@ -51,17 +49,17 @@ def versionFmt(out: sbtdynver.GitDescribeOutput): String = {
 name := "cloudstate"
 
 val GrpcJavaVersion = "1.22.1"
-val GraalAkkaVersion = "0.4.1"
-val AkkaVersion = "2.5.29"
+val GraalAkkaVersion = "0.5.0"
+val AkkaVersion = "2.5.31"
 val AkkaHttpVersion = "10.1.11"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
-val GraalVersion = "19.3.0"
-
-val svmGroupId = if (GraalVersion startsWith "19.2") "com.oracle.substratevm" else "org.graalvm.nativeimage"
+val GraalVersion = "20.0.0"
+val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debian"
+val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
 
 def excludeTheseDependencies = Seq(
   ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
@@ -114,6 +112,7 @@ lazy val root = (project in file("."))
     `akka-client`,
     operator,
     `tck`,
+    `graal-tools`,
     docs
   )
   .settings(common)
@@ -211,6 +210,9 @@ def dockerSettings: Seq[Setting[_]] = Seq(
   dockerUpdateLatest := true,
   dockerRepository := sys.props.get("docker.registry"),
   dockerUsername := sys.props.get("docker.username").orElse(Some("cloudstateio")).filter(_ != ""),
+  dockerBaseImage := DockerBaseImageVersion,
+  // when using tags like latest, uncomment below line, so that local cache will not be used.
+  //  dockerBuildOptions += "--no-cache",
   dockerAlias := {
     val old = dockerAlias.value
     proxyDockerBuild.value match {
@@ -324,7 +326,6 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
         }
       }
     }.value,
-  dockerBaseImage := "bitnami/java:11-prod",
   // Need to make sure it has group execute permission
   // Note I think this is leading to quite large docker images :(
   dockerChmodType := {
@@ -338,7 +339,7 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   dockerEntrypoint := {
     val old = dockerEntrypoint.value
     val withLibraryPath = if (nativeImageDockerBuild.value) {
-      old :+ "-Djava.library.path=/opt/bitnami/java/lib"
+      old :+ s"-Djava.library.path=${DockerBaseImageJavaLibraryPath}"
     } else old
     proxyDockerBuild.value match {
       case Some((_, Some(configResource))) => withLibraryPath :+ s"-Dconfig.resource=$configResource"
@@ -360,9 +361,11 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
   "-H:-PrintUniverse", // if "+" prints out all classes which are included
   "-H:-NativeArchitecture", // if "+" Compiles the native image to customize to the local CPU arch
   "-H:Class=" + "io.cloudstate.proxy.CloudStateProxyMain",
-  "--verbose",
+  //"-J-Xmx10g", // native-image is hungry FIXME I don't believe this is properly applied even when --no-server is enabled!
   //"--no-server", // Uncomment to not use the native-image build server, to avoid potential cache problems with builds
-  //"--report-unsupported-elements-at-runtime", // Hopefully a self-explanatory flag
+  //"--debug-attach=5005", // Debugger makes a ton of sense to use to debug SubstrateVM
+  "--verbose",
+  "--report-unsupported-elements-at-runtime", // Hopefully a self-explanatory flag FIXME comment this option out once AffinityPool is gone
   "--enable-url-protocols=http,https",
   "--allow-incomplete-classpath",
   "--no-fallback",
@@ -372,14 +375,15 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
     "scala",
     "akka.dispatch.affinity",
     "akka.util",
-    "com.google.Protobuf"
+    "com.google.Protobuf",
+    "com.typesafe.config",
+    "java.lang.ref.SoftReference", // https://github.com/oracle/graal/issues/2345
+    "java.lang.invoke.MethodHandleImpl" // https://github.com/oracle/graal/issues/2345
   ).mkString("=", ",", ""),
-  "--initialize-at-run-time=" +
+  "-H:ClassInitialization=com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder:rerun",
+  "-H:ClassInitialization=com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder:rerun",
+  "--initialize-at-run-time" +
   Seq(
-    "akka.protobuf.DescriptorProtos",
-    // We want to delay initialization of these to load the config at runtime
-    "com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder",
-    "com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder",
     // These are to make up for the lack of shaded configuration for svm/native-image in grpc-netty-shaded
     "com.sun.jndi.dns.DnsClient",
     "io.grpc.netty.shaded.io.netty.handler.codec.http2.Http2CodecUtil",
@@ -396,11 +400,12 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
     "io.grpc.netty.shaded.io.netty.handler.ssl.util.BouncyCastleSelfSignedCertGenerator",
     "io.grpc.netty.shaded.io.netty.handler.ssl.ReferenceCountedOpenSslContext",
     "io.grpc.netty.shaded.io.netty.channel.socket.nio.NioSocketChannel"
-  ).mkString(",")
+  ).mkString("=", ",", "")
 )
 
 lazy val `proxy-core` = (project in file("proxy/core"))
   .enablePlugins(DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin, GraalVMPlugin, BuildInfoPlugin)
+  .dependsOn(`graal-tools` % Provided) // Only needed for compilation
   .settings(
     common,
     name := "cloudstate-proxy-core",
@@ -412,14 +417,6 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
         // Since we exclude Aeron, we also exclude its transitive Agrona dependency, so we need to manually add it HERE
         "org.agrona" % "agrona" % "0.9.29",
-        // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        svmGroupId % "svm" % GraalVersion % "provided", // Only needed for compilation
-
-        // Adds configuration to let Graal Native Image (SubstrateVM) work
-        "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion % "provided", // Only needed for compilation
         "com.typesafe.akka" %% "akka-remote" % AkkaVersion excludeAll (excludeTheseDependencies: _*),
         // For Eventing support of Google Pubsub
         "com.google.api.grpc" % "grpc-google-cloud-pubsub-v1" % "0.12.0" % "protobuf", // ApacheV2
@@ -502,15 +499,7 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
         "com.typesafe.akka" %% "akka-persistence-cassandra" % AkkaPersistenceCassandraVersion excludeAll (
           (excludeTheseDependencies :+ ExclusionRule("com.github.jnr")): _* // Can't native-image this, so we don't need this either
         ),
-        "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test,
-        // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        svmGroupId % "svm" % GraalVersion % "provided", // Only needed for compilation
-
-        // Adds configuration to let Graal Native Image (SubstrateVM) work
-        "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion % "provided" // Only needed for compilation
+        "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test
       ),
     fork in run := true,
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
@@ -539,15 +528,7 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
     common,
     name := "cloudstate-proxy-postgres",
     libraryDependencies ++= Seq(
-        "org.postgresql" % "postgresql" % "42.2.6",
-        // FIXME REMOVE THIS ONCE WE CAN HAVE OUR DEPS (grpc-netty-shaded, agrona, and protobuf-java respectively) DO THIS PROPERLY
-        "org.graalvm.sdk" % "graal-sdk" % GraalVersion % "provided", // Only needed for compilation
-        svmGroupId % "svm" % GraalVersion % "provided", // Only needed for compilation
-
-        // Adds configuration to let Graal Native Image (SubstrateVM) work
-        "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion % "provided", // Only needed for compilation
-        "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion % "provided" // Only needed for compilation
+        "org.postgresql" % "postgresql" % "42.2.6"
       ),
     fork in run := true,
     mainClass in Compile := Some("io.cloudstate.proxy.jdbc.CloudStateJdbcProxyMain"),
@@ -595,16 +576,14 @@ lazy val operator = (project in file("operator"))
   .settings(
     common,
     name := "cloudstate-operator",
-    // This is a publishLocal build of this PR https://github.com/doriordan/skuber/pull/268
     libraryDependencies ++= Seq(
         "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
         "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
         "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
-        "io.skuber" %% "skuber" % "2.2.0-jroper-1",
+        "io.skuber" %% "skuber" % "2.4.0",
         "ch.qos.logback" % "logback-classic" % "1.2.3" // Doesn't work well with SubstrateVM, use "org.slf4j"           % "slf4j-simple"     % "1.7.26" instead
       ),
     dockerSettings,
-    dockerBaseImage := "adoptopenjdk/openjdk8",
     dockerExposedPorts := Nil,
     compileK8sDescriptors := {
       val tag = version.value
@@ -768,7 +747,6 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
   .settings(
     name := "java-shopping-cart",
     dockerSettings,
-    dockerBaseImage := "adoptopenjdk/openjdk8",
     mainClass in Compile := Some("io.cloudstate.samples.shoppingcart.Main"),
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
@@ -799,7 +777,6 @@ lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
   .settings(
     name := "java-pingpong",
     dockerSettings,
-    dockerBaseImage := "adoptopenjdk/openjdk8",
     mainClass in Compile := Some("io.cloudstate.samples.pingpong.Main"),
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
@@ -826,9 +803,10 @@ lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
 
 lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart"))
   .dependsOn(`scala-support`)
-  .enablePlugins(AkkaGrpcPlugin)
+  .enablePlugins(AkkaGrpcPlugin, DockerPlugin, JavaAppPackaging)
   .settings(
     name := "scala-shopping-cart",
+    dockerSettings,
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`scala-support`, Compile)).value,
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
@@ -859,6 +837,7 @@ lazy val `akka-client` = (project in file("samples/akka-client"))
         "io.grpc" % "grpc-core" % GrpcJavaVersion,
         "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
         "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
         "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http-core" % AkkaHttpVersion,
@@ -895,6 +874,7 @@ lazy val `tck` = (project in file("tck"))
         "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
         "io.grpc" % "grpc-core" % GrpcJavaVersion,
         "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
         "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
         "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
@@ -910,6 +890,22 @@ lazy val `tck` = (project in file("tck"))
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
         .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly, `scala-shopping-cart` / assembly)
         .value
+  )
+
+lazy val `graal-tools` = (project in file("graal-tools"))
+  .enablePlugins(GraalVMPlugin)
+  .settings(
+    libraryDependencies ++= List(
+        "org.graalvm.nativeimage" % "svm" % GraalVersion,
+        // Adds configuration to let Graal Native Image (SubstrateVM) work
+        "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion,
+        "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion,
+        "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion,
+        "com.typesafe.akka" %% "akka-actor" % AkkaVersion,
+        "com.typesafe.akka" %% "akka-protobuf" % AkkaVersion,
+        "com.google.protobuf" % "protobuf-java" % ProtobufVersion,
+        "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion
+      )
   )
 
 def doCompileK8sDescriptors(dir: File,
