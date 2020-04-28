@@ -14,7 +14,7 @@ This could be looked up in the constructor of the entity, for later use, so it d
 
 ## Forwarding command
 
-The `CommandContext` for each entity type implements `ClientActionContext` to allow forwarding a command by invoking @javadoc[`ClientActionContext.forward()`](io.cloudstate.javasupport.ClientActionContext#forward-io.cloudstate.javasupport.ServiceCall-). For example, the `item` being processed in the `addItem` command, meets a condition to be a "hot" item. We can make the `Hotitems` entity aware of that item by forwarding a command:
+The `CommandContext` for each entity type implements `ClientActionContext` to allow forwarding a command by invoking @javadoc[`ClientActionContext.forward()`](io.cloudstate.javasupport.ClientActionContext#forward-io.cloudstate.javasupport.ServiceCall-). For example, if the item being processed in the `addItem` command is a "hot" item, we can make the `HotItems` entity aware of that item by forwarding a command:
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/effects/ShoppingCartEntity.java) { #forward }
 

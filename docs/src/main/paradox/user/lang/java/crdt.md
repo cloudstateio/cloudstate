@@ -139,6 +139,6 @@ Some wrapper classes are also provided for ORMap. These provide more convenient 
 ## Registering the entity
 
 Once you've created your entity, you can register it with the @javadoc[`CloudState`](io.cloudstate.javasupport.CloudState) server, by invoking the @javadoc[`registerCrdtEntity`](io.cloudstate.javasupport.CloudState#registerCrdtEntity-java.lang.Class-com.google.protobuf.Descriptors.ServiceDescriptor-com.google.protobuf.Descriptors.FileDescriptor...-) method.
-In addition to passing your entity class and service descriptor. If you use protobufs for serialization and the protobuf message definition are missing in the file of your service descriptor, then you'll need to pass those protobuf descriptors as well.
+In addition to passing your entity class and service descriptor, if you use protobuf for serialization and any protobuf message definitions are missing from your service descriptor (they are not declared directly in the file, nor as dependencies), then you'll need to pass those protobuf descriptors as well.
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/crdt/ShoppingCartEntity.java) { #register }
