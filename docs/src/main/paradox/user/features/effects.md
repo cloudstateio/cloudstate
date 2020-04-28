@@ -12,7 +12,7 @@ The command won't be forwarded until any state actions request by the command ha
 
 An entity may also emit one or more effects. An effect is something whose result has no impact on the result of the current command - if it fails, the current command still succeeds. The result of the effect is therefore ignored. Effects are only performed after the successful completion of any state actions requested by the command handler.
 
-Effects may be declared as synchronous or asynchronous. Asynchronous commands run in a "fire and forget" fashion. The code flow of the caller (the command handler of the entity which emitted the async command) continues while the command is being asynchronously processed. Meanwhile, synchronous commands runs in "blocking" mode, ie. the commands are processed in order, one at a time. The final result of the command handler, either a reply or a forward, is not sent until all synchronous commands are completed.
+Effects may be declared as synchronous or asynchronous. Asynchronous commands run in a "fire and forget" fashion. The code flow of the caller (the command handler of the entity which emitted the async command) continues while the command is being asynchronously processed. Meanwhile, synchronous commands run in "blocking" mode, ie. the commands are processed in order, one at a time. The final result of the command handler, either a reply or a forward, is not sent until all synchronous commands are completed.
 
 ## Transactional concerns
 
