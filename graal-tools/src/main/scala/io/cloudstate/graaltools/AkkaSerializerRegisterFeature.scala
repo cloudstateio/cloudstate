@@ -14,9 +14,9 @@ final class AkkaSerializerRegisterFeature extends Feature {
 
   // FIXME THIS IS CURRENTLY DISABLED SINCE IT WILL NOT MERGE ALL REFERENCE CONFS FOR SOME REASON
   override final def isInConfiguration(access: Feature.IsInConfigurationAccess): Boolean = false
+
   override final def duringAnalysis(access: Feature.DuringAnalysisAccess): Unit = {
-    val serializerClass = access.findClassByName(classOf[akka.serialization.Serializer].getName)
-    if (access.isReachable(serializerClass)) {
+    for (serializerClass <- access.lookupClass(classOf[akka.serialization.Serializer].getName)) {
       val config = com.typesafe.config.ConfigFactory.load(serializerClass.getClassLoader)
       config
         .getConfig("akka.actor.serializers")
@@ -36,31 +36,25 @@ final class AkkaSerializerRegisterFeature extends Feature {
     com.typesafe.config.ConfigFactory.invalidateCaches()
 
   final def registerSerializerClassByName(access: Feature.DuringAnalysisAccess, className: String): Unit =
-    registerSerializerClass(access, access.findClassByName(className))
+    for (cls <- access.lookupClass(className))
+      registerSerializerClass(cls)
 
-  final def registerSerializerClass(access: Feature.DuringAnalysisAccess, cls: Class[_]): Unit =
+  final def registerSerializerClass(cls: Class[_]): Unit =
     for {
-      cls <- Option(cls).filter(access.isReachable)
-      if cls != null && !cls.isInterface && !isAbstract(cls.getModifiers) && cache.add(cls.getName)
-      ctor <- getDeclaredConstructor(cls, classOf[akka.actor.ExtendedActorSystem]) orElse getDeclaredConstructor(
-        cls
-      )
-      _ = println("Automatically registering serializer class for reflection purposes: " + cls.getName)
+      cls <- Option(cls)
+      if !cls.isInterface && !isAbstract(cls.getModifiers) && cache.add(cls.getName)
+      ctor <- reflect(cls.getDeclaredConstructor(classOf[akka.actor.ExtendedActorSystem]))
+        .orElse(reflect(cls.getDeclaredConstructor()))
     } {
+      println(s"Automatically registering serializer class for reflection purposes: $cls")
       RuntimeReflection.register(cls)
       RuntimeReflection.register(ctor)
     }
 
   final def registerSubtypesOf(access: Feature.DuringAnalysisAccess, className: String): Unit = {
-    val akkaSerializerClass = access.findClassByName(className)
-    if (akkaSerializerClass != null && access.isReachable(akkaSerializerClass)) {
-      access.reachableSubtypes(akkaSerializerClass).iterator.asScala.filter(_ != null).foreach { subtype =>
-        registerSerializerClass(access, subtype)
-      }
-    }
+    for {
+      akkaSerializerClass <- access.lookupClass(className)
+      subtype <- access.lookupSubtypes(akkaSerializerClass)
+    } registerSerializerClass(subtype)
   }
-
-  private[this] final def getDeclaredConstructor(cls: Class[_], parameterTypes: Class[_]*) =
-    try Option(cls.getDeclaredConstructor(parameterTypes: _*))
-    catch { case _: NoSuchMethodException => None }
 }

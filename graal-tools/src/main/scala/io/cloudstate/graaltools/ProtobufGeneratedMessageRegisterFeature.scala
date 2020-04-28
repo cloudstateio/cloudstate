@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
 @AutomaticFeature
 final class ProtobufGeneratedMessageRegisterFeature extends Feature {
   private[this] final val cache = ConcurrentHashMap.newKeySet[String]
+
   final val messageClasses = Vector(
     classOf[akka.protobuf.GeneratedMessage],
     classOf[akka.protobuf.GeneratedMessage.Builder[_]],
@@ -19,13 +20,13 @@ final class ProtobufGeneratedMessageRegisterFeature extends Feature {
     classOf[com.google.protobuf.ProtocolMessageEnum],
     classOf[scalapb.GeneratedMessage]
   ).map(_.getName) // We do this to get compile-time safety of the classes, and allow graalvm to resolve their names
+
   override final def duringAnalysis(access: Feature.DuringAnalysisAccess): Unit =
     for {
-      className <- messageClasses.iterator
-      cls = access.findClassByName(className)
-      if cls != null && access.isReachable(cls)
-      subtype <- access.reachableSubtypes(cls).iterator.asScala
-      if subtype != null && cache.add(subtype.getName)
+      className <- messageClasses
+      cls <- access.lookupClass(className)
+      subtype <- access.lookupSubtypes(cls)
+      if cache.add(subtype.getName)
     } {
       RuntimeReflection.register(subtype)
       subtype.getPackage.getName match {

@@ -19,25 +19,19 @@ final class AkkaActorRegisterFeature extends Feature {
   }
 
   override final def duringAnalysis(access: Feature.DuringAnalysisAccess): Unit = {
-    val akkaActorClass =
-      access.findClassByName(classOf[akka.actor.Actor].getName) // We do this to get compile-time safety of the classes, and allow graalvm to resolve their names
-    if (akkaActorClass != null && access.isReachable(akkaActorClass)) {
-      for {
-        subtype <- access.reachableSubtypes(akkaActorClass).iterator.asScala
-        if subtype != null && !subtype.isInterface && cache.add(subtype.getName)
-        _ = println("Automatically registering actor class for reflection purposes: " + subtype.getName)
-        _ = RuntimeReflection.register(subtype)
-        _ = RuntimeReflection.register(subtype.getDeclaredConstructors: _*)
-        _ = RuntimeReflection.register(subtype.getDeclaredFields: _*)
-        if subtype.getInterfaces.exists(_ == akkaActorClass)
-        (context, self) <- getDeclaredField(subtype, "context") zip getDeclaredField(subtype, "self")
-      } {
-        RuntimeReflection.register( /* finalIsWritable = */ true, context, self)
-      }
+    for {
+      akkaActorClass <- access.lookupClass(classOf[akka.actor.Actor].getName) // We do this to get compile-time safety of the classes, and allow graalvm to resolve their names
+      subtype <- access.lookupSubtypes(akkaActorClass)
+      if !subtype.isInterface && cache.add(subtype.getName)
+      _ = println("Automatically registering actor class for reflection purposes: " + subtype.getName)
+      _ = RuntimeReflection.register(subtype)
+      _ = RuntimeReflection.register(subtype.getDeclaredConstructors: _*)
+      _ = RuntimeReflection.register(subtype.getDeclaredFields: _*)
+      if subtype.getInterfaces.exists(_ == akkaActorClass)
+      context <- reflect(subtype.getDeclaredField("context"))
+      self <- reflect(subtype.getDeclaredField("self"))
+    } {
+      RuntimeReflection.register( /* finalIsWritable = */ true, context, self)
     }
   }
-
-  private[this] final def getDeclaredField(cls: Class[_], name: String) =
-    try Option(cls.getDeclaredField(name))
-    catch { case _: NoSuchFieldException => None }
 }
