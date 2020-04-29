@@ -9,6 +9,7 @@ There is a weekly Cloudstate contributors' call, see the following for [details]
 @@@ index
 
 * [The Build](thebuild.md)
+* [Native Image Building](nativeimage.md)
 * [Language support](language-support/index.md)
 
 @@@

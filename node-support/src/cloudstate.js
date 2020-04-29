@@ -23,6 +23,18 @@ const debug = require("debug")("cloudstate");
 // Bind to stdout
 debug.log = console.log.bind(console);
 
+const defaultOptions = {
+  bindAddress: "127.0.0.1",
+  bindPort: 8080
+};
+
+if (process.env.PORT !== undefined) {
+  defaultOptions.bindPort = parseInt(process.env.PORT);
+}
+if (process.env.HOST !== undefined) {
+  defaultOptions.bindAddress = process.env.HOST;
+}
+
 const packageInfo = require(path.join(__dirname, "..", "package.json"));
 const serviceInfo = {
   serviceName: "",
@@ -136,10 +148,7 @@ class CloudState {
    */
   start(options) {
     const opts = {
-      ...{
-        bindAddress: "0.0.0.0",
-        bindPort: 8080
-      },
+      ...defaultOptions,
       ...options
     };
 
