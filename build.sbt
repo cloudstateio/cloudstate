@@ -188,7 +188,7 @@ lazy val docs = (project in file("docs"))
         "cloudstate.node-support.version" -> "0.0.1",
         "cloudstate.go-support.version" -> "0.1.0",
         "cloudstate.go.version" -> "1.13",
-        "cloudstate.kotlin-support.version" -> "0.4.3"
+        "cloudstate.kotlin-support.version" -> "0.5.0"
       ),
     paradoxNavigationDepth := 3,
     inConfig(Test)(
