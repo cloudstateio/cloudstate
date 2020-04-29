@@ -49,13 +49,13 @@ name := "cloudstate"
 
 val GrpcJavaVersion = "1.22.1"
 val GraalAkkaVersion = "0.5.0"
-val AkkaVersion = "2.5.31"
+val AkkaVersion = "2.6.4"
 val AkkaHttpVersion = "10.1.11"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
-val ProtobufVersion = "3.9.0"
+val ProtobufVersion = "3.10.0"
 val GraalVersion = "20.0.0"
 val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debian"
 val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
@@ -316,6 +316,8 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
   "-H:+AllowVMInspection",
   "-H:-RuntimeAssertions",
   "-H:+ReportExceptionStackTraces",
+  // "-H:+PrintAnalysisCallTree" // Uncomment to dump the entire call graph, useful for debugging native-image failing builds
+  // "-H:ReportAnalysisForbiddenType=java.lang.invoke.MethodHandleImpl$AsVarargsCollector" // Uncomment and specify a type which will break analysis, useful to figure out reachability
   "-H:-PrintUniverse", // if "+" prints out all classes which are included
   "-H:-NativeArchitecture", // if "+" Compiles the native image to customize to the local CPU arch
   "-H:Class=" + "io.cloudstate.proxy.CloudStateProxyMain",
@@ -335,8 +337,7 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
     "akka.util",
     "com.google.Protobuf",
     "com.typesafe.config",
-    "java.lang.ref.SoftReference", // https://github.com/oracle/graal/issues/2345
-    "java.lang.invoke.MethodHandleImpl" // https://github.com/oracle/graal/issues/2345
+    "scala.runtime.Statics$VM"
   ).mkString("=", ",", ""),
   "-H:ClassInitialization=com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder:rerun",
   "-H:ClassInitialization=com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder:rerun",
@@ -345,6 +346,7 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
   Seq(
     // These are to make up for the lack of shaded configuration for svm/native-image in grpc-netty-shaded
     "com.sun.jndi.dns.DnsClient",
+    "com.typesafe.sslconfig.ssl.tracing.TracingSSLContext",
     "io.grpc.netty.shaded.io.netty.handler.codec.http2.Http2CodecUtil",
     "io.grpc.netty.shaded.io.netty.handler.codec.http2.DefaultHttp2FrameWriter",
     "io.grpc.netty.shaded.io.netty.handler.codec.http.HttpObjectEncoder",
