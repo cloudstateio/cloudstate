@@ -20,7 +20,7 @@ The `CommandContext` for each entity type implements `ClientActionContext` to al
 
 ## Emitting an effect
 
-The `CommandContext` for each entity type implements `EffectContext` to allow emitting an effect by invoking @javadoc[`EffectContext.effect()`](io.cloudstate.javasupport.EffectContext#effect-io.cloudstate.javasupport.ServiceCall-boolean-). For example, upon successful completion of the `addItem` command by `ShoppingCartEntity`, we also want to emit an effect on the `HotItems` entity. We would invoke the effectful service call as:
+The `CommandContext` for each entity type implements `EffectContext` to allow emitting an effect by invoking @javadoc[`EffectContext.effect()`](io.cloudstate.javasupport.EffectContext#effect-io.cloudstate.javasupport.ServiceCall-boolean-). For example, upon successful completion of the `addItem` command by `ShoppingCartEntity`, if we also want to emit an effect on the `HotItems` entity, we would invoke the effectful service call as:
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/effects/ShoppingCartEntity.java) { #effect }
 
