@@ -45,12 +45,12 @@ private[crdt] final class LWWRegisterImpl[T](anySupport: AnySupport) extends Int
     )
 
   override val applyDelta = {
-    case CrdtDelta.Delta.Lwwregister(LWWRegisterDelta(Some(any), _, _)) =>
+    case CrdtDelta.Delta.Lwwregister(LWWRegisterDelta(Some(any), _, _, _)) =>
       this.value = anySupport.decode(any).asInstanceOf[T]
   }
 
   override val applyState = {
-    case CrdtState.State.Lwwregister(LWWRegisterState(Some(any), _, _)) =>
+    case CrdtState.State.Lwwregister(LWWRegisterState(Some(any), _, _, _)) =>
       this.value = anySupport.decode(any).asInstanceOf[T]
   }
 

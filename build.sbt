@@ -10,8 +10,8 @@ inThisBuild(
     version := dynverGitDescribeOutput.value.mkVersion(versionFmt, "latest"),
     dynver := sbtdynver.DynVer.getGitDescribeOutput(new Date).mkVersion(versionFmt, "latest"),
     scalaVersion := "2.12.11",
-    // Needed for the fixed HTTP/2 connection cleanup version of akka-http
-    resolvers += Resolver.bintrayRepo("akka", "snapshots"), // TODO: Remove once we're switching to akka-http 10.1.11
+    // Needed for the akka-grpc 0.8.4 snapshot
+    resolvers += Resolver.bintrayRepo("akka", "maven"), // TODO: Remove once we're switching to akka-grpc 0.8.5/1.0.0
     organizationName := "Lightbend Inc.",
     organizationHomepage := Some(url("https://lightbend.com")),
     startYear := Some(2019),
@@ -71,11 +71,6 @@ def common: Seq[Setting[_]] = Seq(
       de.heikoseeberger.sbtheader.FileType("proto") -> HeaderCommentStyle.cppStyleLineComment,
       de.heikoseeberger.sbtheader.FileType("js") -> HeaderCommentStyle.cStyleBlockComment
     ),
-  // Akka gRPC adds all protobuf files from the classpath to this, which we don't want because it includes
-  // all the Google protobuf files which are already compiled and on the classpath by ScalaPB. So we set it
-  // back to just our source directory.
-  PB.protoSources in Compile := Seq(),
-  PB.protoSources in Test := Seq(),
   // Akka gRPC overrides the default ScalaPB setting including the file base name, let's override it right back.
   akkaGrpcCodeGeneratorSettings := Seq(),
   excludeFilter in headerResources := HiddenFileFilter || GlobFilter("reflection.proto"),
@@ -422,18 +417,14 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     },
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "proxy", baseDir / "frontend", baseDir / "protocol", (sourceDirectory in Compile).value / "protos")
+      Seq(baseDir / "proxy", baseDir / "frontend", baseDir / "protocol")
+    },
+    PB.protoSources in Test ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "frontend")
     },
     // For Google Cloud Pubsub API
     PB.protoSources in Compile += target.value / "protobuf_external" / "google" / "pubsub" / "v1",
-    // This adds the test/protos dir and enables the ProtocPlugin to generate protos in the Test scope
-    inConfig(Test)(
-      sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
-        PB.protoSources ++= Seq(sourceDirectory.value / "protos"),
-        akkaGrpcCodeGeneratorSettings := Seq(),
-        akkaGrpcGeneratedSources := Seq(AkkaGrpc.Server, AkkaGrpc.Client)
-      )
-    ),
     javaAgents += "org.mortbay.jetty.alpn" % "jetty-alpn-agent" % "2.0.9" % "runtime;test",
     dockerSettings,
     fork in run := true,
