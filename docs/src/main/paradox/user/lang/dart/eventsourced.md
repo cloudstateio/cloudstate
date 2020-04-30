@@ -99,4 +99,4 @@ Once you've created your entity, you can register it with the `CloudState` serve
 
 The complete code for our entity class would look like this:
 
-@@snip [eventsourced_entity.dart](/docs/src/test/dart/docs/user/eventsourced/behavior/eventsourced_entity.dart) { #register }
+@@snip [eventsourced_entity.dart](/docs/src/test/dart/docs/user/eventsourced/eventsourced_entity.dart) { #register }
