@@ -195,20 +195,32 @@ object GraalVMPlugin extends AutoPlugin {
     val dirs = List((resourceDirectory in GraalVMNativeImage).value)
     val files = dirs.descendantsExcept("*.json.conf", HiddenFileFilter).get()
     val destDir = resourceManaged.value
-    (files --- dirs).pair(Path.relativeTo(dirs)).map {
-      case (confFile, relativePath) =>
-        import com.typesafe.config._
-        import com.typesafe.config.impl.Parseable
-        val parseable = Parseable.newFile(confFile, ConfigParseOptions.defaults())
-        val parseValue = classOf[Parseable].getDeclaredMethod("parseValue")
-        parseValue.setAccessible(true) // from lightbend/config#460#issuecomment-285662952
-        val conf = parseValue.invoke(parseable).asInstanceOf[ConfigValue]
-        // Not resolving (yet?) as it's only a config value, not a config (object).
-        val json = conf.render(ConfigRenderOptions.concise().setFormatted(true))
-        val dest = destDir / relativePath.stripSuffix(".conf")
-        IO.write(dest, json)
-        dest
-    }
+    val log = streams.value.log
+
+    def toMapping(files: Iterable[File]) =
+      (files --- dirs).pair(Path.relativeTo(dirs)).map {
+        case (confFile, relativePath) =>
+          confFile -> destDir / relativePath.stripSuffix(".conf")
+      }
+
+    FileFunction.cached(streams.value.cacheStoreFactory) { (in, _) =>
+      log.info(s"Converting ${in.modified.size} HOCON files to JSON, e.g. ${in.modified.take(3).mkString(", ")}...")
+      toMapping(in.modified).map {
+        case (confFile, dest) =>
+          import com.typesafe.config._
+          import com.typesafe.config.impl.Parseable
+          val parseable = Parseable.newFile(confFile, ConfigParseOptions.defaults())
+          val parseValue = classOf[Parseable].getDeclaredMethod("parseValue")
+          parseValue.setAccessible(true) // from lightbend/config#460#issuecomment-285662952
+          val conf = parseValue.invoke(parseable).asInstanceOf[ConfigValue]
+          // Not resolving (yet?) as it's only a config value, not a config (object).
+          val json = conf.render(ConfigRenderOptions.concise().setFormatted(true))
+          IO.write(dest, json)
+          dest
+      }.toSet
+    }(files.toSet)
+
+    toMapping(files).map(_._2)
   }
 
   private def buildLocal(targetDirectory: File,
