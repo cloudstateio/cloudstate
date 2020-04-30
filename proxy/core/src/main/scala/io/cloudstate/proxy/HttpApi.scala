@@ -171,6 +171,8 @@ object HttpApi {
   private final val IdentityHeader = new `Message-Accept-Encoding`("identity")
   private final val NEWLINE_BYTES = ByteString('\n')
 
+  private final val grpcWriter = GrpcProtocolNative.newWriter(Identity)
+
   final class HttpEndpoint(
       final val methDesc: MethodDescriptor,
       final val rule: HttpRule,
@@ -444,9 +446,7 @@ object HttpApi {
         entity = HttpEntity.Chunked(
           ContentTypes.`application/grpc+proto`,
           Source.single(
-            GrpcProtocolNative
-              .newWriter(Identity)
-              .encodeFrame(GrpcProtocol.DataFrame(ByteString.fromArrayUnsafe(message.toByteArray)))
+            grpcWriter.encodeFrame(GrpcProtocol.DataFrame(ByteString.fromArrayUnsafe(message.toByteArray)))
           )
         ),
         protocol = req.protocol

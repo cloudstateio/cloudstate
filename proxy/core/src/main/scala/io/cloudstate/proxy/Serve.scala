@@ -245,10 +245,7 @@ object Serve {
           }
 
         val responseWriter = GrpcProtocolNative.newWriter(Codecs.negotiate(req))
-        val reader = GrpcProtocolNative.newReader(
-          Codecs.detect(req).getOrElse(throw new IllegalArgumentException(s"Unknown codec"))
-        )
-        val messageEncoding = `Message-Encoding`.findIn(req.headers)
+        val reader = GrpcProtocolNative.newReader(Codecs.detect(req).get)
 
         Future
           .successful(
