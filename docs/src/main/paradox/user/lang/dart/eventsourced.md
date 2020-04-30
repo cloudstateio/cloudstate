@@ -93,7 +93,7 @@ Multiple snapshot handlers may be defined to handle multiple different types of 
 
 ## Registering the entity
 
-Once you've created your entity, you can register it with the `cloudState` server, by invoking the `registerEventSourcedEntity` function. In addition to passing the protobuf qualified package name, and your entity class.
+Once you've created your entity, you can register it with the `CloudState` server, by invoking the `registerEventSourcedEntity` method. In addition to passing the protobuf qualified package name, and your entity class.
 
 @@snip [eventsourced_entity.dart](/docs/src/test/dart/docs/user/eventsourced/behavior/eventsourced_entity.dart) { #content }
 
