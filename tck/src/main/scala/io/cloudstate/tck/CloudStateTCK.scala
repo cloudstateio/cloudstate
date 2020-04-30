@@ -381,9 +381,14 @@ class CloudStateTCK(private[this] final val config: TckConfiguration)
       val ShoppingCart = "com.example.shoppingcart.ShoppingCart"
 
       val testData = List[(In, Out)](
-          (In.ListServices(""), Out.ListServicesResponse(ListServiceResponse(Vector(ServiceResponse(ShoppingCart))))),
+          (In.ListServices(""),
+           Out.ListServicesResponse(
+             ListServiceResponse(Vector(ServiceResponse(ServerReflection.name), ServiceResponse(ShoppingCart)))
+           )),
           (In.ListServices("nonsense.blabla."),
-           Out.ListServicesResponse(ListServiceResponse(Vector(ServiceResponse(ShoppingCart))))),
+           Out.ListServicesResponse(
+             ListServiceResponse(Vector(ServiceResponse(ServerReflection.name), ServiceResponse(ShoppingCart)))
+           )),
           (In.FileContainingSymbol("nonsense.blabla.Void"), Out.FileDescriptorResponse(FileDescriptorResponse(Nil)))
         ) map {
           case (in, out) =>
