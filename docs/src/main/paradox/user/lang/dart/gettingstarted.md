@@ -34,7 +34,6 @@ RUN dart --snapshot-kind=kernel --snapshot=bin/main.dart.snapshot bin/main.dart
 CMD []
 ENTRYPOINT ["/usr/bin/dart", "--enable-asserts",  "--enable-vm-service:8181", "bin/main.dart.snapshot"]
 ```
-@@@
 
 In addition to the above, you will need to install the Cloudstate Dart support library, which can be done as follows:
     
