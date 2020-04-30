@@ -14,7 +14,6 @@ class ShoppingCartEntity {
   ShoppingCartEntity.create(@EntityId() String entityId, Context context) {
     this.entityId = entityId;
     this.context = context;
-    print('Entity $entityId. Context: $context');
   }
 
   @Snapshot()
@@ -54,7 +53,6 @@ class ShoppingCartEntity {
 
   @EventSourcedCommandHandler()
   Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
-    print('AddLineItem => $item');
     if (item.quantity <= 0) {
       ctx.fail('Cannot add negative quantity of to item ${item.productId}');
     }
