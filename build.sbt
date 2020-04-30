@@ -10,8 +10,8 @@ inThisBuild(
     version := dynverGitDescribeOutput.value.mkVersion(versionFmt, "latest"),
     dynver := sbtdynver.DynVer.getGitDescribeOutput(new Date).mkVersion(versionFmt, "latest"),
     scalaVersion := "2.12.11",
-    // Needed for the fixed HTTP/2 connection cleanup version of akka-http
-    resolvers += Resolver.bintrayRepo("akka", "snapshots"), // TODO: Remove once we're switching to akka-http 10.1.11
+    // Needed for the akka-grpc 0.8.4 snapshot
+    resolvers += Resolver.bintrayRepo("akka", "maven"), // TODO: Remove once we're switching to akka-grpc 0.8.5/1.0.0
     organizationName := "Lightbend Inc.",
     organizationHomepage := Some(url("https://lightbend.com")),
     startYear := Some(2019),
