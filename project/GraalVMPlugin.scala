@@ -1,14 +1,12 @@
 import java.io.ByteArrayInputStream
 
-import sbt._
-import sbt.Keys._
-import com.typesafe.sbt.packager.Stager
 import com.typesafe.sbt.packager.Compat._
-import com.typesafe.sbt.packager.{Keys => NativePackagerKeys}
 import com.typesafe.sbt.packager.archetypes.JavaAppPackaging
 import com.typesafe.sbt.packager.docker.{Cmd, DockerPlugin, Dockerfile, ExecCmd}
-import com.typesafe.sbt.packager.universal.UniversalPlugin
 import com.typesafe.sbt.packager.graalvmnativeimage.GraalVMNativeImagePlugin.autoImport._
+import com.typesafe.sbt.packager.{Stager, Keys => NativePackagerKeys}
+import sbt.Keys._
+import sbt._
 
 /**
  * COPIED AND ADAPTED FROM https://github.com/sbt/sbt-native-packager/pull/1251
@@ -35,9 +33,8 @@ object GraalVMPlugin extends AutoPlugin {
       settingKey[Boolean]("Whether the native image should be built directly by docker:publishLocal")
   }
 
-  import autoImport._
   import DockerPlugin.autoImport._
-  import UniversalPlugin.autoImport._
+  import autoImport._
 
   private val GraalVMBaseImage = "oracle/graalvm-ce"
   private val NativeImageCommand = "native-image"
@@ -84,6 +81,11 @@ object GraalVMPlugin extends AutoPlugin {
               "native-image",
               "-cp",
               classpathJars.map(_._2).mkString(":"),
+              "--initialize-at-run-time=io.grpc.netty.shaded.io.netty.handler.ssl.OpenSsl",
+              "--initialize-at-run-time=io.grpc.netty.shaded.io.netty.util.internal.CleanerJava6",
+              "--rerun-class-initialization-at-runtime=io.netty.handler.codec.http2.Http2CodecUtil",
+              "--initialize-at-run-time=io.netty.handler.codec.http2.DefaultHttp2FrameWriter",
+              "--initialize-at-build-time=com.google.protobuf",
               s"-H:Name=$binaryName"
             ) ++ extraOptions.map(_.replace("$", "\\$")) ++ Seq(className)
 
