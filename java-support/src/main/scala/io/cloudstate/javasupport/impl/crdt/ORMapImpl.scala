@@ -173,13 +173,13 @@ private[crdt] final class ORMapImpl[K, V <: InternalCrdt](anySupport: AnySupport
     )
 
   override val applyDelta = {
-    case CrdtDelta.Delta.Ormap(ORMapDelta(cleared, removed, updated, added)) =>
+    case CrdtDelta.Delta.Ormap(ORMapDelta(cleared, removed, updated, added, _)) =>
       if (cleared) {
         value.clear()
       }
       removed.foreach(key => value.remove(anySupport.decode(key)))
       updated.foreach {
-        case ORMapEntryDelta(Some(key), Some(delta)) =>
+        case ORMapEntryDelta(Some(key), Some(delta), _) =>
           val crdt = value.get(anySupport.decode(key))
           if (crdt == null) {
             ORMapImpl.log.warn(s"ORMap entry to update with key $key not found in map")
@@ -188,17 +188,17 @@ private[crdt] final class ORMapImpl[K, V <: InternalCrdt](anySupport: AnySupport
           }
       }
       added.foreach {
-        case ORMapEntry(Some(key), Some(state)) =>
+        case ORMapEntry(Some(key), Some(state), _) =>
           value.put(anySupport.decode(key).asInstanceOf[K],
                     CrdtStateTransformer.create(state, anySupport).asInstanceOf[V])
       }
   }
 
   override val applyState = {
-    case CrdtState.State.Ormap(ORMapState(values)) =>
+    case CrdtState.State.Ormap(ORMapState(values, _)) =>
       value.clear()
       values.foreach {
-        case ORMapEntry(Some(key), Some(state)) =>
+        case ORMapEntry(Some(key), Some(state), _) =>
           value.put(anySupport.decode(key).asInstanceOf[K],
                     CrdtStateTransformer.create(state, anySupport).asInstanceOf[V])
       }

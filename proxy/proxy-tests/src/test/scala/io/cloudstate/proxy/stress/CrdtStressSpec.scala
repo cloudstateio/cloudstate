@@ -2,9 +2,9 @@ package io.cloudstate.proxy.stress
 
 import java.io.File
 import java.net.ServerSocket
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
+import java.util.concurrent.atomic.AtomicLong
 
-import akka.{Done, NotUsed}
+import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
 import akka.cluster.Cluster
 import akka.grpc.GrpcClientSettings
@@ -14,14 +14,14 @@ import akka.stream.scaladsl.{Flow, Sink, Source}
 import akka.util.Timeout
 import com.example.crdts.crdt_example.{CrdtExampleClient, Get, MutateSet, SomeValue, UpdateCounter}
 import com.typesafe.config.ConfigFactory
-import io.cloudstate.proxy.{CloudStateProxyMain, EntityDiscoveryManager}
-import org.scalatest.concurrent.{Eventually, Futures, ScalaFutures}
-import org.scalatest.time.{Millis, Second, Seconds, Span}
+import io.cloudstate.proxy.EntityDiscoveryManager
+import org.scalatest.concurrent.{Eventually, ScalaFutures}
+import org.scalatest.time.{Second, Seconds, Span}
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpec}
 import org.scalatest.{Ignore, Tag}
 
 import scala.collection.concurrent.TrieMap
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.sys.process.Process
 import scala.util.Random

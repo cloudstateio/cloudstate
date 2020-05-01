@@ -1,7 +1,8 @@
 addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "1.3.17")
 addSbtPlugin("com.dwijnand" % "sbt-dynver" % "3.3.0")
 
-addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "0.7.1")
+resolvers += Resolver.bintrayRepo("akka", "maven")
+addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "0.8.4+25-52f006d6")
 addSbtPlugin("com.lightbend.sbt" % "sbt-javaagent" % "0.1.4")
 
 addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.9")

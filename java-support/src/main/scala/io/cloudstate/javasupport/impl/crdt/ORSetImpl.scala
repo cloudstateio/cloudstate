@@ -101,7 +101,7 @@ private[crdt] class ORSetImpl[T](anySupport: AnySupport) extends util.AbstractSe
     CrdtState.State.Orset(ORSetState(value.asScala.toSeq.map(anySupport.encodeScala)))
 
   override val applyDelta = {
-    case CrdtDelta.Delta.Orset(ORSetDelta(cleared, removed, added)) =>
+    case CrdtDelta.Delta.Orset(ORSetDelta(cleared, removed, added, _)) =>
       if (cleared) {
         value.clear()
       }
@@ -110,7 +110,7 @@ private[crdt] class ORSetImpl[T](anySupport: AnySupport) extends util.AbstractSe
   }
 
   override val applyState = {
-    case CrdtState.State.Orset(ORSetState(value)) =>
+    case CrdtState.State.Orset(ORSetState(value, _)) =>
       this.value.clear()
       this.value.addAll(value.map(e => anySupport.decode(e).asInstanceOf[T]).asJava)
   }

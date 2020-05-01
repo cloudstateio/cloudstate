@@ -22,11 +22,18 @@ import scala.util.Success
 import scala.annotation.tailrec
 import akka.grpc.scaladsl.{GrpcExceptionHandler, GrpcMarshalling}
 import GrpcMarshalling.{marshalStream, unmarshalStream}
-import akka.grpc.internal.{CancellationBarrierGraphStage, GrpcResponseHelpers}
+import akka.grpc.internal.{
+  CancellationBarrierGraphStage,
+  Codecs,
+  GrpcProtocolNative,
+  GrpcResponseHelpers,
+  Identity,
+  ServerReflectionImpl
+}
 import akka.grpc.scaladsl.headers.`Message-Encoding`
-import akka.grpc.Grpc
 import akka.{Done, NotUsed}
-import akka.grpc.{Codecs, ProtobufSerializer}
+import akka.grpc.{ProtobufSerializer, Trailers}
+import akka.grpc.javadsl.ServerReflection
 import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes}
 import akka.http.scaladsl.model.Uri.Path
 import akka.actor.{ActorRef, ActorSystem}
@@ -36,12 +43,13 @@ import akka.stream.scaladsl.{Flow, Keep, RunnableGraph, Source}
 import com.google.protobuf.{ByteString => ProtobufByteString}
 import com.google.protobuf.any.{Any => ProtobufAny}
 import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor, MethodDescriptor}
+import grpc.reflection.v1alpha.reflection.ServerReflectionHandler
 import io.cloudstate.protocol.entity._
 import io.cloudstate.proxy.eventing.{Emitter, Emitters, EventingManager, EventingSupport}
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
 import io.cloudstate.proxy.protobuf.Types
-import io.grpc.Status
+import io.grpc.{Status, StatusRuntimeException}
 import org.slf4j.{Logger, LoggerFactory}
 
 object Serve {
@@ -53,9 +61,10 @@ object Serve {
   private final val Http404Response: Future[HttpResponse] =
     Future.successful(HttpResponse(StatusCodes.NotFound))
 
-  val mapRequestFailureExceptions: ActorSystem => PartialFunction[Throwable, Status] = { _ =>
+  val mapRequestFailureExceptions: ActorSystem => PartialFunction[Throwable, Trailers] = { _ =>
     {
-      case CommandException(msg) => Status.UNKNOWN.augmentDescription(msg)
+      case CommandException(msg) => Trailers(Status.UNKNOWN.augmentDescription(msg))
+      case e: StatusRuntimeException => Trailers(e.getStatus)
     }
   }
 
@@ -106,8 +115,10 @@ object Serve {
 
       zipWithEmitter
         .map({
-          case (emitter,
-                UserFunctionReply(Some(ClientAction(ClientAction.Action.Reply(Reply(some @ Some(payload))))), _)) =>
+          case (
+              emitter,
+              UserFunctionReply(Some(ClientAction(ClientAction.Action.Reply(Reply(some @ Some(payload), _)), _)), _, _)
+              ) =>
             if (payload.typeUrl != expectedReplyTypeUrl) {
               val msg =
                 s"${fullCommandName}: Expected reply type_url to be [${expectedReplyTypeUrl}] but was [${payload.typeUrl}]."
@@ -117,10 +128,11 @@ object Serve {
               val _ = emitter.emit(payload, method) // TODO: check returned boolean?
             }
             some
-          case (_, UserFunctionReply(Some(ClientAction(ClientAction.Action.Forward(_))), _)) =>
+          case (_, UserFunctionReply(Some(ClientAction(ClientAction.Action.Forward(_), _)), _, _)) =>
             log.error("Cannot serialize forward reply, this should have been handled by the UserFunctionRouter")
             None
-          case (_, UserFunctionReply(Some(ClientAction(ClientAction.Action.Failure(Failure(_, message)))), _)) =>
+          case (_,
+                UserFunctionReply(Some(ClientAction(ClientAction.Action.Failure(Failure(_, message, _)), _)), _, _)) =>
             log.error("User Function responded with a failure: {}", message)
             None
           case _ =>
@@ -146,7 +158,9 @@ object Serve {
       GrpcWebSupport.wrapGrpcHandler(grpcProxy),
       HttpApi.serve(entities.map(_.serviceDescriptor -> grpcProxy).toList),
       handleNetworkProbe(),
-      Reflection.serve(fileDescriptors, entities.map(_.serviceName).toList)
+      ServerReflectionHandler.partial(
+        ServerReflectionImpl(fileDescriptors, entities.map(_.serviceName).toList)
+      )
     )
 
     ({ // Creates a fast implementation of multi-PartialFunction composition
@@ -230,19 +244,19 @@ object Serve {
             handler.flow
           }
 
-        val responseCodec = Codecs.negotiate(req)
-        val messageEncoding = `Message-Encoding`.findIn(req.headers)
+        val responseWriter = GrpcProtocolNative.newWriter(Codecs.negotiate(req))
+        val reader = GrpcProtocolNative.newReader(Codecs.detect(req).get)
 
         Future
           .successful(
             GrpcResponseHelpers(
               req.entity.dataBytes
-                .viaMat(Grpc.grpcFramingDecoder(messageEncoding))(Keep.none)
+                .viaMat(reader.dataFrameDecoder)(Keep.none)
                 .map(handler.serializer.deserialize)
                 .via(new CancellationBarrierGraphStage) // In gRPC we signal failure by returning an error code, so we don't want the cancellation bubbled out
                 .via(processRequest),
               mapRequestFailureExceptions
-            )(ReplySerializer, mat, responseCodec, sys)
+            )(ReplySerializer, responseWriter, sys)
           )
     }
 

@@ -152,8 +152,7 @@ jobs:
             rm package-lock.json
             npm install
             cd /home/circleci/project
-            cp tck/src/it/resources/graalvm_application.conf tck/src/it/resources/application.conf
-            sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
+            sbt -Dconfig.resource=native-image.conf 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
 
 workflows:
   version: 2

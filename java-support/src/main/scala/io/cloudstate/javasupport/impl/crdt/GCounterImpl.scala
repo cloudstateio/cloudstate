@@ -31,12 +31,12 @@ private[crdt] final class GCounterImpl extends InternalCrdt with GCounter {
   override def state: CrdtState.State = CrdtState.State.Gcounter(GCounterState(value))
 
   override val applyDelta = {
-    case CrdtDelta.Delta.Gcounter(GCounterDelta(increment)) =>
+    case CrdtDelta.Delta.Gcounter(GCounterDelta(increment, _)) =>
       value += increment
   }
 
   override val applyState = {
-    case CrdtState.State.Gcounter(GCounterState(value)) =>
+    case CrdtState.State.Gcounter(GCounterState(value, _)) =>
       this.value = value
   }
 

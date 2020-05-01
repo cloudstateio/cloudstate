@@ -16,13 +16,12 @@
 
 package io.cloudstate.proxy
 
-import akka.{Done, NotUsed}
+import akka.Done
 import akka.actor.{Actor, ActorLogging, CoordinatedShutdown, PoisonPill, Props, Status}
 import akka.cluster.Cluster
 import akka.util.Timeout
 import akka.pattern.pipe
-import akka.stream.{ActorMaterializer, Materializer}
-import akka.stream.scaladsl.{RunnableGraph, Sink}
+import akka.stream.scaladsl.RunnableGraph
 import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
 import akka.http.scaladsl.Http.ServerBinding
 import akka.cluster.singleton.{
@@ -32,6 +31,7 @@ import akka.cluster.singleton.{
   ClusterSingletonProxySettings
 }
 import akka.grpc.GrpcClientSettings
+import akka.stream.ActorMaterializer
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.typesafe.config.Config
@@ -67,7 +67,7 @@ object EntityDiscoveryManager {
       devMode: Boolean,
       httpInterface: String,
       httpPort: Int,
-      userFunctionInterface: String,
+      userFunctionHost: String,
       userFunctionPort: Int,
       relayTimeout: Timeout,
       relayOutputBufferSize: Int,
@@ -86,7 +86,7 @@ object EntityDiscoveryManager {
       this(devMode = config.getBoolean("dev-mode-enabled"),
            httpInterface = config.getString("http-interface"),
            httpPort = config.getInt("http-port"),
-           userFunctionInterface = config.getString("user-function-interface"),
+           userFunctionHost = config.getString("user-function-host"),
            userFunctionPort = config.getInt("user-function-port"),
            relayTimeout = Timeout(config.getDuration("relay-timeout").toMillis.millis),
            maxInboundMessageSize = config.getBytes("max-inbound-message-size"),
@@ -141,13 +141,14 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
     implicit mat: ActorMaterializer
 ) extends Actor
     with ActorLogging {
+
   implicit val system = context.system
   implicit val ec = context.dispatcher
   import EntityDiscoveryManager.Ready
 
   private[this] final val clientSettings =
     GrpcClientSettings
-      .connectToServiceAt(config.userFunctionInterface, config.userFunctionPort)
+      .connectToServiceAt(config.userFunctionHost, config.userFunctionPort)
       .withChannelBuilderOverrides(_.maxInboundMessageSize(config.maxInboundMessageSize.toInt))
       .withTls(false)
   private[this] final val entityDiscoveryClient = EntityDiscoveryClient(clientSettings)
@@ -256,8 +257,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
           Http().bindAndHandleAsync(
             handler = route,
             interface = config.httpInterface,
-            port = config.httpPort,
-            connectionContext = HttpConnectionContext(http2 = UseHttp2.Negotiated)
+            port = config.httpPort
           ) pipeTo self
         }
 

@@ -29,6 +29,9 @@ trait UserFunctionTypeSupportFactory {
  */
 abstract class EntityTypeSupportFactory extends UserFunctionTypeSupportFactory {
   override final def build(entity: Entity, serviceDescriptor: ServiceDescriptor): UserFunctionTypeSupport = {
+    require(serviceDescriptor != null,
+            "ServiceDescriptor not found, please verify the spelling and package name provided when looking it up")
+
     val methods = serviceDescriptor.getMethods.asScala
       .map(method => method.getName -> new EntityMethodDescriptor(method))
       .toMap
