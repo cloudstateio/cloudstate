@@ -479,7 +479,9 @@ lazy val `proxy-spanner` = (project in file("proxy/spanner"))
       // These are the only 2 .proto with this problem because the version in
       // cloudstate has deviated from the upstream one since
       // https://github.com/cloudstateio/cloudstate/pull/127
-      // We should still not ship these .proto's in akka-persistence-spanner, though
+      // Can be removed when akka-persistence-spanner is built with a
+      // post-0.8.4 akka-grpc version (with
+      // https://github.com/akka/akka-grpc/pull/948)
       case "google/api/http.proto" => MergeStrategy.first
       case "google/api/annotations.proto" => MergeStrategy.first
       // This one is different in akka-protobuf-v3.
