@@ -80,7 +80,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
   def handle(in: Source[CrdtStreamIn, NotUsed]): Source[CrdtStreamOut, NotUsed] =
     in.prefixAndTail(1)
       .flatMapConcat {
-        case (Seq(CrdtStreamIn(In.Init(init))), source) =>
+        case (Seq(CrdtStreamIn(In.Init(init), _)), source) =>
           source.via(runEntity(init))
         case _ =>
           // todo better error

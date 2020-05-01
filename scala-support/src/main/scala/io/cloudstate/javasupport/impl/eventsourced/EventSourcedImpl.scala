@@ -96,7 +96,7 @@ final class EventSourcedImpl(_system: ActorSystem,
   ): akka.stream.scaladsl.Source[EventSourcedStreamOut, akka.NotUsed] =
     in.prefixAndTail(1)
       .flatMapConcat {
-        case (Seq(EventSourcedStreamIn(InInit(init))), source) =>
+        case (Seq(EventSourcedStreamIn(InInit(init), _)), source) =>
           source.via(runEntity(init))
         case _ =>
           // todo better error

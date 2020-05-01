@@ -28,12 +28,12 @@ private[crdt] final class FlagImpl extends InternalCrdt with Flag {
   override def state: CrdtState.State = CrdtState.State.Flag(FlagState(value))
 
   override val applyDelta = {
-    case CrdtDelta.Delta.Flag(FlagDelta(value)) =>
+    case CrdtDelta.Delta.Flag(FlagDelta(value, _)) =>
       this.value |= value
   }
 
   override val applyState = {
-    case CrdtState.State.Flag(FlagState(value)) =>
+    case CrdtState.State.Flag(FlagState(value, _)) =>
       this.value = value
   }
 

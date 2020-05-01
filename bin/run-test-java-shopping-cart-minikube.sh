@@ -40,6 +40,10 @@ then
     echo
     kubectl describe deployment/shopping-cart-deployment
     echo
+    echo "=== Pods description: ==="
+    echo
+    kubectl describe pods
+    echo
     echo "=== Proxy logs: ==="
     echo
     kubectl logs -l app=shopping-cart -c akka-sidecar --tail=-1

@@ -30,12 +30,12 @@ private[crdt] final class PNCounterImpl extends InternalCrdt with PNCounter {
   override def state: CrdtState.State = CrdtState.State.Pncounter(PNCounterState(value))
 
   override val applyDelta = {
-    case CrdtDelta.Delta.Pncounter(PNCounterDelta(increment)) =>
+    case CrdtDelta.Delta.Pncounter(PNCounterDelta(increment, _)) =>
       value += increment
   }
 
   override val applyState = {
-    case CrdtState.State.Pncounter(PNCounterState(value)) =>
+    case CrdtState.State.Pncounter(PNCounterState(value, _)) =>
       this.value = value
   }
 

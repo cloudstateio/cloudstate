@@ -70,12 +70,12 @@ class Warmup(needsWarmup: Boolean) extends Actor with ActorLogging {
     case ConcurrencyEnforcer.Action(_, start) =>
       log.debug("Warmup received action, starting it.")
       start()
-    case EventSourcedStreamIn(EventSourcedStreamIn.Message.Event(_)) =>
+    case EventSourcedStreamIn(EventSourcedStreamIn.Message.Event(_), _) =>
     // Ignore
-    case EventSourcedStreamIn(EventSourcedStreamIn.Message.Init(_)) =>
+    case EventSourcedStreamIn(EventSourcedStreamIn.Message.Init(_), _) =>
       log.debug("Warmup got init.")
     // Ignore
-    case EventSourcedStreamIn(EventSourcedStreamIn.Message.Command(cmd)) =>
+    case EventSourcedStreamIn(EventSourcedStreamIn.Message.Command(cmd), _) =>
       log.debug("Warmup got forwarded command")
       // It's forwarded us our command, send it a reply
       eventSourcedEntityManager ! EventSourcedStreamOut(

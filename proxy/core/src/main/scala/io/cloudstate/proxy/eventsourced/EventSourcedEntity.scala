@@ -242,7 +242,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
     case command: EntityCommand =>
       handleCommand(command, sender())
 
-    case EventSourcedStreamOut(m) =>
+    case EventSourcedStreamOut(m, _) =>
       import EventSourcedStreamOut.{Message => ESOMsg}
       m match {
 

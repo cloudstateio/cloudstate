@@ -188,11 +188,11 @@ class Autoscaler(settings: AutoscalerSettings,
             case WaitingForState =>
             // Do nothing, we don't have our own state yet
 
-            case Stable() =>
+            case Stable(_) =>
               become(stable)
               self ! Tick
 
-            case ScalingUp(desired, lastStableRequestRatePerNode, wallClockDeadline) =>
+            case ScalingUp(desired, lastStableRequestRatePerNode, wallClockDeadline, _) =>
               become(
                 scalingUp(desired,
                           lastStableRequestRatePerNode,
@@ -200,11 +200,11 @@ class Autoscaler(settings: AutoscalerSettings,
               )
               self ! Tick
 
-            case ScalingDown(desired, wallClockDeadline) =>
+            case ScalingDown(desired, wallClockDeadline, _) =>
               become(scalingDown(desired, Deadline.now + (wallClockDeadline - System.currentTimeMillis()).millis))
               self ! Tick
 
-            case Upgrading(desired, lastStableRequestRatePerNode) =>
+            case Upgrading(desired, lastStableRequestRatePerNode, _) =>
               become(upgrading(desired, lastStableRequestRatePerNode))
               self ! Tick
           }
