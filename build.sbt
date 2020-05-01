@@ -51,9 +51,12 @@ val GrpcJavaVersion = "1.22.1"
 val GraalAkkaVersion = "0.5.0"
 val AkkaVersion = "2.6.4"
 val AkkaHttpVersion = "10.1.11"
+// Can be removed when a post-0.8.4 version comes in (e.g. via akka-persistence-spanner)
+val AkkaGrpcVersion = "0.8.4+25-52f006d6"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
-val AkkaPersistenceSpannerVersion = "0.1"
+// https://github.com/akka/akka-persistence-spanner/pull/74
+val AkkaPersistenceSpannerVersion = "0.1+14-bd4114ba"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0"
@@ -456,6 +459,8 @@ lazy val `proxy-spanner` = (project in file("proxy/spanner"))
     name := "cloudstate-proxy-spanner",
     libraryDependencies ++= Seq(
       "com.lightbend.akka" %% "akka-persistence-spanner" % AkkaPersistenceSpannerVersion,
+      // Can be removed when a post-0.8.4 version comes in (e.g. via akka-persistence-spanner)
+      "com.lightbend.akka.grpc" %% "akka-grpc-runtime" % AkkaGrpcVersion,
     ),
     fork in run := true,
     mainClass in Compile := Some("io.cloudstate.proxy.CloudstateSpannerProxyMain"),
@@ -466,6 +471,21 @@ lazy val `proxy-spanner` = (project in file("proxy/spanner"))
     assemblyMergeStrategy in assembly := {
       /*ADD CUSTOMIZATIONS HERE*/
       case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
+      case "module-info.class" => MergeStrategy.discard
+      // Perhaps can be removed later depending on how
+      // https://github.com/akka/akka-persistence-spanner/issues/75
+      // is resolved
+      case "GoogleInternetAuthorityG3.crt" => MergeStrategy.first
+      // These are the only 2 .proto with this problem because the version in
+      // cloudstate has deviated from the upstream one since
+      // https://github.com/cloudstateio/cloudstate/pull/127
+      // We should still not ship these .proto's in akka-persistence-spanner, though
+      case "google/api/http.proto" => MergeStrategy.first
+      case "google/api/annotations.proto" => MergeStrategy.first
+      // This one is different in akka-protobuf-v3.
+      // We should still not ship these .proto's in akka-persistence-spanner
+      // and not in akka-protobuf-v3, though.
+      case "google/protobuf/field_mask.proto" => MergeStrategy.first
       case x =>
         val oldStrategy = (assemblyMergeStrategy in assembly).value
         oldStrategy(x)
