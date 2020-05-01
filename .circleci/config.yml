@@ -161,8 +161,11 @@ jobs:
       - checkout
       - setup_sbt
       - run: |
-          sbt -Dconfig.resource=native-image.conf  "set scalafmtOnCompile := false ; dockerBuildNativeDevMode publishLocal"
-          docker images
+          # sbt -Dconfig.resource=native-image.conf  "set scalafmtOnCompile := false ; dockerBuildNativeDevMode publishLocal"
+          sbt -Dconfig.resource=native-image.conf \
+              'set concurrentRestrictions in Global += Tags.limitAll(1)' \
+              'set scalafmtOnCompile := false' \
+              'dockerBuildNativeDevMode publishLocal;' tck/it:test
 
 workflows:
   version: 2
