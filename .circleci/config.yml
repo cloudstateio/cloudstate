@@ -153,6 +153,14 @@ jobs:
             npm install
             cd /home/circleci/project
             sbt -Dconfig.resource=native-image.conf 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
+  gvm-test:
+    machine: true
+    resource_class: xlarge
+    description: "Graal Test"
+    steps:
+      - checkout
+      - setup_sbt
+      - run: sbt -Dconfig.resource=native-image.conf  "; dockerBuildNativeDevMode publishLocal; tck/it:test"
 
 workflows:
   version: 2
@@ -160,7 +168,10 @@ workflows:
 #  build:
 #    jobs:
 #      - graalvm_local_build
-  test:
+  graalTest:
     jobs:
-      - it_test
-      - graalvm_it_test
+      - gvm-test
+#  test:
+#    jobs:
+#      - it_test
+#      - graalvm_it_test
