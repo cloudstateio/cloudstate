@@ -1,35 +1,23 @@
 package io.cloudstate.proxy.eventing
 
 import akka.{Done, NotUsed}
-import akka.actor.{ActorSystem, Cancellable}
-import akka.http.scaladsl.model.{HttpEntity, HttpRequest, HttpResponse, StatusCodes}
-import akka.http.scaladsl.model.Uri.Path
+import akka.actor.Cancellable
 import akka.stream.{ActorMaterializer, FlowShape, OverflowStrategy}
-import akka.stream.scaladsl.{Flow, GraphDSL, Keep, Merge, Partition, RunnableGraph, Sink, Source}
-import akka.parboiled2.util.Base64
-
+import akka.stream.scaladsl.{Flow, GraphDSL, Merge, Partition, RunnableGraph, Sink, Source}
 import io.cloudstate.protocol.entity.{ClientAction, EntityDiscoveryClient, Failure, Reply, UserFunctionError}
 import io.cloudstate.proxy.{Serve, UserFunctionRouter}
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.protobuf.{Options, Types}
 import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
-
 import io.cloudstate.eventing.{Eventing, EventingProto}
-
-import com.google.protobuf.{ByteString => ProtobufByteString}
 import com.google.protobuf.any.{Any => ProtobufAny}
-import com.google.protobuf.Descriptors.{FileDescriptor, MethodDescriptor}
+import com.google.protobuf.Descriptors.MethodDescriptor
 
-import scala.annotation.tailrec
 import scala.collection.JavaConverters._
-import scala.concurrent.{ExecutionContext, Future}
-import scala.concurrent.duration._
-
+import scala.concurrent.Future
 import com.typesafe.config.Config
-
-import org.slf4j.{Logger, LoggerFactory}
-
-import Serve.{CommandHandler}
+import org.slf4j.LoggerFactory
+import Serve.CommandHandler
 
 trait Emitter {
   def emit(payload: ProtobufAny, method: MethodDescriptor): Boolean

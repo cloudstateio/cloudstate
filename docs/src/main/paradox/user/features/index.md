@@ -23,7 +23,7 @@ The following diagram illustrates how the different components of a Cloudstate s
 
 ### Stateful service
 
-A stateful service is a deployable unit. It is represented in Kubernetes as a `StatefulService` resource. It contains a @ref:[User function](#user-function), and may reference a @ref:[Stateful store](#stateful-store). When the Cloudstate operator handles it, it will transform it to a Kubernetes Deployment resource with an associated Kubernetes Service for accessing it. The deployment will be injected with the Cloudstate @ref:[Proxy](#proxy). 
+A stateful service is a deployable unit. It is represented in Kubernetes as a `StatefulService` resource. It contains a @ref:[User function](#user-function), and may reference a @ref:[Stateful store](#stateful-store). The Cloudstate operator transforms a stateful service into a Kubernetes Deployment resource. The Cloudstate operator then defines a Kubernetes Service to expose the stateful service to the outside world. The deployment will be augmented by the injection of a Cloudstate @ref:[Proxy](#proxy). 
 
 ### Stateful store
 
@@ -31,15 +31,15 @@ A stateful store is an abstraction over a datastore, typically a database. It is
 
 ### User function
 
-A user function is the code that the user writes, packaged as a Docker image, and deployed as a @ref:[Stateful service](#stateful-service). The user function exposes a gRPC interface that speaks the Cloudstate @ref:[Protocol](#protocol). The injected Cloudstate @ref:[Proxy](#proxy) speaks to the user function using this protocol. While the user function does implement this protocol, this implementation is not generally provided by end user developers themselves, rather, a Cloudstate @ref:[Support library](#support-library) is used, specific to the language that the user function is implemented in, to implement the protocol, providing a language specific idiomatic API for developers to code to.
+A user function is the code that the user writes, packaged as a Docker image, and deployed as a @ref:[Stateful service](#stateful-service). The user function exposes a gRPC interface that speaks the Cloudstate @ref:[Protocol](#protocol). The injected Cloudstate @ref:[Proxy](#proxy) speaks to the user function using this protocol. The end-user developer, generally, doesn't need to provide the code implementation of this protocol along with the user function. This burden is delegated to a Cloudstate @ref:[Support library](#support-library), specific to the programming language used to write the user function.
 
 ### Protocol
 
-The Cloudstate protocol is an open specification of a protocol for Cloudstate state management proxies to speak to Cloudstate user functions. The Cloudstate project itself provides a @ref:[Reference implementation](#reference-implementation) of this protocol. The protocol is built on and specified using gRPC, and provides support for multiple different @ref:[Entity types](#entity-type). Cloudstate provides a TCK that can be used to verify any permutation of @ref:[Proxy](#proxy) and @ref:[Support Library](#support-library) available.
+The Cloudstate protocol is an open specification for Cloudstate state management proxies to speak to Cloudstate user functions. The Cloudstate project itself provides a @ref:[Reference implementation](#reference-implementation) of this protocol. The protocol is built upon gRPC, and provides support for multiple different @ref:[Entity types](#entity-type). Cloudstate provides a Technology Compatibility Kit (TCK) that can be used to verify any permutation of @ref:[Proxy](#proxy) and @ref:[Support Library](#support-library) available. More technical details in section [Creating language support libraries](../../developer/language-support/index.html#creating-language-support-libraries)
 
 ### Proxy
 
-The Cloudstate proxy is injected as a sidecar into the deployment of each @ref:[Stateful service](#stateful-service). It is responsible for state management, and exposing the @ref:[Entity service's](#entity-service) implemented by the use @ref:[User function](#user-function) as both gRPC and REST services to the rest of the system, translating the incoming calls to @ref:[Commands](#command) that are sent to the user function using the Cloudstate @ref:[Protocol](#protocol). The proxy will typically form a cluster with other nodes in the same stateful service, allowing advanced state management features such as sharding, replication and addressed communication between nodes of a single stateful service.
+The Cloudstate proxy is injected as a sidecar into the deployment of each @ref:[Stateful service](#stateful-service). It is responsible for state management, and exposing the @ref:[Entity service](#entity-service) implemented by the @ref:[User function](#user-function) as both gRPC and REST services to the rest of the system, translating the incoming calls to @ref:[Commands](#command) that are sent to the user function using the Cloudstate @ref:[Protocol](#protocol). The proxy will typically form a cluster with other nodes in the same stateful service, allowing advanced distributed state management features such as sharding, replication and addressed communication between nodes of a single stateful service.
 
 ### Reference implementation
 
@@ -51,19 +51,19 @@ While @ref:[User functions](#user-function) can be implemented simply by impleme
 
 ### Command
 
-A command is a message received by user function. Commands may come from outside of the @ref:[Stateful service](#stateful-service), perhaps from other stateful services, other non Cloudstate services, or the outside world, or they may come from within the service, invoked as a side effect or to forward command handling from another command.
+A command is used to express the intention to alter the state of an @ref:[Entity](#entity). A command is materialized by a message received by a user function. Commands may come from outside of the @ref:[Stateful service](#stateful-service), perhaps from other stateful services, other non Cloudstate services, or the outside world, or they may come from within the service, invoked as a side effect or to forward command handling from another command.
 
 ### Entity
 
-A @ref:[User function](#user-function) implements one or more entities. An entity is conceptually equivalent to a class, or a type of state. An entity will have multiple @ref:[instances](#entity-instance) of it which can handle commands. For example, a user function may implement a chat room entity, encompassing the logic associated with chat rooms, and a particular chat room may be an instance of that entity, containing a list of the users currently in the room and a history of the messages sent to it. Each entity has a particular @ref:[Entity type](#entity-type), which defines how the entities state is persisted, shared, and what its capabilities are.
+A @ref:[User function](#user-function) implements one or more entities. An entity is conceptually equivalent to a class, or a type of state. An entity will have multiple @ref:[instances](#entity-instance) of it which can handle commands. For example, a user function may implement a chat room entity, encompassing the logic associated with chat rooms, and a particular chat room may be an instance of that entity, containing a list of the users currently in the room and a history of the messages sent to it. Each entity has a particular @ref:[Entity type](#entity-type), which defines how the entity's state is persisted, shared, and what its capabilities are.
 
 #### Entity instance
 
-An instance of an @ref:[Entity](#entity). Entity instances are identified by an @ref:[Entity key](#entity-key), which is unique to a given entity. An entity holds state in the @ref:[User function](#user-function), and depending on @ref:[Entity type](#entity-type) this state is held within the context of a gRPC stream. When a command for a particular entity instance is received, the @ref:[Proxy](#proxy) will make a new streamed gRPC call for that entity instance to the @ref:[User function](#user-function). All subsequent commands received for that entity instance will be sent through that streamed call.
+An instance of an @ref:[Entity](#entity). Entity instances are identified by an @ref:[Entity key](#entity-key), which is unique to a given entity. An entity holds state in the @ref:[User function](#user-function), and depending on the @ref:[Entity type](#entity-type) this state is held within the context of a gRPC stream. When a command for a particular entity instance is received, the @ref:[Proxy](#proxy) will make a new streamed gRPC call for that entity instance to the @ref:[User function](#user-function). All subsequent commands received for that entity instance will be sent through that streamed call.
 
 #### Entity service
 
-An entity service is a gRPC service that allows interacting with an @ref:[Entity](#entity). The @ref:[Proxy](#proxy) makes this service available for other Kubernetes services and ingreses to consume, while the @ref:[User function](#user-function) provides the implementation of it. Note that the service is not implemented directly, by the user function like a normal gRPC service, rather, it is implemented through the Cloudstate @ref:[Protocol](#protocol), which enriches the incoming and outgoing gRPC messages with state management capabilities, such as the ability to receive and update state.
+An entity service is a gRPC service that allows interacting with an @ref:[Entity](#entity). The @ref:[Proxy](#proxy) makes this service available for other Kubernetes services and ingresses to consume, while the @ref:[User function](#user-function) provides the implementation of the entity business logic. Note that the service is not implemented directly, by the user function like a normal gRPC service. Rather, it is implemented through the Cloudstate @ref:[Protocol](#protocol), which enriches the incoming and outgoing gRPC messages with state management capabilities, such as the ability to receive and update state.
 
 #### Entity type
 
@@ -71,7 +71,7 @@ The type of state management that an @ref:[Entity](#entity) uses. Available type
 
 #### Entity key
 
-A key used to identify instances of an @ref:[Entity](#entity). All @ref:[Commands](#command) must contain the entity key so that the command can be routed to the right instance of the entity that the command is from. The gRPC descriptor for the @ref:[Entity service](#entity-service) annotates the incoming message types for the entity to indicate which field(s) contain the entity key.
+A key used to identify instances of an @ref:[Entity](#entity). All @ref:[Commands](#command) must contain the entity key so that the command can be routed to the right instance of the entity that the command is for. The gRPC descriptor for the @ref:[Entity service](#entity-service) annotates the incoming message types for the entity to indicate which field(s) contain the entity key.
 
 ### Event sourced
 

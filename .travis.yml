@@ -3,7 +3,7 @@ dist: xenial
 jdk:
   - openjdk11
 scala:
-  - 2.12.9
+  - 2.12.11
 env:
   global:
   # GitHub personal access token
