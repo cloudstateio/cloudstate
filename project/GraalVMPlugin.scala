@@ -83,9 +83,9 @@ object GraalVMPlugin extends AutoPlugin {
               classpathJars.map(_._2).mkString(":"),
               "--initialize-at-run-time=io.grpc.netty.shaded.io.netty.handler.ssl.OpenSsl",
               "--initialize-at-run-time=io.grpc.netty.shaded.io.netty.util.internal.CleanerJava6",
-              "--rerun-class-initialization-at-runtime=io.netty.handler.codec.http2.Http2CodecUtil",
-              "--initialize-at-run-time=io.netty.handler.codec.http2.DefaultHttp2FrameWriter",
-              "--initialize-at-build-time=com.google.protobuf",
+//              "--rerun-class-initialization-at-runtime=io.netty.handler.codec.http2.Http2CodecUtil",
+//              "--initialize-at-run-time=io.netty.handler.codec.http2.DefaultHttp2FrameWriter",
+//              "--initialize-at-build-time=com.google.protobuf",
               s"-H:Name=$binaryName"
             ) ++ extraOptions.map(_.replace("$", "\\$")) ++ Seq(className)
 
