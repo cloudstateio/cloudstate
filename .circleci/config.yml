@@ -160,7 +160,9 @@ jobs:
     steps:
       - checkout
       - setup_sbt
-      - run: sbt -Dconfig.resource=native-image.conf  "set scalafmtOnCompile := false ; dockerBuildNativeDevMode publishLocal; tck/it:test"
+      - run: |
+          sbt -Dconfig.resource=native-image.conf  "set scalafmtOnCompile := false ; dockerBuildNativeDevMode publishLocal"
+          docker images
 
 workflows:
   version: 2
