@@ -21,6 +21,6 @@ class TCK extends Suites({
     iterator.
     asScala.
     filter(section => verify(section.getString("name"))).
-    map(c => new CloudStateTCK(CloudStateTCK.Configuration(c))).
+    map(c => new CloudStateTCK(TckConfiguration.fromConfig(c))).
     toVector
   }: _*) with SequentialNestedSuiteExecution
