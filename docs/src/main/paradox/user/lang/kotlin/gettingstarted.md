@@ -64,7 +64,7 @@ Maven
 
 Gradle Kts
 : @@@vars
-@@snip [Main.kt](/docs/src/test/kotlin/docs/user/gettingstarted/build.gradle.kts) { #build.kts }
+@@snip [Main.kt](/docs/src/test/kotlin/docs/user/gettingstarted/build.gradle.kts) { #build-kts }
 @@@
 
 @@@ note { title=Important }

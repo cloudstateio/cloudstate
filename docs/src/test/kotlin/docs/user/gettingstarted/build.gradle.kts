@@ -1,4 +1,4 @@
-// #build.kts
+// #build-kts
 import com.google.protobuf.gradle.*
 
 plugins {
@@ -45,4 +45,4 @@ jib {
         ports = listOf("8080")
         }
 }
-// #build.kts
+// #build-kts
