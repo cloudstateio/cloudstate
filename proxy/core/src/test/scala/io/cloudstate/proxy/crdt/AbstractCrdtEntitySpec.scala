@@ -155,7 +155,7 @@ abstract class AbstractCrdtEntitySpec
                                      writeConsistency: CrdtWriteConsistency = CrdtWriteConsistency.LOCAL): Failure = {
     val reply = doSendAndExpectReply(commandId, action, writeConsistency)
     inside(reply.clientAction) {
-      case Some(ClientAction(ClientAction.Action.Failure(failure))) => failure
+      case Some(ClientAction(ClientAction.Action.Failure(failure), _)) => failure
     }
   }
 
@@ -184,7 +184,7 @@ abstract class AbstractCrdtEntitySpec
 
   protected def expectCommand(name: String, payload: ProtoAny, streamed: Boolean = false): Long =
     inside(toUserFunction.expectMsgType[CrdtStreamIn].message) {
-      case CrdtStreamIn.Message.Command(Command(eid, cid, n, p, s)) =>
+      case CrdtStreamIn.Message.Command(Command(eid, cid, n, p, s, _)) =>
         eid should ===(entityId)
         n should ===(name)
         p shouldBe Some(payload)
@@ -223,7 +223,7 @@ abstract class AbstractCrdtEntitySpec
 
     val init = toUserFunction.expectMsgType[CrdtStreamIn]
     inside(init.message) {
-      case CrdtStreamIn.Message.Init(CrdtInit(serviceName, eid, state)) =>
+      case CrdtStreamIn.Message.Init(CrdtInit(serviceName, eid, state, _)) =>
         serviceName should ===(ServiceName)
         eid should ===(entityId)
         state.map(s => extractState(s.state))

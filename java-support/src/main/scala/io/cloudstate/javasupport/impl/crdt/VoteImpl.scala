@@ -43,13 +43,13 @@ private[crdt] final class VoteImpl extends InternalCrdt with Vote {
   override def state: CrdtState.State = CrdtState.State.Vote(VoteState(votesFor, voters, selfVote))
 
   override val applyDelta = {
-    case CrdtDelta.Delta.Vote(VoteDelta(_, votesFor, totalVoters)) =>
+    case CrdtDelta.Delta.Vote(VoteDelta(_, votesFor, totalVoters, _)) =>
       this.voters = totalVoters
       this.votesFor = votesFor
   }
 
   override val applyState = {
-    case CrdtState.State.Vote(VoteState(votesFor, voters, selfVote)) =>
+    case CrdtState.State.Vote(VoteState(votesFor, voters, selfVote, _)) =>
       this.voters = voters
       this.votesFor = votesFor
       this.selfVote = selfVote

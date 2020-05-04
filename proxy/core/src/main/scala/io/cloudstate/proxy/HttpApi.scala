@@ -53,14 +53,14 @@ import akka.parboiled2.util.Base64
 import com.google.api.annotations.AnnotationsProto
 import com.google.api.http.HttpRule
 import com.google.protobuf.{
-  DynamicMessage,
-  MessageOrBuilder,
-  ByteString => ProtobufByteString,
   BytesValue,
+  DynamicMessage,
   ListValue,
+  MessageOrBuilder,
   StringValue,
   Struct,
-  Value
+  Value,
+  ByteString => ProtobufByteString
 }
 import com.google.protobuf.Descriptors.{
   Descriptor,
@@ -82,17 +82,16 @@ import java.lang.{
 import java.net.URLDecoder
 import java.util.regex.{Matcher, Pattern}
 
-import akka.grpc.Grpc
+import akka.grpc.GrpcProtocol
+import akka.grpc.internal.{GrpcProtocolNative, Identity}
 import akka.grpc.scaladsl.headers.`Message-Accept-Encoding`
 import akka.http.scaladsl.model.HttpEntity.LastChunk
 import akka.stream.scaladsl.{Sink, Source}
 import akka.util.ByteString
-
 import io.grpc.Status
-
 import io.cloudstate.proxy.protobuf.Options
-
 import com.google.api.httpbody.HttpBody
+import scalapb.UnknownFieldSet
 
 // References:
 // https://cloud.google.com/endpoints/docs/grpc-service-config/reference/rpc/google.api#httprule
@@ -171,6 +170,8 @@ object HttpApi {
   private final val NoMatch = PartialFunction.empty[HttpRequest, Future[HttpResponse]]
   private final val IdentityHeader = new `Message-Accept-Encoding`("identity")
   private final val NEWLINE_BYTES = ByteString('\n')
+
+  private final val grpcWriter = GrpcProtocolNative.newWriter(Identity)
 
   final class HttpEndpoint(
       final val methDesc: MethodDescriptor,
@@ -442,9 +443,11 @@ object HttpApi {
         method = HttpMethods.POST,
         uri = Uri(path = Path / methDesc.getService.getFullName / methDesc.getName),
         headers = req.headers :+ IdentityHeader,
-        entity = HttpEntity(
+        entity = HttpEntity.Chunked(
           ContentTypes.`application/grpc+proto`,
-          Grpc.encodeFrame(Grpc.notCompressed, ByteString.fromArrayUnsafe(message.toByteArray))
+          Source.single(
+            grpcWriter.encodeFrame(GrpcProtocol.DataFrame(ByteString.fromArrayUnsafe(message.toByteArray)))
+          )
         ),
         protocol = req.protocol
       )
