@@ -13,7 +13,7 @@ class TCK extends Suites({
 
   verify.filterNot(validNames) match {
     case x if !x.isEmpty =>
-      System.err.println("Configuration 'cloudstate-tck.verify' contains non-existent names for combinations:" + x.mkString("[",",","]"))
+      throw new IllegalArgumentException("Configuration 'cloudstate-tck.verify' contains non-existent names for combinations:" + x.mkString("[",",","]"))
     case _ => // All good
   }
 
