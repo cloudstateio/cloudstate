@@ -1,7 +1,6 @@
 import java.io.File
 import java.util.Date
 
-import com.typesafe.sbt.packager.docker.DockerChmodType
 import sbt.Keys.{developers, scmInfo}
 import sbt.url
 
@@ -11,8 +10,8 @@ inThisBuild(
     version := dynverGitDescribeOutput.value.mkVersion(versionFmt, "latest"),
     dynver := sbtdynver.DynVer.getGitDescribeOutput(new Date).mkVersion(versionFmt, "latest"),
     scalaVersion := "2.12.11",
-    // Needed for the fixed HTTP/2 connection cleanup version of akka-http
-    resolvers += Resolver.bintrayRepo("akka", "snapshots"), // TODO: Remove once we're switching to akka-http 10.1.11
+    // Needed for the akka-grpc 0.8.4 snapshot
+    resolvers += Resolver.bintrayRepo("akka", "maven"), // TODO: Remove once we're switching to akka-grpc 0.8.5/1.0.0
     organizationName := "Lightbend Inc.",
     organizationHomepage := Some(url("https://lightbend.com")),
     startYear := Some(2019),
@@ -72,11 +71,6 @@ def common: Seq[Setting[_]] = Seq(
       de.heikoseeberger.sbtheader.FileType("proto") -> HeaderCommentStyle.cppStyleLineComment,
       de.heikoseeberger.sbtheader.FileType("js") -> HeaderCommentStyle.cStyleBlockComment
     ),
-  // Akka gRPC adds all protobuf files from the classpath to this, which we don't want because it includes
-  // all the Google protobuf files which are already compiled and on the classpath by ScalaPB. So we set it
-  // back to just our source directory.
-  PB.protoSources in Compile := Seq(),
-  PB.protoSources in Test := Seq(),
   // Akka gRPC overrides the default ScalaPB setting including the file base name, let's override it right back.
   akkaGrpcCodeGeneratorSettings := Seq(),
   excludeFilter in headerResources := HiddenFileFilter || GlobFilter("reflection.proto"),
@@ -202,8 +196,6 @@ lazy val docs = (project in file("docs"))
 lazy val proxyDockerBuild = settingKey[Option[(String, Option[String])]](
   "Docker artifact name and configuration file which gets overridden by the buildProxy command"
 )
-lazy val nativeImageDockerBuild =
-  settingKey[Boolean]("Whether the docker image should be based on the native image or not.")
 
 def dockerSettings: Seq[Setting[_]] = Seq(
   proxyDockerBuild := None,
@@ -261,12 +253,10 @@ def buildProxyCommand(commandName: String,
     buildProxyHelp(cn, name)
   ) { (state, command) =>
     List(
-      s"project ${project.id}",
-      s"""set proxyDockerBuild := Some(("cloudstate-proxy-$imageName", $configResourceSetting))""",
-      s"""set nativeImageDockerBuild := $native""",
-      s"docker:$command",
-      "set proxyDockerBuild := None",
-      "project root"
+      s"""set proxyDockerBuild in `${project.id}` := Some(("cloudstate-proxy-$imageName", $configResourceSetting))""",
+      s"""set graalVMDockerPublishLocalBuild in ThisBuild := $native""",
+      s"${project.id}/docker:$command",
+      s"set proxyDockerBuild in `${project.id}` := None"
     ) ::: state
   }
 }
@@ -295,50 +285,18 @@ commands ++= Seq(
 
 // Shared settings for native image and docker builds
 def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
-  nativeImageDockerBuild := false,
   // If this is Some(…): run the native-image generation inside a Docker image
   // If this is None: run the native-image generation using a local GraalVM installation
   graalVMVersion := Some(GraalVersion),
   graalVMNativeImageOptions ++= sharedNativeImageSettings({
       graalVMVersion.value match {
-        case Some(_) => new File("/opt/graalvm/stage/resources/")
+        case Some(_) => new File("/opt/docker/graal-resources/")
         case None => baseDirectory.value / "src" / "graal"
       }
     }),
-  (mappings in Docker) := Def.taskDyn {
-      if (nativeImageDockerBuild.value) {
-        Def.task {
-          Seq(
-            (packageBin in GraalVMNativeImage).value -> s"${(defaultLinuxInstallLocation in Docker).value}/bin/${executableScriptName.value}"
-          )
-        }
-      } else {
-        Def.task {
-          // This is copied from the native packager DockerPlugin, because I don't think a dynamic task can reuse the
-          // old value of itself in the dynamic part.
-          def renameDests(from: Seq[(File, String)], dest: String) =
-            for {
-              (f, path) <- from
-              newPath = "%s/%s" format (dest, path)
-            } yield (f, newPath)
-
-          renameDests((mappings in Universal).value, (defaultLinuxInstallLocation in Docker).value)
-        }
-      }
-    }.value,
-  // Need to make sure it has group execute permission
-  // Note I think this is leading to quite large docker images :(
-  dockerChmodType := {
-    val old = dockerChmodType.value
-    if (nativeImageDockerBuild.value) {
-      DockerChmodType.Custom("u+x,g+x")
-    } else {
-      old
-    }
-  },
   dockerEntrypoint := {
     val old = dockerEntrypoint.value
-    val withLibraryPath = if (nativeImageDockerBuild.value) {
+    val withLibraryPath = if (graalVMDockerPublishLocalBuild.value) {
       old :+ s"-Djava.library.path=${DockerBaseImageJavaLibraryPath}"
     } else old
     proxyDockerBuild.value match {
@@ -382,6 +340,7 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
   ).mkString("=", ",", ""),
   "-H:ClassInitialization=com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder:rerun",
   "-H:ClassInitialization=com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder:rerun",
+  "-H:ClassInitialization=com.typesafe.config.impl.ConfigImpl$LoaderCacheHolder:rerun",
   "--initialize-at-run-time" +
   Seq(
     // These are to make up for the lack of shaded configuration for svm/native-image in grpc-netty-shaded
@@ -458,18 +417,14 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     },
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "proxy", baseDir / "frontend", baseDir / "protocol", (sourceDirectory in Compile).value / "protos")
+      Seq(baseDir / "proxy", baseDir / "frontend", baseDir / "protocol")
+    },
+    PB.protoSources in Test ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "frontend")
     },
     // For Google Cloud Pubsub API
     PB.protoSources in Compile += target.value / "protobuf_external" / "google" / "pubsub" / "v1",
-    // This adds the test/protos dir and enables the ProtocPlugin to generate protos in the Test scope
-    inConfig(Test)(
-      sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
-        PB.protoSources ++= Seq(sourceDirectory.value / "protos"),
-        akkaGrpcCodeGeneratorSettings := Seq(),
-        akkaGrpcGeneratedSources := Seq(AkkaGrpc.Server, AkkaGrpc.Client)
-      )
-    ),
     javaAgents += "org.mortbay.jetty.alpn" % "jetty-alpn-agent" % "2.0.9" % "runtime;test",
     dockerSettings,
     fork in run := true,
@@ -885,7 +840,7 @@ lazy val `tck` = (project in file("tck"))
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "proxy", baseDir / "protocol")
     },
-    fork in test := true,
+    javaOptions in IntegrationTest := sys.props.get("config.resource").map(r => s"-Dconfig.resource=$r").toSeq,
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
         .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly, `scala-shopping-cart` / assembly)

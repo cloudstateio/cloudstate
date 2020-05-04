@@ -56,7 +56,7 @@ class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
       assertConfigurationFailure(
         IllegalHttpConfig0.IllegalHttpConfig0Proto.javaDescriptor,
         "IllegalHttpConfig0",
-        "HTTP API Config: Pattern missing for rule [HttpRule(,,,Vector(),Empty)]!"
+        "HTTP API Config: Pattern missing for rule [HttpRule(,Empty,,,Vector(),UnknownFieldSet(Map()))]!"
       )
     }
 
@@ -130,7 +130,7 @@ class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
       assertConfigurationFailure(
         IllegalHttpConfig9.IllegalHttpConfig9Proto.javaDescriptor,
         "IllegalHttpConfig9",
-        "HTTP API Config: Only one level of additionalBindings supported, but [HttpRule(,,,Vector(HttpRule(,,,Vector(HttpRule(,,,Vector(),Get(/baz))),Get(/bar))),Get(/foo))] has more than one!"
+        "HTTP API Config: Only one level of additionalBindings supported, but [HttpRule(,Get(/foo),,,Vector(HttpRule(,Get(/bar),,,Vector(HttpRule(,Get(/baz),,,Vector(),UnknownFieldSet(Map()))),UnknownFieldSet(Map()))),UnknownFieldSet(Map()))] has more than one!"
       )
     }
 

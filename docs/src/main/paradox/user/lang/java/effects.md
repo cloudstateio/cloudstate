@@ -14,12 +14,14 @@ This could be looked up in the constructor of the entity, for later use, so it d
 
 ## Forwarding command
 
-To forward a command, @javadoc[`ClientActionContext.forward()`](io.cloudstate.javasupport.ClientActionContext#forward-io.cloudstate.javasupport.ServiceCall-) may be invoked. The `CommandContext` for each entity type implements `ClientActionContext` and so offers this function. If the hot items effect service call above were to be invoked as a forward, it would might look like this:
+The `CommandContext` for each entity type implements `ClientActionContext` to allow forwarding a command by invoking @javadoc[`ClientActionContext.forward()`](io.cloudstate.javasupport.ClientActionContext#forward-io.cloudstate.javasupport.ServiceCall-). For example, if the item being processed in the `addItem` command is a "hot" item, we can make the `HotItems` entity aware of that item by forwarding a command:
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/effects/ShoppingCartEntity.java) { #forward }
 
 ## Emitting an effect
 
-To emit an effect, @javadoc[`EffectContext.effect()`](io.cloudstate.javasupport.EffectContext#effect-io.cloudstate.javasupport.ServiceCall-boolean-) may be invoked. The `CommandContext` for each entity type implements `EffectContext` and so offers this function. If the hot items effect service call above were to be invoked as an effect, it would might look like this:
-                   
+The `CommandContext` for each entity type implements `EffectContext` to allow emitting an effect by invoking @javadoc[`EffectContext.effect()`](io.cloudstate.javasupport.EffectContext#effect-io.cloudstate.javasupport.ServiceCall-boolean-). For example, upon successful completion of the `addItem` command by `ShoppingCartEntity`, if we also want to emit an effect on the `HotItems` entity, we would invoke the effectful service call as:
+
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/effects/ShoppingCartEntity.java) { #effect }
+
+Please note that, contrary to command forwarding, the result of the effect is ignored by the current command `addItem`. More details in the common section @ref[Forwarding and effects](../../features/effects.md#forwarding-and-effects)

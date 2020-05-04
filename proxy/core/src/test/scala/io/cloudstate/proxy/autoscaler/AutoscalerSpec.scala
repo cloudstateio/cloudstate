@@ -138,7 +138,7 @@ class AutoscalerSpec
         userFunctionConcurrency = 1.1
       )
       expectMsg(Scale("name", 2))
-      expectScalerStateToBe { case ScalingUp(2, 200, _) => }
+      expectScalerStateToBe { case ScalingUp(2, 200, _, _) => }
     }
 
     "scale up directly to meet demand required by concurrency" in withAutoscaler() { autoscaler =>
@@ -146,7 +146,7 @@ class AutoscalerSpec
         userFunctionConcurrency = 2.2
       )
       expectMsg(Scale("name", 3))
-      expectScalerStateToBe { case ScalingUp(3, 200, _) => }
+      expectScalerStateToBe { case ScalingUp(3, 200, _, _) => }
     }
 
     "not exceed absolute scaling cap when scaling for concurrency" in withAutoscaler() { autoscaler =>
@@ -154,7 +154,7 @@ class AutoscalerSpec
         userFunctionConcurrency = 6
       )
       expectMsg(Scale("name", 5))
-      expectScalerStateToBe { case ScalingUp(5, 200, _) => }
+      expectScalerStateToBe { case ScalingUp(5, 200, _, _) => }
     }
 
     "not exceed scaling factor cap when scaling for concurrency" in withAutoscaler(
@@ -164,7 +164,7 @@ class AutoscalerSpec
         userFunctionConcurrency = 6
       )
       expectMsg(Scale("name", 3))
-      expectScalerStateToBe { case ScalingUp(3, 200, _) => }
+      expectScalerStateToBe { case ScalingUp(3, 200, _, _) => }
     }
 
     "aggregate from multiple metrics" in withAutoscaler() { autoscaler =>
@@ -180,7 +180,7 @@ class AutoscalerSpec
       autoscaler ! Tick
       expectMsg(Scale("name", 2))
       // Average request rate should be 200, because all samples were from the same member
-      expectScalerStateToBe { case ScalingUp(2, 200, _) => }
+      expectScalerStateToBe { case ScalingUp(2, 200, _, _) => }
     }
 
     "aggregate from multiple cluster members" in withAutoscaler(
@@ -200,7 +200,7 @@ class AutoscalerSpec
       // Average concurrency now should be > 1, so it should scale up, and request rate should be average of the
       // above
       expectMsg(Scale("name", 4))
-      expectScalerStateToBe { case ScalingUp(4, 300, _) => }
+      expectScalerStateToBe { case ScalingUp(4, 300, _, _) => }
     }
 
     "take into account cluster size when scaling up" in withAutoscaler(
@@ -220,7 +220,7 @@ class AutoscalerSpec
         userFunctionConcurrency = 2.2
       )
       expectMsg(Scale("name", 5))
-      expectScalerStateToBe { case ScalingUp(5, 200, _) => }
+      expectScalerStateToBe { case ScalingUp(5, 200, _, _) => }
     }
 
     "not make new scale up decisions based on concurrency while scaling" in withAutoscaler(
