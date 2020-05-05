@@ -27,7 +27,7 @@ import akka.cluster.Cluster
 import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
 import akka.pattern.{BackoffOpts, BackoffSupervisor}
-import akka.stream.ActorMaterializer
+import akka.stream.SystemMaterializer
 import org.slf4j.LoggerFactory
 import sun.misc.Signal
 
@@ -140,7 +140,7 @@ object CloudStateProxyMain {
     }
 
     implicit val system = configuration.fold(ActorSystem("cloudstate-proxy"))(c => ActorSystem("cloudstate-proxy", c))
-    implicit val materializer = ActorMaterializer()
+    implicit val materializer = SystemMaterializer(system)
     import system.dispatcher
 
     val c = system.settings.config.getConfig("cloudstate.proxy")
