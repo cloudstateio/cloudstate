@@ -11,9 +11,6 @@ import java.util.concurrent.ConcurrentHashMap
 final class ProtobufGeneratedMessageRegisterFeature extends Feature {
   private[this] final val cache = ConcurrentHashMap.newKeySet[String]
   final val messageClasses = Vector(
-    classOf[akka.protobuf.GeneratedMessage],
-    classOf[akka.protobuf.GeneratedMessage.Builder[_]],
-    classOf[akka.protobuf.ProtocolMessageEnum],
     classOf[com.google.protobuf.GeneratedMessageV3],
     classOf[com.google.protobuf.GeneratedMessageV3.Builder[_]],
     classOf[com.google.protobuf.ProtocolMessageEnum],
@@ -28,6 +25,7 @@ final class ProtobufGeneratedMessageRegisterFeature extends Feature {
       if subtype != null && cache.add(subtype.getName)
     } {
       RuntimeReflection.register(subtype)
+      // TODO check if we only need to register `parseFrom` and `toByteArray`
       subtype.getPackage.getName match {
         case "akka.cluster.protobuf.msg" | "com.google.protobuf" | "akka.cluster.ddata.protobuf"
             if !subtype.isInterface =>

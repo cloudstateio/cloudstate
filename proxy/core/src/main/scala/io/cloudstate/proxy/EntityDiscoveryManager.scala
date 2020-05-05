@@ -31,7 +31,7 @@ import akka.cluster.singleton.{
   ClusterSingletonProxySettings
 }
 import akka.grpc.GrpcClientSettings
-import akka.stream.ActorMaterializer
+import akka.stream.Materializer
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.typesafe.config.Config
@@ -119,7 +119,7 @@ object EntityDiscoveryManager {
     }
   }
 
-  def props(config: Configuration)(implicit mat: ActorMaterializer): Props =
+  def props(config: Configuration)(implicit mat: Materializer): Props =
     Props(new EntityDiscoveryManager(config))
 
   final case object Ready // Responds with true / false
@@ -138,7 +138,7 @@ object EntityDiscoveryManager {
 }
 
 class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
-    implicit mat: ActorMaterializer
+    implicit mat: Materializer
 ) extends Actor
     with ActorLogging {
 

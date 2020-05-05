@@ -366,10 +366,8 @@ object GraalVMPlugin extends AutoPlugin {
     if (dep.data.isFile) Some(dep)
     else {
       projectArts.find { art =>
-        (art.get(sbt.Keys.artifact.key), dep.get(sbt.Keys.artifact.key)) match {
-          case (Some(l), Some(r)) =>
-            l.name == r.name && l.classifier == r.classifier
-          case _ => false
+        art.get(sbt.Keys.artifact.key).zip(dep.get(sbt.Keys.artifact.key)) exists {
+          case (l, r) => l.name == r.name && l.classifier == r.classifier
         }
       }
     }

@@ -2,7 +2,7 @@ package io.cloudstate.proxy.eventing
 
 import akka.{Done, NotUsed}
 import akka.actor.Cancellable
-import akka.stream.{ActorMaterializer, FlowShape, OverflowStrategy}
+import akka.stream.{FlowShape, Materializer, OverflowStrategy}
 import akka.stream.scaladsl.{Flow, GraphDSL, Merge, Partition, RunnableGraph, Sink, Source}
 import io.cloudstate.protocol.entity.{ClientAction, EntityDiscoveryClient, Failure, Reply, UserFunctionError}
 import io.cloudstate.proxy.{Serve, UserFunctionRouter}
@@ -71,7 +71,7 @@ object EventingManager {
       else List(EventMapping(entity, endpoints))
     }
 
-  def createSupport(eventConfig: Config)(implicit materializer: ActorMaterializer): Option[EventingSupport] =
+  def createSupport(eventConfig: Config)(implicit materializer: Materializer): Option[EventingSupport] =
     eventConfig.getString("support") match {
       case "none" =>
         log.info("Eventing support turned off in configuration")
