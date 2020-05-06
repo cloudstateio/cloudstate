@@ -1,3 +1,3 @@
 # Protocol Specification
 
-Specification for the CloudEvents protocol.
+Specification for the `CloudEvents` protocol.
