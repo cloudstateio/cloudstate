@@ -38,7 +38,8 @@ jobs:
           sbt -Dconfig.resource=native-image.conf \
               'set concurrentRestrictions in Global += Tags.limitAll(1)' \
               'set scalafmtOnCompile := false' \
-              'dockerBuildNativeDevMode publishLocal;' tck/it:test
+              'dockerBuildNativeDevMode publishLocal' \
+              tck/it:test
       - save_sbt_cache
 
 
