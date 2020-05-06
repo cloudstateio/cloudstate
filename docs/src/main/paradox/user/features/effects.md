@@ -6,7 +6,7 @@ A command may only act on one entity at a time. Sometimes however, you would lik
 
 An entity may, rather than sending a reply to a command, forward it to another entity. This is done by sending a forward message back to the proxy, instructing the proxy which call on which entity should be invoked, and passing the message to invoke it with.
 
-The command won't be forwarded until any state actions request by the command handler have successfully completed. It is the responsibility of the forwarded action to return a reply that matches the type of the original command handler. Forwards can be chained arbitrarily long.
+The command won't be forwarded until any state actions requested by the command handler have successfully completed. It is the responsibility of the forwarded action to return a reply that matches the type of the original command handler. Forwards can be chained arbitrarily long.
 
 ## Emitting effects on another entity
 
