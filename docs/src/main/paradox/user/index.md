@@ -1,6 +1,6 @@
 # Using Cloudstate
 
-Documentation for Cloudstate users.
+To use the open source version of Cloudstate, see the following sections.
 
 @@toc{ depth=2 }
 
