@@ -2,24 +2,28 @@
 
 ## Prerequisites
 
-Dart version
-: Cloudstate Dart support requires Dart sdk >=2.7.0 <3.0.0.
+### Dart version
+Cloudstate Dart support requires Dart sdk >=2.7.0 <3.0.0.
 
-Build tool
-: Use Dart [Pub](https://dart.dev/tools/pub/cmd) tool for build Cloudstate Dart projects.
+### Build tool
+Use Dart [Pub](https://dart.dev/tools/pub/cmd) tool for build Cloudstate Dart projects.
 
-protoc
-: Since Cloudstate is based on gRPC, you need a protoc compiler to compile gRPC protobuf descriptors. While this can be done by downloading, [installing and running protoc manually](https://github.com/protocolbuffers/protobuf#protocol-compiler-installation). You will also need to add a plugin to compile the proto files for Dart classes.
+### Protoc
+Since Cloudstate is based on gRPC, you need a protoc compiler to compile gRPC protobuf descriptors. While this can be done by downloading, [installing and running protoc manually](https://github.com/protocolbuffers/protobuf#protocol-compiler-installation). You will also need to add a plugin to compile the proto files for Dart classes.
+
 ```shell script
 pub global activate protoc_plugin
 ```
+
 The compiler plugin, protoc-gen-dart, is installed in $HOME/.pub-cache/bin. It must be in your PATH for the protocol compiler, protoc, to find it.
+
 ```shell script
 export PATH=$PATH:$HOME/.pub-cache/bin
 ```
 
-docker
-: Cloudstate runs in Kubernetes with [Docker](https://www.docker.com/), hence you will need Docker to build a container that you can deploy to Kubernetes. Below is a Dockerfile file with Dart support:
+### Docker
+Cloudstate runs in Kubernetes with [Docker](https://www.docker.com/), hence you will need Docker to build a container that you can deploy to Kubernetes. Below is a Dockerfile file with Dart support:
+
 ```shell script
 FROM google/dart
 
@@ -36,14 +40,16 @@ ENTRYPOINT ["/usr/bin/dart", "--enable-asserts",  "--enable-vm-service:8181", "b
 ```
 
 In addition to the above, you will need to install the Cloudstate Dart support library, which can be done as follows:
-    
+
+: @@@vars   
 ```yaml
 dependencies:
-  cloudstate: ^0.5.4
+  cloudstate: ^$cloudstate.dart-support.version$
   async: ^2.2.0
   grpc: ^2.1.3
   protobuf: ^1.0.1
 ```
+@@@
 
 ## Protobuf files
 
