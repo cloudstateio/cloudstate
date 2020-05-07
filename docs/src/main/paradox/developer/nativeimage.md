@@ -116,7 +116,7 @@ GCP_AGENT_ENABLED=true sbt -Dconfig.resource=native-image.conf
 Now after building the dev mode native image, you can run the integration tests:
 
 ```
-buildDockerNativeDevMode publishLocalPull
+dockerBuildNativeDevMode publishLocalPull
 tck/it:test
 ```
 
