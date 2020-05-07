@@ -23,7 +23,6 @@ commands:
           paths:
             - "~/.ivy2/cache"
             - "~/.sbt"
-            - "~/.m"
             - "~/.coursier"
 
 jobs:

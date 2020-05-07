@@ -26,6 +26,8 @@ object GraalVMPlugin extends AutoPlugin {
     val graalVMVersion = settingKey[Option[String]](
       "Version of GraalVM to build with. Setting this has the effect of generating a container build image to build the native image with this version of Graal"
     )
+    val graalVMBuildServer =
+      settingKey[Boolean]("Whether to use the native image build server. Disabled for Docker builds by default.")
     val graalVMContainerBuildImage =
       taskKey[Option[String]]("Docker image to use for the container to build the native-image in.")
 
@@ -54,6 +56,7 @@ object GraalVMPlugin extends AutoPlugin {
       target in GraalVMNativeImage := target.value / "graalvm-native-image",
       graalVMNativeImageOptions := Seq.empty,
       graalVMVersion := None,
+      graalVMBuildServer := graalVMVersion.value.isEmpty,
       graalVMContainerBuildImage := Def.taskDyn {
           graalVMVersion.value match {
             case Some(tag) => generateContainerBuildImage(s"$GraalVMBaseImage:$tag")
