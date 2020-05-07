@@ -527,22 +527,26 @@ object HttpApi {
                 if (isHttpBodyResponse) extractContentTypeFromHttpBody(entityMessage)
                 else ContentTypes.`application/json`
 
-              val data =
-                if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage)
-                else ByteString(jsonPrinter.print(entityMessage))
+              val first = {
+                val data =
+                  if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage)
+                  else ByteString(jsonPrinter.print(entityMessage))
+
+                Source.single(HttpEntity.Chunk(data))
+              }
 
               //val extensions = extractExtensionsFromHttpBody(entityMessage) // FIXME / TODO HttpBody.extensions not supported yet
 
               HttpResponse(
                 entity = HttpEntity.Chunked(
                   contentType,
-                  rest map { protobuf: ProtobufAny =>
+                  first.concat(rest map { protobuf: ProtobufAny =>
                     val entityMessage: MessageOrBuilder = parseResponseBody(Serve.ReplySerializer.serialize(protobuf))
                     val data =
                       if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage)
                       else ByteString(jsonPrinter.print(entityMessage))
                     HttpEntity.Chunk(data ++ NEWLINE_BYTES)
-                  }
+                  })
                 )
               )
             case (Seq(), _) =>
