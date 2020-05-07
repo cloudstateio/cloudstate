@@ -310,7 +310,7 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
         case Some(_) => new File("/opt/docker/graal-resources/")
         case None => baseDirectory.value / "src" / "graal"
       }
-    }),
+    }, graalVMBuildServer.value),
   dockerEntrypoint := {
     val old = dockerEntrypoint.value
     val withLibraryPath = if (graalVMDockerPublishLocalBuild.value) {
@@ -339,7 +339,7 @@ def assemblySettings(jarName: String) =
     }
   )
 
-def sharedNativeImageSettings(targetDir: File) = Seq(
+def sharedNativeImageSettings(targetDir: File, buildServer: Boolean) = Seq(
   //"-O1", // Optimization level
   "-H:ResourceConfigurationFiles=" + targetDir / "resource-config.json",
   "-H:ReflectionConfigurationFiles=" + targetDir / "reflect-config.json",
@@ -354,8 +354,9 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
   "-H:-PrintUniverse", // if "+" prints out all classes which are included
   "-H:-NativeArchitecture", // if "+" Compiles the native image to customize to the local CPU arch
   "-H:Class=" + "io.cloudstate.proxy.CloudStateProxyMain",
-  //"-J-Xmx10g", // native-image is hungry FIXME I don't believe this is properly applied even when --no-server is enabled!
-  //"--no-server", // Uncomment to not use the native-image build server, to avoid potential cache problems with builds
+  // build server is disabled for docker builds by default (and native-image will use 80% of available memory in docker)
+  // for local (non-docker) builds, can be disabled with `set graalVMBuildServer := false` to avoid potential cache problems
+  if (buildServer) "--verbose-server" else "--no-server",
   //"--debug-attach=5005", // Debugger makes a ton of sense to use to debug SubstrateVM
   "--verbose",
   "--report-unsupported-elements-at-runtime", // Hopefully a self-explanatory flag FIXME comment this option out once AffinityPool is gone
