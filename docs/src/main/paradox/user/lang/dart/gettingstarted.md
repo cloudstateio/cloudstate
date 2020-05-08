@@ -41,7 +41,7 @@ ENTRYPOINT ["/usr/bin/dart", "--enable-asserts",  "--enable-vm-service:8181", "b
 
 In addition to the above, you will need to install the Cloudstate Dart support library, which can be done as follows:
 
-: @@@vars   
+@@@vars
 ```yaml
 dependencies:
   cloudstate: ^$cloudstate.dart-support.version$
