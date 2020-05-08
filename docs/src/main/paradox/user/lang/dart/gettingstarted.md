@@ -57,7 +57,7 @@ You will need to create a folder to store the .proto definition files for your p
 
 So, if you were to build the example shopping cart application shown earlier in @ref:[gRPC descriptors](../../features/grpc.md) and assuming you created a project called shopping_cart, you could simply paste that protobuf into `shopping_cart/protos/shoppingcart.proto`.
 
-Now if you run the protoc in the root folder of your project for generate Dart files:
+Now run `protoc` in the root folder of your project to generate Dart files:
 
 ```shell script
 protoc --include_imports \
