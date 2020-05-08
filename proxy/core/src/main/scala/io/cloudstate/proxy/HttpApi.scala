@@ -414,7 +414,7 @@ object HttpApi {
     private[this] final def processRequest(req: HttpRequest, matcher: Matcher): Future[HttpResponse] =
       transformRequest(req, matcher)
         .transformWith {
-          case Success(request) => handler(request).flatMap(res => transformResponse(res).runWith(Sink.head))
+          case Success(request) => handler(request).flatMap(res => transformResponse(res))
           case Failure(f) =>
             log.debug("Unable to transform request due to '{}' of type '{}' ", f.getMessage, f.getClass.getName)
             requestError("Malformed request")
@@ -491,7 +491,7 @@ object HttpApi {
       result.build()
     }
 
-    private[this] final def transformResponse(response: HttpResponse): Source[HttpResponse, Any] =
+    private[this] final def transformResponse(response: HttpResponse): Future[HttpResponse] =
       response.entity match {
         case HttpEntity.Chunked(_, data) =>
           def extractContentTypeFromHttpBody(entityMessage: MessageOrBuilder): ContentType =
@@ -568,32 +568,43 @@ object HttpApi {
                         )
                     )
               }
+              .runWith(Sink.head)
           } else {
-            data
-              .grouped(2)
-              .take(1)
-              .map({
-                // This assumes that Akka GRPC will produce exactly two chunks for successful non streaming calls which
-                // it does
-                case Seq(HttpEntity.Chunk(bytes, extension), HttpEntity.LastChunk(_, _)) =>
-                  val entityMessage
-                      : MessageOrBuilder = parseResponseBody(bytes.drop(5)) // gRPC framing encoding has an exactly 5 byte header
-                  response.copy(entity = if (!isHttpBodyResponse) {
-                    HttpEntity(ContentTypes.`application/json`, ByteString(jsonPrinter.print(entityMessage)))
-                  } else {
-                    HttpEntity(extractContentTypeFromHttpBody(entityMessage), extractDataFromHttpBody(entityMessage))
-                  })
-                // Error case
-                case Seq(HttpEntity.LastChunk(extension, trailer)) => transformFailedRequest(response, trailer)
-                case other =>
-                  throw new IllegalStateException(
-                    "Akka GRPC should only produce at most 1 chunk followed by a last chunk?? " + other
-                  )
-              })
+            unwrapSingleResponse(data).map {
+              case Right(bytes) =>
+                val entityMessage = parseResponseBody(bytes)
+                response.copy(entity = if (isHttpBodyResponse) {
+                  HttpEntity(extractContentTypeFromHttpBody(entityMessage), extractDataFromHttpBody(entityMessage))
+                } else {
+                  HttpEntity(ContentTypes.`application/json`, ByteString(jsonPrinter.print(entityMessage)))
+                })
+              case Left(LastChunk(_, trailer)) =>
+                transformFailedRequest(response, trailer)
+            }
           }
         case other =>
-          Source.failed(new IllegalStateException("Akka GRPC should only produce chunked responses?? " + other))
+          Future.failed(new IllegalStateException("Akka GRPC should only produce chunked responses?? " + other))
       }
+
+    // This assumes that Akka gRPC will produce exactly two chunks for successful non streaming calls which
+    // it does
+    private def unwrapSingleResponse(
+        data: Source[HttpEntity.ChunkStreamPart, Any]
+    ): Future[Either[HttpEntity.LastChunk, ByteString]] =
+      data
+        .grouped(2)
+        .take(1)
+        .runWith(Sink.head)
+        .map({
+          case Seq(HttpEntity.Chunk(bytes, _), _: HttpEntity.LastChunk) =>
+            Right(bytes.drop(5))
+          case Seq(last: HttpEntity.LastChunk) =>
+            Left(last)
+          case other =>
+            throw new IllegalStateException(
+              "Akka gRPC should only produce at most 1 chunk followed by a last chunk?? " + other
+            )
+        })
 
     private[this] final def transformFailedRequest(resp: HttpResponse, trailer: Seq[HttpHeader]): HttpResponse = {
       val message = trailer.find(_.is("grpc-message"))
