@@ -25,6 +25,7 @@ import scala.util.matching.Regex
 import scala.util.parsing.combinator.Parsers
 import scala.util.parsing.input.{CharSequenceReader, Positional}
 import akka.ConfigurationException
+import akka.NotUsed
 import akka.http.scaladsl.model.{
   ContentType,
   ContentTypes,
@@ -69,6 +70,7 @@ import com.google.protobuf.Descriptors.{
   MethodDescriptor,
   ServiceDescriptor
 }
+import com.google.protobuf.any.{Any => ProtobufAny}
 import com.google.protobuf.util.JsonFormat
 import com.google.protobuf.Descriptors.FieldDescriptor.JavaType
 import java.lang.{
@@ -176,7 +178,7 @@ object HttpApi {
   final class HttpEndpoint(
       final val methDesc: MethodDescriptor,
       final val rule: HttpRule,
-      final val handler: PartialFunction[HttpRequest, scala.concurrent.Future[HttpResponse]]
+      final val handler: PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]]
   )(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext)
       extends PartialFunction[HttpRequest, Future[HttpResponse]] {
     private[this] final val log = Logging(sys, rule.pattern.toString) // TODO use other name?
@@ -414,7 +416,7 @@ object HttpApi {
     private[this] final def processRequest(req: HttpRequest, matcher: Matcher): Future[HttpResponse] =
       transformRequest(req, matcher)
         .transformWith {
-          case Success(request) => handler(request).flatMap(res => transformResponse(res))
+          case Success(request) => transformResponse(handler(request))
           case Failure(f) =>
             log.debug("Unable to transform request due to '{}' of type '{}' ", f.getMessage, f.getClass.getName)
             requestError("Malformed request")
@@ -491,121 +493,76 @@ object HttpApi {
       result.build()
     }
 
-    private[this] final def transformResponse(response: HttpResponse): Future[HttpResponse] =
-      response.entity match {
-        case HttpEntity.Chunked(_, data) =>
-          def extractContentTypeFromHttpBody(entityMessage: MessageOrBuilder): ContentType =
-            entityMessage
-              .getField(entityMessage.getDescriptorForType.findFieldByName("content_type")) match {
-              case null | "" => ContentTypes.NoContentType
-              case string: String =>
-                ContentType.parse(string) match {
-                  case Left(list) =>
-                    throw new IllegalResponseException(
-                      list.headOption.getOrElse(ErrorInfo.fromCompoundString("Unknown error"))
-                    )
-                  case Right(tpe) => tpe
-                }
+    private[this] final def transformResponse(data: Source[ProtobufAny, NotUsed]): Future[HttpResponse] = {
+      def extractContentTypeFromHttpBody(entityMessage: MessageOrBuilder): ContentType =
+        entityMessage
+          .getField(entityMessage.getDescriptorForType.findFieldByName("content_type")) match {
+          case null | "" => ContentTypes.NoContentType
+          case string: String =>
+            ContentType.parse(string) match {
+              case Left(list) =>
+                throw new IllegalResponseException(
+                  list.headOption.getOrElse(ErrorInfo.fromCompoundString("Unknown error"))
+                )
+              case Right(tpe) => tpe
             }
+        }
 
-          def extractDataFromHttpBody(entityMessage: MessageOrBuilder): ByteString =
-            ByteString.fromArrayUnsafe(
-              entityMessage
-                .getField(entityMessage.getDescriptorForType.findFieldByName("data"))
-                .asInstanceOf[ProtobufByteString]
-                .toByteArray
-            )
+      def extractDataFromHttpBody(entityMessage: MessageOrBuilder): ByteString =
+        ByteString.fromArrayUnsafe(
+          entityMessage
+            .getField(entityMessage.getDescriptorForType.findFieldByName("data"))
+            .asInstanceOf[ProtobufByteString]
+            .toByteArray
+        )
 
-          if (methDesc.isServerStreaming) {
-            data
-              .prefixAndTail(1)
-              .flatMapConcat {
-                case (Seq(chunk @ HttpEntity.Chunk(bytes, extension)), rest) =>
-                  val entityMessage: MessageOrBuilder = parseResponseBody(bytes.drop(5))
-                  val contentType =
-                    if (isHttpBodyResponse) extractContentTypeFromHttpBody(entityMessage)
-                    else ContentTypes.`application/json`
+      if (methDesc.isServerStreaming) {
+        data
+          .prefixAndTail(1)
+          .runWith(Sink.head)
+          .map {
+            case (Seq(protobuf: ProtobufAny), rest) =>
+              val entityMessage: MessageOrBuilder = parseResponseBody(Serve.ReplySerializer.serialize(protobuf))
+              val contentType =
+                if (isHttpBodyResponse) extractContentTypeFromHttpBody(entityMessage)
+                else ContentTypes.`application/json`
 
-                  val data =
-                    if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage)
-                    else ByteString(jsonPrinter.print(entityMessage))
+              val data =
+                if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage)
+                else ByteString(jsonPrinter.print(entityMessage))
 
-                  //val extensions = extractExtensionsFromHttpBody(entityMessage) // FIXME / TODO HttpBody.extensions not supported yet
+              //val extensions = extractExtensionsFromHttpBody(entityMessage) // FIXME / TODO HttpBody.extensions not supported yet
 
-                  Source.single(
-                    response.copy(
-                      entity = HttpEntity.Chunked(
-                        contentType,
-                        rest map {
-                          case HttpEntity.Chunk(bytes, extension) =>
-                            val entityMessage: MessageOrBuilder = parseResponseBody(bytes.drop(5))
-                            val data =
-                              if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage)
-                              else ByteString(jsonPrinter.print(entityMessage))
-                            HttpEntity.Chunk(data ++ NEWLINE_BYTES)
-                          case HttpEntity.LastChunk(extension, trailer) =>
-                            trailer
-                              .find(_.is("grpc-status"))
-                              .map(status => Status.fromCodeValue(status.value().toInt).getCode) match {
-                              case None | Some(Status.Code.OK) => HttpEntity.LastChunk
-                              case Some(other) =>
-                                throw new IllegalResponseException(
-                                  ErrorInfo.fromCompoundString(s"Response error: $other")
-                                )
-                            }
-                        }
-                      )
-                    )
-                  )
-                case (Seq(HttpEntity.LastChunk(extension, trailer)), rest) =>
-                  rest.map(_ => transformFailedRequest(response, trailer))
-                case (Seq(), rest) =>
-                  rest
-                    .map(
-                      _ =>
-                        throw new IllegalStateException(
-                          "Akka GRPC should only produce at most 1 chunk followed by a last chunk??"
-                        )
-                    )
-              }
-              .runWith(Sink.head)
-          } else {
-            unwrapSingleResponse(data).map {
-              case Right(bytes) =>
-                val entityMessage = parseResponseBody(bytes)
-                response.copy(entity = if (isHttpBodyResponse) {
-                  HttpEntity(extractContentTypeFromHttpBody(entityMessage), extractDataFromHttpBody(entityMessage))
-                } else {
-                  HttpEntity(ContentTypes.`application/json`, ByteString(jsonPrinter.print(entityMessage)))
-                })
-              case Left(LastChunk(_, trailer)) =>
-                transformFailedRequest(response, trailer)
-            }
+              HttpResponse(
+                entity = HttpEntity.Chunked(
+                  contentType,
+                  rest map { protobuf: ProtobufAny =>
+                    val entityMessage: MessageOrBuilder = parseResponseBody(Serve.ReplySerializer.serialize(protobuf))
+                    val data =
+                      if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage)
+                      else ByteString(jsonPrinter.print(entityMessage))
+                    HttpEntity.Chunk(data ++ NEWLINE_BYTES)
+                  }
+                )
+              )
+            case (Seq(), _) =>
+              throw new IllegalStateException("Empty response")
           }
-        case other =>
-          Future.failed(new IllegalStateException("Akka GRPC should only produce chunked responses?? " + other))
+      } else {
+        data
+          .runWith(Sink.head)
+          .map { protobuf: ProtobufAny =>
+            val entityMessage = parseResponseBody(Serve.ReplySerializer.serialize(protobuf))
+            HttpResponse(entity = if (isHttpBodyResponse) {
+              HttpEntity(extractContentTypeFromHttpBody(entityMessage), extractDataFromHttpBody(entityMessage))
+            } else {
+              HttpEntity(ContentTypes.`application/json`, ByteString(jsonPrinter.print(entityMessage)))
+            })
+          }
       }
+    }
 
-    // This assumes that Akka gRPC will produce exactly two chunks for successful non streaming calls which
-    // it does
-    private def unwrapSingleResponse(
-        data: Source[HttpEntity.ChunkStreamPart, Any]
-    ): Future[Either[HttpEntity.LastChunk, ByteString]] =
-      data
-        .grouped(2)
-        .take(1)
-        .runWith(Sink.head)
-        .map({
-          case Seq(HttpEntity.Chunk(bytes, _), _: HttpEntity.LastChunk) =>
-            Right(bytes.drop(5))
-          case Seq(last: HttpEntity.LastChunk) =>
-            Left(last)
-          case other =>
-            throw new IllegalStateException(
-              "Akka gRPC should only produce at most 1 chunk followed by a last chunk?? " + other
-            )
-        })
-
+    // TODO convert to error handler
     private[this] final def transformFailedRequest(resp: HttpResponse, trailer: Seq[HttpHeader]): HttpResponse = {
       val message = trailer.find(_.is("grpc-message"))
       val status = Status.fromCodeValue(trailer.filter(_.is("grpc-status")).head.value().toInt)
@@ -661,7 +618,7 @@ object HttpApi {
     }
   }
 
-  final def serve(services: List[(ServiceDescriptor, PartialFunction[HttpRequest, Future[HttpResponse]])])(
+  final def serve(services: List[(ServiceDescriptor, PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]])])(
       implicit sys: ActorSystem,
       mat: Materializer,
       ec: ExecutionContext
