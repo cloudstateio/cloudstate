@@ -15,7 +15,7 @@ Since Cloudstate is based on gRPC, you need a protoc compiler to compile gRPC pr
 pub global activate protoc_plugin
 ```
 
-The compiler plugin, protoc-gen-dart, is installed in $HOME/.pub-cache/bin. It must be in your PATH for the protocol compiler, protoc, to find it.
+The compiler plugin, protoc-gen-dart, is installed in `$HOME/.pub-cache/bin`. It must be in your PATH for the protocol compiler, protoc, to find it.
 
 ```shell script
 export PATH=$PATH:$HOME/.pub-cache/bin
