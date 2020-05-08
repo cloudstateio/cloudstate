@@ -67,7 +67,7 @@ protoc --include_imports \
 ```
 
 @@@ note { title=Important }
-Using the descriptor_set_out = user-function.desc option exactly as presented is mandatory since the Dart library will look for the user-function.desc file at the root of your project during the startup phase
+Using the `descriptor_set_out = user-function.desc` option exactly as presented is mandatory since the Dart library will look for the `user-function.desc` file at the root of your project during the startup phase.
 @@@
 
 ## Creating a main function
