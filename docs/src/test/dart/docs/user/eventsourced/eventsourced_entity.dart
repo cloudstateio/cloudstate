@@ -84,7 +84,6 @@ class ShoppingCartEntity {
     // #add-item
     @EventSourcedCommandHandler()
     Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
-        print('AddLineItem => $item');
         if (item.quantity <= 0) {
             ctx.fail('Cannot add negative quantity of to item ${item.productId}');
         }
