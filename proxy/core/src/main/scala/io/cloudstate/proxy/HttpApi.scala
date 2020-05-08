@@ -499,12 +499,10 @@ object HttpApi {
           .getField(entityMessage.getDescriptorForType.findFieldByName("content_type")) match {
           case null | "" => ContentTypes.NoContentType
           case string: String =>
-            ContentType.parse(string) match {
-              case Left(list) =>
+            ContentType.parse(string).fold(list =>
                 throw new IllegalResponseException(
                   list.headOption.getOrElse(ErrorInfo.fromCompoundString("Unknown error"))
-                )
-              case Right(tpe) => tpe
+                ), identity)
             }
         }
 
