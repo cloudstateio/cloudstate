@@ -72,7 +72,7 @@ Using the descriptor_set_out = user-function.desc option exactly as presented is
 
 ## Creating a main function
 
-Your main class will be responsible for creating the Cloudstate gRPC server, registering the entities for your placement and starting it. To do this, you can use the `Cloudstate` class server builder, for example, in the bin/ folder create a file called main.dart with the following content:
+Your main class will be responsible for creating the Cloudstate gRPC server, registering the entities for your placement and starting it. To do this, you can use the `Cloudstate` class server builder, for example, in the `bin/` folder create a file called `main.dart` with the following content:
 
 @@snip [main.dart](/docs/src/test/dart/docs/user/gettingstarted/main.dart) { #shopping-cart-main }
 
