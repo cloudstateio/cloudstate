@@ -53,7 +53,7 @@ dependencies:
 
 ## Protobuf files
 
-You will need to create a folder to store the .proto definition files for your project. So create a folder called protos at the root of your project
+You will need to create a folder to store the .proto definition files for your project. Create a folder called `protos` at the root of your project.
 
 So, if you were to build the example shopping cart application shown earlier in @ref:[gRPC descriptors](../../features/grpc.md) and assuming you created a project called shopping_cart, you could simply paste that protobuf into `shopping_cart/protos/shoppingcart.proto`.
 
