@@ -243,7 +243,6 @@ Maven
 @@@
 
 Gradle Kts
-<<<<<<< HEAD
 : @@@vars
 
 ```kotlin
