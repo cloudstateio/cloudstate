@@ -1,7 +1,7 @@
 # Language support
 
 Cloudstate is a polyglot platform for developers.
-This is achieved by having a gRPC based protocol between the Proxy and the User function. Since every language wants to be able to offer a language-idiomatic Application Programming Interface (API) Cloudstate offers Support libraries for the following languages:
+This is achieved by having a gRPC based protocol between the Proxy and the User function. Since every language wants to be able to offer a language-idiomatic Application Programming Interface (API) Cloudstate offers Support Libraries for the following languages:
 
 ## Current language support libraries
 
@@ -14,14 +14,14 @@ This is achieved by having a gRPC based protocol between the Proxy and the User 
 
 In order to implement a [Support Library](https://cloudstate.io/docs/user/features/index.html#support-library) for a language, the Cloudstate protocol needs to be implemented as a gRPC server which is started when a Stateful Service is started. This gRPC server will then relay state and commands to the underlying User function.
 
-To obtain the necessary Cloudstate Protobuf descriptors which needs to be implemented, your build can be set up to fetch the following compressed archives and extract the contents. The archives are available from version `v0.6.0` and forwards.
+To obtain the necessary Cloudstate Protobuf descriptors that need to be implemented, your build can be set up to fetch the following compressed archives and extract the contents. The archives are available from version `v0.6.0` and forwards.
 
   * The Cloudstate protocols
       - `https://raw.githubusercontent.com/cloudstateio/cloudstate/<VERSION_TAG>/protocols/cloudstate-protocols.zip`
   * The Cloudstate TCK protocols
       - `https://raw.githubusercontent.com/cloudstateio/cloudstate/<VERSION_TAG>/protocols/cloudstate-tck-protocols.zip`
 
-It is also possible to take a look at the various protobuf messages available in the [project's `protocols` folder](https://github.com/cloudstateio/cloudstate/tree/master/protocols). In this folder, you will see 4 sub-folders divided as follow: 
+It is also possible to take a look at the various protobuf messages available in the [project's `protocols` folder](https://github.com/cloudstateio/cloudstate/tree/master/protocols). In this folder, you will see four sub-folders divided as follows:
 
 - `example` is for implementing the example application, which is also used by the TCK for third-party language (and proxy implementation) validation.
 - `frontend` is what is used by developers of services when they define their proto interfaces. The `cloudstate` subfolder in particular contains the definition of two protobuf options:
@@ -31,12 +31,11 @@ It is also possible to take a look at the various protobuf messages available in
     @@@note  { title='Example of an Event where the entity id is defined' }
     
     ```proto
-  message PongSent {
-      string id = 1 [(.cloudstate.entity_key) = true];
-      int32 sequence_number = 2;
-  }  
+    message PongSent {
+        string id = 1 [(.cloudstate.entity_key) = true];
+        int32 sequence_number = 2;
+    }
     ```
-
     @@@
 
     - `.cloudstate.eventing`: used to indicate the name of the topic/queue to use for data input or output.
@@ -44,25 +43,23 @@ It is also possible to take a look at the various protobuf messages available in
     @@@note  { title='Example of topic/queue definition for the function output' }
      
     ```proto
-  rpc Ping(PongSent) returns (PingSent) {
-      option (.cloudstate.eventing) = {
-        out: "pings",
-    };
-  }  
+    rpc Ping(PongSent) returns (PingSent) {
+        option (.cloudstate.eventing) = {
+          out: "pings",
+      };
+    }
     ```
-  
     @@@
 
     @@@note  { title='Example of topic/queue definition for the function input' }
     
     ```proto
-  rpc SeenPing(PingSent) returns (google.protobuf.Empty) {
-      option (.cloudstate.eventing) = {
-        in: "pings",
-    };
-  }
+    rpc SeenPing(PingSent) returns (google.protobuf.Empty) {
+        option (.cloudstate.eventing) = {
+          in: "pings",
+      };
+    }
     ```
-    
     @@@
     
 - `protocol` is the protocol between the [proxy](https://cloudstate.io/docs/user/features/index.html#proxy) and what we call a [Language Support](https://cloudstate.io/docs/user/features/index.html#support-library), i.e. a bridge library which speaks with the proxy and exposes a native API for some programming language.

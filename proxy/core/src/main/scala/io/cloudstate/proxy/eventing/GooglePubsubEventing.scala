@@ -4,7 +4,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import akka.NotUsed
 import akka.actor.{ActorSystem, Cancellable}
 import akka.grpc.GrpcClientSettings
-import akka.stream.ActorMaterializer
+import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import io.cloudstate.proxy.Serve.CommandHandler
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
@@ -136,7 +136,7 @@ object GCPubsubEventingSupport {
   final val USING_CRD = "using-crd"
 }
 
-class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) extends EventingSupport {
+class GCPubsubEventingSupport(config: Config, materializer: Materializer) extends EventingSupport {
   import GCPubsubEventingSupport._
 
   final val projectId: String = config.getString("project-id")
@@ -226,7 +226,7 @@ class GCPubsubEventingSupport(config: Config, materializer: ActorMaterializer) e
       .mapConcat(_.receivedMessages.toVector) // Note: receivedMessages is most likely a Vector already due to impl, so should be a noop
       .alsoTo(ackSink) // at-most-once // FIXME Add stats generation/collection so we can track progress here
       .collect({
-        case ReceivedMessage(_, Some(msg)) =>
+        case ReceivedMessage(_, Some(msg), _) =>
           commandHandler.serializer.parse(ProtobufAny.parseFrom(msg.data.newCodedInput))
       }) // TODO - investigate ProtobufAny.fromJavaAny(PbAnyJava.parseFrom(msg.data))
       .mapMaterializedValue(_ => cancellable.future)
