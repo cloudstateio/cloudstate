@@ -4,7 +4,7 @@ import 'generated/google/protobuf/empty.pb.dart';
 import 'generated/persistence/domain.pb.dart' as Domain;
 import 'generated/shoppingcart.pb.dart' as Shoppingcart;
 
-@EventSourcedEntity('', 1)
+@EventSourcedEntity('ShoppingCart', 1)
 class ShoppingCartEntity {
   final Map<String, Shoppingcart.LineItem> _cart = {};
 

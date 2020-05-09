@@ -1,9 +1,6 @@
 import 'package:cloudstate/cloudstate.dart';
-
 import 'generated/google/protobuf/empty.pb.dart';
-// ignore: library_prefixes
 import 'generated/persistence/domain.pb.dart' as Domain;
-// ignore: library_prefixes
 import 'generated/shoppingcart.pb.dart' as Shoppingcart;
 
 // #constructing
