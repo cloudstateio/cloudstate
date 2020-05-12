@@ -38,6 +38,7 @@ import akka.http.scaladsl.model.{
   HttpResponse,
   IllegalRequestException,
   IllegalResponseException,
+  MediaTypes,
   RequestEntity,
   RequestEntityAcceptance,
   ResponseEntity,
@@ -46,7 +47,11 @@ import akka.http.scaladsl.model.{
 }
 import akka.http.scaladsl.model.headers.`User-Agent`
 import akka.http.scaladsl.model.Uri.Path
+import akka.http.scaladsl.model.sse.ServerSentEvent
+import akka.http.scaladsl.server.MediaTypeNegotiator
+import akka.http.scaladsl.marshalling.Marshal
 import akka.http.scaladsl.unmarshalling.Unmarshal
+import akka.http.scaladsl.marshalling.sse.EventStreamMarshalling
 import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.stream.Materializer
@@ -416,7 +421,7 @@ object HttpApi {
     private[this] final def processRequest(req: HttpRequest, matcher: Matcher): Future[HttpResponse] =
       transformRequest(req, matcher)
         .transformWith {
-          case Success(request) => transformResponse(handler(request))
+          case Success(request) => transformResponse(request, handler(request))
           case Failure(f) =>
             log.debug("Unable to transform request due to '{}' of type '{}' ", f.getMessage, f.getClass.getName)
             requestError("Malformed request")
@@ -493,7 +498,8 @@ object HttpApi {
       result.build()
     }
 
-    private[this] final def transformResponse(data: Source[ProtobufAny, NotUsed]): Future[HttpResponse] = {
+    private[this] final def transformResponse(grpcRequest: HttpRequest,
+                                              data: Source[ProtobufAny, NotUsed]): Future[HttpResponse] = {
       def extractContentTypeFromHttpBody(entityMessage: MessageOrBuilder): ContentType =
         entityMessage
           .getField(entityMessage.getDescriptorForType.findFieldByName("content_type")) match {
@@ -517,35 +523,49 @@ object HttpApi {
         )
 
       if (methDesc.isServerStreaming) {
-        def toChunk(entityMessage: MessageOrBuilder): HttpEntity.Chunk =
-          HttpEntity.Chunk(
-            if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage) ++ NEWLINE_BYTES
-            else ByteString(jsonPrinter.print(entityMessage)) ++ NEWLINE_BYTES
-          )
+        val sseAccepted = new MediaTypeNegotiator(grpcRequest.headers).isAccepted(MediaTypes.`text/event-stream`)
 
         data
           .prefixAndTail(1)
           .runWith(Sink.head)
-          .map {
+          .flatMap {
             case (Seq(protobuf: ProtobufAny), rest) =>
-              val entityMessage: MessageOrBuilder = parseResponseBody(protobuf)
-              val contentType =
-                if (isHttpBodyResponse) extractContentTypeFromHttpBody(entityMessage)
-                else ContentTypes.`application/json`
-
-              val first =
-                Source.single(toChunk(entityMessage))
-              val following =
-                rest.map(protobuf => toChunk(parseResponseBody(protobuf)))
-
-              //val extensions = extractExtensionsFromHttpBody(entityMessage) // FIXME / TODO HttpBody.extensions not supported yet
-
-              HttpResponse(
-                entity = HttpEntity.Chunked(
-                  contentType,
-                  first.concat(following)
+              if (isHttpBodyResponse) {
+                val entityMessage = parseResponseBody(protobuf) // We need to peek-ahead to check the content-type of the response we're sending out
+                Future.successful(
+                  HttpResponse(
+                    entity = HttpEntity.Chunked(
+                      extractContentTypeFromHttpBody(entityMessage),
+                      Source
+                        .single(entityMessage)
+                        .concat(rest.map(parseResponseBody))
+                        .map(em => HttpEntity.Chunk(extractDataFromHttpBody(em) ++ NEWLINE_BYTES))
+                    )
+                  )
                 )
-              )
+              } else if (sseAccepted) {
+                import EventStreamMarshalling._
+                Marshal(
+                  Source
+                    .single(protobuf)
+                    .concat(rest)
+                    .map(parseResponseBody)
+                    .map(em => ServerSentEvent(jsonPrinter.print(em)))
+                ).to[HttpResponse]
+              } else {
+                Future.successful(
+                  HttpResponse(
+                    entity = HttpEntity.Chunked(
+                      ContentTypes.`application/json`,
+                      Source
+                        .single(protobuf)
+                        .concat(rest)
+                        .map(parseResponseBody)
+                        .map(em => HttpEntity.Chunk(ByteString(jsonPrinter.print(em)) ++ NEWLINE_BYTES))
+                    )
+                  )
+                )
+              }
             case (Seq(), _) =>
               throw new IllegalStateException("Empty response")
           }
