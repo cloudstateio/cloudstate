@@ -98,4 +98,4 @@ entity.start();
 ```
 
 
-For more information see https://cloudstate.io/docs/lang/javascript/.
+For more information see https://cloudstate.io/docs/user/lang/javascript/index.html.
