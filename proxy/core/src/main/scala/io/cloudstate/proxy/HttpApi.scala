@@ -517,36 +517,33 @@ object HttpApi {
         )
 
       if (methDesc.isServerStreaming) {
+        def toChunk(entityMessage: MessageOrBuilder): HttpEntity.Chunk =
+          HttpEntity.Chunk(
+            if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage) ++ NEWLINE_BYTES
+            else ByteString(jsonPrinter.print(entityMessage)) ++ NEWLINE_BYTES
+          )
+
         data
           .prefixAndTail(1)
           .runWith(Sink.head)
           .map {
             case (Seq(protobuf: ProtobufAny), rest) =>
-              val entityMessage: MessageOrBuilder = parseResponseBody(Serve.ReplySerializer.serialize(protobuf))
+              val entityMessage: MessageOrBuilder = parseResponseBody(protobuf)
               val contentType =
                 if (isHttpBodyResponse) extractContentTypeFromHttpBody(entityMessage)
                 else ContentTypes.`application/json`
 
-              val first = {
-                val data =
-                  if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage)
-                  else ByteString(jsonPrinter.print(entityMessage))
-
-                Source.single(HttpEntity.Chunk(data))
-              }
+              val first =
+                Source.single(toChunk(entityMessage))
+              val following =
+                rest.map(protobuf => toChunk(parseResponseBody(protobuf)))
 
               //val extensions = extractExtensionsFromHttpBody(entityMessage) // FIXME / TODO HttpBody.extensions not supported yet
 
               HttpResponse(
                 entity = HttpEntity.Chunked(
                   contentType,
-                  first.concat(rest map { protobuf: ProtobufAny =>
-                    val entityMessage: MessageOrBuilder = parseResponseBody(Serve.ReplySerializer.serialize(protobuf))
-                    val data =
-                      if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage)
-                      else ByteString(jsonPrinter.print(entityMessage))
-                    HttpEntity.Chunk(data ++ NEWLINE_BYTES)
-                  })
+                  first.concat(following)
                 )
               )
             case (Seq(), _) =>
@@ -556,7 +553,7 @@ object HttpApi {
         data
           .runWith(Sink.head)
           .map { protobuf: ProtobufAny =>
-            val entityMessage = parseResponseBody(Serve.ReplySerializer.serialize(protobuf))
+            val entityMessage = parseResponseBody(protobuf)
             HttpResponse(entity = if (isHttpBodyResponse) {
               HttpEntity(extractContentTypeFromHttpBody(entityMessage), extractDataFromHttpBody(entityMessage))
             } else {
@@ -611,7 +608,8 @@ object HttpApi {
       )
     }
 
-    private[this] final def parseResponseBody(bytes: ByteString): MessageOrBuilder = {
+    private[this] final def parseResponseBody(pbAny: ProtobufAny): MessageOrBuilder = {
+      val bytes = Serve.ReplySerializer.serialize(pbAny)
       val message = DynamicMessage.parseFrom(methDesc.getOutputType, bytes.iterator.asInputStream)
       responseBodyDescriptor.fold(message: MessageOrBuilder) { field =>
         message.getField(field) match {
