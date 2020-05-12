@@ -36,16 +36,29 @@ libraryDependencies += "io.cloudstate" % "cloudstate-kotlin-support" % "$cloudst
 
 gradle
 : @@@vars
-```groovy
+```gradle
 compile group: 'io.cloudstate', name: 'cloudstate-kotlin-support', version: '$cloudstate.kotlin-support.version$'
 ```
 @@@
 
-## Maven example
+kotlin
+: @@@vars
+```kotlin
+dependencies {
+    implementation(kotlin("stdlib-jdk8"))
+    implementation("io.cloudstate:cloudstate-kotlin-support:$cloudstate.kotlin-support.version$")
+    implementation("com.google.api.grpc:proto-google-common-protos:1.17.0")
+}
+```
+@@@
 
-A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffers Plugin](https://www.xolstice.org/protobuf-maven-plugin/) and the [Google Jib Docker Maven Plugin](https://github.com/GoogleContainerTools/jib/), for a shopping cart service, is shown below:
+## Simple example
 
-@@@vars
+A minimal Kotlin example using the [Google Jib Docker Maven Plugin](https://github.com/GoogleContainerTools/jib/) 
+to generate the [Docker](https://www.docker.com/) image for a shopping cart service, is shown below:
+
+Maven
+: @@@vars
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -77,7 +90,7 @@ A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffer
         <dependency>
             <groupId>io.cloudstate</groupId>
             <artifactId>cloudstate-kotlin-support</artifactId>
-            <version>${project.version}</version>
+            <version>$cloudstate.kotlin-support.version$</version>
         </dependency>
     </dependencies>
 
@@ -224,8 +237,61 @@ A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffer
             </plugin>
         </plugins>
     </build>
-    
+
 </project>
+```
+@@@
+
+Gradle Kts
+: @@@vars
+
+```kotlin
+import com.google.protobuf.gradle.*
+
+plugins {
+    kotlin("jvm") version "1.3.72"
+    id("com.google.protobuf") version "0.8.12"
+    id("com.google.cloud.tools.jib") version "2.2.0"
+    idea
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    implementation(kotlin("stdlib-jdk8"))
+    implementation("io.cloudstate:cloudstate-kotlin-support:$cloudstate.kotlin-support.version$")
+    implementation("com.google.api.grpc:proto-google-common-protos:1.17.0")
+    implementation("ch.qos.logback:logback-classic:1.2.3")
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:3.9.0"
+    }
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_1_8
+    targetCompatibility = JavaVersion.VERSION_1_8
+}
+
+jib {
+    from {
+        image = "adoptopenjdk/openjdk8-openj9:alpine-slim"
+    }
+    to {
+        image = "${repo.name}"
+        tags = setOf(project.version.toString())
+    }
+    container {
+        mainClass = "${main.class}"
+        jvmFlags = listOf("-XshareClasses", "-Xquickstart", "-XX:+UseG1GC", "-XX:+UseStringDeduplication")
+        ports = listOf("8080")
+        }
+}
 ```
 @@@
 
