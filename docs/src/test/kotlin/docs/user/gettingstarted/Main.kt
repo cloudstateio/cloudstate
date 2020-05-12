@@ -10,7 +10,7 @@ fun main() {
         eventsourced {
             entityService = ShoppingCartEntity::class
             descriptor = Shoppingcart.getDescriptor().findServiceByName("ShoppingCart")
-            additionalDescriptors = arrayOf( Domain.getDescriptor() )
+            additionalDescriptors = mutableListOf(Shoppingcart.getDescriptor(), Domain.getDescriptor() )
         }
     }.start()
             .toCompletableFuture()
