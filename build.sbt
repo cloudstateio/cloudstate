@@ -56,6 +56,7 @@ val AkkaVersion = "2.6.6"
 val AkkaHttpVersion = "10.1.12"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
+val AkkaPersistenceSpannerVersion = "1.0.0-RC2"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.11.4" // We use this version because it is the latest which works with native-image 20
@@ -118,6 +119,7 @@ lazy val root = (project in file("."))
   .aggregate(
     `protocols`,
     `proxy-core`,
+    `proxy-spanner`,
     `proxy-cassandra`,
     `proxy-postgres`,
     `proxy-tests`,
@@ -295,15 +297,17 @@ commands ++= Seq(
   buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), false),
   buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, true),
   buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, false),
+  buildProxyCommand("Spanner", `proxy-spanner`, "spanner", None, true),
+  buildProxyCommand("Spanner", `proxy-spanner`, "spanner", None, false),
   buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, true),
   buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, false),
   Command.single("dockerBuildAllNonNative", buildProxyHelp("dockerBuildAllNonNative", "all non native")) {
     (state, command) =>
-      List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres")
+      List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres", "Spanner")
         .map(c => s"dockerBuild$c $command") ::: state
   },
   Command.single("dockerBuildAllNative", buildProxyHelp("dockerBuildAllNative", "all native")) { (state, command) =>
-    List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres")
+    List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres", "Spanner")
       .map(c => s"dockerBuildNative$c $command") ::: state
   }
 )
@@ -341,6 +345,8 @@ def assemblySettings(jarName: String) =
       /*ADD CUSTOMIZATIONS HERE*/
       case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
       case PathList(ps @ _*) if ps.last endsWith ".proto" => MergeStrategy.last
+      case "module-info.class" => MergeStrategy.discard
+      case "META-INF/native-image/com.typesafe.akka/dynamic-from-reference-conf/reflect-config.json" => MergeStrategy.discard
       case x =>
         val oldStrategy = (assemblyMergeStrategy in assembly).value
         oldStrategy(x)
@@ -475,6 +481,25 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     nativeImageDockerSettings
   )
 
+lazy val `proxy-spanner` = (project in file("proxy/spanner"))
+  .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin)
+  .dependsOn(`proxy-core`)
+  .settings(
+    common,
+    name := "cloudstate-proxy-spanner",
+    libraryDependencies ++= Seq(
+      "com.lightbend.akka" %% "akka-persistence-spanner" % AkkaPersistenceSpannerVersion,
+      akkaDependency("akka-cluster-typed"), // Transitive dependency of akka-persistence-spanner
+      akkaDependency("akka-persistence-typed"), // Transitive dependency of akka-persistence-spanner
+    ),
+    fork in run := true,
+    mainClass in Compile := Some("io.cloudstate.proxy.spanner.CloudstateSpannerProxyMain"),
+    assemblySettings("akka-proxy.jar"),
+    nativeImageDockerSettings,
+    graalVMNativeImageOptions ++= Seq(
+    )
+  )
+
 lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
   .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin)
   .dependsOn(`proxy-core`)
@@ -489,8 +514,8 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
     nativeImageDockerSettings,
     graalVMNativeImageOptions ++= Seq(
-        "-H:IncludeResourceBundles=com.datastax.driver.core.Driver"
-      )
+      "-H:IncludeResourceBundles=com.datastax.driver.core.Driver"
+    )
   )
 
 lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
@@ -749,20 +774,6 @@ lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
     assemblySettings("java-pingpong.jar")
   )
 
-lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart"))
-  .dependsOn(`scala-support`)
-  .enablePlugins(AkkaGrpcPlugin, DockerPlugin, JavaAppPackaging)
-  .settings(
-    name := "scala-shopping-cart",
-    dockerSettings,
-    PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`scala-support`, Compile)).value,
-    PB.protoSources in Compile ++= {
-      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "frontend", baseDir / "example")
-    },
-    assemblySettings("scala-shopping-cart.jar")
-  )
-
 lazy val `akka-client` = (project in file("samples/akka-client"))
   .enablePlugins(AkkaGrpcPlugin)
   .settings(
@@ -825,7 +836,7 @@ lazy val `tck` = (project in file("tck"))
     javaOptions in IntegrationTest := sys.props.get("config.resource").map(r => s"-Dconfig.resource=$r").toSeq,
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
-        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly, `scala-shopping-cart` / assembly)
+        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly)
         .value
   )
 
