@@ -45,7 +45,7 @@ import akka.http.scaladsl.model.{
   StatusCodes,
   Uri
 }
-import akka.http.scaladsl.model.headers.`User-Agent`
+import akka.http.scaladsl.model.headers.{`User-Agent`, Accept}
 import akka.http.scaladsl.model.Uri.Path
 import akka.http.scaladsl.model.sse.ServerSentEvent
 import akka.http.scaladsl.server.MediaTypeNegotiator
@@ -523,7 +523,10 @@ object HttpApi {
         )
 
       if (methDesc.isServerStreaming) {
-        val sseAccepted = new MediaTypeNegotiator(grpcRequest.headers).isAccepted(MediaTypes.`text/event-stream`)
+        val sseAccepted =
+          grpcRequest
+            .header[Accept]
+            .exists(_.mediaRanges.exists(_.value.startsWith(MediaTypes.`text/event-stream`.toString)))
 
         data
           .prefixAndTail(1)
