@@ -460,7 +460,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     },
     // For Google Cloud Pubsub API
     PB.protoSources in Compile += target.value / "protobuf_external" / "google" / "pubsub" / "v1",
-    javaAgents += "org.mortbay.jetty.alpn" % "jetty-alpn-agent" % "2.0.9" % "runtime;test",
+    javaAgents += "org.mortbay.jetty.alpn" % "jetty-alpn-agent" % "2.0.10" % "runtime;test",
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
     dockerSettings,
     fork in run := true,
