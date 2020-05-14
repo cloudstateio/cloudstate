@@ -2,12 +2,13 @@ package io.cloudstate.proxy
 
 import akka.NotUsed
 import akka.stream.scaladsl.Flow
-import com.google.protobuf.Descriptors.{FieldDescriptor, MethodDescriptor, ServiceDescriptor}
+import com.google.protobuf.Descriptors.{MethodDescriptor, ServiceDescriptor}
 import com.google.protobuf.{ByteString, DynamicMessage}
-import io.cloudstate.protocol.entity.Entity
 import io.cloudstate.entity_key.EntityKeyProto
+import io.cloudstate.protocol.entity.Entity
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionCommand, UserFunctionReply}
 import io.cloudstate.proxy.protobuf.Options
+import io.cloudstate.sub_entity_key.SubEntityKeyProto
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
@@ -57,6 +58,11 @@ final class EntityMethodDescriptor(val method: MethodDescriptor) {
     .toArray
     .sortBy(_.getIndex)
 
+  private[this] val subEntityKeyFields = method.getInputType.getFields.iterator.asScala
+    .filter(field => SubEntityKeyProto.subEntityKey.get(Options.convertFieldOptions(field)))
+    .toArray
+    .sortBy(_.getIndex)
+
   def keyFieldsCount: Int = keyFields.length
 
   def extractId(bytes: ByteString): String =
@@ -71,6 +77,17 @@ final class EntityMethodDescriptor(val method: MethodDescriptor) {
         keyFields.iterator.map(dm.getField).mkString(EntityMethodDescriptor.Separator)
     }
 
+  def extractSubEntityId(bytes: ByteString): String =
+    subEntityKeyFields.length match {
+      case 0 =>
+        ""
+      case 1 =>
+        val dm = DynamicMessage.parseFrom(method.getInputType, bytes)
+        dm.getField(subEntityKeyFields.head).toString
+      case _ =>
+        val dm = DynamicMessage.parseFrom(method.getInputType, bytes)
+        subEntityKeyFields.iterator.map(dm.getField).mkString(EntityMethodDescriptor.Separator)
+    }
 }
 
 private final class EntityUserFunctionTypeSupport(serviceDescriptor: ServiceDescriptor,

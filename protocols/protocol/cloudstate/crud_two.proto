@@ -1,0 +1,224 @@
+// Copyright 2019 Lightbend Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// gRPC interface for CRUD Entity user functions.
+
+syntax = "proto3";
+
+package cloudstate.crudtwo;
+
+// Any is used so that domain events defined according to the functions business domain can be embedded inside
+// the protocol.
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+import "cloudstate/entity.proto";
+//import "cloudstate/sub_entity.proto";
+
+option java_package = "io.cloudstate.protocol";
+option go_package = "cloudstate/protocol";
+
+enum CrudCommandType {
+    UNKNOWN = 0;
+    CREATE = 1;
+    FETCH = 2;
+    UPDATE = 3;
+    DELETE = 4;
+}
+
+message CrudState {
+    // The state payload
+    google.protobuf.Any payload = 2;
+}
+
+message CrudInitCommand {
+
+    // The ID of the entity.
+    string entity_id = 1;
+
+    // The ID of a sub entity.
+    string sub_entity_id = 2;
+
+    // Command name
+    string name = 3;
+
+    // The command payload.
+    google.protobuf.Any payload = 4;
+
+    CrudCommandType type = 5;
+}
+
+message CrudCommand {
+
+    // The ID of the entity.
+    string entity_id = 1;
+
+    // The ID of a sub entity.
+    string sub_entity_id = 2;
+
+    // A command id.
+    int64 id = 3;
+
+    // Command name
+    string name = 4;
+
+    // The command payload.
+    google.protobuf.Any payload = 5;
+
+    //CrudCommandType type = 6;
+
+    // persistent state to be conveyed between persistent entity and the user function
+    CrudState state = 6;
+}
+
+message CreateCommand {
+
+    // The ID of the entity.
+    string entity_id = 1;
+
+    // The ID of a sub entity.
+    string sub_entity_id = 2;
+
+    // A command id.
+    int64 id = 3;
+
+    // Command name
+    string name = 4;
+
+    // The command payload.
+    google.protobuf.Any payload = 5;
+
+    CrudCommandType type = 6;
+
+    // persistent state to be conveyed between persistent entity and the user function
+    CrudState state = 7;
+}
+
+message FetchCommand {
+
+    // The ID of the entity.
+    string entity_id = 1;
+
+    // The ID of a sub entity.
+    string sub_entity_id = 2;
+
+    // A command id.
+    int64 id = 3;
+
+    // Command name
+    string name = 4;
+
+    // The command payload.
+    google.protobuf.Any payload = 5;
+
+    CrudCommandType type = 6;
+
+    CrudState state = 7;
+}
+
+message UpdateCommand {
+
+    // The ID of the entity.
+    string entity_id = 1;
+
+    // The ID of a sub entity.
+    string sub_entity_id = 2;
+
+    // A command id.
+    int64 id = 3;
+
+    // Command name
+    string name = 4;
+
+    // The command payload.
+    google.protobuf.Any payload = 5;
+
+    CrudCommandType type = 6;
+
+    CrudState state = 7;
+}
+
+message DeleteCommand {
+
+    // The ID of the entity.
+    string entity_id = 1;
+
+    // The ID of a sub entity.
+    string sub_entity_id = 2;
+
+    // A command id.
+    int64 id = 3;
+
+    // Command name
+    string name = 4;
+
+    CrudCommandType type = 5;
+
+    CrudState state = 6;
+}
+
+// A reply to a command.
+message CrudReply {
+
+    // The id of the command being replied to. Must match the input command.
+    int64 command_id = 1;
+
+    // The action to take
+    ClientAction client_action = 2;
+
+    // Any side effects to perform
+    repeated SideEffect side_effects = 3;
+
+    // An optional state to persist.
+    google.protobuf.Any state = 4;
+}
+
+message CrudReplies {
+    oneof message {
+        CrudReply reply = 1;
+        Failure failure = 2;
+    }
+}
+
+message CrudFetchReply {
+    // The id of the command being replied to. Must match the input command.
+    int64 command_id = 1;
+
+    // The action to take
+    ClientAction client_action = 2;
+
+    // Any side effects to perform
+    repeated SideEffect side_effects = 3;
+
+    // An optional state to be return to the caller.
+    google.protobuf.Any fetch_state = 4;
+}
+
+message CrudFetchReplies {
+    oneof message {
+        CrudFetchReply reply = 1;
+        Failure failure = 2;
+    }
+}
+
+// The CRUD Entity service
+service CrudTwo {
+
+    rpc create(CrudCommand) returns (CrudReplies) {}
+
+    rpc fetch(CrudCommand) returns (CrudFetchReplies) {}
+
+    rpc update(CrudCommand) returns (CrudReplies) {}
+
+    rpc delete(CrudCommand) returns (CrudReplies) {}
+}
