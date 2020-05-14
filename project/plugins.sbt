@@ -1,6 +1,7 @@
 addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "1.3.17")
 addSbtPlugin("com.dwijnand" % "sbt-dynver" % "3.3.0")
 
+// When updating, also update GrpcJavaVersion in build.sbt to be in sync
 resolvers += Resolver.bintrayRepo("akka", "maven")
 addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "0.8.4+42-1c7e655a")
 addSbtPlugin("com.lightbend.sbt" % "sbt-javaagent" % "0.1.4")

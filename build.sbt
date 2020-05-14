@@ -48,7 +48,12 @@ def versionFmt(out: sbtdynver.GitDescribeOutput): String = {
 
 name := "cloudstate"
 
-val GrpcJavaVersion = "1.22.1"
+// Should be in sync with the version used in Akka gRPC
+val GrpcJavaVersion = "1.29.0"
+// Unfortunately we need to downgrade grpc-netty-shaded
+// in the proxy until we have a fix to make it work with
+// native-image
+val GrpcNettyShadedVersion = "1.28.1"
 val GraalAkkaVersion = "0.5.0"
 val AkkaVersion = "2.6.5"
 val AkkaHttpVersion = "10.1.12"
@@ -408,9 +413,6 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     buildInfoKeys := Seq[BuildInfoKey](name, version),
     buildInfoPackage := "io.cloudstate.proxy",
     libraryDependencies ++= Seq(
-        // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
-        "io.grpc" % "grpc-core" % GrpcJavaVersion,
-        "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
         // Since we exclude Aeron, we also exclude its transitive Agrona dependency, so we need to manually add it HERE
         "org.agrona" % "agrona" % "0.9.29",
         akkaDependency("akka-remote"),
@@ -594,9 +596,6 @@ lazy val `java-support` = (project in file("java-support"))
         "Cloudstate Java Support"
       ),
     libraryDependencies ++= Seq(
-        // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
-        "io.grpc" % "grpc-core" % GrpcJavaVersion,
-        "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
         akkaDependency("akka-stream"),
         akkaDependency("akka-slf4j"),
         akkaDependency("akka-discovery"),
@@ -673,9 +672,6 @@ lazy val `scala-support` = (project in file("scala-support"))
         "CloudState Scala Support"
       ),
     libraryDependencies ++= Seq(
-        // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
-        "io.grpc" % "grpc-core" % GrpcJavaVersion,
-        "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
         akkaDependency("akka-stream"),
         akkaDependency("akka-slf4j"),
         akkaDependency("akka-discovery"),
@@ -771,9 +767,6 @@ lazy val `akka-client` = (project in file("samples/akka-client"))
     name := "akka-client",
     fork in run := true,
     libraryDependencies ++= Seq(
-        // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
-        "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
-        "io.grpc" % "grpc-core" % GrpcJavaVersion,
         akkaDependency("akka-persistence"),
         akkaDependency("akka-stream"),
         akkaDependency("akka-discovery"),
@@ -809,9 +802,6 @@ lazy val `tck` = (project in file("tck"))
     common,
     name := "tck",
     libraryDependencies ++= Seq(
-        // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
-        "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
-        "io.grpc" % "grpc-core" % GrpcJavaVersion,
         akkaDependency("akka-stream"),
         akkaDependency("akka-discovery"),
         akkaHttpDependency("akka-http"),
