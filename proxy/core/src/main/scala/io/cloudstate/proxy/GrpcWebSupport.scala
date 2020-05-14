@@ -2,6 +2,9 @@ package io.cloudstate.proxy
 
 import java.util.Base64
 
+import akka.NotUsed
+import akka.actor.ActorSystem
+import akka.grpc.internal.{Codecs, GrpcProtocolNative, GrpcResponseHelpers}
 import akka.http.scaladsl.model.HttpEntity.{Chunk, LastChunk}
 import akka.http.scaladsl.model.headers.Accept
 import akka.http.scaladsl.model.{
@@ -14,8 +17,10 @@ import akka.http.scaladsl.model.{
   ResponseEntity
 }
 import akka.stream.{Attributes, FlowShape, Inlet, Outlet}
+import akka.stream.scaladsl.Source
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 import akka.util.ByteString
+import com.google.protobuf.any.{Any => ProtobufAny}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -28,8 +33,8 @@ object GrpcWebSupport {
   private val GrpcWebContentTypeParser = "application/grpc-web(-text)?(?:\\+(\\w+))?".r
 
   def wrapGrpcHandler(
-      partial: PartialFunction[HttpRequest, Future[HttpResponse]]
-  )(implicit ec: ExecutionContext): PartialFunction[HttpRequest, Future[HttpResponse]] =
+      partial: PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]]
+  )(implicit ec: ExecutionContext, system: ActorSystem): PartialFunction[HttpRequest, Future[HttpResponse]] =
     Function.unlift { request =>
       request.entity.contentType.mediaType.value match {
         case GrpcWebContentTypeParser(text, proto) if request.method == HttpMethods.POST =>
@@ -49,15 +54,18 @@ object GrpcWebSupport {
 
           val newRequest = request.withEntity(decoded)
           partial
-            .andThen { futureResponse =>
-              Some(futureResponse.map { response =>
+            .andThen { protobufs =>
+              // This can likely be simplified further without going via createResponse
+              Some(Serve.createResponse(request, protobufs).map { response =>
                 encode(request, response, proto)
               })
             }
             .applyOrElse(newRequest, (_: HttpRequest) => None)
 
         case _ =>
-          partial.andThen(Some(_)).applyOrElse(request, (_: HttpRequest) => None)
+          partial
+            .andThen(protobufs => Some(Serve.createResponse(request, protobufs)))
+            .applyOrElse(request, (_: HttpRequest) => None)
       }
     }
 

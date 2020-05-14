@@ -6,9 +6,9 @@ An event sourced entity can be created by annotating it with the `@EventSourcedE
 
 @@snip [ShoppingCartEntity.kt](/docs/src/test/dart/docs/user/eventsourced/eventsourced_entity.dart) { #entity-class }
 
-The @EventSourcedEntity annotation has two parameters that can be used:
+The `@EventSourcedEntity` annotation has two parameters that can be used:
 
-The `persistenceId` is used to namespace events in the journal, useful for when you share the same database between multiple entities. It defaults to the simple name for the entity class (in this case, `ShoppingCartEntity`), it's good practice to select one explicitly, this means your database isn't depend on classnames in your code.
+The `persistenceId` is used to namespace events in the journal, useful for when you share the same database between multiple entities. It defaults to the simple name for the entity class (in this case, `ShoppingCartEntity`), it's good practice to select one explicitly, this means your database isn't dependent on classnames in your code.
 The `snapshotEvery` parameter controls how often snapshots are taken, so that the entity doesn't need to be recovered from the whole journal each time it's loaded. If left unset, it defaults to 100. Setting it to a negative number will result in snapshots never being taken.
 
 ## Persistence types and serialization
@@ -93,8 +93,10 @@ Multiple snapshot handlers may be defined to handle multiple different types of 
 
 ## Registering the entity
 
-Once you've created your entity, you can register it with the `cloudState` server, by invoking the `registerEventSourcedEntity` function. In addition to passing the protobuf qualified package name, and your entity class.
+Once you've created your entity, you can register it with the `CloudState` server, by invoking the `registerEventSourcedEntity` method. In addition to passing the protobuf qualified package name, and your entity class.
+
+@@snip [eventsourced_entity.dart](/docs/src/test/dart/docs/user/eventsourced/behavior/eventsourced_entity.dart) { #content }
 
 The complete code for our entity class would look like this:
 
-@@snip [eventsourced_entity.dart](/docs/src/test/dart/docs/user/eventsourced/behavior/eventsourced_entity.dart) { #content }
+@@snip [eventsourced_entity.dart](/docs/src/test/dart/docs/user/eventsourced/eventsourced_entity.dart) { #register }

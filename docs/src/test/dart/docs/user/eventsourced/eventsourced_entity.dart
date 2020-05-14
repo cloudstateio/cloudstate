@@ -1,9 +1,6 @@
 import 'package:cloudstate/cloudstate.dart';
-
 import 'generated/google/protobuf/empty.pb.dart';
-// ignore: library_prefixes
 import 'generated/persistence/domain.pb.dart' as Domain;
-// ignore: library_prefixes
 import 'generated/shoppingcart.pb.dart' as Shoppingcart;
 
 // #constructing
@@ -84,7 +81,6 @@ class ShoppingCartEntity {
     // #add-item
     @EventSourcedCommandHandler()
     Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
-        print('AddLineItem => $item');
         if (item.quantity <= 0) {
             ctx.fail('Cannot add negative quantity of to item ${item.productId}');
         }
