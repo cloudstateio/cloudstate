@@ -25,7 +25,18 @@ import akka.persistence._
 import akka.stream.Materializer
 import akka.util.Timeout
 import com.google.protobuf.any.{Any => pbAny}
-import io.cloudstate.protocol.crud_two.{CreateCommand, CrudCommand, CrudCommandType, CrudFetchReplies, CrudFetchReply, CrudInitCommand, CrudReplies, CrudReply, CrudState, CrudTwoClient, DeleteCommand, FetchCommand, UpdateCommand}
+import io.cloudstate.protocol.crud_two.{
+  CreateCommand,
+  CrudCommand,
+  CrudCommandType,
+  CrudFetchReplies,
+  CrudFetchReply,
+  CrudInitCommand,
+  CrudReplies,
+  CrudReply,
+  CrudState,
+  CrudTwoClient,
+}
 import io.cloudstate.protocol.entity._
 import io.cloudstate.proxy.ConcurrencyEnforcer.{Action, ActionCompleted}
 import io.cloudstate.proxy.StatsCollector

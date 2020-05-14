@@ -67,9 +67,10 @@ final class CrudImpl(_system: ActorSystem,
   private val entityId = "entityId" // FIXME entityId can be extract from command, where to get entityId from when creating the CrudImpl?
   private final val service =
     services.getOrElse(serviceName, throw new RuntimeException(s"Service not found: $serviceName"))
-  private var handler: CrudEntityHandler = service.factory.create(new CrudContextImpl(entityId)) // FIXME how to create it?
+  private var handler
+      : CrudEntityHandler = service.factory.create(new CrudContextImpl(entityId)) // FIXME how to create it?
 
-  override def create(command: CrudCommand): Future[CrudReplies] = {
+  override def create(command: CrudCommand): Future[CrudReplies] =
     Future.unit
       .map { _ =>
         val cmd = ScalaPbAny.toJavaProto(command.payload.get) //FIXME payload empty?
@@ -88,9 +89,8 @@ final class CrudImpl(_system: ActorSystem,
           )
         )
       }
-  }
 
-  override def fetch(command: CrudCommand): Future[CrudFetchReplies] = {
+  override def fetch(command: CrudCommand): Future[CrudFetchReplies] =
     Future.unit
       .map { _ =>
         val cmd = ScalaPbAny.toJavaProto(command.payload.get) //FIXME payload empty?
@@ -108,8 +108,7 @@ final class CrudImpl(_system: ActorSystem,
             )
           )
         )
-    }
-  }
+      }
 
   override def update(command: CrudCommand): Future[CrudReplies] = ??? // same as create
 
@@ -128,11 +127,7 @@ final class CrudImpl(_system: ActorSystem,
       with AbstractContext
       with AbstractClientActionContext
       with AbstractEffectContext
-      with ActivatableContext {
-
-    //val encoded = anySupport.encodeScala(event)
-    // handler.handleState(ScalaPbAny.toJavaProto(encoded), new CrudEventContextImpl(entityId, nextSequenceNumber))
-  }
+      with ActivatableContext {}
 
   // FIXME add final val subEntityId: String
   class CrudContextImpl(override final val entityId: String) extends CrudContext with AbstractContext
