@@ -16,6 +16,7 @@ inThisBuild(
     organizationHomepage := Some(url("https://lightbend.com")),
     startYear := Some(2019),
     licenses += ("Apache-2.0", new URL("https://www.apache.org/licenses/LICENSE-2.0.txt")),
+    resolvers += "Akka Snapshots" at "https://repo.akka.io/snapshots/", // FIXME for akka-protobuf-v390
     homepage := Some(url("https://cloudstate.io")),
     scmInfo := Some(
         ScmInfo(
@@ -49,22 +50,37 @@ name := "cloudstate"
 
 val GrpcJavaVersion = "1.22.1"
 val GraalAkkaVersion = "0.5.0"
-val AkkaVersion = "2.5.31"
-val AkkaHttpVersion = "10.1.11"
+val AkkaVersion = "2.6.5"
+val AkkaHttpVersion = "10.1.12"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
-val ProtobufVersion = "3.9.0"
+val ProtobufVersion = "3.9.0" // We use this version because it is the latest which works with native-image 20.0.0
 val GraalVersion = "20.0.0"
 val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debian"
 val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
 
-def excludeTheseDependencies = Seq(
+val excludeTheseDependencies: Seq[ExclusionRule] = Seq(
   ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
   ExclusionRule("io.aeron"), // we're using Artery-TCP
   ExclusionRule("org.agrona") // and we don't need this either
 )
+
+def akkaDependency(name: String, excludeThese: ExclusionRule*) =
+  "com.typesafe.akka" %% name % AkkaVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
+
+def akkaHttpDependency(name: String, excludeThese: ExclusionRule*) =
+  "com.typesafe.akka" %% name % AkkaHttpVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
+
+def akkaManagementDependency(name: String, excludeThese: ExclusionRule*) =
+  "com.lightbend.akka.management" %% name % AkkaManagementVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
+
+def akkaDiscoveryDependency(name: String, excludeThese: ExclusionRule*) =
+  "com.lightbend.akka.discovery" %% name % AkkaManagementVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
+
+def akkaPersistenceCassandraDependency(name: String, excludeThese: ExclusionRule*) =
+  "com.typesafe.akka" %% name % AkkaPersistenceCassandraVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
 
 def common: Seq[Setting[_]] = Seq(
   headerMappings := headerMappings.value ++ Seq(
@@ -73,6 +89,7 @@ def common: Seq[Setting[_]] = Seq(
     ),
   // Akka gRPC overrides the default ScalaPB setting including the file base name, let's override it right back.
   akkaGrpcCodeGeneratorSettings := Seq(),
+  excludeDependencies += "com.typesafe.akka" %% "akka-protobuf-v3", // akka-protobuf-v3 shades protobuf-java 3.10.0 which is not compatible with native-image 20.0.0
   excludeFilter in headerResources := HiddenFileFilter || GlobFilter("reflection.proto"),
   javaOptions in Test ++= Seq("-Xms1G", "-XX:+CMSClassUnloadingEnabled", "-XX:+UseConcMarkSweepGC")
 )
@@ -182,7 +199,8 @@ lazy val docs = (project in file("docs"))
         "cloudstate.node-support.version" -> "0.0.1",
         "cloudstate.go-support.version" -> "0.1.0",
         "cloudstate.go.version" -> "1.13",
-        "cloudstate.kotlin-support.version" -> "0.4.3"
+        "cloudstate.kotlin-support.version" -> "0.5.1",
+        "cloudstate.dart-support.version" -> "0.5.5"
       ),
     paradoxNavigationDepth := 3,
     inConfig(Test)(
@@ -287,13 +305,13 @@ commands ++= Seq(
 def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   // If this is Some(…): run the native-image generation inside a Docker image
   // If this is None: run the native-image generation using a local GraalVM installation
-  graalVMVersion := Some(GraalVersion),
+  graalVMVersion := Some(GraalVersion + "-java11"), // make sure we use the java11 version
   graalVMNativeImageOptions ++= sharedNativeImageSettings({
       graalVMVersion.value match {
         case Some(_) => new File("/opt/docker/graal-resources/")
         case None => baseDirectory.value / "src" / "graal"
       }
-    }),
+    }, graalVMBuildServer.value),
   dockerEntrypoint := {
     val old = dockerEntrypoint.value
     val withLibraryPath = if (graalVMDockerPublishLocalBuild.value) {
@@ -306,7 +324,23 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   }
 )
 
-def sharedNativeImageSettings(targetDir: File) = Seq(
+def assemblySettings(jarName: String) =
+  Seq(
+    mainClass in assembly := (mainClass in Compile).value,
+    assemblyJarName in assembly := jarName,
+    test in assembly := {},
+    // logLevel in assembly := Level.Debug,
+    assemblyMergeStrategy in assembly := {
+      /*ADD CUSTOMIZATIONS HERE*/
+      case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
+      case PathList(ps @ _*) if ps.last endsWith ".proto" => MergeStrategy.last
+      case x =>
+        val oldStrategy = (assemblyMergeStrategy in assembly).value
+        oldStrategy(x)
+    }
+  )
+
+def sharedNativeImageSettings(targetDir: File, buildServer: Boolean) = Seq(
   //"-O1", // Optimization level
   "-H:ResourceConfigurationFiles=" + targetDir / "resource-config.json",
   "-H:ReflectionConfigurationFiles=" + targetDir / "reflect-config.json",
@@ -316,11 +350,14 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
   "-H:+AllowVMInspection",
   "-H:-RuntimeAssertions",
   "-H:+ReportExceptionStackTraces",
+  // "-H:+PrintAnalysisCallTree", // Uncomment to dump the entire call graph, useful for debugging native-image failing builds
+  //"-H:ReportAnalysisForbiddenType=java.lang.invoke.MethodHandleImpl$AsVarargsCollector", // Uncomment and specify a type which will break analysis, useful to figure out reachability
   "-H:-PrintUniverse", // if "+" prints out all classes which are included
   "-H:-NativeArchitecture", // if "+" Compiles the native image to customize to the local CPU arch
   "-H:Class=" + "io.cloudstate.proxy.CloudStateProxyMain",
-  //"-J-Xmx10g", // native-image is hungry FIXME I don't believe this is properly applied even when --no-server is enabled!
-  //"--no-server", // Uncomment to not use the native-image build server, to avoid potential cache problems with builds
+  // build server is disabled for docker builds by default (and native-image will use 80% of available memory in docker)
+  // for local (non-docker) builds, can be disabled with `set graalVMBuildServer := false` to avoid potential cache problems
+  if (buildServer) "--verbose-server" else "--no-server",
   //"--debug-attach=5005", // Debugger makes a ton of sense to use to debug SubstrateVM
   "--verbose",
   "--report-unsupported-elements-at-runtime", // Hopefully a self-explanatory flag FIXME comment this option out once AffinityPool is gone
@@ -333,18 +370,18 @@ def sharedNativeImageSettings(targetDir: File) = Seq(
     "scala",
     "akka.dispatch.affinity",
     "akka.util",
-    "com.google.Protobuf",
-    "com.typesafe.config",
-    "java.lang.ref.SoftReference", // https://github.com/oracle/graal/issues/2345
-    "java.lang.invoke.MethodHandleImpl" // https://github.com/oracle/graal/issues/2345
+    "com.google.Protobuf"
   ).mkString("=", ",", ""),
-  "-H:ClassInitialization=com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder:rerun",
-  "-H:ClassInitialization=com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder:rerun",
-  "-H:ClassInitialization=com.typesafe.config.impl.ConfigImpl$LoaderCacheHolder:rerun",
   "--initialize-at-run-time" +
   Seq(
+    "com.typesafe.config.impl.ConfigImpl",
+    "com.typesafe.config.impl.ConfigImpl$EnvVariablesHolder",
+    "com.typesafe.config.impl.ConfigImpl$SystemPropertiesHolder",
+    "com.typesafe.config.impl.ConfigImpl$LoaderCacheHolder",
+    "akka.actor.ActorCell", // Do not initialize the actor system until runtime (native-image)
     // These are to make up for the lack of shaded configuration for svm/native-image in grpc-netty-shaded
     "com.sun.jndi.dns.DnsClient",
+    "com.typesafe.sslconfig.ssl.tracing.TracingSSLContext",
     "io.grpc.netty.shaded.io.netty.handler.codec.http2.Http2CodecUtil",
     "io.grpc.netty.shaded.io.netty.handler.codec.http2.DefaultHttp2FrameWriter",
     "io.grpc.netty.shaded.io.netty.handler.codec.http.HttpObjectEncoder",
@@ -376,32 +413,30 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
         // Since we exclude Aeron, we also exclude its transitive Agrona dependency, so we need to manually add it HERE
         "org.agrona" % "agrona" % "0.9.29",
-        "com.typesafe.akka" %% "akka-remote" % AkkaVersion excludeAll (excludeTheseDependencies: _*),
+        akkaDependency("akka-remote"),
+        "com.typesafe.akka" %% "akka-protobuf-v390" % (AkkaVersion + "-proto390") excludeAll (excludeTheseDependencies: _*), // FIXME since akka-protobuf-v3 uses a shaded protobuf-java 3.10.0 which is not supported in native-image yet…
         // For Eventing support of Google Pubsub
         "com.google.api.grpc" % "grpc-google-cloud-pubsub-v1" % "0.12.0" % "protobuf", // ApacheV2
         "io.grpc" % "grpc-auth" % GrpcJavaVersion, // ApacheV2
         "com.google.auth" % "google-auth-library-oauth2-http" % "0.15.0", // BSD 3-clause
-        "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-http-core" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-cluster-sharding" % AkkaVersion excludeAll ((excludeTheseDependencies :+ ExclusionRule(
-          "org.lmdbjava",
-          "lmdbjava"
-        )): _*),
-        "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion excludeAll (excludeTheseDependencies: _*),
-        "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion excludeAll (excludeTheseDependencies: _*),
+        akkaDependency("akka-persistence"),
+        akkaDependency("akka-persistence-query"),
+        akkaDependency("akka-stream"),
+        akkaDependency("akka-slf4j"),
+        akkaDependency("akka-discovery"),
+        akkaHttpDependency("akka-http"),
+        akkaHttpDependency("akka-http-spray-json"),
+        akkaHttpDependency("akka-http-core"),
+        akkaHttpDependency("akka-http2-support"),
+        akkaDependency("akka-cluster-sharding", ExclusionRule("org.lmdbjava", "lmdbjava")),
+        akkaManagementDependency("akka-management-cluster-bootstrap"),
+        akkaDiscoveryDependency("akka-discovery-kubernetes-api"),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
         "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
-        "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
-        "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
-        "com.typesafe.akka" %% "akka-http-testkit" % AkkaHttpVersion % Test,
+        akkaDependency("akka-testkit") % Test,
+        akkaDependency("akka-stream-testkit") % Test,
+        akkaHttpDependency("akka-http-testkit") % Test,
         "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
         "io.prometheus" % "simpleclient" % PrometheusClientVersion,
         "io.prometheus" % "simpleclient_common" % PrometheusClientVersion,
@@ -426,21 +461,12 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     // For Google Cloud Pubsub API
     PB.protoSources in Compile += target.value / "protobuf_external" / "google" / "pubsub" / "v1",
     javaAgents += "org.mortbay.jetty.alpn" % "jetty-alpn-agent" % "2.0.9" % "runtime;test",
+    mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
     dockerSettings,
     fork in run := true,
     // In memory journal by default
     javaOptions in run ++= Seq("-Dconfig.resource=dev-mode.conf"),
-    mainClass in assembly := Some("io.cloudstate.proxy.CloudStateProxyMain"),
-    assemblyJarName in assembly := "akka-proxy.jar",
-    test in assembly := {},
-    // logLevel in assembly := Level.Debug,
-    assemblyMergeStrategy in assembly := {
-      /*ADD CUSTOMIZATIONS HERE*/
-      case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
-      case x =>
-        val oldStrategy = (assemblyMergeStrategy in assembly).value
-        oldStrategy(x)
-    },
+    assemblySettings("akka-proxy.jar"),
     nativeImageDockerSettings
   )
 
@@ -451,10 +477,8 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
     common,
     name := "cloudstate-proxy-cassandra",
     libraryDependencies ++= Seq(
-        "com.typesafe.akka" %% "akka-persistence-cassandra" % AkkaPersistenceCassandraVersion excludeAll (
-          (excludeTheseDependencies :+ ExclusionRule("com.github.jnr")): _* // Can't native-image this, so we don't need this either
-        ),
-        "com.typesafe.akka" %% "akka-persistence-cassandra-launcher" % AkkaPersistenceCassandraVersion % Test
+        akkaPersistenceCassandraDependency("akka-persistence-cassandra", ExclusionRule("com.github.jnr")),
+        akkaPersistenceCassandraDependency("akka-persistence-cassandra-launcher") % Test
       ),
     fork in run := true,
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
@@ -489,17 +513,7 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
     mainClass in Compile := Some("io.cloudstate.proxy.jdbc.CloudStateJdbcProxyMain"),
     // If run by sbt, run in dev mode
     javaOptions in run += "-Dcloudstate.proxy.dev-mode-enabled=true",
-    mainClass in assembly := (mainClass in Compile).value,
-    assemblyJarName in assembly := "akka-proxy-postgres.jar",
-    test in assembly := {},
-    // logLevel in assembly := Level.Debug,
-    assemblyMergeStrategy in assembly := {
-      /*ADD CUSTOMIZATIONS HERE*/
-      case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
-      case x =>
-        val oldStrategy = (assemblyMergeStrategy in assembly).value
-        oldStrategy(x)
-    },
+    assemblySettings("akka-proxy.jar"),
     nativeImageDockerSettings,
     graalVMNativeImageOptions ++= Seq(
         "--initialize-at-build-time"
@@ -520,7 +534,7 @@ lazy val `proxy-tests` = (project in file("proxy/proxy-tests"))
     baseDirectory in Test := (baseDirectory in ThisBuild).value,
     libraryDependencies ++= Seq(
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
-        "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test
+        akkaDependency("akka-testkit") % Test
       )
   )
 
@@ -532,9 +546,9 @@ lazy val operator = (project in file("operator"))
     common,
     name := "cloudstate-operator",
     libraryDependencies ++= Seq(
-        "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
+        akkaDependency("akka-stream"),
+        akkaDependency("akka-slf4j"),
+        akkaHttpDependency("akka-http"),
         "io.skuber" %% "skuber" % "2.4.0",
         "ch.qos.logback" % "logback-classic" % "1.2.3" // Doesn't work well with SubstrateVM, use "org.slf4j"           % "slf4j-simple"     % "1.7.26" instead
       ),
@@ -583,19 +597,19 @@ lazy val `java-support` = (project in file("java-support"))
         // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
         "io.grpc" % "grpc-core" % GrpcJavaVersion,
         "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
-        "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-http-core" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
+        akkaDependency("akka-stream"),
+        akkaDependency("akka-slf4j"),
+        akkaDependency("akka-discovery"),
+        akkaHttpDependency("akka-http"),
+        akkaHttpDependency("akka-http-spray-json"),
+        akkaHttpDependency("akka-http-core"),
+        akkaHttpDependency("akka-http2-support"),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
         "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
-        "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
-        "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
-        "com.typesafe.akka" %% "akka-http-testkit" % AkkaHttpVersion % Test,
+        akkaDependency("akka-testkit") % Test,
+        akkaDependency("akka-stream-testkit") % Test,
+        akkaHttpDependency("akka-http-testkit") % Test,
         "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
         "org.slf4j" % "slf4j-simple" % "1.7.26",
         "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9.3"
@@ -662,19 +676,19 @@ lazy val `scala-support` = (project in file("scala-support"))
         // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
         "io.grpc" % "grpc-core" % GrpcJavaVersion,
         "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
-        "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-http-core" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
+        akkaDependency("akka-stream"),
+        akkaDependency("akka-slf4j"),
+        akkaDependency("akka-discovery"),
+        akkaHttpDependency("akka-http"),
+        akkaHttpDependency("akka-http-spray-json"),
+        akkaHttpDependency("akka-http-core"),
+        akkaHttpDependency("akka-http2-support"),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
         "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
-        "com.typesafe.akka" %% "akka-testkit" % AkkaVersion % Test,
-        "com.typesafe.akka" %% "akka-stream-testkit" % AkkaVersion % Test,
-        "com.typesafe.akka" %% "akka-http-testkit" % AkkaHttpVersion % Test,
+        akkaDependency("akka-testkit") % Test,
+        akkaDependency("akka-stream-testkit") % Test,
+        akkaHttpDependency("akka-http-testkit") % Test,
         "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
         "org.slf4j" % "slf4j-simple" % "1.7.26",
         "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9.3"
@@ -713,17 +727,7 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
         PB.gens.java -> (sourceManaged in Compile).value
       ),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8"),
-    mainClass in assembly := (mainClass in Compile).value,
-    assemblyJarName in assembly := "java-shopping-cart.jar",
-    test in assembly := {},
-    // logLevel in assembly := Level.Debug,
-    assemblyMergeStrategy in assembly := {
-      /*ADD CUSTOMIZATIONS HERE*/
-      case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
-      case x =>
-        val oldStrategy = (assemblyMergeStrategy in assembly).value
-        oldStrategy(x)
-    }
+    assemblySettings("java-shopping-cart.jar")
   )
 
 lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
@@ -743,17 +747,7 @@ lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
         PB.gens.java -> (sourceManaged in Compile).value
       ),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8"),
-    mainClass in assembly := (mainClass in Compile).value,
-    assemblyJarName in assembly := "java-pingpong.jar",
-    test in assembly := {},
-    // logLevel in assembly := Level.Debug,
-    assemblyMergeStrategy in assembly := {
-      /*ADD CUSTOMIZATIONS HERE*/
-      case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
-      case x =>
-        val oldStrategy = (assemblyMergeStrategy in assembly).value
-        oldStrategy(x)
-    }
+    assemblySettings("java-pingpong.jar")
   )
 
 lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart"))
@@ -767,17 +761,7 @@ lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart")
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "frontend", baseDir / "example")
     },
-    mainClass in assembly := Some("io.cloudstate.samples.shoppingcart.Main"),
-    assemblyJarName in assembly := "scala-shopping-cart.jar",
-    test in assembly := {},
-    // logLevel in assembly := Level.Debug,
-    assemblyMergeStrategy in assembly := {
-      /*ADD CUSTOMIZATIONS HERE*/
-      case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
-      case x =>
-        val oldStrategy = (assemblyMergeStrategy in assembly).value
-        oldStrategy(x)
-    }
+    assemblySettings("scala-shopping-cart.jar")
   )
 
 lazy val `akka-client` = (project in file("samples/akka-client"))
@@ -790,13 +774,13 @@ lazy val `akka-client` = (project in file("samples/akka-client"))
         // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
         "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
         "io.grpc" % "grpc-core" % GrpcJavaVersion,
-        "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-http-core" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-http2-support" % AkkaHttpVersion,
+        akkaDependency("akka-persistence"),
+        akkaDependency("akka-stream"),
+        akkaDependency("akka-discovery"),
+        akkaHttpDependency("akka-http"),
+        akkaHttpDependency("akka-http-spray-json"),
+        akkaHttpDependency("akka-http-core"),
+        akkaHttpDependency("akka-http2-support"),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
         "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
       ),
@@ -828,13 +812,13 @@ lazy val `tck` = (project in file("tck"))
         // Remove these explicit gRPC/netty dependencies once akka-grpc 0.7.1 is released and we've upgraded to using that
         "io.grpc" % "grpc-netty-shaded" % GrpcJavaVersion,
         "io.grpc" % "grpc-core" % GrpcJavaVersion,
-        "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-http" % AkkaHttpVersion,
-        "com.typesafe.akka" %% "akka-http-spray-json" % AkkaHttpVersion,
+        akkaDependency("akka-stream"),
+        akkaDependency("akka-discovery"),
+        akkaHttpDependency("akka-http"),
+        akkaHttpDependency("akka-http-spray-json"),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
         "org.scalatest" %% "scalatest" % ScalaTestVersion,
-        "com.typesafe.akka" %% "akka-testkit" % AkkaVersion
+        akkaDependency("akka-testkit")
       ),
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
@@ -851,13 +835,13 @@ lazy val `graal-tools` = (project in file("graal-tools"))
   .enablePlugins(GraalVMPlugin)
   .settings(
     libraryDependencies ++= List(
-        "org.graalvm.nativeimage" % "svm" % GraalVersion,
+        "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided",
         // Adds configuration to let Graal Native Image (SubstrateVM) work
+        "com.typesafe.akka" %% "akka-protobuf-v390" % (AkkaVersion + "-proto390") excludeAll (excludeTheseDependencies: _*),
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion,
         "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion,
         "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion,
-        "com.typesafe.akka" %% "akka-actor" % AkkaVersion,
-        "com.typesafe.akka" %% "akka-protobuf" % AkkaVersion,
+        akkaDependency("akka-actor"),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion,
         "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion
       )

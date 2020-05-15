@@ -3,20 +3,22 @@ package com.example.shoppingcart
 import com.example.shoppingcart.Shoppingcart
 import com.example.shoppingcart.persistence.Domain
 import com.google.protobuf.Empty
-import io.cloudstate.javasupport.EntityId
 import io.cloudstate.javasupport.eventsourced.CommandContext
-import io.cloudstate.kotlinsupport.api.eventsourced.*
+import io.cloudstate.javasupport.eventsourced.EventSourcedEntityCreationContext
+import io.cloudstate.kotlinsupport.annotations.EntityId
+import io.cloudstate.kotlinsupport.annotations.eventsourced.*
 
 import java.util.stream.Collectors
 import com.example.shoppingcart.persistence.Domain
 
 // #constructing
-class ShoppingCartEntity(@param:EntityId private val entityId: String)
+class ShoppingCartEntity(@EntityId private val entityId: String,
+                         context: EventSourcedEntityCreationContext)
 // #constructing
 
 // #entity-class
 @EventSourcedEntity
-class ShoppingCartEntity(@param:EntityId private val entityId: String) {
+class ShoppingCartEntity(@EntityId private val entityId: String) {
 // #entity-class
 
     // #entity-state
@@ -26,13 +28,13 @@ class ShoppingCartEntity(@param:EntityId private val entityId: String) {
     // #snapshot
     @Snapshot
     fun snapshot(): Domain.Cart =
-            Domain.Cart.newBuilder()
-                    .addAllItems(
-                            cart.values.stream()
-                                    .map { item: Shoppingcart.LineItem? -> this.convert(item) }
-                                    .collect(Collectors.toList())
-                    )
-                    .build()
+        Domain.Cart.newBuilder()
+            .addAllItems(
+                cart.values.stream()
+                    .map { item: Shoppingcart.LineItem? -> this.convert(item) }
+                    .collect(Collectors.toList())
+            )
+            .build()
 
     private fun convert(item: Shoppingcart.LineItem?): Domain.LineItem =
             Domain.LineItem.newBuilder()
@@ -73,11 +75,11 @@ class ShoppingCartEntity(@param:EntityId private val entityId: String) {
     fun itemRemoved(itemRemoved: Domain.ItemRemoved): Shoppingcart.LineItem? = cart.remove(itemRemoved.productId)
 
     private fun convert(item: Domain.LineItem): Shoppingcart.LineItem =
-            Shoppingcart.LineItem.newBuilder()
-                    .setProductId(item.productId)
-                    .setName(item.name)
-                    .setQuantity(item.quantity)
-                    .build()
+        Shoppingcart.LineItem.newBuilder()
+            .setProductId(item.productId)
+            .setName(item.name)
+            .setQuantity(item.quantity)
+            .build()
     // #item-removed
 
     // #get-cart
@@ -92,14 +94,14 @@ class ShoppingCartEntity(@param:EntityId private val entityId: String) {
             ctx.fail("Cannot add negative quantity of to item ${item.productId}" )
         }
         ctx.emit(
-                Domain.ItemAdded.newBuilder()
-                        .setItem(
-                                Domain.LineItem.newBuilder()
-                                        .setProductId(item.productId)
-                                        .setName(item.name)
-                                        .setQuantity(item.quantity)
-                                        .build())
+            Domain.ItemAdded.newBuilder()
+                .setItem(
+                    Domain.LineItem.newBuilder()
+                        .setProductId(item.productId)
+                        .setName(item.name)
+                        .setQuantity(item.quantity)
                         .build())
+                .build())
         return Empty.getDefaultInstance()
     }
     // #add-item
@@ -110,9 +112,9 @@ class ShoppingCartEntity(@param:EntityId private val entityId: String) {
             ctx.fail("Cannot remove item ${item.productId} because it is not in the cart.")
         }
         ctx.emit(
-                Domain.ItemRemoved.newBuilder()
-                        .setProductId(item.productId)
-                        .build())
+            Domain.ItemRemoved.newBuilder()
+                .setProductId(item.productId)
+                .build())
         return Empty.getDefaultInstance()
     }
 
@@ -122,7 +124,7 @@ class ShoppingCartEntity(@param:EntityId private val entityId: String) {
             eventsourced {
                 entityService = ShoppingCartEntity::class
                 descriptor = Shoppingcart.getDescriptor().findServiceByName("ShoppingCart")
-                additionalDescriptors = arrayOf( Domain.getDescriptor() )
+                additionalDescriptors = mutableListOf(Shoppingcart.getDescriptor(), Domain.getDescriptor() )
             }
         }.start()
                 .toCompletableFuture()
@@ -133,7 +135,6 @@ class ShoppingCartEntity(@param:EntityId private val entityId: String) {
     // #options
     fun main() {
         cloudstate {
-
             config {
                 host = "0.0.0.0"
                 port = 8080
@@ -143,8 +144,7 @@ class ShoppingCartEntity(@param:EntityId private val entityId: String) {
             eventsourced {
                 entityService = ShoppingCartEntity::class
                 descriptor = Shoppingcart.getDescriptor().findServiceByName("ShoppingCart")
-                additionalDescriptors = arrayOf( Domain.getDescriptor() )
-
+                additionalDescriptors = mutableListOf(Shoppingcart.getDescriptor(), Domain.getDescriptor() )
                 snapshotEvery = 1
                 persistenceId = "shopping-cart"
             }

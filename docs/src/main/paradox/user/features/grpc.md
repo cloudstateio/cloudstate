@@ -47,9 +47,9 @@ This descriptor provides a shopping cart entity. It supports three different com
 
 ## Specifying the entity key
 
-The most important thing to note in the above descriptor is the entity key annotations. Each message that is used as the input of an rpc command has one - this is requirement of Cloudstate, all inbound command messages must contain an entity key.
+The most important thing to note in the above descriptor is the entity key annotations. Each message that is used as the input of an rpc command has one - this is a requirement of Cloudstate, all inbound command messages must contain an entity key.
 
-The entity key is used by Cloudstate to know which instance of an entity a command is for. In the above example, the entity key used is the `user_id`. This means, there will be one shopping cart entity for each `user_id` in the system. When a command is received for a given entity key, Cloudstate will establish a gRPC streamed call to the user function using that entity's type's protocol if one isn't already established, and any commands received for entity key will be sent through that call.
+The entity key is used by Cloudstate to know which instance of an entity a command is for. In the above example, the entity key used is the `user_id`. This means, there will be one shopping cart entity for each `user_id` in the system. When a command is received for a given entity key, Cloudstate will establish a gRPC streamed call to the user function using that entity's type's protocol if one isn't already established, and any commands received for the entity key will be sent through that call.
 
 Cloudstate entity keys must be strings. When a non string type is specified as the entity key, it is converted to a string in a proxy specific manner. It's recommended therefore, for maximum portability, that only strings are used as entity keys. If more than one field is specified as an entity key, the fields are concatenated together in a proxy specific manner.
 
