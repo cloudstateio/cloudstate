@@ -28,6 +28,7 @@ import "cloudstate/entity.proto";
 option java_package = "io.cloudstate.protocol";
 option go_package = "cloudstate/protocol";
 
+// The type of the command to be executed
 enum CrudCommandType {
     UNKNOWN = 0;
     CREATE = 1;
@@ -36,11 +37,13 @@ enum CrudCommandType {
     DELETE = 4;
 }
 
+// The persisted state
 message CrudState {
     // The state payload
     google.protobuf.Any payload = 2;
 }
 
+// Message for initiating the command execution
 message CrudInitCommand {
 
     // The ID of the entity.
@@ -55,9 +58,14 @@ message CrudInitCommand {
     // The command payload.
     google.protobuf.Any payload = 4;
 
+    // The command type.
     CrudCommandType type = 5;
 }
 
+// Message for the command to be execute
+// I am not sure we need different command for each service operation like create, fetch, update and remove.
+// Perhaps we would use it for clarity because some operation has different semantics
+// (see CreateCommand, FetchCommand, UpdateCommand and DeleteCommand). Is it an option?
 message CrudCommand {
 
     // The ID of the entity.
@@ -75,9 +83,7 @@ message CrudCommand {
     // The command payload.
     google.protobuf.Any payload = 5;
 
-    //CrudCommandType type = 6;
-
-    // persistent state to be conveyed between persistent entity and the user function
+    // The persisted state to be conveyed between persistent entity and the user function.
     CrudState state = 6;
 }
 
@@ -98,10 +104,8 @@ message CreateCommand {
     // The command payload.
     google.protobuf.Any payload = 5;
 
-    CrudCommandType type = 6;
-
-    // persistent state to be conveyed between persistent entity and the user function
-    CrudState state = 7;
+    // The persisted state.
+    CrudState state = 6;
 }
 
 message FetchCommand {
@@ -118,12 +122,8 @@ message FetchCommand {
     // Command name
     string name = 4;
 
-    // The command payload.
-    google.protobuf.Any payload = 5;
-
-    CrudCommandType type = 6;
-
-    CrudState state = 7;
+    // The persisted state.
+    CrudState state = 5;
 }
 
 message UpdateCommand {
@@ -143,9 +143,8 @@ message UpdateCommand {
     // The command payload.
     google.protobuf.Any payload = 5;
 
-    CrudCommandType type = 6;
-
-    CrudState state = 7;
+    // The persisted state.
+    CrudState state = 6;
 }
 
 message DeleteCommand {
@@ -162,9 +161,8 @@ message DeleteCommand {
     // Command name
     string name = 4;
 
-    CrudCommandType type = 5;
-
-    CrudState state = 6;
+    // The persisted state.
+    CrudState state = 5;
 }
 
 // A reply to a command.
@@ -183,6 +181,7 @@ message CrudReply {
     google.protobuf.Any state = 4;
 }
 
+// Missing better name. It will be fixed
 message CrudReplies {
     oneof message {
         CrudReply reply = 1;
@@ -199,11 +198,9 @@ message CrudFetchReply {
 
     // Any side effects to perform
     repeated SideEffect side_effects = 3;
-
-    // An optional state to be return to the caller.
-    google.protobuf.Any fetch_state = 4;
 }
 
+// Missing better name. It will be fixed
 message CrudFetchReplies {
     oneof message {
         CrudFetchReply reply = 1;
@@ -221,4 +218,14 @@ service CrudTwo {
     rpc update(CrudCommand) returns (CrudReplies) {}
 
     rpc delete(CrudCommand) returns (CrudReplies) {}
+
+
+    // another option
+    //rpc create(CreateCommand) returns (CrudReplies) {}
+
+    //rpc fetch(FetchCommand) returns (CrudFetchReplies) {}
+
+    //rpc update(UpdateCommand) returns (CrudReplies) {}
+
+    //rpc delete(DeleteCommand) returns (CrudReplies) {}
 }

@@ -82,7 +82,7 @@ private class CrudSupport(eventSourcedEntity: ActorRef, parallelism: Int, privat
 
   override def handler(method: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed] =
     Flow[EntityCommand].mapAsync(parallelism) { command =>
-      val subEntityId = method.extractSubEntityId(command.payload.fold(ByteString.EMPTY)(_.value))
+      val subEntityId = method.extractCrudSubEntityId(command.payload.fold(ByteString.EMPTY)(_.value))
       val commandType = extractCommandType(command.payload.fold(ByteString.EMPTY)(_.value))
       val initCommand = CrudInitCommand(entityId = command.entityId,
                                         subEntityId = subEntityId,
@@ -96,7 +96,7 @@ private class CrudSupport(eventSourcedEntity: ActorRef, parallelism: Int, privat
     (eventSourcedEntity ? command).mapTo[UserFunctionReply]
 
   private def extractCommandType(string: ByteString): CrudCommandType =
-    // CRUD TODO be defined
+    // TODO to be defined for extracting from EntityMethodDescriptor
     CrudCommandType.CREATE
 }
 

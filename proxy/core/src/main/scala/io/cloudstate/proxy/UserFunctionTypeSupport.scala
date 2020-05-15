@@ -77,7 +77,7 @@ final class EntityMethodDescriptor(val method: MethodDescriptor) {
         keyFields.iterator.map(dm.getField).mkString(EntityMethodDescriptor.Separator)
     }
 
-  def extractSubEntityId(bytes: ByteString): String =
+  def extractCrudSubEntityId(bytes: ByteString): String =
     subEntityKeyFields.length match {
       case 0 =>
         ""

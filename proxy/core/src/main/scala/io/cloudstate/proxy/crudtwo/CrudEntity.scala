@@ -25,22 +25,11 @@ import akka.persistence._
 import akka.stream.Materializer
 import akka.util.Timeout
 import com.google.protobuf.any.{Any => pbAny}
-import io.cloudstate.protocol.crud_two.{
-  CreateCommand,
-  CrudCommand,
-  CrudCommandType,
-  CrudFetchReplies,
-  CrudFetchReply,
-  CrudInitCommand,
-  CrudReplies,
-  CrudReply,
-  CrudState,
-  CrudTwoClient,
-}
+import io.cloudstate.protocol.crud_two._
 import io.cloudstate.protocol.entity._
 import io.cloudstate.proxy.ConcurrencyEnforcer.{Action, ActionCompleted}
 import io.cloudstate.proxy.StatsCollector
-import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
+import io.cloudstate.proxy.entity.UserFunctionReply
 
 import scala.collection.immutable.Queue
 
@@ -145,8 +134,8 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
     extends PersistentActor
     with ActorLogging {
 
-  import context.dispatcher
   import akka.pattern.pipe
+  import context.dispatcher
 
   override final def persistenceId: String = configuration.userFunctionName + entityId
 
@@ -207,24 +196,6 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
 
   private[this] final def reportActionComplete() =
     concurrencyEnforcer ! ActionCompleted(currentCommand.actionId, System.nanoTime() - commandStartTime)
-
-  private[this] final def handleCommand(entityCommand: EntityCommand, sender: ActorRef): Unit = {
-    idCounter += 1
-    val command = CreateCommand(
-      entityId = entityId,
-      subEntityId = entityCommand.entityId,
-      id = idCounter,
-      name = entityCommand.name,
-      payload = entityCommand.payload,
-      CrudCommandType.CREATE,
-      Some(state)
-    )
-    currentCommand = CrudEntity.OutstandingCommand(idCounter, actorId + ":" + entityId + ":" + idCounter, sender)
-    commandStartTime = System.nanoTime()
-    concurrencyEnforcer ! Action(currentCommand.actionId, () => {
-      self ! command
-    })
-  }
 
   private[this] final def handleCommand(initCommand: CrudInitCommand, sender: ActorRef): Unit = {
     idCounter += 1
