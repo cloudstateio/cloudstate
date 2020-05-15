@@ -68,7 +68,7 @@ object Serve {
     }
   }
 
-  private final object ReplySerializer extends ProtobufSerializer[ProtobufAny] {
+  private[proxy] final object ReplySerializer extends ProtobufSerializer[ProtobufAny] {
     override final def serialize(reply: ProtobufAny): ByteString =
       if (reply.value.isEmpty) ByteString.empty
       else ByteString.fromArrayUnsafe(reply.value.toByteArray)
@@ -142,6 +142,15 @@ object Serve {
     }
   }
 
+  private[proxy] def createResponse(request: HttpRequest, protobufs: Source[ProtobufAny, NotUsed])(
+      implicit system: ActorSystem
+  ): Future[HttpResponse] = {
+    val responseWriter = GrpcProtocolNative.newWriter(Codecs.negotiate(request))
+    Future.successful(
+      GrpcResponseHelpers(protobufs, Serve.mapRequestFailureExceptions)(Serve.ReplySerializer, responseWriter, system)
+    )
+  }
+
   def createRoute(entities: Seq[ServableEntity],
                   router: UserFunctionRouter,
                   statsCollector: ActorRef,
@@ -201,7 +210,7 @@ object Serve {
       implicit sys: ActorSystem,
       mat: Materializer,
       ec: ExecutionContext
-  ): (PartialFunction[HttpRequest, Future[HttpResponse]], Option[RunnableGraph[Future[Done]]]) = {
+  ): (PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]], Option[RunnableGraph[Future[Done]]]) = {
     val p = Promise[Emitter]
     val eventingGraph =
       eventingSupport.flatMap(
@@ -225,7 +234,7 @@ object Serve {
       (Path / entity.serviceName / method.getName, handler)
     }).toMap
 
-    val routes: PartialFunction[HttpRequest, Future[HttpResponse]] = {
+    val routes: PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]] = {
       case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
         val startTime = System.nanoTime()
         val handler = rpcMethodSerializers(req.uri.path)
@@ -244,20 +253,13 @@ object Serve {
             handler.flow
           }
 
-        val responseWriter = GrpcProtocolNative.newWriter(Codecs.negotiate(req))
         val reader = GrpcProtocolNative.newReader(Codecs.detect(req).get)
 
-        Future
-          .successful(
-            GrpcResponseHelpers(
-              req.entity.dataBytes
-                .viaMat(reader.dataFrameDecoder)(Keep.none)
-                .map(handler.serializer.deserialize)
-                .via(new CancellationBarrierGraphStage) // In gRPC we signal failure by returning an error code, so we don't want the cancellation bubbled out
-                .via(processRequest),
-              mapRequestFailureExceptions
-            )(ReplySerializer, responseWriter, sys)
-          )
+        req.entity.dataBytes
+          .viaMat(reader.dataFrameDecoder)(Keep.none)
+          .map(handler.serializer.deserialize)
+          .via(new CancellationBarrierGraphStage) // In gRPC we signal failure by returning an error code, so we don't want the cancellation bubbled out
+          .via(processRequest)
     }
 
     (routes, eventingGraph)

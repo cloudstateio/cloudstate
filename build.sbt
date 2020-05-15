@@ -51,7 +51,7 @@ name := "cloudstate"
 val GrpcJavaVersion = "1.22.1"
 val GraalAkkaVersion = "0.5.0"
 val AkkaVersion = "2.6.5"
-val AkkaHttpVersion = "10.1.11"
+val AkkaHttpVersion = "10.1.12"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
 val PrometheusClientVersion = "0.6.0"
@@ -199,7 +199,8 @@ lazy val docs = (project in file("docs"))
         "cloudstate.node-support.version" -> "0.0.1",
         "cloudstate.go-support.version" -> "0.1.0",
         "cloudstate.go.version" -> "1.13",
-        "cloudstate.kotlin-support.version" -> "0.4.3"
+        "cloudstate.kotlin-support.version" -> "0.5.1",
+        "cloudstate.dart-support.version" -> "0.5.5"
       ),
     paradoxNavigationDepth := 3,
     inConfig(Test)(
