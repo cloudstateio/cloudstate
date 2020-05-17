@@ -83,7 +83,7 @@ def akkaDiscoveryDependency(name: String, excludeThese: ExclusionRule*) =
 def akkaPersistenceCassandraDependency(name: String, excludeThese: ExclusionRule*) =
   "com.typesafe.akka" %% name % AkkaPersistenceCassandraVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
 
-def akkaSBRDependency(name: String, excludeThese: ExclusionRule*) =
+def akkaEnhancementsDependency(name: String, excludeThese: ExclusionRule*) =
   "com.lightbend.akka" %% name % AkkaSBRVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
 
 def common: Seq[Setting[_]] = Seq(
