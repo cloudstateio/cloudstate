@@ -84,7 +84,7 @@ def akkaPersistenceCassandraDependency(name: String, excludeThese: ExclusionRule
   "com.typesafe.akka" %% name % AkkaPersistenceCassandraVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
 
 def akkaEnhancementsDependency(name: String, excludeThese: ExclusionRule*) =
-  "com.lightbend.akka" %% name % AkkaSBRVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
+  "com.lightbend.akka" %% name % AkkaEnhancementsVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
 
 def common: Seq[Setting[_]] = Seq(
   headerMappings := headerMappings.value ++ Seq(
@@ -435,7 +435,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         akkaDependency("akka-cluster-sharding", ExclusionRule("org.lmdbjava", "lmdbjava")),
         akkaManagementDependency("akka-management-cluster-bootstrap"),
         akkaDiscoveryDependency("akka-discovery-kubernetes-api"),
-        akkaSBRDependency("akka-split-brain-resolver"),
+        akkaEnhancementsDependency("akka-split-brain-resolver"),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
         "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
@@ -609,7 +609,7 @@ lazy val `java-support` = (project in file("java-support"))
         akkaHttpDependency("akka-http-spray-json"),
         akkaHttpDependency("akka-http-core"),
         akkaHttpDependency("akka-http2-support"),
-        akkaSBRDependency("akka-split-brain-resolver"),
+        akkaEnhancementsDependency("akka-split-brain-resolver"),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
         "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
@@ -689,7 +689,7 @@ lazy val `scala-support` = (project in file("scala-support"))
         akkaHttpDependency("akka-http-spray-json"),
         akkaHttpDependency("akka-http-core"),
         akkaHttpDependency("akka-http2-support"),
-        akkaSBRDependency("akka-split-brain-resolver"),
+        akkaEnhancementsDependency("akka-split-brain-resolver"),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
         "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
@@ -788,7 +788,7 @@ lazy val `akka-client` = (project in file("samples/akka-client"))
         akkaHttpDependency("akka-http-spray-json"),
         akkaHttpDependency("akka-http-core"),
         akkaHttpDependency("akka-http2-support"),
-        akkaSBRDependency("akka-split-brain-resolver"),
+        akkaEnhancementsDependency("akka-split-brain-resolver"),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
         "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
       ),
@@ -824,7 +824,7 @@ lazy val `tck` = (project in file("tck"))
         akkaDependency("akka-discovery"),
         akkaHttpDependency("akka-http"),
         akkaHttpDependency("akka-http-spray-json"),
-        akkaSBRDependency("akka-split-brain-resolver"),
+        akkaEnhancementsDependency("akka-split-brain-resolver"),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
         "org.scalatest" %% "scalatest" % ScalaTestVersion,
         akkaDependency("akka-testkit")
