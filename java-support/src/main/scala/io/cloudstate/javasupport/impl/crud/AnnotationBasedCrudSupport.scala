@@ -1,12 +1,24 @@
-package io.cloudstate.javasupport.impl.crudone
+package io.cloudstate.javasupport.impl.crud
 
 import java.lang.reflect.{Constructor, InvocationTargetException, Method}
 import java.util.Optional
 
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 import io.cloudstate.javasupport.ServiceCallFactory
-import io.cloudstate.javasupport.crud.{CrudContext, CrudEntityCreationContext, CrudEntityHandler, CrudEventContext}
-import io.cloudstate.javasupport.crud._
+import io.cloudstate.javasupport.crud.{
+  CommandContext,
+  CommandHandler,
+  CrudContext,
+  CrudEntity,
+  CrudEntityCreationContext,
+  CrudEntityFactory,
+  CrudEntityHandler,
+  CrudEventContext,
+  EventHandler,
+  Snapshot,
+  SnapshotContext,
+  SnapshotHandler
+}
 import io.cloudstate.javasupport.impl.ReflectionHelper.{InvocationContext, MainArgumentParameterHandler}
 import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEntityFactory, ResolvedServiceMethod}
 
@@ -28,9 +40,6 @@ private[impl] class AnnotationBasedCrudSupport(
 
   private val behavior = EventBehaviorReflection(entityClass, resolvedMethods)
 
-  override def create(context: CrudContext): CrudEntityHandler =
-    new EntityHandler(context)
-
   private val constructor: CrudEntityCreationContext => AnyRef = factory.getOrElse {
     entityClass.getConstructors match {
       case Array(single) =>
@@ -40,6 +49,9 @@ private[impl] class AnnotationBasedCrudSupport(
     }
   }
 
+  override def create(context: CrudContext): CrudEntityHandler =
+    new EntityHandler(context)
+
   private class EntityHandler(context: CrudContext) extends CrudEntityHandler {
     private val entity = {
       constructor(new DelegatingCrudContext(context) with CrudEntityCreationContext {
@@ -48,45 +60,6 @@ private[impl] class AnnotationBasedCrudSupport(
     }
 
     override def handleCommand(command: JavaPbAny, context: CommandContext): Optional[JavaPbAny] = unwrap {
-      behavior.commandHandlers.get(context.commandName()).map { handler =>
-        handler.invoke(entity, command, context)
-      } getOrElse {
-        throw new RuntimeException(
-          s"No command handler found for command [${context.commandName()}] on $behaviorsString"
-        )
-      }
-    }
-
-    override def handleCreateCommand(command: JavaPbAny, context: CommandContext): Optional[JavaPbAny] = unwrap {
-      behavior.commandHandlers.get(context.commandName()).map { handler =>
-        handler.invoke(entity, command, context)
-      } getOrElse {
-        throw new RuntimeException(
-          s"No command handler found for command [${context.commandName()}] on $behaviorsString"
-        )
-      }
-    }
-    override def handleFetchCommand(command: JavaPbAny, context: CommandContext): Optional[JavaPbAny] = unwrap {
-      behavior.commandHandlers.get(context.commandName()).map { handler =>
-        handler.invoke(entity, command, context)
-      } getOrElse {
-        throw new RuntimeException(
-          s"No command handler found for command [${context.commandName()}] on $behaviorsString"
-        )
-      }
-    }
-
-    override def handleUpdateCommand(command: JavaPbAny, context: CommandContext): Optional[JavaPbAny] = unwrap {
-      behavior.commandHandlers.get(context.commandName()).map { handler =>
-        handler.invoke(entity, command, context)
-      } getOrElse {
-        throw new RuntimeException(
-          s"No command handler found for command [${context.commandName()}] on $behaviorsString"
-        )
-      }
-    }
-
-    override def handleDeleteCommand(command: JavaPbAny, context: CommandContext): Optional[JavaPbAny] = unwrap {
       behavior.commandHandlers.get(context.commandName()).map { handler =>
         handler.invoke(entity, command, context)
       } getOrElse {
@@ -109,15 +82,6 @@ private[impl] class AnnotationBasedCrudSupport(
           throw new RuntimeException(
             s"No state handler found for state ${state.getClass} on $behaviorsString"
           )
-      }
-    }
-
-    override def snapshot(context: SnapshotContext): Optional[JavaPbAny] = unwrap {
-      behavior.snapshotInvoker.map { invoker =>
-        invoker.invoke(entity, context)
-      } match {
-        case Some(invoker) => Optional.ofNullable(anySupport.encodeJava(invoker))
-        case None => Optional.empty()
       }
     }
 

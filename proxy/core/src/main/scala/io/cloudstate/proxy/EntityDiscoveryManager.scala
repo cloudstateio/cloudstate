@@ -37,6 +37,7 @@ import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.typesafe.config.Config
 import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.crdt.Crdt
+import io.cloudstate.protocol.crud.Crud
 import io.cloudstate.protocol.event_sourced.EventSourced
 import io.cloudstate.protocol.function.StatelessFunction
 import io.cloudstate.proxy.StatsCollector.StatsCollectorSettings
@@ -51,6 +52,7 @@ import io.cloudstate.proxy.autoscaler.{
   NoScaler
 }
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
+import io.cloudstate.proxy.crud.CrudSupportFactory
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
 import io.cloudstate.proxy.eventing.EventingManager
 import io.cloudstate.proxy.function.StatelessFunctionSupportFactory
@@ -202,7 +204,12 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
                                                               config,
                                                               clientSettings,
                                                               concurrencyEnforcer = concurrencyEnforcer,
-                                                              statsCollector = statsCollector)
+                                                              statsCollector = statsCollector),
+          Crud.name -> new CrudSupportFactory(context.system,
+                                              config,
+                                              clientSettings,
+                                              concurrencyEnforcer = concurrencyEnforcer,
+                                              statsCollector = statsCollector)
         )
       else Map.empty
     }

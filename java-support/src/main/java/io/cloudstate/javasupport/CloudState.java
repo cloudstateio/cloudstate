@@ -10,13 +10,13 @@ import io.cloudstate.javasupport.eventsourced.EventSourcedEntityFactory;
 import io.cloudstate.javasupport.impl.AnySupport;
 import io.cloudstate.javasupport.impl.crdt.AnnotationBasedCrdtSupport;
 import io.cloudstate.javasupport.impl.crdt.CrdtStatefulService;
+import io.cloudstate.javasupport.impl.crud.AnnotationBasedCrudSupport;
+import io.cloudstate.javasupport.impl.crud.CrudStatefulService;
 import io.cloudstate.javasupport.impl.eventsourced.AnnotationBasedEventSourcedSupport;
 import io.cloudstate.javasupport.impl.eventsourced.EventSourcedStatefulService;
 
 import akka.Done;
 
-import java.util.Arrays;
-import java.util.List;
 import java.util.concurrent.CompletionStage;
 import java.util.HashMap;
 import java.util.Map;
@@ -194,8 +194,8 @@ public final class CloudState {
 
     services.put(
         descriptor.getFullName(),
-        new EventSourcedStatefulService(
-            new AnnotationBasedEventSourcedSupport(entityClass, anySupport, descriptor),
+        new CrudStatefulService(
+            new AnnotationBasedCrudSupport(entityClass, anySupport, descriptor),
             descriptor,
             anySupport,
             persistenceId,

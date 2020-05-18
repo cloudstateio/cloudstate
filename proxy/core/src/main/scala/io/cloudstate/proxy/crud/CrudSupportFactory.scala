@@ -1,4 +1,4 @@
-package io.cloudstate.proxy.crudtwo
+package io.cloudstate.proxy.crud
 
 import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
@@ -11,7 +11,7 @@ import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 import com.google.protobuf.ByteString
 import com.google.protobuf.Descriptors.ServiceDescriptor
-import io.cloudstate.protocol.crud_two.{CrudCommandType, CrudInitCommand, CrudTwoClient}
+import io.cloudstate.protocol.crud.{CrudClient, CrudCommandType, CrudEntityCommand}
 import io.cloudstate.protocol.entity.Entity
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
@@ -28,7 +28,7 @@ class CrudSupportFactory(system: ActorSystem,
 
   private final val log = Logging.getLogger(system, this.getClass)
 
-  private val crudClient = CrudTwoClient(grpcClientSettings)
+  private val crudClient = CrudClient(grpcClientSettings)
 
   override def buildEntityTypeSupport(entity: Entity,
                                       serviceDescriptor: ServiceDescriptor,
@@ -78,30 +78,31 @@ class CrudSupportFactory(system: ActorSystem,
 
 private class CrudSupport(eventSourcedEntity: ActorRef, parallelism: Int, private implicit val relayTimeout: Timeout)
     extends EntityTypeSupport {
+
   import akka.pattern.ask
 
   override def handler(method: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed] =
     Flow[EntityCommand].mapAsync(parallelism) { command =>
       val subEntityId = method.extractCrudSubEntityId(command.payload.fold(ByteString.EMPTY)(_.value))
       val commandType = extractCommandType(command.payload.fold(ByteString.EMPTY)(_.value))
-      val initCommand = CrudInitCommand(entityId = command.entityId,
-                                        subEntityId = subEntityId,
-                                        name = command.name,
-                                        payload = command.payload,
-                                        `type` = commandType)
+      val initCommand = CrudEntityCommand(entityId = command.entityId,
+                                          subEntityId = subEntityId,
+                                          name = command.name,
+                                          payload = command.payload,
+                                          `type` = commandType)
       (eventSourcedEntity ? initCommand).mapTo[UserFunctionReply]
     }
 
   override def handleUnary(command: EntityCommand): Future[UserFunctionReply] =
     (eventSourcedEntity ? command).mapTo[UserFunctionReply]
 
-  private def extractCommandType(string: ByteString): CrudCommandType =
-    // TODO to be defined for extracting from EntityMethodDescriptor
+  private def extractCommandType(bytes: ByteString): CrudCommandType =
+    // TODO to be defined for extracting CrudCommandType from EntityMethodDescriptor
     CrudCommandType.CREATE
 }
 
 private final class EntityIdExtractor(shards: Int) extends HashCodeMessageExtractor(shards) {
   override final def entityId(message: Any): String = message match {
-    case command: EntityCommand => command.entityId
+    case command: CrudEntityCommand => command.entityId
   }
 }
