@@ -255,12 +255,15 @@ def buildProxyCommand(commandName: String,
                       project: => Project,
                       name: String,
                       configResource: Option[String],
-                      native: Boolean): Command = {
+                      native: Boolean = false,
+                      aot: Boolean = false): Command = {
   val cn =
     if (native) s"dockerBuildNative$commandName"
+    else if (aot) s"dockerBuildAot$commandName"
     else s"dockerBuild$commandName"
   val imageName =
     if (native) s"native-$name"
+    else if (aot) s"aot-$name"
     else name
   val configResourceSetting = configResource match {
     case Some(resource) => "Some(\"" + resource + "\")"
@@ -273,6 +276,7 @@ def buildProxyCommand(commandName: String,
     List(
       s"""set proxyDockerBuild in `${project.id}` := Some(("cloudstate-proxy-$imageName", $configResourceSetting))""",
       s"""set graalVMDockerPublishLocalBuild in ThisBuild := $native""",
+      s"""set aotCompileDockerBuild in ThisBuild := $aot""",
       s"${project.id}/docker:$command",
       s"set proxyDockerBuild in `${project.id}` := None"
     ) ::: state
@@ -280,16 +284,21 @@ def buildProxyCommand(commandName: String,
 }
 
 commands ++= Seq(
-  buildProxyCommand("DevMode", `proxy-core`, "dev-mode", Some("dev-mode.conf"), true),
-  buildProxyCommand("DevMode", `proxy-core`, "dev-mode", Some("dev-mode.conf"), false),
-  buildProxyCommand("NoStore", `proxy-core`, "no-store", Some("no-store.conf"), true),
-  buildProxyCommand("NoStore", `proxy-core`, "no-store", Some("no-store.conf"), false),
-  buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), true),
-  buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), false),
-  buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, true),
-  buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, false),
-  buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, true),
-  buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, false),
+  buildProxyCommand("DevMode", `proxy-core`, "dev-mode", Some("dev-mode.conf")),
+  buildProxyCommand("DevMode", `proxy-core`, "dev-mode", Some("dev-mode.conf"), native = true),
+  buildProxyCommand("DevMode", `proxy-core`, "dev-mode", Some("dev-mode.conf"), aot = true),
+  buildProxyCommand("NoStore", `proxy-core`, "no-store", Some("no-store.conf")),
+  buildProxyCommand("NoStore", `proxy-core`, "no-store", Some("no-store.conf"), native = true),
+  buildProxyCommand("NoStore", `proxy-core`, "no-store", Some("no-store.conf"), aot = true),
+  buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf")),
+  buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), native = true),
+  buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), aot = true),
+  buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None),
+  buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, native = true),
+  buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, aot = true),
+  buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None),
+  buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, native = true),
+  buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, aot = true),
   Command.single("dockerBuildAllNonNative", buildProxyHelp("dockerBuildAllNonNative", "all non native")) {
     (state, command) =>
       List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres")
@@ -298,6 +307,10 @@ commands ++= Seq(
   Command.single("dockerBuildAllNative", buildProxyHelp("dockerBuildAllNative", "all native")) { (state, command) =>
     List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres")
       .map(c => s"dockerBuildNative$c $command") ::: state
+  },
+  Command.single("dockerBuildAllAot", buildProxyHelp("dockerBuildAllAot", "all aot")) { (state, command) =>
+    List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres")
+      .map(c => s"dockerBuildAot$c $command") ::: state
   }
 )
 
@@ -321,6 +334,58 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
       case Some((_, Some(configResource))) => withLibraryPath :+ s"-Dconfig.resource=$configResource"
       case _ => withLibraryPath
     }
+  }
+)
+
+lazy val aotCompileDockerBuild = settingKey[Boolean]("Whether to AOT compile in the docker build")
+lazy val jaotcOptions = settingKey[Seq[String]]("Options for jaotc in AOT-compiled docker builds")
+
+// option to jaotc on the assembly jar instead of the classpath, as it's different for some reason
+//   using lib/*: 131728 methods compiled, 4222 methods failed (shared library: 495M)
+//   using assembly: 322462 methods compiled, 257 methods failed (shared library: 1.2G)
+lazy val jaotcAssembly = settingKey[Boolean]("Whether to run jaotc on the assembly jar instead of the classpath")
+
+def aotCompileDockerSettings: Seq[Setting[_]] = Seq(
+  aotCompileDockerBuild in ThisBuild := false,
+  // note: JVM options (like GC or UseCompressedOops) for jaotc must match runtime options (currently just defaults)
+  jaotcOptions := Seq(
+      "-J-Xmx12g",
+      "--compile-for-tiered",
+      "--info"
+    ),
+  jaotcAssembly := false,
+  Docker / mappings ++= Def.taskDyn {
+      val aotBuild = (aotCompileDockerBuild in ThisBuild).value
+      val useAssembly = jaotcAssembly.value
+      if (aotBuild && useAssembly) Def.task {
+        Seq(assembly.value -> "/opt/docker/proxy.jar")
+      } else Def.task { Seq.empty[(File, String)] }
+    }.value,
+  dockerCommands := {
+    import com.typesafe.sbt.packager.docker.{DockerStageBreak, ExecCmd}
+    val aotBuild = (aotCompileDockerBuild in ThisBuild).value
+    val commands = dockerCommands.value
+    val options = jaotcOptions.value.mkString(" ")
+    val useAssembly = jaotcAssembly.value
+    def jaotc(name: String, input: String) = s"jaotc $options --output /opt/docker/$name.so $input"
+    if (aotBuild) {
+      val (firstStage, secondStage) = commands.span(_ != DockerStageBreak)
+      firstStage ++ Seq(
+        ExecCmd("RUN", "sh", "-c", "apt-get update && apt-get -y install binutils"),
+        ExecCmd("RUN", "sh", "-c", jaotc("java.base", "--module java.base")),
+        // note: lots of errors, so ignore these to compile what we can
+        if (useAssembly) ExecCmd("RUN", "sh", "-c", jaotc("proxy", "--ignore-errors /opt/docker/proxy.jar"))
+        else ExecCmd("RUN", "sh", "-c", jaotc("proxy", "--ignore-errors /opt/docker/lib/*"))
+      ) ++ secondStage
+    } else commands
+  },
+  bashScriptExtraDefines ++= {
+    if ((aotCompileDockerBuild in ThisBuild).value)
+      Seq(
+        "addJava -XX:+UnlockExperimentalVMOptions",
+        "addJava -XX:AOTLibrary=/opt/docker/java.base.so,/opt/docker/proxy.so"
+      )
+    else Seq.empty
   }
 )
 
@@ -462,12 +527,12 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     PB.protoSources in Compile += target.value / "protobuf_external" / "google" / "pubsub" / "v1",
     javaAgents += "org.mortbay.jetty.alpn" % "jetty-alpn-agent" % "2.0.9" % "runtime;test",
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
-    dockerSettings,
     fork in run := true,
     // In memory journal by default
     javaOptions in run ++= Seq("-Dconfig.resource=dev-mode.conf"),
     assemblySettings("akka-proxy.jar"),
-    nativeImageDockerSettings
+    nativeImageDockerSettings,
+    aotCompileDockerSettings
   )
 
 lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
@@ -485,7 +550,8 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
     nativeImageDockerSettings,
     graalVMNativeImageOptions ++= Seq(
         "-H:IncludeResourceBundles=com.datastax.driver.core.Driver"
-      )
+      ),
+    aotCompileDockerSettings
   )
 
 lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
@@ -521,7 +587,8 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
           "org.postgresql.Driver",
           "org.postgresql.util.SharedTimer"
         ).mkString("=", ",", "")
-      )
+      ),
+    aotCompileDockerSettings
   )
 
 lazy val `proxy-tests` = (project in file("proxy/proxy-tests"))
