@@ -4,8 +4,6 @@ jdk:
   - openjdk11
 scala:
   - 2.12.11
-node_js:
-  - 12
 env:
   global:
   # GitHub personal access token
