@@ -23,6 +23,10 @@
     "url": "https://github.com/cloudstateio/cloudstate",
     "directory": "src/node-support"
   },
+  "engineStrict": true,
+  "engines": {
+    "node": "~12"
+  },
   "files": [
     "proto",
     "protobuf-bundle.js",
