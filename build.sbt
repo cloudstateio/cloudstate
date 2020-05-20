@@ -62,7 +62,7 @@ val AkkaPersistenceCassandraVersion = "0.102"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0" // We use this version because it is the latest which works with native-image 20.0.0
-val GraalVersion = "20.0.0"
+val GraalVersion = "20.1.0"
 val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debian"
 val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
 
@@ -354,6 +354,7 @@ def sharedNativeImageSettings(targetDir: File, buildServer: Boolean) = Seq(
   "-H:IncludeResources=.+\\.properties",
   "-H:+AllowVMInspection",
   "-H:-RuntimeAssertions",
+  "-H:+RemoveSaturatedTypeFlows", // GraalVM native-image 20.1 feature which speeds up the build time
   "-H:+ReportExceptionStackTraces",
   // "-H:+PrintAnalysisCallTree", // Uncomment to dump the entire call graph, useful for debugging native-image failing builds
   //"-H:ReportAnalysisForbiddenType=java.lang.invoke.MethodHandleImpl$AsVarargsCollector", // Uncomment and specify a type which will break analysis, useful to figure out reachability
