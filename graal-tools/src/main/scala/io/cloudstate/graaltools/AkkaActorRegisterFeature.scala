@@ -10,7 +10,7 @@ final class AkkaActorRegisterFeature extends Feature {
     "akka.io.TcpConnection",
     "akka.io.TcpListener",
     "akka.stream.impl.fusing.ActorGraphInterpreter"
-  ).contains(_)
+  )
 
   override final def beforeAnalysis(access: Feature.BeforeAnalysisAccess): Unit = {
     val akkaActorClass =
