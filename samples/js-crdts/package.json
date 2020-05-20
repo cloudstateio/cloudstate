@@ -17,6 +17,10 @@
     "email": "jroper2@gmail.com",
     "url": "https://jazzy.id.au"
   },
+  "engineStrict": true,
+  "engines": {
+    "node": "~12"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/cloudstateio/cloudstate",
