@@ -112,7 +112,7 @@ final class EventSourcedImpl(_system: ActorSystem,
     val service =
       services.getOrElse(init.serviceName, throw new RuntimeException(s"Service not found: ${init.serviceName}"))
     val handler = service.factory.create(new EventSourcedContextImpl(init.entityId))
-    val entityId = init.entityId
+    val thisEntityId = init.entityId
 
     val startingSequenceNumber = (for {
       snapshot <- init.snapshot
@@ -120,7 +120,7 @@ final class EventSourcedImpl(_system: ActorSystem,
     } yield {
       val snapshotSequence = snapshot.snapshotSequence
       val context = new SnapshotContext with AbstractContext {
-        override def entityId: String = entityId
+        override def entityId: String = thisEntityId
         override def sequenceNumber: Long = snapshotSequence
       }
       handler.handleSnapshot(ScalaPbAny.toJavaProto(any), context)
@@ -131,15 +131,15 @@ final class EventSourcedImpl(_system: ActorSystem,
       .map(_.message)
       .scan[(Long, Option[EventSourcedStreamOut.Message])]((startingSequenceNumber, None)) {
         case (_, InEvent(event)) =>
-          val context = new EventContextImpl(entityId, event.sequence)
+          val context = new EventContextImpl(thisEntityId, event.sequence)
           val ev = ScalaPbAny.toJavaProto(event.payload.get) // FIXME empty?
           handler.handleEvent(ev, context)
           (event.sequence, None)
         case ((sequence, _), InCommand(command)) =>
-          if (entityId != command.entityId)
+          if (thisEntityId != command.entityId)
             throw new IllegalStateException("Receiving entity is not the intended recipient of command")
           val cmd = ScalaPbAny.toJavaProto(command.payload.get)
-          val context = new CommandContextImpl(entityId,
+          val context = new CommandContextImpl(thisEntityId,
                                                sequence,
                                                command.name,
                                                command.id,

@@ -5,7 +5,6 @@ import java.util.Optional
 import com.example.shoppingcart.Shoppingcart
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.google.protobuf.{ByteString, Any => JavaPbAny}
-import io.cloudstate.javasupport.eventsourced._
 import io.cloudstate.javasupport.impl.{AnySupport, ResolvedServiceMethod, ResolvedType}
 import io.cloudstate.javasupport._
 import io.cloudstate.javasupport.crdt.{Crdt, CrdtContext, CrdtCreationContext, CrdtEntity, Vote}
@@ -60,9 +59,8 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
   }
 
   case class Wrapped(value: String)
-  val descriptor = Shoppingcart.getDescriptor
-    .findServiceByName("ShoppingCart")
-    .findMethodByName("AddItem")
+  val serviceDescriptor = Shoppingcart.getDescriptor.findServiceByName("ShoppingCart")
+  val descriptor = serviceDescriptor.findMethodByName("AddItem")
   val method = ResolvedServiceMethod(descriptor, StringResolvedType, WrappedResolvedType)
 
   def create(behavior: AnyRef, methods: ResolvedServiceMethod[_, _]*) =
@@ -111,7 +109,18 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
                                                             Some(MockCreationContext.newGCounter()))
       }
 
+      "there is a provided entity factory" in {
+        val factory = new EntityFactory {
+          override def create(context: EntityContext): AnyRef = new CrdtFactoryTest(context)
+          override def entityClass: Class[_] = classOf[CrdtFactoryTest]
+        }
+        val crdtSupport = new AnnotationBasedCrdtSupport(factory, anySupport, serviceDescriptor)
+        crdtSupport.create(MockCreationContext)
+      }
+
     }
+
+    // TODO: CRDT command handlers should be tested
   }
 }
 
@@ -131,4 +140,10 @@ private class OptionalCrdtConstructorTest(crdt: Optional[Vote]) {
 @CrdtEntity
 private class CrdtConstructorTest(crdt: Vote) {
   crdt shouldBe a[Vote]
+}
+
+@CrdtEntity
+private class CrdtFactoryTest(ctx: EntityContext) {
+  ctx shouldBe a[CrdtCreationContext]
+  ctx.entityId should ===("foo")
 }
