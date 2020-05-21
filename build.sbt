@@ -154,8 +154,7 @@ lazy val protocols = (project in file("protocols"))
       IO.zip(
         archiveStructure(cloudstateProtocolsName,
                          (base / "frontend" ** "*.proto" +++
-                         base / "protocol" ** "*.proto" +++
-                         base / "proxy" ** "*.proto")),
+                         base / "protocol" ** "*.proto")),
         cloudstateProtos
       )
 
@@ -456,7 +455,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     },
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "proxy", baseDir / "frontend", baseDir / "protocol")
+      Seq(baseDir / "frontend", baseDir / "protocol")
     },
     PB.protoSources in Test ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
@@ -796,13 +795,13 @@ lazy val `load-generator` = (project in file("samples/js-shopping-cart-load-gene
   )
 
 lazy val `tck` = (project in file("tck"))
-  .enablePlugins(AkkaGrpcPlugin)
+  .enablePlugins(AkkaGrpcPlugin, JavaAppPackaging, DockerPlugin)
   .configs(IntegrationTest)
   .dependsOn(`akka-client`)
   .settings(
     Defaults.itSettings,
     common,
-    name := "tck",
+    name := "cloudstate-tck",
     libraryDependencies ++= Seq(
         akkaDependency("akka-stream"),
         akkaDependency("akka-discovery"),
@@ -814,8 +813,11 @@ lazy val `tck` = (project in file("tck"))
       ),
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "proxy", baseDir / "protocol")
+      Seq(baseDir / "protocol")
     },
+    dockerSettings,
+    Compile / bashScriptDefines / mainClass := Some("org.scalatest.run"),
+    bashScriptExtraDefines += "addApp io.cloudstate.tck.ConfiguredCloudStateTCK",
     javaOptions in IntegrationTest := sys.props.get("config.resource").map(r => s"-Dconfig.resource=$r").toSeq,
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)

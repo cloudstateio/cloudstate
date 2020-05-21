@@ -86,14 +86,14 @@ jobs:
     if: tag =~ ^v
     script:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
-    - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish
+    - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish tck/docker:publish
   
   - stage: Deploy
     name: Publish latest builds
     if: branch = master AND type = push
     script:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
-    - sbt -Duse.native.builds=false -Ddocker.tag=latest "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish
+    - sbt -Duse.native.builds=false -Ddocker.tag=latest "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish tck/docker:publish
 
 cache:
   directories:
