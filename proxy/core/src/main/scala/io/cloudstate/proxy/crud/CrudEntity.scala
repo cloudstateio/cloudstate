@@ -114,7 +114,11 @@ object CrudEntity {
       replyTo: ActorRef
   )
 
-  private final case class InternalState(value: pbAny)
+  // The entity state
+  private final case class InternalState(
+      payload: pbAny, // the state payload
+      sequenceNumber: Long // the sequence number of the last taken snapshot
+  )
 
   final def props(configuration: Configuration,
                   entityId: String,
@@ -210,7 +214,7 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       id = idCounter,
       name = entityCommand.name,
       payload = entityCommand.payload,
-      state = state.map(s => CrudState(Some(s.value)))
+      state = state.map(s => CrudState(Some(s.payload), sequenceNumber()))
     )
     currentCommand = CrudEntity.OutstandingCommand(idCounter, actorId + ":" + entityId + ":" + idCounter, sender)
     commandStartTime = System.nanoTime()
@@ -252,12 +256,15 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
   private[this] final def maybeInit(snapshot: Option[SnapshotOffer]): Unit =
     if (!inited) {
       state = snapshot.map {
-        case SnapshotOffer(_, offeredSnapshot: pbAny) =>
-          InternalState(offeredSnapshot)
+        case SnapshotOffer(metadata, offeredSnapshot: pbAny) =>
+          InternalState(offeredSnapshot, metadata.sequenceNr)
         case other => throw new IllegalStateException(s"Unexpected snapshot type received: ${other.getClass}")
       }
       inited = true
     }
+
+  // the sequence number of the last taken snapshot
+  private[this] final def sequenceNumber(): Long = state.map(_.sequenceNumber).getOrElse(0L)
 
   override final def receiveCommand: PartialFunction[Any, Unit] = {
 
@@ -285,9 +292,10 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
               commandHandled()
             case Some(event) =>
               reportDatabaseOperationStarted()
-              persistAll(List(event)) { _ =>
-                state = Some(InternalState(event))
+              persist(event) { _ =>
                 reportDatabaseOperationFinished()
+                state = Some(InternalState(event, sequenceNumber))
+                r.snapshot.foreach(saveSnapshot)
                 // Make sure that the current request is still ours
                 if (currentCommand == null || currentCommand.commandId != commandId) {
                   crash("Internal error - currentRequest changed before all events were persisted")
@@ -347,7 +355,7 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
 
     case event: pbAny =>
       maybeInit(None)
-      state = Some(InternalState(event))
+      state = Some(InternalState(event, sequenceNumber))
   }
 
   private def reportDatabaseOperationStarted(): Unit =

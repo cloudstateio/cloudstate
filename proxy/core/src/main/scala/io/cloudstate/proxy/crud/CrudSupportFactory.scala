@@ -40,7 +40,7 @@ class CrudSupportFactory(system: ActorSystem,
                                                       config.passivationTimeout,
                                                       config.relayOutputBufferSize)
 
-    log.debug("Starting EventSourcedEntity for {}", entity.persistenceId)
+    log.debug("Starting Crud Entity for {}", entity.persistenceId)
     val clusterSharding = ClusterSharding(system)
     val clusterShardingSettings = ClusterShardingSettings(system)
     val eventSourcedEntity = clusterSharding.start(
@@ -62,15 +62,33 @@ class CrudSupportFactory(system: ActorSystem,
     if (streamedMethods.nonEmpty) {
       val offendingMethods = streamedMethods.map(_.method.getName).mkString(",")
       throw EntityDiscoveryException(
-        s"Event sourced entities do not support streamed methods, but ${serviceDescriptor.getFullName} has the following streamed methods: ${offendingMethods}"
+        s"Crud entities do not support streamed methods, but ${serviceDescriptor.getFullName} has the following streamed methods: ${offendingMethods}"
       )
     }
     val methodsWithoutKeys = methodDescriptors.values.filter(_.keyFieldsCount < 1)
     if (methodsWithoutKeys.nonEmpty) {
       val offendingMethods = methodsWithoutKeys.map(_.method.getName).mkString(",")
-      throw new EntityDiscoveryException(
-        s"Event sourced entities do not support methods whose parameters do not have at least one field marked as entity_key, " +
-        "but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}"
+      throw EntityDiscoveryException(
+        s"""Crud entities do not support methods whose parameters do not have at least one field marked as entity_key,
+            |"but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}""".stripMargin
+      )
+    }
+
+    val methodsWithoutSubEntityKeys = methodDescriptors.values.filter(_.crudSubEntityKeyFieldsCount < 1)
+    if (methodsWithoutSubEntityKeys.nonEmpty) {
+      val offendingMethods = methodsWithoutSubEntityKeys.map(_.method.getName).mkString(",")
+      throw EntityDiscoveryException(
+        s"""Crud entities do not support methods whose parameters do not have at least one field marked as sub_entity_key,
+           |"but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}""".stripMargin
+      )
+    }
+
+    val methodsWithoutCommandType = methodDescriptors.values.filter(_.crudCommandTypeFieldsCount < 1)
+    if (methodsWithoutCommandType.nonEmpty) {
+      val offendingMethods = methodsWithoutCommandType.map(_.method.getName).mkString(",")
+      throw EntityDiscoveryException(
+        s"""Crud entities do not support methods whose parameters do not have at least one field marked as crud_command_type,
+           |"but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}""".stripMargin
       )
     }
   }
@@ -84,7 +102,7 @@ private class CrudSupport(eventSourcedEntity: ActorRef, parallelism: Int, privat
   override def handler(method: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed] =
     Flow[EntityCommand].mapAsync(parallelism) { command =>
       val subEntityId = method.extractCrudSubEntityId(command.payload.fold(ByteString.EMPTY)(_.value))
-      val commandType = extractCommandType(command.payload.fold(ByteString.EMPTY)(_.value))
+      val commandType = extractCommandType(method, command)
       val initCommand = CrudEntityCommand(entityId = command.entityId,
                                           subEntityId = subEntityId,
                                           name = command.name,
@@ -96,9 +114,13 @@ private class CrudSupport(eventSourcedEntity: ActorRef, parallelism: Int, privat
   override def handleUnary(command: EntityCommand): Future[UserFunctionReply] =
     (eventSourcedEntity ? command).mapTo[UserFunctionReply]
 
-  private def extractCommandType(bytes: ByteString): CrudCommandType =
-    // TODO to be defined for extracting CrudCommandType from EntityMethodDescriptor
-    CrudCommandType.CREATE
+  private def extractCommandType(method: EntityMethodDescriptor, command: EntityCommand): CrudCommandType = {
+    val commandType = method.extractCrudCommandType(command.payload.fold(ByteString.EMPTY)(_.value))
+    CrudCommandType.fromName(commandType.toUpperCase).getOrElse {
+      // cannot be empty here because the check is made in the validate method of CrudSupportFactory
+      throw new RuntimeException(s"Command - ${command.name} for CRUD entity should have a command type")
+    }
+  }
 }
 
 private final class EntityIdExtractor(shards: Int) extends HashCodeMessageExtractor(shards) {

@@ -18,8 +18,7 @@ package io.cloudstate.javasupport.impl.crud
 import java.util.Optional
 
 import akka.actor.ActorSystem
-import com.google.protobuf.any.{Any => ScalaPbAny}
-import com.google.protobuf.{Descriptors, Any => JavaPbAny}
+import com.google.protobuf.Descriptors
 import io.cloudstate.javasupport.CloudStateRunner.Configuration
 import io.cloudstate.javasupport.crud._
 import io.cloudstate.javasupport.impl._
@@ -58,31 +57,24 @@ final class CrudImpl(_system: ActorSystem,
 
   private final val system = _system
   private final implicit val ec = system.dispatcher
-  private final val services = _services.iterator.toMap
+  private final val services = _services.iterator
+    .map({
+      case (name, crudss) =>
+        // FIXME overlay configuration provided by _system
+        (name, if (crudss.snapshotEvery == 0) crudss.withSnapshotEvery(configuration.snapshotEvery) else crudss)
+    })
+    .toMap
 
-  private final var serviceInit = false
-  private final var handlerInit = false
-  private final var service: CrudStatefulService = _
-  private final var handler: CrudEntityHandler = _
+  private final val runner = new EntityHandlerRunner()
 
-  override def create(command: CrudCommand): Future[CrudReplyOut] = {
-    maybeInitService(command.serviceName)
-    maybeInitHandler(command.entityId)
-
+  override def create(command: CrudCommand): Future[CrudReplyOut] =
     Future.unit
       .map { _ =>
-        command.state.map { state =>
-          // Not sure about the best way to push the state to the user function
-          // There are two options here. The first is using an annotation which is called on handler.handleState.
-          // handler.handleState will use a new special context called StateContext (will be implemented).
-          // The other option is to pass the state in the CommandContext and use emit or something else to publish the new state
-          handler.handleState(ScalaPbAny.toJavaProto(state.payload.get), new SnapshotContextImpl(command.entityId, 0))
-        }
-        val cmd = ScalaPbAny.toJavaProto(command.payload.get) //FIXME payload empty?
-        val context =
-          new CommandContextImpl(command.entityId, 0, command.name, command.id, handler, service.anySupport)
-        val reply = handleCommand(context, cmd)
+        runner.handleState(command)
+        val (reply, context) = runner.handleCommand(command)
         val clientAction = context.createClientAction(reply, false)
+        runner.endSequenceNumber(context.hasError)
+
         if (!context.hasError) {
           CrudReplyOut(
             CrudReplyOut.Message.Reply(
@@ -90,7 +82,8 @@ final class CrudImpl(_system: ActorSystem,
                 command.id,
                 clientAction,
                 context.sideEffects,
-                Some(context.events(0)) // FIXME deal with the events?
+                runner.event(command.id),
+                runner.snapshot()
               )
             )
           )
@@ -100,28 +93,18 @@ final class CrudImpl(_system: ActorSystem,
               CrudReply(
                 commandId = command.id,
                 clientAction = clientAction,
-                state = Some(context.events(0)) // FIXME deal with the events?
+                state = runner.event(command.id)
               )
             )
           )
         }
       }
-  }
 
-  override def fetch(command: CrudCommand): Future[CrudReplyOut] = {
-    maybeInitService(command.serviceName)
-    maybeInitHandler(command.entityId)
-
+  override def fetch(command: CrudCommand): Future[CrudReplyOut] =
     Future.unit
       .map { _ =>
-        command.state.map { state =>
-          handler.handleState(ScalaPbAny.toJavaProto(state.payload.get), new SnapshotContextImpl(command.entityId, 0))
-        }
-
-        val cmd = ScalaPbAny.toJavaProto(command.payload.get) //FIXME payload empty?
-        val context =
-          new CommandContextImpl(command.entityId, 0, command.name, command.id, handler, service.anySupport)
-        val reply = handleCommand(context, cmd)
+        runner.handleState(command)
+        val (reply, context) = runner.handleCommand(command)
         val clientAction = context.createClientAction(reply, false)
         if (!context.hasError) {
           CrudReplyOut(
@@ -129,7 +112,9 @@ final class CrudImpl(_system: ActorSystem,
               CrudReply(
                 command.id,
                 clientAction,
-                context.sideEffects
+                context.sideEffects,
+                runner.event(command.id),
+                runner.snapshot()
               )
             )
           )
@@ -138,73 +123,154 @@ final class CrudImpl(_system: ActorSystem,
             CrudReplyOut.Message.Reply(
               CrudReply(
                 commandId = command.id,
-                clientAction = clientAction
+                clientAction = clientAction,
+                state = runner.event(command.id)
               )
             )
           )
         }
       }
-  }
 
-  override def save(command: CrudCommand): Future[CrudReplyOut] = ???
+  override def save(command: CrudCommand): Future[CrudReplyOut] =
+    Future.unit
+      .map { _ =>
+        runner.handleState(command)
+        val (reply, context) = runner.handleCommand(command)
+        val clientAction = context.createClientAction(reply, false)
+        runner.endSequenceNumber(context.hasError)
+
+        if (!context.hasError) {
+          CrudReplyOut(
+            CrudReplyOut.Message.Reply(
+              CrudReply(
+                command.id,
+                clientAction,
+                context.sideEffects,
+                runner.event(command.id),
+                runner.snapshot()
+              )
+            )
+          )
+        } else {
+          CrudReplyOut(
+            CrudReplyOut.Message.Reply(
+              CrudReply(
+                commandId = command.id,
+                clientAction = clientAction,
+                state = runner.event(command.id)
+              )
+            )
+          )
+        }
+      }
 
   override def delete(command: CrudCommand): Future[CrudReplyOut] = ???
 
   override def fetchAll(command: CrudCommand): Future[CrudReplyOut] = ???
 
-  private def maybeInitService(serviceName: String): Unit =
-    if (!serviceInit) {
-      service = services.getOrElse(serviceName, throw new RuntimeException(s"Service not found: $serviceName"))
-      serviceInit = true
+  /*
+   * Represents a wrapper for the crud service and crud entity handler.
+   * It creates the service and entity handler once depending on the first command which starts the flow.
+   * It also deals with snapshotting of events and the deactivation of the command context.
+   */
+  private final class EntityHandlerRunner() {
+    import com.google.protobuf.{Any => JavaPbAny}
+    import com.google.protobuf.any.{Any => ScalaPbAny}
+
+    private final var handlerInit = false
+    private final var service: CrudStatefulService = _
+    private final var handler: CrudEntityHandler = _
+
+    private final var sequenceNumber: Long = 0
+    private final var performSnapshot: Boolean = false
+    private final var events = Map.empty[Long, ScalaPbAny]
+
+    def handleCommand(command: CrudCommand): (Optional[JavaPbAny], CommandContextImpl) = {
+      maybeInitHandler(command)
+
+      val context = new CommandContextImpl(command.entityId, sequenceNumber, command.name, command.id, this)
+      try {
+        command.payload
+          .map(p => (handler.handleCommand(ScalaPbAny.toJavaProto(p), context), context))
+          .getOrElse((Optional.empty[JavaPbAny](), context)) //FIXME payload empty should throw an exception or not?
+      } catch {
+        case FailInvoked =>
+          (Optional.empty[JavaPbAny](), context)
+      } finally {
+        context.deactivate()
+      }
     }
 
-  private def maybeInitHandler(entityId: String): Unit =
-    if (!handlerInit) {
-      handlerInit = true
-      handler = service.factory.create(new CrudContextImpl(entityId))
+    def handleState(command: CrudCommand): Unit = {
+      maybeInitHandler(command)
+
+      val context = new SnapshotContextImpl(command.entityId, sequenceNumber)
+      // Not sure about the best way to push the state to the user function
+      // There are two options here. The first is using an annotation which is called on runner.handleState.
+      // runner.handleState will use a new special context called StateContext (will be implemented).
+      // The other option is to pass the state in the CommandContext and use emit or something else to publish the new state
+      command.state.map(s => handler.handleState(ScalaPbAny.toJavaProto(s.payload.get), context))
     }
 
-  private def handleCommand(context: CommandContextImpl, command: JavaPbAny): Optional[JavaPbAny] =
-    try {
-      handler.handleCommand(command, context)
-    } catch {
-      case FailInvoked =>
-        Optional.empty[JavaPbAny]()
-    } finally {
-      context.deactivate()
+    def emit(event: AnyRef, context: CommandContext): Unit = {
+      val encoded = service.anySupport.encodeScala(event)
+      val nextSequenceNumber = context.sequenceNumber() + events.size + 1
+      handler.handleState(ScalaPbAny.toJavaProto(encoded),
+                          new SnapshotContextImpl(context.entityId, nextSequenceNumber))
+
+      events += (context.commandId() -> encoded)
+      performSnapshot = (service.snapshotEvery > 0) && (performSnapshot || (nextSequenceNumber % service.snapshotEvery == 0))
     }
+
+    def endSequenceNumber(hasError: Boolean): Unit =
+      if (!hasError) {
+        sequenceNumber = sequenceNumber + events.size
+      }
+
+    def snapshot(): Option[ScalaPbAny] =
+      if (performSnapshot) {
+        val (_, lastEvent) = events.last
+        Some(lastEvent)
+      } else None
+
+    def event(commandId: Long): Option[ScalaPbAny] = {
+      val e = events.get(commandId)
+      events -= commandId // remove the event for the command id
+      e
+    }
+
+    private def maybeInitHandler(command: CrudCommand): Unit =
+      if (!handlerInit) {
+        service = services.getOrElse(command.serviceName,
+                                     throw new RuntimeException(s"Service not found: ${command.serviceName}"))
+        handler = service.factory.create(new CrudContextImpl(command.entityId))
+        sequenceNumber = command.state.map(_.snapshotSequence).getOrElse(0L)
+        handlerInit = true
+      }
+  }
 
   trait AbstractContext extends CrudContext {
     override def serviceCallFactory(): ServiceCallFactory = rootContext.serviceCallFactory()
   }
 
-  class CommandContextImpl(override val entityId: String,
-                           override val sequenceNumber: Long,
-                           override val commandName: String,
-                           override val commandId: Long,
-                           val handler: CrudEntityHandler,
-                           val anySupport: AnySupport)
+  private final class CommandContextImpl(override val entityId: String,
+                                         override val sequenceNumber: Long,
+                                         override val commandName: String,
+                                         override val commandId: Long,
+                                         private val runner: EntityHandlerRunner)
       extends CommandContext
       with AbstractContext
       with AbstractClientActionContext
       with AbstractEffectContext
       with ActivatableContext {
 
-    final var events: Vector[ScalaPbAny] = Vector.empty
-
-    override def emit(event: AnyRef): Unit = {
-      val encoded = anySupport.encodeScala(event)
-      // Snapshotting should be done!!
-      handler.handleState(ScalaPbAny.toJavaProto(encoded), new SnapshotContextImpl(entityId, 0))
-      events :+= encoded
-    }
+    override def emit(event: AnyRef): Unit =
+      runner.emit(event, this)
   }
 
-  class CrudContextImpl(override final val entityId: String) extends CrudContext with AbstractContext
+  private final class CrudContextImpl(override final val entityId: String) extends CrudContext with AbstractContext
 
-  class SnapshotContextImpl(override final val entityId: String, override final val sequenceNumber: Long)
+  private final class SnapshotContextImpl(override final val entityId: String, override final val sequenceNumber: Long)
       extends SnapshotContext
       with AbstractContext
-
-  //class StateContextImpl(override final val entityId: String) extends CrudContext with AbstractContext with StateContext
 }

@@ -1,22 +1,25 @@
-// This is the public API offered by the shopping cart entity.
+// This is the public API offered by the shopping cart crud entity.
 syntax = "proto3";
 
 import "google/protobuf/empty.proto";
 import "cloudstate/entity_key.proto";
-import "cloudstate/eventing.proto";
+import "cloudstate/sub_entity_key.proto";
+import "cloudstate/crud_command_type.proto";
 import "google/api/annotations.proto";
 import "google/api/http.proto";
 import "google/api/httpbody.proto";
 
-package com.example.shoppingcart;
+package cloudstate.proxy.test.crud;
 
-option go_package = "tck/shoppingcart";
+option java_package = "io.cloudstate.proxy.test.crud";
 
 message AddLineItem {
-    string user_id = 1 [(.cloudstate.entity_key) = true];
-    string product_id = 2;
-    string name = 3;
-    int32 quantity = 4;
+    string shopping_id = 1 [(.cloudstate.entity_key) = true];
+    string user_id = 2 [(.cloudstate.sub_entity_key) = true];
+    string command_type = 3 [(.cloudstate.crud_command_type) = true];
+    string product_id = 4;
+    string name = 5;
+    int32 quantity = 6;
 }
 
 message RemoveLineItem {
@@ -44,7 +47,6 @@ service ShoppingCart {
             post: "/cart/{user_id}/items/add",
             body: "*",
         };
-        option (.cloudstate.eventing).in = "items";
     }
 
     rpc RemoveItem(RemoveLineItem) returns (google.protobuf.Empty) {
@@ -54,10 +56,14 @@ service ShoppingCart {
     rpc GetCart(GetShoppingCart) returns (Cart) {
         option (google.api.http) = {
           get: "/carts/{user_id}",
-          additional_bindings: {
+          additional_bindings: [{
             get: "/carts/{user_id}/items",
             response_body: "items"
-          }
+          }]
         };
+    }
+
+    rpc ShowCartPage(GetShoppingCart) returns (google.api.HttpBody) {
+        option (google.api.http).get = "/carts/{user_id}.html";
     }
 }

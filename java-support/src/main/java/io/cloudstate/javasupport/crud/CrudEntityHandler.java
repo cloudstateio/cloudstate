@@ -9,7 +9,7 @@ import java.util.Optional;
  * an crud entity.
  *
  * <p>Generally, this should not be needed, instead, a class annotated with the {@link
- * StateHandler}, {@link CommandHandler} and similar annotations should be used.
+ * SnapshotHandler}, {@link CommandHandler} and similar annotations should be used.
  */
 public interface CrudEntityHandler {
 

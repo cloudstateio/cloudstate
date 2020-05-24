@@ -3,12 +3,15 @@ package io.cloudstate.proxy
 import akka.NotUsed
 import akka.stream.scaladsl.Flow
 import com.google.protobuf.Descriptors.{MethodDescriptor, ServiceDescriptor}
-import com.google.protobuf.{ByteString, DynamicMessage}
+import com.google.protobuf.descriptor.FieldOptions
+import com.google.protobuf.{ByteString, Descriptors, DynamicMessage}
+import io.cloudstate.crud_command_type.CrudCommandTypeProto
 import io.cloudstate.entity_key.EntityKeyProto
 import io.cloudstate.protocol.entity.Entity
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionCommand, UserFunctionReply}
 import io.cloudstate.proxy.protobuf.Options
 import io.cloudstate.sub_entity_key.SubEntityKeyProto
+import scalapb.GeneratedExtension
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
@@ -53,41 +56,47 @@ private object EntityMethodDescriptor {
 }
 
 final class EntityMethodDescriptor(val method: MethodDescriptor) {
-  private[this] val keyFields = method.getInputType.getFields.iterator.asScala
-    .filter(field => EntityKeyProto.entityKey.get(Options.convertFieldOptions(field)))
-    .toArray
-    .sortBy(_.getIndex)
 
-  private[this] val subEntityKeyFields = method.getInputType.getFields.iterator.asScala
-    .filter(field => SubEntityKeyProto.subEntityKey.get(Options.convertFieldOptions(field)))
-    .toArray
-    .sortBy(_.getIndex)
+  /** represents cloudstate entity key for all entities */
+  private[this] val keyFields = commandFieldOptions(EntityKeyProto.entityKey)
+
+  /** represents cloudstate sub entity key for crud entity */
+  private[this] val crudSubEntityKeyFields = commandFieldOptions(SubEntityKeyProto.subEntityKey)
+
+  /** represents cloudstate command type for crud entity */
+  private[this] val crudCommandTypeFields = commandFieldOptions(CrudCommandTypeProto.crudCommandType)
 
   def keyFieldsCount: Int = keyFields.length
 
-  def extractId(bytes: ByteString): String =
-    keyFields.length match {
+  def crudSubEntityKeyFieldsCount: Int = crudSubEntityKeyFields.length
+
+  def crudCommandTypeFieldsCount: Int = crudCommandTypeFields.length
+
+  def extractId(bytes: ByteString): String = extract(keyFields, bytes)
+
+  def extractCrudSubEntityId(bytes: ByteString): String = extract(crudSubEntityKeyFields, bytes)
+
+  def extractCrudCommandType(bytes: ByteString): String = extract(crudCommandTypeFields, bytes)
+
+  private def extract(fieldOptions: Array[Descriptors.FieldDescriptor], bytes: ByteString): String =
+    fieldOptions.length match {
       case 0 =>
         ""
       case 1 =>
         val dm = DynamicMessage.parseFrom(method.getInputType, bytes)
-        dm.getField(keyFields.head).toString
+        dm.getField(fieldOptions.head).toString
       case _ =>
         val dm = DynamicMessage.parseFrom(method.getInputType, bytes)
-        keyFields.iterator.map(dm.getField).mkString(EntityMethodDescriptor.Separator)
+        fieldOptions.iterator.map(dm.getField).mkString(EntityMethodDescriptor.Separator)
     }
 
-  def extractCrudSubEntityId(bytes: ByteString): String =
-    subEntityKeyFields.length match {
-      case 0 =>
-        ""
-      case 1 =>
-        val dm = DynamicMessage.parseFrom(method.getInputType, bytes)
-        dm.getField(subEntityKeyFields.head).toString
-      case _ =>
-        val dm = DynamicMessage.parseFrom(method.getInputType, bytes)
-        subEntityKeyFields.iterator.map(dm.getField).mkString(EntityMethodDescriptor.Separator)
-    }
+  private def commandFieldOptions(
+      optionType: GeneratedExtension[FieldOptions, Boolean]
+  ): Array[Descriptors.FieldDescriptor] =
+    method.getInputType.getFields.iterator.asScala
+      .filter(field => optionType.get(Options.convertFieldOptions(field)))
+      .toArray
+      .sortBy(_.getIndex)
 }
 
 private final class EntityUserFunctionTypeSupport(serviceDescriptor: ServiceDescriptor,

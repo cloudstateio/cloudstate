@@ -37,10 +37,13 @@ enum CrudCommandType {
     DELETE = 5;
 }
 
-// The persisted state
+// The persisted state with the sequence number of the last snapshot
 message CrudState {
     // The state payload
     google.protobuf.Any payload = 2;
+
+    // The sequence number when the snapshot was taken.
+    int64 snapshot_sequence = 1;
 }
 
 // Message for initiating the command execution
@@ -101,6 +104,11 @@ message CrudReply {
 
     // An optional state to persist.
     google.protobuf.Any state = 4;
+
+    // An optional snapshot to persist. It is assumed that this snapshot will have
+    // the state of any events in the events field applied to it. It is illegal to
+    // send a snapshot without sending any events.
+    google.protobuf.Any snapshot = 5;
 }
 
 // Missing better name. It will be fixed

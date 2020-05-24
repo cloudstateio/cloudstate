@@ -9,7 +9,6 @@ import io.cloudstate.javasupport.crud.{
   CrudContext,
   CrudEntity,
   CrudEntityCreationContext,
-  CrudEventContext,
   SnapshotContext,
   SnapshotHandler
 }
@@ -39,11 +38,6 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
     override def fail(errorMessage: String): RuntimeException = ???
     override def forward(to: ServiceCall): Unit = ???
     override def effect(effect: ServiceCall, synchronous: Boolean): Unit = ???
-  }
-
-  val eventCtx = new CrudEventContext with BaseContext {
-    override def sequenceNumber(): Long = 10
-    override def entityId(): String = "foo"
   }
 
   object WrappedResolvedType extends ResolvedType[Wrapped] {
