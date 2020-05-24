@@ -19,7 +19,7 @@ final class AkkaActorRegisterFeature extends Feature {
     def register(subtype: Class[_]) =
       for {
         subtype <- Option(subtype)
-        if !subtype.isInterface && ignoreClass(subtype.getName)
+        if !subtype.isInterface && !ignoreClass(subtype.getName)
         _ = println("Automatically registering actor class for reflection purposes: " + subtype.getName)
         _ = RuntimeReflection.register(subtype)
         _ = RuntimeReflection.register(subtype.getDeclaredConstructors: _*)
