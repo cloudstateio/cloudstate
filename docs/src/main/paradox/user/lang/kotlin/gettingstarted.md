@@ -15,7 +15,7 @@ docker
 : Cloudstate runs in Kubernetes with [Docker](https://www.docker.com/), hence you will need Docker to build a container that you can deploy to Kubernetes. Most popular build tools have plugins that assist in building Docker images.
 
 In addition to the above, you will need to install the Cloudstate Kotlin support library, which can be done as follows:
-    
+
 Maven
 : @@@vars
 ```xml
@@ -26,7 +26,7 @@ Maven
 </dependency>
 ```
 @@@
-  
+
 sbt
 : @@@vars
 ```scala
@@ -54,246 +54,249 @@ dependencies {
 
 ## Simple example
 
-A minimal Kotlin example using the [Google Jib Docker Maven Plugin](https://github.com/GoogleContainerTools/jib/) 
+A minimal Kotlin example using the [Google Jib Docker Maven Plugin](https://github.com/GoogleContainerTools/jib/)
 to generate the [Docker](https://www.docker.com/) image for a shopping cart service, is shown below:
 
 Maven
-: @@@vars
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
+:   <!-- allow empty lines in code block below: https://github.com/lightbend/paradox/issues/161 -->
 
-    <groupId>io.cloudstate</groupId>
-    <artifactId>shopping-cart</artifactId>
-    <version>0.4.3</version>
+    @@@vars
+    ```xml
+    <?xml version="1.0" encoding="UTF-8"?>
+    <project xmlns="http://maven.apache.org/POM/4.0.0"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+        <modelVersion>4.0.0</modelVersion>
 
-    <properties>
-        <main.class>com.example.shoppingcart.MainKt</main.class>
-        <repo.name>cloudstate/kotlin-shopping-cart</repo.name>
-        <tag.version>${project.version}</tag.version>
+        <groupId>io.cloudstate</groupId>
+        <artifactId>shopping-cart</artifactId>
+        <version>0.4.3</version>
 
-        <kotlin.version>1.3.61</kotlin.version>
-        <kotlin.compiler.jvmTarget>1.8</kotlin.compiler.jvmTarget>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    </properties>
+        <properties>
+            <main.class>com.example.shoppingcart.MainKt</main.class>
+            <repo.name>cloudstate/kotlin-shopping-cart</repo.name>
+            <tag.version>${project.version}</tag.version>
 
-    <dependencies>
-        <dependency>
-            <groupId>org.jetbrains.kotlin</groupId>
-            <artifactId>kotlin-stdlib-jdk8</artifactId>
-            <version>${kotlin.version}</version>
-        </dependency>
+            <kotlin.version>1.3.61</kotlin.version>
+            <kotlin.compiler.jvmTarget>1.8</kotlin.compiler.jvmTarget>
+            <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        </properties>
 
-        <dependency>
-            <groupId>io.cloudstate</groupId>
-            <artifactId>cloudstate-kotlin-support</artifactId>
-            <version>$cloudstate.kotlin-support.version$</version>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <sourceDirectory>${project.basedir}/src/main/kotlin</sourceDirectory>
-        <testSourceDirectory>${project.basedir}/src/test/kotlin</testSourceDirectory>
-
-        <extensions>
-            <extension>
-                <groupId>kr.motd.maven</groupId>
-                <artifactId>os-maven-plugin</artifactId>
-                <version>1.6.0</version>
-            </extension>
-        </extensions>
-
-        <plugins>
-            <plugin>
-                <groupId>org.codehaus.mojo</groupId>
-                <artifactId>build-helper-maven-plugin</artifactId>
-                <executions>
-                    <execution>
-                        <phase>generate-sources</phase>
-                        <goals>
-                            <goal>add-source</goal>
-                        </goals>
-                        <configuration>
-                            <sources>
-                                <source>${project.build.directory}/generated-sources/protobuf/java</source>
-                            </sources>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-
-            <plugin>
+        <dependencies>
+            <dependency>
                 <groupId>org.jetbrains.kotlin</groupId>
-                <artifactId>kotlin-maven-plugin</artifactId>
+                <artifactId>kotlin-stdlib-jdk8</artifactId>
                 <version>${kotlin.version}</version>
-                <executions>
-                    <execution>
-                        <id>compile</id>
-                        <goals> <goal>compile</goal> </goals>
-                        <configuration>
-                            <sourceDirs>
-                                <sourceDir>${project.basedir}/src/main/kotlin</sourceDir>
-                                <sourceDir>${project.basedir}/src/main/java</sourceDir>
-                            </sourceDirs>
-                        </configuration>
-                    </execution>
-                    <execution>
-                        <id>test-compile</id>
-                        <goals> <goal>test-compile</goal> </goals>
-                        <configuration>
-                            <sourceDirs>
-                                <sourceDir>${project.basedir}/src/test/kotlin</sourceDir>
-                                <sourceDir>${project.basedir}/src/test/java</sourceDir>
-                            </sourceDirs>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
+            </dependency>
 
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.5.1</version>
-                <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
-                </configuration>
-                <executions>
-                    <!-- Replacing default-compile as it is treated specially by maven -->
-                    <execution>
-                        <id>default-compile</id>
-                        <phase>none</phase>
-                    </execution>
-                    <!-- Replacing default-testCompile as it is treated specially by maven -->
-                    <execution>
-                        <id>default-testCompile</id>
-                        <phase>none</phase>
-                    </execution>
-                    <execution>
-                        <id>java-compile</id>
-                        <phase>compile</phase>
-                        <goals> <goal>compile</goal> </goals>
-                    </execution>
-                    <execution>
-                        <id>java-test-compile</id>
-                        <phase>test-compile</phase>
-                        <goals> <goal>testCompile</goal> </goals>
-                    </execution>
-                </executions>
-            </plugin>
+            <dependency>
+                <groupId>io.cloudstate</groupId>
+                <artifactId>cloudstate-kotlin-support</artifactId>
+                <version>$cloudstate.kotlin-support.version$</version>
+            </dependency>
+        </dependencies>
 
-            <plugin>
-                <groupId>org.xolstice.maven.plugins</groupId>
-                <artifactId>protobuf-maven-plugin</artifactId>
-                <version>0.6.1</version>
-                <configuration>
-                    <protocExecutable>/usr/local/bin/protoc</protocExecutable>
-                    <protocArtifact>com.google.protobuf:protoc:3.9.1:exe:${os.detected.classifier}</protocArtifact>
-                </configuration>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>compile</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
+        <build>
+            <sourceDirectory>${project.basedir}/src/main/kotlin</sourceDirectory>
+            <testSourceDirectory>${project.basedir}/src/test/kotlin</testSourceDirectory>
 
-            <plugin>
-                <groupId>com.google.cloud.tools</groupId>
-                <artifactId>jib-maven-plugin</artifactId>
-                <version>1.7.0</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>build</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <to>
-                        <image>${repo.name}</image>
-                        <credHelper></credHelper>
-                        <tags>
-                            <tag>${tag.version}</tag>
-                        </tags>
-                    </to>
-                    <container>
-                        <mainClass>${main.class}</mainClass>
-                        <jvmFlags>
-                            <jvmFlag>-XX:+UseG1GC</jvmFlag>
-                            <jvmFlag>-XX:+UseStringDeduplication</jvmFlag>
-                        </jvmFlags>
-                        <ports>
-                            <port>8080</port>
-                        </ports>
-                    </container>
-                </configuration>
-            </plugin>
-        </plugins>
-    </build>
+            <extensions>
+                <extension>
+                    <groupId>kr.motd.maven</groupId>
+                    <artifactId>os-maven-plugin</artifactId>
+                    <version>1.6.0</version>
+                </extension>
+            </extensions>
 
-</project>
-```
-@@@
+            <plugins>
+                <plugin>
+                    <groupId>org.codehaus.mojo</groupId>
+                    <artifactId>build-helper-maven-plugin</artifactId>
+                    <executions>
+                        <execution>
+                            <phase>generate-sources</phase>
+                            <goals>
+                                <goal>add-source</goal>
+                            </goals>
+                            <configuration>
+                                <sources>
+                                    <source>${project.build.directory}/generated-sources/protobuf/java</source>
+                                </sources>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.jetbrains.kotlin</groupId>
+                    <artifactId>kotlin-maven-plugin</artifactId>
+                    <version>${kotlin.version}</version>
+                    <executions>
+                        <execution>
+                            <id>compile</id>
+                            <goals> <goal>compile</goal> </goals>
+                            <configuration>
+                                <sourceDirs>
+                                    <sourceDir>${project.basedir}/src/main/kotlin</sourceDir>
+                                    <sourceDir>${project.basedir}/src/main/java</sourceDir>
+                                </sourceDirs>
+                            </configuration>
+                        </execution>
+                        <execution>
+                            <id>test-compile</id>
+                            <goals> <goal>test-compile</goal> </goals>
+                            <configuration>
+                                <sourceDirs>
+                                    <sourceDir>${project.basedir}/src/test/kotlin</sourceDir>
+                                    <sourceDir>${project.basedir}/src/test/java</sourceDir>
+                                </sourceDirs>
+                            </configuration>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.5.1</version>
+                    <configuration>
+                        <source>1.8</source>
+                        <target>1.8</target>
+                    </configuration>
+                    <executions>
+                        <!-- Replacing default-compile as it is treated specially by maven -->
+                        <execution>
+                            <id>default-compile</id>
+                            <phase>none</phase>
+                        </execution>
+                        <!-- Replacing default-testCompile as it is treated specially by maven -->
+                        <execution>
+                            <id>default-testCompile</id>
+                            <phase>none</phase>
+                        </execution>
+                        <execution>
+                            <id>java-compile</id>
+                            <phase>compile</phase>
+                            <goals> <goal>compile</goal> </goals>
+                        </execution>
+                        <execution>
+                            <id>java-test-compile</id>
+                            <phase>test-compile</phase>
+                            <goals> <goal>testCompile</goal> </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.xolstice.maven.plugins</groupId>
+                    <artifactId>protobuf-maven-plugin</artifactId>
+                    <version>0.6.1</version>
+                    <configuration>
+                        <protocExecutable>/usr/local/bin/protoc</protocExecutable>
+                        <protocArtifact>com.google.protobuf:protoc:3.9.1:exe:${os.detected.classifier}</protocArtifact>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <phase>package</phase>
+                            <goals>
+                                <goal>compile</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+
+                <plugin>
+                    <groupId>com.google.cloud.tools</groupId>
+                    <artifactId>jib-maven-plugin</artifactId>
+                    <version>1.7.0</version>
+                    <executions>
+                        <execution>
+                            <phase>package</phase>
+                            <goals>
+                                <goal>build</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                    <configuration>
+                        <to>
+                            <image>${repo.name}</image>
+                            <credHelper></credHelper>
+                            <tags>
+                                <tag>${tag.version}</tag>
+                            </tags>
+                        </to>
+                        <container>
+                            <mainClass>${main.class}</mainClass>
+                            <jvmFlags>
+                                <jvmFlag>-XX:+UseG1GC</jvmFlag>
+                                <jvmFlag>-XX:+UseStringDeduplication</jvmFlag>
+                            </jvmFlags>
+                            <ports>
+                                <port>8080</port>
+                            </ports>
+                        </container>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </build>
+
+    </project>
+    ```
+    @@@
 
 Gradle Kts
-: @@@vars
+:   <!-- allow empty lines in code block below: https://github.com/lightbend/paradox/issues/161 -->
 
-```kotlin
-import com.google.protobuf.gradle.*
+    @@@vars
+    ```kotlin
+    import com.google.protobuf.gradle.*
 
-plugins {
-    kotlin("jvm") version "1.3.72"
-    id("com.google.protobuf") version "0.8.12"
-    id("com.google.cloud.tools.jib") version "2.2.0"
-    idea
-}
-
-repositories {
-    mavenLocal()
-    mavenCentral()
-}
-
-dependencies {
-    implementation(kotlin("stdlib-jdk8"))
-    implementation("io.cloudstate:cloudstate-kotlin-support:$cloudstate.kotlin-support.version$")
-    implementation("com.google.api.grpc:proto-google-common-protos:1.17.0")
-    implementation("ch.qos.logback:logback-classic:1.2.3")
-}
-
-protobuf {
-    protoc {
-        artifact = "com.google.protobuf:protoc:3.9.0"
+    plugins {
+        kotlin("jvm") version "1.3.72"
+        id("com.google.protobuf") version "0.8.12"
+        id("com.google.cloud.tools.jib") version "2.2.0"
+        idea
     }
-}
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
-}
+    repositories {
+        mavenLocal()
+        mavenCentral()
+    }
 
-jib {
-    from {
-        image = "adoptopenjdk/openjdk8-openj9:alpine-slim"
+    dependencies {
+        implementation(kotlin("stdlib-jdk8"))
+        implementation("io.cloudstate:cloudstate-kotlin-support:$cloudstate.kotlin-support.version$")
+        implementation("com.google.api.grpc:proto-google-common-protos:1.17.0")
+        implementation("ch.qos.logback:logback-classic:1.2.3")
     }
-    to {
-        image = "${repo.name}"
-        tags = setOf(project.version.toString())
-    }
-    container {
-        mainClass = "${main.class}"
-        jvmFlags = listOf("-XshareClasses", "-Xquickstart", "-XX:+UseG1GC", "-XX:+UseStringDeduplication")
-        ports = listOf("8080")
+
+    protobuf {
+        protoc {
+            artifact = "com.google.protobuf:protoc:3.9.0"
         }
-}
-```
-@@@
+    }
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
+
+    jib {
+        from {
+            image = "adoptopenjdk/openjdk8-openj9:alpine-slim"
+        }
+        to {
+            image = "${repo.name}"
+            tags = setOf(project.version.toString())
+        }
+        container {
+            mainClass = "${main.class}"
+            jvmFlags = listOf("-XshareClasses", "-Xquickstart", "-XX:+UseG1GC", "-XX:+UseStringDeduplication")
+            ports = listOf("8080")
+            }
+    }
+    ```
+    @@@
 
 @@@ note { title=Important }
 Remember to change the values of the **main.class**, **repo.name**, and **version** tags to their respective values
@@ -330,7 +333,7 @@ Exactly which context parameters are available depend on the type of entity and 
 | Type                                | Annotation   | Description           |
 |-------------------------------------|--------------|-----------------------|
 | `io.cloudstate.javasupport.Context` |              | The super type of all Cloudstate contexts. Every invoker makes a subtype of this available for injection, and method or constructor may accept that sub type, or any super type of that subtype that is a subtype of `Context`. |
-| `java.lang.String`                  | `@EntityId`  | The ID of the entity. |  
+| `java.lang.String`                  | `@EntityId`  | The ID of the entity. |
 
 
 Cloudstate Kotlin support allows you to use both annotations from the java-support library and your own kotlin annotations contained in the io.cloudstate.kotlinsupport.api.* package
