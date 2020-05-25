@@ -67,38 +67,7 @@ final class CrudImpl(_system: ActorSystem,
 
   private final val runner = new EntityHandlerRunner()
 
-  override def create(command: CrudCommand): Future[CrudReplyOut] =
-    Future.unit
-      .map { _ =>
-        runner.handleState(command)
-        val (reply, context) = runner.handleCommand(command)
-        val clientAction = context.createClientAction(reply, false)
-        runner.endSequenceNumber(context.hasError)
-
-        if (!context.hasError) {
-          CrudReplyOut(
-            CrudReplyOut.Message.Reply(
-              CrudReply(
-                command.id,
-                clientAction,
-                context.sideEffects,
-                runner.event(command.id),
-                runner.snapshot()
-              )
-            )
-          )
-        } else {
-          CrudReplyOut(
-            CrudReplyOut.Message.Reply(
-              CrudReply(
-                commandId = command.id,
-                clientAction = clientAction,
-                state = runner.event(command.id)
-              )
-            )
-          )
-        }
-      }
+  override def create(command: CrudCommand): Future[CrudReplyOut] = Future.unit.map(_ => handleWriteCommand(command))
 
   override def fetch(command: CrudCommand): Future[CrudReplyOut] =
     Future.unit
@@ -131,42 +100,42 @@ final class CrudImpl(_system: ActorSystem,
         }
       }
 
-  override def save(command: CrudCommand): Future[CrudReplyOut] =
-    Future.unit
-      .map { _ =>
-        runner.handleState(command)
-        val (reply, context) = runner.handleCommand(command)
-        val clientAction = context.createClientAction(reply, false)
-        runner.endSequenceNumber(context.hasError)
+  override def save(command: CrudCommand): Future[CrudReplyOut] = Future.unit.map(_ => handleWriteCommand(command))
 
-        if (!context.hasError) {
-          CrudReplyOut(
-            CrudReplyOut.Message.Reply(
-              CrudReply(
-                command.id,
-                clientAction,
-                context.sideEffects,
-                runner.event(command.id),
-                runner.snapshot()
-              )
-            )
-          )
-        } else {
-          CrudReplyOut(
-            CrudReplyOut.Message.Reply(
-              CrudReply(
-                commandId = command.id,
-                clientAction = clientAction,
-                state = runner.event(command.id)
-              )
-            )
-          )
-        }
-      }
-
-  override def delete(command: CrudCommand): Future[CrudReplyOut] = ???
+  override def delete(command: CrudCommand): Future[CrudReplyOut] = Future.unit.map(_ => handleWriteCommand(command))
 
   override def fetchAll(command: CrudCommand): Future[CrudReplyOut] = ???
+
+  private def handleWriteCommand(command: CrudCommand): CrudReplyOut = {
+    runner.handleState(command)
+    val (reply, context) = runner.handleCommand(command)
+    val clientAction = context.createClientAction(reply, false)
+    runner.endSequenceNumber(context.hasError)
+
+    if (!context.hasError) {
+      CrudReplyOut(
+        CrudReplyOut.Message.Reply(
+          CrudReply(
+            command.id,
+            clientAction,
+            context.sideEffects,
+            runner.event(command.id),
+            runner.snapshot()
+          )
+        )
+      )
+    } else {
+      CrudReplyOut(
+        CrudReplyOut.Message.Reply(
+          CrudReply(
+            commandId = command.id,
+            clientAction = clientAction,
+            state = runner.event(command.id)
+          )
+        )
+      )
+    }
+  }
 
   /*
    * Represents a wrapper for the crud service and crud entity handler.
@@ -183,6 +152,7 @@ final class CrudImpl(_system: ActorSystem,
 
     private final var sequenceNumber: Long = 0
     private final var performSnapshot: Boolean = false
+    // map command id to corresponding state changes
     private final var events = Map.empty[Long, ScalaPbAny]
 
     def handleCommand(command: CrudCommand): (Optional[JavaPbAny], CommandContextImpl) = {
@@ -205,10 +175,6 @@ final class CrudImpl(_system: ActorSystem,
       maybeInitHandler(command)
 
       val context = new SnapshotContextImpl(command.entityId, sequenceNumber)
-      // Not sure about the best way to push the state to the user function
-      // There are two options here. The first is using an annotation which is called on runner.handleState.
-      // runner.handleState will use a new special context called StateContext (will be implemented).
-      // The other option is to pass the state in the CommandContext and use emit or something else to publish the new state
       command.state.map(s => handler.handleState(ScalaPbAny.toJavaProto(s.payload.get), context))
     }
 
@@ -222,17 +188,20 @@ final class CrudImpl(_system: ActorSystem,
       performSnapshot = (service.snapshotEvery > 0) && (performSnapshot || (nextSequenceNumber % service.snapshotEvery == 0))
     }
 
+    // update the sequence number of the entity
     def endSequenceNumber(hasError: Boolean): Unit =
       if (!hasError) {
         sequenceNumber = sequenceNumber + events.size
       }
 
+    // the snapshot of the entity which is the last state changes so far
     def snapshot(): Option[ScalaPbAny] =
       if (performSnapshot) {
         val (_, lastEvent) = events.last
         Some(lastEvent)
       } else None
 
+    // the state changes associated with the command id
     def event(commandId: Long): Option[ScalaPbAny] = {
       val e = events.get(commandId)
       events -= commandId // remove the event for the command id

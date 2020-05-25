@@ -65,8 +65,8 @@ message CrudEntityCommand {
     CrudCommandType type = 5;
 }
 
-// The command to be executed
-// which can be for the any of the supported (create, fetch, save, delete, fetchAll) crud operations.
+// The command to be executed which can be for any of the supported
+// (create, fetch, save, delete, fetchAll) crud operations.
 message CrudCommand {
     // The name of the service this crud entity is on.
     string service_name = 1;
