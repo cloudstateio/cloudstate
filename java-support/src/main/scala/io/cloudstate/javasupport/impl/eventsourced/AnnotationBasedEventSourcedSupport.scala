@@ -9,7 +9,7 @@ import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEnt
 
 import scala.collection.concurrent.TrieMap
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
-import io.cloudstate.javasupport.ServiceCallFactory
+import io.cloudstate.javasupport.{EntityFactory, ServiceCallFactory}
 
 /**
  * Annotation based implementation of the [[EventSourcedEntityFactory]].
@@ -24,6 +24,12 @@ private[impl] class AnnotationBasedEventSourcedSupport(
 
   def this(entityClass: Class[_], anySupport: AnySupport, serviceDescriptor: Descriptors.ServiceDescriptor) =
     this(entityClass, anySupport, anySupport.resolveServiceDescriptor(serviceDescriptor))
+
+  def this(factory: EntityFactory, anySupport: AnySupport, serviceDescriptor: Descriptors.ServiceDescriptor) =
+    this(factory.entityClass,
+         anySupport,
+         anySupport.resolveServiceDescriptor(serviceDescriptor),
+         Some(context => factory.create(context)))
 
   private val behavior = EventBehaviorReflection(entityClass, resolvedMethods)
 

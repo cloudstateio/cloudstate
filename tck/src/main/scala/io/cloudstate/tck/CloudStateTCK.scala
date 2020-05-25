@@ -18,50 +18,42 @@ package io.cloudstate.tck
 
 import akka.NotUsed
 import akka.actor.{ActorSystem, Scheduler}
+import akka.grpc.GrpcClientSettings
+import akka.http.scaladsl.Http
+import akka.http.scaladsl.Http.ServerBinding
+import akka.http.scaladsl.model._
+import akka.http.scaladsl.unmarshalling._
+import akka.pattern.after
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.{Sink, Source}
-import akka.pattern.after
-import akka.grpc.GrpcClientSettings
-import com.google.protobuf.{ByteString => ProtobufByteString}
-import org.scalatest._
-import com.typesafe.config.{Config, ConfigFactory}
-
-import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.concurrent.duration._
-import scala.util.Try
-import java.util.{Map => JMap}
-import java.util.concurrent.TimeUnit
-import java.io.File
-import java.net.InetAddress
-
-import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
-import akka.http.scaladsl.Http.ServerBinding
-import akka.http.scaladsl.model.{
-  ContentTypes,
-  HttpEntity,
-  HttpMethods,
-  HttpProtocols,
-  HttpRequest,
-  HttpResponse,
-  StatusCodes
-}
-import akka.http.scaladsl.unmarshalling._
-import io.cloudstate.protocol.entity._
-import com.example.shoppingcart.shoppingcart._
 import akka.testkit.TestProbe
+import com.example.shoppingcart.shoppingcart._
 import com.google.protobuf.empty.Empty
-import io.cloudstate.protocol.event_sourced.{
-  EventSourced,
-  EventSourcedClient,
-  EventSourcedHandler,
-  EventSourcedInit,
-  EventSourcedReply,
-  EventSourcedStreamIn,
-  EventSourcedStreamOut
-}
-import io.grpc.netty.shaded.io.grpc.netty.NegotiationType
+import com.google.protobuf.{ByteString => ProtobufByteString}
+import com.typesafe.config.{Config, ConfigFactory}
+import io.cloudstate.protocol.entity._
+import io.cloudstate.protocol.event_sourced._
+import org.scalatest._
+
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.util.Try
 
 object CloudStateTCK {
+  final case class Address(hostname: String, port: Int)
+  final case class Settings(tck: Address, proxy: Address, frontend: Address)
+
+  object Settings {
+    def fromConfig(config: Config): Settings = {
+      val tckConfig = config.getConfig("cloudstate.tck")
+      Settings(
+        Address(tckConfig.getString("hostname"), tckConfig.getInt("port")),
+        Address(tckConfig.getString("proxy.hostname"), tckConfig.getInt("proxy.port")),
+        Address(tckConfig.getString("frontend.hostname"), tckConfig.getInt("frontend.port"))
+      )
+    }
+  }
+
   final val noWait = 0.seconds
 
   // FIXME add interception to enable asserting exchanges
@@ -116,11 +108,15 @@ object CloudStateTCK {
   )
 }
 
-class CloudStateTCK(private[this] final val config: TckConfiguration)
+class ConfiguredCloudStateTCK extends CloudStateTCK(CloudStateTCK.Settings.fromConfig(ConfigFactory.load()))
+
+class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
     extends AsyncWordSpec
     with MustMatchers
     with BeforeAndAfterAll {
   import CloudStateTCK._
+
+  def this(settings: CloudStateTCK.Settings) = this("", settings)
 
   private[this] final val system = ActorSystem("CloudStateTCK", ConfigFactory.load("tck"))
   private[this] final val mat = ActorMaterializer()(system)
@@ -131,7 +127,6 @@ class CloudStateTCK(private[this] final val config: TckConfiguration)
   @volatile private[this] final var shoppingClient: ShoppingCartClient = _
   @volatile private[this] final var entityDiscoveryClient: EntityDiscoveryClient = _
   @volatile private[this] final var eventSourcedClient: EventSourcedClient = _
-  @volatile private[this] final var processes: TckProcesses = _
   @volatile private[this] final var tckProxy: ServerBinding = _
 
   def buildTCKProxy(entityDiscovery: EntityDiscovery, eventSourced: EventSourced): Future[ServerBinding] = {
@@ -139,20 +134,14 @@ class CloudStateTCK(private[this] final val config: TckConfiguration)
     implicit val m = mat
     Http().bindAndHandleAsync(
       handler = EntityDiscoveryHandler.partial(entityDiscovery) orElse EventSourcedHandler.partial(eventSourced),
-      interface = config.tckHostname,
-      port = config.tckPort
+      interface = settings.tck.hostname,
+      port = settings.tck.port
     )
   }
 
   override def beforeAll(): Unit = {
-
-    config.validate()
-
-    processes = TckProcesses.create(config)
-    processes.frontend.start()
-
     val clientSettings =
-      GrpcClientSettings.connectToServiceAt(config.frontend.hostname, config.frontend.port)(system).withTls(false)
+      GrpcClientSettings.connectToServiceAt(settings.frontend.hostname, settings.frontend.port)(system).withTls(false)
 
     val edc = EntityDiscoveryClient(clientSettings)(mat, mat.executionContext)
 
@@ -172,30 +161,22 @@ class CloudStateTCK(private[this] final val config: TckConfiguration)
 
     tckProxy = tp
 
-    // Wait for the backend to come up before starting the frontend, otherwise the discovery call from the backend,
+    // Wait for the frontend to come up before starting the backend, otherwise the discovery call from the backend,
     // if it happens before the frontend starts, will cause the proxy probes to have failures in them
     Await.ready(attempt(entityDiscoveryClient.discover(proxyInfo), 4.seconds, 10)(system.dispatcher, system.scheduler),
                 1.minute)
 
-    processes.proxy.start()
-
     val sc = ShoppingCartClient(
-      GrpcClientSettings.connectToServiceAt(config.proxy.hostname, config.proxy.port)(system).withTls(false)
+      GrpcClientSettings.connectToServiceAt(settings.proxy.hostname, settings.proxy.port)(system).withTls(false)
     )(mat, mat.executionContext)
 
     shoppingClient = sc
   }
 
-  override final def afterAll(): Unit = {
+  override def afterAll(): Unit =
     try Option(shoppingClient).foreach(c => Await.result(c.close(), 10.seconds))
-    finally try {
-      Option(processes).foreach(_.proxy.stop())
-    } finally {
-      Seq(entityDiscoveryClient, eventSourcedClient).foreach(c => Await.result(c.close(), 10.seconds))
-    }
-    try Option(processes).foreach(_.frontend.stop())
+    finally try Seq(entityDiscoveryClient, eventSourcedClient).foreach(c => Await.result(c.close(), 10.seconds))
     finally Await.ready(tckProxy.unbind().transformWith(_ => system.terminate())(system.dispatcher), 30.seconds)
-  }
 
   final def fromFrontend_expectEntitySpec(within: FiniteDuration): EntitySpec =
     withClue("EntitySpec was not received, or not well-formed: ") {
@@ -264,7 +245,7 @@ class CloudStateTCK(private[this] final val config: TckConfiguration)
     cmd.id must not be commandId
   }
 
-  ("The TCK for " + config.name) must {
+  ("Cloudstate TCK " + description) must {
     implicit val scheduler = system.scheduler
 
     "verify that the user function process responds" in {
@@ -374,10 +355,10 @@ class CloudStateTCK(private[this] final val config: TckConfiguration)
       import ServerReflectionResponse.{MessageResponse => Out}
 
       val reflectionClient = ServerReflectionClient(
-        GrpcClientSettings.connectToServiceAt(config.proxy.hostname, config.proxy.port)(system).withTls(false)
+        GrpcClientSettings.connectToServiceAt(settings.proxy.hostname, settings.proxy.port)(system).withTls(false)
       )(mat, mat.executionContext)
 
-      val Host = config.proxy.hostname
+      val Host = settings.proxy.hostname
       val ShoppingCart = "com.example.shoppingcart.ShoppingCart"
 
       val testData = List[(In, Out)](
@@ -428,7 +409,7 @@ class CloudStateTCK(private[this] final val config: TckConfiguration)
             HttpRequest(
               method = HttpMethods.GET,
               headers = Nil,
-              uri = s"http://${config.proxy.hostname}:${config.proxy.port}/carts/${userId}",
+              uri = s"http://${settings.proxy.hostname}:${settings.proxy.port}/carts/${userId}",
               entity = HttpEntity.Empty,
               protocol = HttpProtocols.`HTTP/1.1`
             )
@@ -441,7 +422,7 @@ class CloudStateTCK(private[this] final val config: TckConfiguration)
             HttpRequest(
               method = HttpMethods.GET,
               headers = Nil,
-              uri = s"http://${config.proxy.hostname}:${config.proxy.port}/carts/${userId}/items",
+              uri = s"http://${settings.proxy.hostname}:${settings.proxy.port}/carts/${userId}/items",
               entity = HttpEntity.Empty,
               protocol = HttpProtocols.`HTTP/1.1`
             )
@@ -454,7 +435,7 @@ class CloudStateTCK(private[this] final val config: TckConfiguration)
             HttpRequest(
               method = HttpMethods.POST,
               headers = Nil,
-              uri = s"http://${config.proxy.hostname}:${config.proxy.port}/cart/${userId}/items/add",
+              uri = s"http://${settings.proxy.hostname}:${settings.proxy.port}/cart/${userId}/items/add",
               entity = HttpEntity(
                 ContentTypes.`application/json`,
                 s"""
@@ -476,7 +457,7 @@ class CloudStateTCK(private[this] final val config: TckConfiguration)
             HttpRequest(
               method = HttpMethods.POST,
               headers = Nil,
-              uri = s"http://${config.proxy.hostname}:${config.proxy.port}/cart/${userId}/items/${productId}/remove",
+              uri = s"http://${settings.proxy.hostname}:${settings.proxy.port}/cart/${userId}/items/${productId}/remove",
               entity = HttpEntity.Empty,
               protocol = HttpProtocols.`HTTP/1.1`
             )

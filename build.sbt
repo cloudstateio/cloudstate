@@ -62,7 +62,7 @@ val AkkaPersistenceCassandraVersion = "0.102"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0" // We use this version because it is the latest which works with native-image 20.0.0
-val GraalVersion = "20.0.0"
+val GraalVersion = "20.1.0"
 val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debian"
 val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
 
@@ -154,8 +154,7 @@ lazy val protocols = (project in file("protocols"))
       IO.zip(
         archiveStructure(cloudstateProtocolsName,
                          (base / "frontend" ** "*.proto" +++
-                         base / "protocol" ** "*.proto" +++
-                         base / "proxy" ** "*.proto")),
+                         base / "protocol" ** "*.proto")),
         cloudstateProtos
       )
 
@@ -354,6 +353,7 @@ def sharedNativeImageSettings(targetDir: File, buildServer: Boolean) = Seq(
   "-H:IncludeResources=.+\\.properties",
   "-H:+AllowVMInspection",
   "-H:-RuntimeAssertions",
+  "-H:+RemoveSaturatedTypeFlows", // GraalVM native-image 20.1 feature which speeds up the build time
   "-H:+ReportExceptionStackTraces",
   // "-H:+PrintAnalysisCallTree", // Uncomment to dump the entire call graph, useful for debugging native-image failing builds
   //"-H:ReportAnalysisForbiddenType=java.lang.invoke.MethodHandleImpl$AsVarargsCollector", // Uncomment and specify a type which will break analysis, useful to figure out reachability
@@ -455,7 +455,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     },
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "proxy", baseDir / "frontend", baseDir / "protocol")
+      Seq(baseDir / "frontend", baseDir / "protocol")
     },
     PB.protoSources in Test ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
@@ -795,13 +795,13 @@ lazy val `load-generator` = (project in file("samples/js-shopping-cart-load-gene
   )
 
 lazy val `tck` = (project in file("tck"))
-  .enablePlugins(AkkaGrpcPlugin)
+  .enablePlugins(AkkaGrpcPlugin, JavaAppPackaging, DockerPlugin)
   .configs(IntegrationTest)
   .dependsOn(`akka-client`)
   .settings(
     Defaults.itSettings,
     common,
-    name := "tck",
+    name := "cloudstate-tck",
     libraryDependencies ++= Seq(
         akkaDependency("akka-stream"),
         akkaDependency("akka-discovery"),
@@ -813,8 +813,11 @@ lazy val `tck` = (project in file("tck"))
       ),
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "proxy", baseDir / "protocol")
+      Seq(baseDir / "protocol")
     },
+    dockerSettings,
+    Compile / bashScriptDefines / mainClass := Some("org.scalatest.run"),
+    bashScriptExtraDefines += "addApp io.cloudstate.tck.ConfiguredCloudStateTCK",
     javaOptions in IntegrationTest := sys.props.get("config.resource").map(r => s"-Dconfig.resource=$r").toSeq,
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)

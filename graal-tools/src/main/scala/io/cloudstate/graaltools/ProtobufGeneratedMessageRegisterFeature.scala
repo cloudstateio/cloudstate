@@ -1,40 +1,43 @@
 package io.cloudstate.graaltools
 
 import com.oracle.svm.core.annotate.AutomaticFeature
-import org.graalvm.nativeimage.hosted.Feature.QueryReachabilityAccess
 import org.graalvm.nativeimage.hosted.{Feature, RuntimeReflection}
-
-import scala.collection.JavaConverters._
-import java.util.concurrent.ConcurrentHashMap
 
 @AutomaticFeature
 final class ProtobufGeneratedMessageRegisterFeature extends Feature {
-  private[this] final val cache = ConcurrentHashMap.newKeySet[String]
   final val messageClasses = Vector(
-    classOf[com.google.protobuf.GeneratedMessageV3],
-    classOf[com.google.protobuf.GeneratedMessageV3.Builder[_]],
-    classOf[com.google.protobuf.ProtocolMessageEnum],
-    classOf[scalapb.GeneratedMessage]
+    classOf[com.google.protobuf.DescriptorProtos],
+    classOf[com.google.protobuf.ListValue],
+    classOf[com.google.protobuf.NullValue],
+    classOf[com.google.protobuf.Struct],
+    classOf[com.google.protobuf.Value]
   ).map(_.getName) // We do this to get compile-time safety of the classes, and allow graalvm to resolve their names
-  override final def duringAnalysis(access: Feature.DuringAnalysisAccess): Unit =
+  override final def beforeAnalysis(access: Feature.BeforeAnalysisAccess): Unit =
     for {
       className <- messageClasses.iterator
       cls = access.findClassByName(className)
-      if cls != null && access.isReachable(cls)
-      subtype <- access.reachableSubtypes(cls).iterator.asScala
-      if subtype != null && cache.add(subtype.getName)
+      if cls != null
     } {
-      RuntimeReflection.register(subtype)
-      // TODO check if we only need to register `parseFrom` and `toByteArray`
-      subtype.getPackage.getName match {
-        case "akka.cluster.protobuf.msg" | "com.google.protobuf" | "akka.cluster.ddata.protobuf"
-            if !subtype.isInterface =>
-          RuntimeReflection.register(subtype.getMethods: _*)
-          println(
-            "Automatically registering protobuf message class with all methods for reflection purposes: " + subtype.getName
-          )
-        case _ =>
-          println("Automatically registering protobuf message class for reflection purposes: " + subtype.getName)
-      }
+      registerDeep(cls)
     }
+
+  private def registerDeep(cls: Class[_]): Unit = {
+    register(cls)
+    for (innerCls <- cls.getDeclaredClasses)
+      registerDeep(innerCls)
+  }
+
+  private def register(subtype: Class[_]) = {
+    RuntimeReflection.register(subtype)
+    subtype.getPackage.getName match {
+      case "akka.cluster.protobuf.msg" | "com.google.protobuf" | "akka.cluster.ddata.protobuf"
+          if !subtype.isInterface =>
+        RuntimeReflection.register(subtype.getMethods: _*)
+        println(
+          "Automatically registering protobuf message class with all methods for reflection purposes: " + subtype.getName
+        )
+      case _ =>
+        println("Automatically registering protobuf message class for reflection purposes: " + subtype.getName)
+    }
+  }
 }
