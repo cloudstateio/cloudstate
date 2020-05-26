@@ -170,12 +170,11 @@ lazy val protocols = (project in file("protocols"))
   )
 
 lazy val docs = (project in file("docs"))
-  .enablePlugins(ParadoxPlugin, ProtocPlugin)
+  .enablePlugins(CloudstateParadoxPlugin, ProtocPlugin)
   .dependsOn(`java-support` % Test)
   .settings(
     common,
     name := "Cloudstate Documentation",
-    paradoxTheme := Some(builtinParadoxTheme("generic")),
     mappings in (Compile, paradox) ++= {
       val javaApiDocs = (doc in (`java-support`, Compile)).value
 
@@ -194,6 +193,7 @@ lazy val docs = (project in file("docs"))
       }
     },
     paradoxProperties in Compile ++= Map(
+        "documentation.title" -> "Cloudstate Documentation",
         "canonical.base_url" -> "https://cloudstate.io/docs/",
         "javadoc.io.cloudstate.javasupport.base_url" -> ".../user/lang/java/api/",
         "javadoc.link_style" -> "direct",
@@ -206,7 +206,6 @@ lazy val docs = (project in file("docs"))
         "cloudstate.kotlin-support.version" -> "0.5.1",
         "cloudstate.dart-support.version" -> "0.5.5"
       ),
-    paradoxNavigationDepth := 3,
     inConfig(Test)(
       sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
         PB.protoSources += sourceDirectory.value / "proto",
