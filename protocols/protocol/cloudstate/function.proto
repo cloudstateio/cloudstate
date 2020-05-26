@@ -28,13 +28,10 @@ option go_package = "cloudstate/protocol";
 
 message FunctionCommand {
     // The name of the service this function is on.
-    string service_name = 2;
+    string service_name = 2; // TODO revisit this ordinal value
 
-    // Command name
-    string name = 3;
-
-    // The command payload.
-    google.protobuf.Any payload = 4;
+    // The call to make to that service
+    Call call = 5; // TODO revisit this ordinal value
 }
 
 message FunctionReply {

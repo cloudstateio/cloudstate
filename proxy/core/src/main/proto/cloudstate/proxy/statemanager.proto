@@ -30,15 +30,12 @@ option (scalapb.options) = {
 };
 
 message UserFunctionCommand {
-    string name = 1;
-    google.protobuf.Any payload = 2;
+    Call call = 1;
 }
 
 message EntityCommand {
     string entity_id = 1;
-    string name = 2;
-    google.protobuf.Any payload = 3;
-    bool streamed = 4;
+    Call call = 2;
 }
 
 message UserFunctionReply {

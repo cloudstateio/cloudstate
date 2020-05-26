@@ -326,6 +326,8 @@ message CrdtReply {
     // and a CrdtStreamCancelled message will be sent if the stream is cancelled (though
     // not if the a CrdtStreamedMessage ends the stream first).
     bool streamed = 6;
+
+    repeated Metadata metadata = 7; // FIXME Should we rely on client_action Reply's metadata instead?
 }
 
 message CrdtStateAction {

@@ -31,16 +31,18 @@ option go_package = "cloudstate/protocol";
 message Reply {
     // The reply payload
     google.protobuf.Any payload = 1;
+
+    // The reply metadata
+    repeated Metadata metadata = 2;
 }
 
 // Forwards handling of this request to another entity.
 message Forward {
     // The name of the service to forward to.
     string service_name = 1;
-    // The name of the command.
-    string command_name = 2;
-    // The payload.
-    google.protobuf.Any payload = 3;
+
+    // The call to forward to that service
+    Call call = 2;
 }
 
 // An action for the client
@@ -64,15 +66,8 @@ message SideEffect {
     // The name of the service to perform the side effect on.
     string service_name = 1;
 
-    // The name of the command.
-    string command_name = 2;
-
-    // The payload of the command.
-    google.protobuf.Any payload = 3;
-
-    // Whether this side effect should be performed synchronously, ie, before the reply is eventually
-    // sent, or not.
-    bool synchronous = 4;
+    // The call to make on the service
+    Call call = 2;
 }
 
 // A command. For each command received, a reply must be sent with a matching command id.
@@ -81,17 +76,36 @@ message Command {
     // The ID of the entity.
     string entity_id = 1;
 
-    // A command id.
+    // A command identifier, to be used for correlation and deduplication purposes
     int64 id = 2;
 
-    // Command name
-    string name = 3;
+    // The Call to make on the entity
+    Call call = 3;
+}
 
-    // The command payload.
-    google.protobuf.Any payload = 4;
+// A Call describes what endpoint, what payload, and what metadata to provide
+message Call {
 
-    // Whether the command is streamed or not
-    bool streamed = 5;
+    // The name of the endpoint
+    string name = 1;
+
+    // The payload of the endpoint
+    google.protobuf.Any payload = 2;
+
+    // Whether or not to stream the response
+    bool streamed = 3;
+
+    // The metadata / headers to send with the call
+    repeated Metadata metadata = 4;
+}
+
+// This Metadata construct should obey the exact same rules as traditional gRPC Metadata
+message Metadata {
+    // The name of this piece of metadata
+    string name = 1;
+
+    // The value of the metadata
+    string value = 2;
 }
 
 message StreamCancelled {
