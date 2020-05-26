@@ -9,8 +9,7 @@ public final class Main {
         .registerCrudEntity(
             ShoppingCartCrudEntity.class,
             Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
-            com.example.crud.shoppingcart.persistence.Domain.getDescriptor(),
-            io.cloudstate.keyvalue.KeyValue.getDescriptor())
+            com.example.crud.shoppingcart.persistence.Domain.getDescriptor())
         .start()
         .toCompletableFuture()
         .get();

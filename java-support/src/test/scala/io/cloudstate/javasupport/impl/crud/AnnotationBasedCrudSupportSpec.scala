@@ -29,11 +29,11 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
   }
 
   class MockCommandContext extends CommandContext with BaseContext {
-    var emited = Seq.empty[AnyRef]
+    var emitted = Seq.empty[AnyRef]
     override def sequenceNumber(): Long = 10
     override def commandName(): String = "AddItem"
     override def commandId(): Long = 20
-    override def emit(event: AnyRef): Unit = emited :+= event
+    override def emit(event: AnyRef): Unit = emitted :+= event
     override def entityId(): String = "foo"
     override def fail(errorMessage: String): RuntimeException = ???
     override def forward(to: ServiceCall): Unit = ???
@@ -55,6 +55,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
   }
 
   case class Wrapped(value: String)
+
   val anySupport = new AnySupport(Array(Shoppingcart.getDescriptor), this.getClass.getClassLoader)
   val descriptor = Shoppingcart.getDescriptor
     .findServiceByName("ShoppingCart")
@@ -78,7 +79,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
     WrappedResolvedType.parseFrom(any.getValue)
   }
 
-  def event(any: Any): JavaPbAny = anySupport.encodeJava(any)
+  def state(any: Any): JavaPbAny = anySupport.encodeJava(any)
 
   "Crud annotation support" should {
     "support entity construction" when {
@@ -127,7 +128,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         val handler = create(
           new {
             @CommandHandler
-            def addItem(msg: String, @EntityId eid: String, ctx: CommandContext) = {
+            def addItem(msg: String, @EntityId eid: String, ctx: CommandContext): Wrapped = {
               eid should ===("foo")
               ctx.commandName() should ===("AddItem")
               Wrapped(msg)
@@ -138,18 +139,21 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         decodeWrapped(handler.handleCommand(command("blah"), new MockCommandContext).get) should ===(Wrapped("blah"))
       }
 
-      "allow emiting events" in {
-        val handler = create(new {
-          @CommandHandler
-          def addItem(msg: String, ctx: CommandContext) = {
-            ctx.emit(msg + " event")
-            ctx.commandName() should ===("AddItem")
-            Wrapped(msg)
-          }
-        }, method)
+      "allow emitting events" in {
+        val handler = create(
+          new {
+            @CommandHandler
+            def addItem(msg: String, ctx: CommandContext): Wrapped = {
+              ctx.emit(msg + " event")
+              ctx.commandName() should ===("AddItem")
+              Wrapped(msg)
+            }
+          },
+          method
+        )
         val ctx = new MockCommandContext
         decodeWrapped(handler.handleCommand(command("blah"), ctx).get) should ===(Wrapped("blah"))
-        ctx.emited should ===(Seq("blah event"))
+        ctx.emitted should ===(Seq("blah event"))
       }
 
       "fail if there's a bad context type" in {
@@ -210,12 +214,12 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         var invoked = false
         val handler = create(new {
           @SnapshotHandler
-          def handleState(snapshot: String) = {
-            snapshot should ===("snap!")
+          def handleState(state: String): Unit = {
+            state should ===("snap!")
             invoked = true
           }
         })
-        handler.handleState(event("snap!"), ctx)
+        handler.handleState(state("snap!"), ctx)
         invoked shouldBe true
       }
 
@@ -223,20 +227,20 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         var invoked = false
         val handler = create(new {
           @SnapshotHandler
-          def handleState(snapshot: String, context: SnapshotContext) = {
-            snapshot should ===("snap!")
+          def handleState(state: String, context: SnapshotContext): Unit = {
+            state should ===("snap!")
             context.sequenceNumber() should ===(10)
             invoked = true
           }
         })
-        handler.handleState(event("snap!"), ctx)
+        handler.handleState(state("snap!"), ctx)
         invoked shouldBe true
       }
 
       "fail if there's a bad context" in {
         a[RuntimeException] should be thrownBy create(new {
           @SnapshotHandler
-          def handleState(snapshot: String, context: CommandContext) = ()
+          def handleState(state: String, context: CommandContext) = ()
         })
       }
 
@@ -250,9 +254,9 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
       "fail if there's no snapshot handler for the given type" in {
         val handler = create(new {
           @SnapshotHandler
-          def handleState(snapshot: Int) = ()
+          def handleState(state: Int) = ()
         })
-        a[RuntimeException] should be thrownBy handler.handleState(event(10), ctx)
+        a[RuntimeException] should be thrownBy handler.handleState(state(10), ctx)
       }
 
     }

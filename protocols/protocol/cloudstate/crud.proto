@@ -111,7 +111,7 @@ message CrudReply {
     google.protobuf.Any snapshot = 5;
 }
 
-// Missing better name. It will be fixed
+// A reply message type for the gRPC call.
 message CrudReplyOut {
     oneof message {
         CrudReply reply = 1;
@@ -120,15 +120,28 @@ message CrudReplyOut {
 }
 
 // The CRUD Entity service
+// Provides read and write operations for managing the entity state.
+// For a CRUD entity an event represents also the whole state of the entity.
+// A read operation only transport the state from the entity without changing it.
+// Typical read operations are fetch and fetchAll.
+// A typical write operation might transform the state of the entity and crate a new one.
+// Typical write operations are create, save, and delete.
+// Each write operation may generate zero or one event which is then sent to the entity.
+// The entity is expected to apply these event to its state.
 service Crud {
 
+    // Create a sub entity.
     rpc create(CrudCommand) returns (CrudReplyOut) {}
 
+    // Fetch the state of a sub entity.
     rpc fetch(CrudCommand) returns (CrudReplyOut) {}
 
+    // Save a updated sub entity.
     rpc save(CrudCommand) returns (CrudReplyOut) {}
 
+    // Delete a sub entity.
     rpc delete(CrudCommand) returns (CrudReplyOut) {}
 
+    // Fetch the state of the whole entity.
     rpc fetchAll(CrudCommand) returns (CrudReplyOut) {}
 }

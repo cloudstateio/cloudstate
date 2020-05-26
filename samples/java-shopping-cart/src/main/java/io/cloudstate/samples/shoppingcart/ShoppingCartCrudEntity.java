@@ -49,11 +49,51 @@ public class ShoppingCartCrudEntity {
             .setQuantity(item.getQuantity())
             .build();
     ctx.emit(Domain.Cart.newBuilder().addItems(lineItem).build());
-    return Empty.getDefaultInstance();
+    return Empty.getDefaultInstance(); // FIXME change return type
+  }
+
+  @CommandHandler
+  public Empty updateItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
+    if (item.getQuantity() <= 0) {
+      ctx.fail("Cannot add negative quantity of to item" + item.getProductId());
+    }
+
+    Domain.LineItem lineItem =
+        Domain.LineItem.newBuilder()
+            .setUserId(item.getUserId())
+            .setProductId(item.getProductId())
+            .setName(item.getName())
+            .setQuantity(item.getQuantity())
+            .build();
+    ctx.emit(Domain.Cart.newBuilder().addItems(lineItem).build());
+    return Empty.getDefaultInstance(); // FIXME change return type
+  }
+
+  @CommandHandler
+  public Empty removeItem(Shoppingcart.RemoveLineItem item, CommandContext ctx) {
+    if (!cart.containsKey(item.getProductId())) {
+      ctx.fail("Cannot remove item " + item.getProductId() + " because it is not in the cart.");
+    }
+    cart.remove(item.getProductId());
+
+    Domain.Cart.Builder builder = Domain.Cart.newBuilder();
+    cart.entrySet().stream()
+        .forEach(entry -> builder.addItems(convert(entry.getKey(), entry.getValue())));
+    ctx.emit(builder.build());
+    return Empty.getDefaultInstance(); // FIXME change return type
   }
 
   private Shoppingcart.LineItem convert(Domain.LineItem item) {
     return Shoppingcart.LineItem.newBuilder()
+        .setProductId(item.getProductId())
+        .setName(item.getName())
+        .setQuantity(item.getQuantity())
+        .build();
+  }
+
+  private Domain.LineItem convert(String userId, Shoppingcart.LineItem item) {
+    return Domain.LineItem.newBuilder()
+        .setUserId(userId)
         .setProductId(item.getProductId())
         .setName(item.getName())
         .setQuantity(item.getQuantity())

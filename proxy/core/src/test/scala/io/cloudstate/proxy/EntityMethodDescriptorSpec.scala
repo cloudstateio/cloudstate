@@ -16,22 +16,22 @@ class EntityMethodDescriptorSpec extends WordSpecLike with Matchers {
     "extract entity key" in {
       val subEntityKey =
         entityMethodDescriptor.extractId(
-          AddLineItem("shoppingId", "userId", "productId", "name").toByteString
+          AddLineItem("cartId", "userId", "productId", "name").toByteString
         )
-      subEntityKey should ===("shoppingId")
+      subEntityKey should ===("cartId")
     }
 
     "extract crud sub entity key" in {
       val subEntityKey =
         entityMethodDescriptor.extractCrudSubEntityId(
-          AddLineItem("shoppingId", "userId", "productId", "name").toByteString
+          AddLineItem("cartId", "userId", "productId", "name").toByteString
         )
       subEntityKey should ===("userId")
     }
 
     "extract crud command type" in {
       val commandType = entityMethodDescriptor.extractCrudCommandType(
-        AddLineItem("shoppingId", "userId", "create", "productId", "name").toByteString
+        AddLineItem("cartId", "userId", "create", "productId", "name").toByteString
       )
       commandType should ===("create")
     }
