@@ -155,17 +155,34 @@ module.exports = class StatelessServices {
   handleUnary(call, callback){
     const service = this.services[call.request.serviceName];
     if (service && service.commandHandlers.hasOwnProperty(call.request.name)) {
-      const userReturn = service.commandHandlers[call.request.name](service.deserialize(call.request.payload));
-      const grpcReturn = service.service.methods[call.request.name].resolvedResponseType.fromObject(userReturn);
-      const requireJsonType =true;
-      var metadata = new grpc.Metadata();
-      callback(null, {        
-        reply:{
-          payload: AnySupport.serialize(grpcReturn, false, false, requireJsonType)          
-        }        
-      }, metadata);
+      function onSuccess(userReturn) {
+        const grpcReturn = service.service.methods[call.request.name].resolvedResponseType.fromObject(userReturn);
+        const requireJsonType = true;
+        const metadata = new grpc.Metadata();
+        callback(null, {
+          reply: {
+            payload: AnySupport.serialize(grpcReturn, false, false, requireJsonType)
+          }
+        }, metadata);
+      }
+
+      function onFailure(err) {
+        callback(err)
+      }
+
+      try {
+        const userReturn = service.commandHandlers[call.request.name](service.deserialize(call.request.payload));
+        if (userReturn instanceof Promise) {
+          userReturn.then(onSuccess, onFailure)
+        } else {
+          onSuccess(userReturn)
+        }
+      } catch (err) {
+        onFailure(err)
+      }
     }else{
       console.warn("There is no user function with name: " + call.request.serviceName);
+      // TODO Shouldn't this error be reported via callback?
       callback();
     }    
   }
