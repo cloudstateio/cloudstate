@@ -6,13 +6,13 @@ An event sourced entity can be created by embedding the `cloudstate.EventEmitter
 
 @@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #entity-type }
 
-Then by composing the Cloudstate entity with an `cloudstate.EventSourcedEntity` and register it with `CloudState.Register()`, your entity gets configured to be an event sourced entity and handled by the Cloudstate instance for now on.
+Then by composing the Cloudstate entity with a `cloudstate.EventSourcedEntity` and register it with `CloudState.Register()`, your entity gets configured to be an event sourced entity and handled by the Cloudstate instance from now on.
 
 @@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/eventsourced.go) { #event-sourced-entity-type }
 
-The `ServiceName` is the fully qualified name of the gRPC service that implements this entities interface. Setting it is mandatory.
+The `ServiceName` is the fully qualified name of the gRPC service that implements this entity's interface. Setting it is mandatory.
 
-The `PersistenceID` is used to namespace events in the journal, useful for when you share the same database between multiple entities. It is recommended to be the name for the entity type (in this case, `ShoppingCart`) and is set to be mandatory.
+The `PersistenceID` is used to namespace events in the journal, useful for when you share the same database between multiple entities. It is recommended to be the name for the entity type (in this case, `ShoppingCart`). Setting it is mandatory.
 
 The `SnapshotEvery` parameter controls how often snapshots are taken, so that the entity doesn't need to be recovered from the whole journal each time it's loaded. If left unset, it defaults to 100. Setting it to a negative number will result in snapshots never being taken.
 
@@ -20,11 +20,11 @@ The `EntityFunc` is a factory method which generates a new Entity whenever Cloud
 
 ## Persistence types and serialization
 
-Event sourced entities persist events and snapshots, and these need to be serialized when persisted. The most straight forward way to persist events and snapshots is to use protobufs. Cloudstate will automatically detect if an emitted event is a protobuf, and serialize it as such. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
+Event sourced entities persist events and snapshots, and these need to be serialized when persisted. The most straightforward way to persist events and snapshots is to use protobufs. Cloudstate will automatically detect if an emitted event is a protobuf, and serialize it as such. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
 
-While protobufs are the recommended format for persisting events, it is recommended that you do not persist your services protobuf messages, rather, you should create new messages, even if they are identical to the services. While this may introduce some overhead in needing to convert from one type to the other, the reason for doing this is that it will allow the services public interface to evolve independently from its data storage format, which should be private.
+While protobufs are the recommended format for persisting events, it is recommended that you do not persist your service's protobuf messages, rather, you should create new messages, even if they are identical to the service's. While this may introduce some overhead in needing to convert from one type to the other, the reason for doing this is that it will allow the service's public interface to evolve independently from its data storage format, which should be private.
 
-For our shopping cart example, we'll create a new file called `domain.proto`, the name domain is selected to indicate that these are my applications domain objects:
+For our shopping cart example, we'll create a new file called `domain.proto`, the name domain is selected to indicate that these are my application's domain objects:
 
 @@snip [domain.proto](/docs/src/test/proto/domain.proto)
 
@@ -46,7 +46,7 @@ The entity factory function returns a `cloudstate.Entity` which is composed of t
 
 ## Handling commands
 
-An event sourced entity implements the composed `cloudstate.Entity` interface. `cloudstate.Entity` embeds the `cloudstate.EventHandler` interface and therefore entities implementing it get commands from Cloudstate through the event handlers `HandleCommand` method.
+An event sourced entity implements the composed `cloudstate.Entity` interface. `cloudstate.Entity` embeds the `cloudstate.EventHandler` interface and therefore entities implementing it get commands from Cloudstate through the event handler's `HandleCommand` method.
 
 The command types received by an event sourced entity are declared by the gRPC Server interface which is generated from the protobuf definitions. The Cloudstate Go Support library together with the registered `cloudstate.EventSourcedEntity` is then able to dispatch commands it gets from the Cloudstate proxy to the event sourced entity.
 
@@ -72,17 +72,17 @@ Here's an example of a command handler that emits an event:
 
 @@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #add-item }
 
-This command handler also validates the command, ensuring the quantity items added is greater than zero. Returning a `error` fails the command and the support library takes care of signaling that back to the requesting proxy as a `Failure` reply.  
+This command handler also validates the command, ensuring the quantity of items added is greater than zero. Returning an `error` fails the command and the support library takes care of signaling that back to the requesting proxy as a `Failure` reply.  
 
 ## Handling events
 
-Event handlers are invoked at two points, when restoring entities from the journal, before any commands are handled, and each time a new event is emitted. An event handlers responsibility is to update the state of the entity according to the event. Event handlers are the only place where its safe to mutate the state of the entity at all.
+Event handlers are invoked at two points, when restoring entities from the journal, before any commands are handled, and each time a new event is emitted. An event handler's responsibility is to update the state of the entity according to the event. Event handlers are the only place where it's safe to mutate the state of the entity at all.
 
 Event handlers are declared by implementing the `cloudstate.EventHandler` interface.
 
 @@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/event.go) { #event-handler }
 
-Emitted events by command handlers get dispatched to the implemented event handler which then decides how to proceed with the event. 
+Events emitted by command handlers get dispatched to the implemented event handler which then decides how to proceed with the event. 
 
 @@snip [shoppingcart.go](/docs/src/main/paradox/user/lang/go/src/shoppingcart.go) { #handle-event } 
 
@@ -110,7 +110,7 @@ A snapshot handler then can type-switch over types the corresponding `cloudstate
 
 ## Registering the entity
 
-Once you've created your entity, you can register it with the `cloudstate.Cloudstate` server, by invoking the `Register` method of an Cloudstate instance. In addition to passing your entity type and service name, you also need to pass any descriptors that you use for persisting events, for example, the `domain.proto` descriptor.
+Once you've created your entity, you can register it with the `cloudstate.Cloudstate` server, by invoking the `Register` method of a Cloudstate instance. In addition to passing your entity type and service name, you also need to pass any descriptors that you use for persisting events, for example, the `domain.proto` descriptor.
 
 During registration the optional ServiceName and the ServiceVersion can be configured.
 (TODO: give an example on how to pick values for these after the spec defines semantics )

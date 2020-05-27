@@ -16,6 +16,6 @@ import java.lang.annotation.Target;
  * <p>The type of the parameter must be {@link String}.
  */
 @CloudStateAnnotation
-@Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.PARAMETER, ElementType.FIELD})
 public @interface EntityId {}

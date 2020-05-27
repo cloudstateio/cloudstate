@@ -21,16 +21,16 @@ jobs:
   - stage: Unit tests
     name: npm tests
     before_script:
-    - cd node-support && npm install && cd -
-    - cd samples/js-shopping-cart && npm install && cd -
+    - cd node-support && nvm install && nvm use && npm install && cd -
+    - cd samples/js-shopping-cart && nvm install && nvm use && npm install && cd -
     script:
     - cd node-support && npm test && cd -
     - cd samples/js-shopping-cart && npm test && cd -
   
   - name: sbt tests
     before_script:
-      - cd node-support && npm install && cd -
-      - cd samples/js-shopping-cart && npm install && cd -
+      - cd node-support && nvm install && nvm use && npm install && cd -
+      - cd samples/js-shopping-cart && nvm install && nvm use && npm install && cd -
       - sbt update
       - docker pull google/cloud-sdk:latest
       - docker run --rm --expose=8085 --volume=/data -m 140MB --name=googlepubsub -d -p 8085:8085 google/cloud-sdk:latest /bin/sh -c "gcloud beta emulators pubsub start --project=test --host-port=0.0.0.0:8085 --data-dir=/data"
@@ -41,8 +41,8 @@ jobs:
   
   - name: docs tests
     before_script:
-    - cd node-support && npm install && cd -
-    - cd docs/src/test/js && npm install && cd -
+    - cd node-support && nvm install && nvm use && npm install && cd -
+    - cd docs/src/test/js && nvm install && nvm use && npm install && cd -
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' docs/paradox docs/test
     - cd docs/src/test/js && npm test && cd -
@@ -51,8 +51,8 @@ jobs:
     name: TCK
     before_script:
     - sbt update
-    - cd node-support && npm install && cd -
-    - cd samples/js-shopping-cart && npm install && cd -
+    - cd node-support && nvm install && nvm use && npm install && cd -
+    - cd samples/js-shopping-cart && nvm install && nvm use && npm install && cd -
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
   
@@ -66,7 +66,7 @@ jobs:
   - stage: Deploy
     name: Deploy documentation to cloudstate.io
     if: branch = master AND type = push
-    before_script: cd node-support && npm install && cd -
+    before_script: cd node-support && nvm install && nvm use && npm install && cd -
     script: sbt docs/paradox
     deploy:
       provider: pages
@@ -86,14 +86,14 @@ jobs:
     if: tag =~ ^v
     script:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
-    - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish
+    - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish tck/docker:publish
   
   - stage: Deploy
     name: Publish latest builds
     if: branch = master AND type = push
     script:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
-    - sbt -Duse.native.builds=false -Ddocker.tag=latest "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish
+    - sbt -Duse.native.builds=false -Ddocker.tag=latest "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish tck/docker:publish
 
 cache:
   directories:

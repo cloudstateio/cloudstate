@@ -42,14 +42,14 @@ const snapshotEveryDefault = 100
 // It is used to be registered as an event sourced entity on a CloudState instance.
 //#event-sourced-entity-type
 type EventSourcedEntity struct {
-	// ServiceName is the fully qualified name of the gRPC service that implements this entities interface.
+	// ServiceName is the fully qualified name of the gRPC service that implements this entity's interface.
 	// Setting it is mandatory.
 	ServiceName string
 	// PersistenceID is used to namespace events in the journal, useful for
 	// when you share the same database between multiple entities. It defaults to
 	// the simple name for the entity type.
 	// It’s good practice to select one explicitly, this means your database
-	// isn’t depend on type names in your code.
+	// isn’t dependent on type names in your code.
 	// Setting it is mandatory.
 	PersistenceID string
 	// The snapshotEvery parameter controls how often snapshots are taken,

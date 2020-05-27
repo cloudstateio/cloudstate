@@ -26,6 +26,8 @@ object GraalVMPlugin extends AutoPlugin {
     val graalVMVersion = settingKey[Option[String]](
       "Version of GraalVM to build with. Setting this has the effect of generating a container build image to build the native image with this version of Graal"
     )
+    val graalVMBuildServer =
+      settingKey[Boolean]("Whether to use the native image build server. Disabled for Docker builds by default.")
     val graalVMContainerBuildImage =
       taskKey[Option[String]]("Docker image to use for the container to build the native-image in.")
 
@@ -54,6 +56,7 @@ object GraalVMPlugin extends AutoPlugin {
       target in GraalVMNativeImage := target.value / "graalvm-native-image",
       graalVMNativeImageOptions := Seq.empty,
       graalVMVersion := None,
+      graalVMBuildServer := graalVMVersion.value.isEmpty,
       graalVMContainerBuildImage := Def.taskDyn {
           graalVMVersion.value match {
             case Some(tag) => generateContainerBuildImage(s"$GraalVMBaseImage:$tag")
@@ -132,7 +135,9 @@ object GraalVMPlugin extends AutoPlugin {
         } else oldCommands
       }
     ) ++ inConfig(GraalVMNativeImage)(scopedSettings) ++
-    inConfig(Compile)(resourceGenerators += hocon2json)
+    inConfig(Compile)(
+      resourceGenerators ++= List(hocon2json.taskValue, mkDynamicAkkaReflectConfig.taskValue)
+    )
 
   private lazy val scopedSettings = Seq[Setting[_]](
     resourceDirectories := Seq(resourceDirectory.value),
@@ -221,6 +226,24 @@ object GraalVMPlugin extends AutoPlugin {
     }(files.toSet)
 
     toMapping(files).map(_._2)
+  }
+
+  private val mkDynamicAkkaReflectConfig = Def.task {
+    import scala.collection.JavaConverters._
+    import com.typesafe.config._
+    val cp = Attributed.data(dependencyClasspath.value) ++ unmanagedResourceDirectories.value
+    val cl = new java.net.URLClassLoader(cp.map(_.toURI.toURL).toArray)
+    val conf = ConfigFactory.load(cl, "cloudstate-common")
+    val classes = conf.getConfig("akka.actor.serializers").root.unwrapped.asScala.values
+    val bindings = conf.getConfig("akka.actor.serialization-bindings").root.keySet().asScala
+    val cfg1 = classes.map(name => Map("name" -> name, "allDeclaredConstructors" -> true).asJava)
+    val cfg2 = bindings.map(name => Map("name" -> name).asJava)
+    val list = ConfigValueFactory.fromIterable((cfg1 ++ cfg2).asJava)
+    val json = list.render(ConfigRenderOptions.concise().setFormatted(true))
+    val base = resourceManaged.value / "META-INF" / "native-image"
+    val dest = base / "com.typesafe.akka" / "dynamic-from-reference-conf" / "reflect-config.json"
+    IO.write(dest, json)
+    Seq(dest)
   }
 
   private def buildLocal(targetDirectory: File,
@@ -366,10 +389,8 @@ object GraalVMPlugin extends AutoPlugin {
     if (dep.data.isFile) Some(dep)
     else {
       projectArts.find { art =>
-        (art.get(sbt.Keys.artifact.key), dep.get(sbt.Keys.artifact.key)) match {
-          case (Some(l), Some(r)) =>
-            l.name == r.name && l.classifier == r.classifier
-          case _ => false
+        art.get(sbt.Keys.artifact.key).zip(dep.get(sbt.Keys.artifact.key)) exists {
+          case (l, r) => l.name == r.name && l.classifier == r.classifier
         }
       }
     }

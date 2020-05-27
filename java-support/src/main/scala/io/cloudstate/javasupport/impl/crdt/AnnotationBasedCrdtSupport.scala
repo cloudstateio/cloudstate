@@ -7,7 +7,7 @@ import java.util.function.Consumer
 import scala.annotation.unchecked
 
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
-import io.cloudstate.javasupport.{Context, ServiceCall, ServiceCallFactory}
+import io.cloudstate.javasupport.{Context, EntityFactory, ServiceCall, ServiceCallFactory}
 import io.cloudstate.javasupport.crdt.{
   CommandContext,
   CommandHandler,
@@ -61,6 +61,12 @@ private[impl] class AnnotationBasedCrdtSupport(entityClass: Class[_],
   // TODO JavaDoc
   def this(entityClass: Class[_], anySupport: AnySupport, serviceDescriptor: Descriptors.ServiceDescriptor) =
     this(entityClass, anySupport, anySupport.resolveServiceDescriptor(serviceDescriptor))
+
+  def this(factory: EntityFactory, anySupport: AnySupport, serviceDescriptor: Descriptors.ServiceDescriptor) =
+    this(factory.entityClass,
+         anySupport,
+         anySupport.resolveServiceDescriptor(serviceDescriptor),
+         Some(context => factory.create(context)))
 
   private val constructor: CrdtCreationContext => AnyRef = factory.getOrElse {
     entityClass.getConstructors match {
