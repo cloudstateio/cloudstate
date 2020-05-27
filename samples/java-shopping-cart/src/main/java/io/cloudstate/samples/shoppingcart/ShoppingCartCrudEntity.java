@@ -1,145 +1,99 @@
 package io.cloudstate.samples.shoppingcart;
 
-import akka.util.ByteString;
-import com.example.shoppingcart.Shoppingcart;
-import com.example.shoppingcart.crud.persistence.Domain;
-import com.google.protobuf.InvalidProtocolBufferException;
+import com.example.crud.shoppingcart.Shoppingcart;
+import com.example.crud.shoppingcart.persistence.Domain;
+import com.google.protobuf.Empty;
+import io.cloudstate.javasupport.EntityId;
+import io.cloudstate.javasupport.crud.CommandContext;
+import io.cloudstate.javasupport.crud.CommandHandler;
 import io.cloudstate.javasupport.crud.CrudEntity;
-import io.cloudstate.javasupport.crud.KeyValue;
-import io.cloudstate.javasupport.crud.KeyValue.Key;
-import io.cloudstate.javasupport.eventsourced.CommandContext;
-import io.cloudstate.javasupport.eventsourced.CommandHandler;
+import io.cloudstate.javasupport.crud.SnapshotHandler;
 
-import java.util.Collection;
-import java.util.List;
-import java.util.stream.Collectors;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-import static io.cloudstate.javasupport.crud.KeyValue.keyOf;
-
+/** A crud entity. */
 @CrudEntity
-public class ShoppingCartCrudEntity extends KeyValue.KeyValueEntity {
+public class ShoppingCartCrudEntity {
+  private final String entityId;
+  private final Map<String, Shoppingcart.LineItem> cart = new LinkedHashMap<>();
+
+  public ShoppingCartCrudEntity(@EntityId String entityId) {
+    this.entityId = entityId;
+  }
+
+  @SnapshotHandler
+  public void handleState(Domain.Cart cart) {
+    this.cart.clear();
+    for (Domain.LineItem item : cart.getItemsList()) {
+      this.cart.put(item.getProductId(), convert(item));
+    }
+  }
 
   @CommandHandler
-  public com.google.protobuf.Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
+  public Shoppingcart.Cart getCart() {
+    return Shoppingcart.Cart.newBuilder().addAllItems(cart.values()).build();
+  }
+
+  @CommandHandler
+  public Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
     if (item.getQuantity() <= 0) {
       ctx.fail("Cannot add negative quantity of to item" + item.getProductId());
     }
 
-    Key<String> userId = keyOf(item.getUserId(), ByteString::utf8String, ByteString::fromString);
-    if (!state().get(userId).isPresent()) {
-      Domain.Cart cart =
-          Domain.Cart.newBuilder()
-              .addItems(
-                  Domain.LineItem.newBuilder()
-                      .setProductId(item.getProductId())
-                      .setName(item.getName())
-                      .setQuantity(item.getQuantity())
-                      .build())
-              .build();
-
-      state().set(userId, cart.toByteString().toStringUtf8());
-    } else {
-      Domain.Cart cart = deserialize(userId);
-      Domain.LineItem lineItem =
-          Domain.LineItem.newBuilder()
-              .setProductId(item.getProductId())
-              .setName(item.getName())
-              .setQuantity(quantity(cart, item))
-              .build();
-      List<Domain.LineItem> items =
-          cart.getItemsList().stream()
-              .filter(i -> !i.getProductId().equals(item.getProductId()))
-              .collect(Collectors.toList());
-      Domain.Cart modifiedCart =
-          Domain.Cart.newBuilder().addAllItems(items).addItems(lineItem).build();
-      state().set(userId, modifiedCart.toByteString().toStringUtf8());
-    }
-
-    ctx.emit(state().toProtoModification());
-
-    return com.google.protobuf.Empty.getDefaultInstance();
+    Domain.LineItem lineItem =
+        Domain.LineItem.newBuilder()
+            .setUserId(item.getUserId())
+            .setProductId(item.getProductId())
+            .setName(item.getName())
+            .setQuantity(item.getQuantity())
+            .build();
+    ctx.emit(Domain.Cart.newBuilder().addItems(lineItem).build());
+    return Empty.getDefaultInstance(); // FIXME change return type
   }
 
   @CommandHandler
-  public com.google.protobuf.Empty removeItem(
-      Shoppingcart.RemoveLineItem item, CommandContext ctx) {
-    Key<String> userId = keyOf(item.getUserId(), ByteString::utf8String, ByteString::fromString);
-    if (!state().get(userId).isPresent()) {
-      ctx.fail(
-          "Cannot remove item " + item.getProductId() + " for unknown user " + item.getUserId());
+  public Empty updateItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
+    if (item.getQuantity() <= 0) {
+      ctx.fail("Cannot add negative quantity of to item" + item.getProductId());
     }
 
-    Domain.Cart cart = deserialize(userId);
-    if (!containsItem(cart, item)) {
+    Domain.LineItem lineItem =
+        Domain.LineItem.newBuilder()
+            .setUserId(item.getUserId())
+            .setProductId(item.getProductId())
+            .setName(item.getName())
+            .setQuantity(item.getQuantity())
+            .build();
+    ctx.emit(Domain.Cart.newBuilder().addItems(lineItem).build());
+    return Empty.getDefaultInstance(); // FIXME change return type
+  }
+
+  @CommandHandler
+  public Empty removeItem(Shoppingcart.RemoveLineItem item, CommandContext ctx) {
+    if (!cart.containsKey(item.getProductId())) {
       ctx.fail("Cannot remove item " + item.getProductId() + " because it is not in the cart.");
     }
+    cart.remove(item.getProductId());
 
-    List<Domain.LineItem> items =
-        cart.getItemsList().stream()
-            .filter(lineItem -> !lineItem.getProductId().equals(item.getProductId()))
-            .collect(Collectors.toList());
-    Domain.Cart modifiedCart = Domain.Cart.newBuilder().addAllItems(items).build();
-
-    state().set(userId, modifiedCart.toByteString().toStringUtf8());
-    ctx.emit(state().toProtoModification());
-
-    return com.google.protobuf.Empty.getDefaultInstance();
-  }
-
-  @CommandHandler
-  public com.google.protobuf.Empty removeCart(
-      Shoppingcart.RemoveShoppingCart cart, CommandContext ctx) {
-    Key<String> userId = keyOf(cart.getUserId(), ByteString::utf8String, ByteString::fromString);
-    if (!state().get(userId).isPresent()) {
-      ctx.fail("Cannot remove cart " + cart.getUserId() + " because it is unknown");
-    }
-
-    state().remove(userId);
-    ctx.emit(state().toProtoModification());
-
-    return com.google.protobuf.Empty.getDefaultInstance();
-  }
-
-  @CommandHandler
-  public Shoppingcart.Cart getCart(Shoppingcart.GetShoppingCart cartId, CommandContext ctx) {
-    Key<String> userId = keyOf(cartId.getUserId(), ByteString::utf8String, ByteString::fromString);
-    if (!state().get(userId).isPresent()) {
-      return Shoppingcart.Cart.newBuilder().build();
-    } else {
-      Domain.Cart cart = deserialize(userId);
-      Collection<Shoppingcart.LineItem> lineItems =
-          cart.getItemsList().stream().map(this::convert).collect(Collectors.toList());
-      return Shoppingcart.Cart.newBuilder().addAllItems(lineItems).build();
-    }
-  }
-
-  // it should be externalize
-  private Domain.Cart deserialize(Key<String> userId) {
-    try {
-      return Domain.Cart.parseFrom(
-          com.google.protobuf.ByteString.copyFromUtf8(state().get(userId).get()));
-    } catch (InvalidProtocolBufferException e) {
-      return null;
-    }
-  }
-
-  private int quantity(Domain.Cart cart, Shoppingcart.AddLineItem item) {
-    return cart.getItemsList().stream()
-        .filter(lineItem -> lineItem.getProductId().equals(item.getProductId()))
-        .findFirst()
-        .map(lineItem -> lineItem.getQuantity() + item.getQuantity())
-        .orElse(item.getQuantity());
-  }
-
-  private boolean containsItem(Domain.Cart cart, Shoppingcart.RemoveLineItem item) {
-    return cart.getItemsList().stream()
-        .filter(lineItem -> lineItem.getProductId().equals(item.getProductId()))
-        .findFirst()
-        .isPresent();
+    Domain.Cart.Builder builder = Domain.Cart.newBuilder();
+    cart.entrySet().stream()
+        .forEach(entry -> builder.addItems(convert(entry.getKey(), entry.getValue())));
+    ctx.emit(builder.build());
+    return Empty.getDefaultInstance(); // FIXME change return type
   }
 
   private Shoppingcart.LineItem convert(Domain.LineItem item) {
     return Shoppingcart.LineItem.newBuilder()
+        .setProductId(item.getProductId())
+        .setName(item.getName())
+        .setQuantity(item.getQuantity())
+        .build();
+  }
+
+  private Domain.LineItem convert(String userId, Shoppingcart.LineItem item) {
+    return Domain.LineItem.newBuilder()
+        .setUserId(userId)
         .setProductId(item.getProductId())
         .setName(item.getName())
         .setQuantity(item.getQuantity())

@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Extension for specifying which field in a message is to be considered an
+// entity key, for the purposes associating gRPC calls with entities and
+// sharding.
+
 syntax = "proto3";
 
-import "google/protobuf/any.proto";
+import "google/protobuf/descriptor.proto";
 
 package cloudstate;
 
-option java_package = "io.cloudstate.keyvalue";
+option java_package = "io.cloudstate";
+option go_package = "github.com/cloudstateio/go-support/cloudstate/;cloudstate";
 
-message KVEntity {
-  map<string, bytes> entries = 1;
-}
-
-message KVModification {
-  map<string, bytes> updated_entries = 1;
-  repeated string removed_keys = 2;
+extend google.protobuf.FieldOptions {
+    bool sub_entity_key = 50004;
 }

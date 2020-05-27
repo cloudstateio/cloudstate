@@ -1,0 +1,92 @@
+// This is the public API offered by the shopping cart entity.
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "cloudstate/entity_key.proto";
+import "cloudstate/sub_entity_key.proto";
+import "cloudstate/crud_command_type.proto";
+import "google/api/annotations.proto";
+import "google/api/http.proto";
+import "google/api/httpbody.proto";
+
+package com.example.crud.shoppingcart;
+
+option go_package = "tck/crudshoppingcart";
+
+message AddLineItem {
+    string cart_id = 1 [(.cloudstate.entity_key) = true];
+    string user_id = 2 [(.cloudstate.sub_entity_key) = true]; // do i need that for create?
+    string command_type = 3 [(.cloudstate.crud_command_type) = true];
+    string product_id = 4;
+    string name = 5;
+    int32 quantity = 6;
+}
+
+message RemoveLineItem {
+    string cart_id = 1 [(.cloudstate.entity_key) = true];
+    string user_id = 2 [(.cloudstate.sub_entity_key) = true];
+    string command_type = 3 [(.cloudstate.crud_command_type) = true];
+    string product_id = 4;
+}
+
+message GetShoppingCart {
+    string cart_id = 1 [(.cloudstate.entity_key) = true];
+    string user_id = 2 [(.cloudstate.sub_entity_key) = true];
+    string command_type = 3 [(.cloudstate.crud_command_type) = true];
+}
+
+message GetAllCart {
+    string cart_id = 1 [(.cloudstate.entity_key) = true];
+    string command_type = 2 [(.cloudstate.crud_command_type) = true];
+}
+
+message LineItem {
+    string product_id = 1;
+    string name = 2;
+    int32 quantity = 3;
+}
+
+message Cart {
+    repeated LineItem items = 1;
+}
+
+message Carts {
+    repeated Cart carts = 1;
+}
+
+service ShoppingCart {
+    rpc AddItem(AddLineItem) returns (google.protobuf.Empty) {
+        option (google.api.http) = {
+            post: "/cart/{cart_id}/{user_id}/items/add",
+            body: "*",
+        };
+    }
+
+    rpc UpdateItem(AddLineItem) returns (google.protobuf.Empty) {
+        option (google.api.http) = {
+            post: "/cart/{cart_id}/{user_id}/items/update",
+            body: "*",
+        };
+    }
+
+    rpc RemoveItem(RemoveLineItem) returns (google.protobuf.Empty) {
+        option (google.api.http).post = "/cart/{cart_id}/{user_id}/items/{product_id}/remove";
+    }
+
+    rpc GetCart(GetShoppingCart) returns (Cart) {
+        option (google.api.http) = {
+          get: "/carts/{cart_id}/{user_id}",
+          additional_bindings: {
+            get: "/carts/{cart_id}/{user_id}/items",
+            response_body: "items"
+          }
+        };
+    }
+
+    rpc GetAll(GetAllCart) returns (Carts) {
+        option (google.api.http) = {
+            get: "/carts/{cart_id}",
+            response_body: "items"
+        };
+    }
+}

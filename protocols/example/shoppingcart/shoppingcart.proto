@@ -24,10 +24,6 @@ message RemoveLineItem {
     string product_id = 2;
 }
 
-message RemoveShoppingCart {
-    string user_id = 1 [(.cloudstate.entity_key) = true];
-}
-
 message GetShoppingCart {
     string user_id = 1 [(.cloudstate.entity_key) = true];
 }
@@ -53,10 +49,6 @@ service ShoppingCart {
 
     rpc RemoveItem(RemoveLineItem) returns (google.protobuf.Empty) {
         option (google.api.http).post = "/cart/{user_id}/items/{product_id}/remove";
-    }
-
-    rpc RemoveCart(RemoveShoppingCart) returns (google.protobuf.Empty) {
-        option (google.api.http).post = "/cart/{user_id}/remove";
     }
 
     rpc GetCart(GetShoppingCart) returns (Cart) {
