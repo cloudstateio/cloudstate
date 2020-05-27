@@ -128,7 +128,7 @@ func (sc *ShoppingCart) HandleEvent(_ context.Context, event interface{}) (handl
 //#add-item
 func (sc *ShoppingCart) AddItem(_ context.Context, li *shoppingcart.AddLineItem) (*empty.Empty, error) {
 	if li.GetQuantity() <= 0 {
-		return nil, fmt.Errorf("cannot add negative quantity of to item %s", li.GetProductId())
+		return nil, fmt.Errorf("cannot add negative quantity to item %s", li.GetProductId())
 	}
 	sc.Emit(&domain.ItemAdded{
 		Item: &domain.LineItem{
