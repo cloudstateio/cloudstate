@@ -175,6 +175,7 @@ lazy val docs = (project in file("docs"))
   .settings(
     common,
     name := "Cloudstate Documentation",
+    deployModule := "core",
     mappings in (Compile, paradox) ++= {
       val javaApiDocs = (doc in (`java-support`, Compile)).value
 
@@ -194,11 +195,13 @@ lazy val docs = (project in file("docs"))
     },
     paradoxProperties in Compile ++= Map(
         "documentation.title" -> "Cloudstate Documentation",
-        "canonical.base_url" -> "https://cloudstate.io/docs/",
+        "canonical.base_url" -> "https://cloudstate.io/docs/core/current/",
         "javadoc.io.cloudstate.javasupport.base_url" -> ".../user/lang/java/api/",
         "javadoc.link_style" -> "direct",
         "extref.jsdoc.base_url" -> ".../user/lang/javascript/api/module-cloudstate.%s",
-        "cloudstate.version" -> "0.4.3", // hardcode, otherwise we'll end up with the wrong version in the docs
+        "cloudstate.version" -> {
+          if (isSnapshot.value) previousStableVersion.value.getOrElse("0.0.0") else version.value
+        },
         "cloudstate.java-support.version" -> "0.4.3",
         "cloudstate.node-support.version" -> "0.0.1",
         "cloudstate.go-support.version" -> "0.1.0",

@@ -20,6 +20,6 @@ addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.9.0")
 addSbtPlugin("org.xerial.sbt" % "sbt-sonatype" % "2.5")
 addSbtPlugin("io.crashbox" % "sbt-gpg" % "0.2.0")
 
-addSbtPlugin("io.cloudstate" % "sbt-cloudstate-paradox" % "0.1.0")
+addSbtPlugin("io.cloudstate" % "sbt-cloudstate-paradox" % "0.1.2")
 
 addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.10.0-RC1")
