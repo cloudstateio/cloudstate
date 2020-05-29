@@ -9,7 +9,7 @@ Build tool
 : Cloudstate does not require any particular build tool, you can select your own. Or use the [Cloudstate CLI](https://github.com/sleipnir/cloudstate-cli)
 
 protoc
-: Since Cloudstate is based on gRPC, you need a protoc compiler to compile gRPC protobuf descriptors. While this can be done by downloading, [installing and running protoc manually](https://github.com/protocolbuffers/protobuf#protocol-compiler-installation), most popular build tools have a protoc plugin which will automatically compile protobuf descriptors during your build for you.
+: Since Cloudstate is based on gRPC, you need a protoc compiler to compile gRPC protobuf descriptors. While this can be done by downloading, [installing and running protoc manually](https://github.com/protocolbuffers/protobuf#user-content-protocol-compiler-installation), most popular build tools have a protoc plugin which will automatically compile protobuf descriptors during your build for you.
 
 docker
 : Cloudstate runs in Kubernetes with [Docker](https://www.docker.com/), hence you will need Docker to build a container that you can deploy to Kubernetes. Most popular build tools have plugins that assist in building Docker images.

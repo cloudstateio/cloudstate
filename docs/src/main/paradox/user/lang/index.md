@@ -25,7 +25,7 @@ Here is a list of other, **non-official** libraries in various other languages:
 |-------------------------------------------------------------------------------------------------------|-----------|---------------------------|-----------------------|-----------------------|
 | [scala-support](https://github.com/cloudstateio/cloudstate/tree/master/scala-support/src/main)        | Scala     | **❗️**                    | **❗️**               | **❌**                 |
 | [cloudstate-csharp](https://github.com/nagytech/cloudstate-csharp)                                    | C#        | **✅**                    | **✅**               | **❌**                 |
-| [python-support](https://github.com/marcellanz/cloudstate_python-support/tree/feature/python-support) | Python    | **❓**                    | **❓**               | **❌**                 |
+| [python-support](https://github.com/cloudstateio/python-support)                                      | Python    | **❓**                    | **❓**               | **❌**                 |
 | [cloudstate-rust](https://github.com/sleipnir/cloudstate-rust)                                        | Rust      | **❓**                    | **❓**               | **❌**                 |
 
 ### Legend:
