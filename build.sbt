@@ -63,7 +63,7 @@ val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0" // We use this version because it is the latest which works with native-image 20.0.0
 val GraalVersion = "20.1.0"
-val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debian"
+val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debianslim-jre"
 val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
 
 val excludeTheseDependencies: Seq[ExclusionRule] = Seq(
