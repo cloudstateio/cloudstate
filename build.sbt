@@ -199,13 +199,12 @@ lazy val docs = (project in file("docs"))
         "javadoc.io.cloudstate.javasupport.base_url" -> ".../user/lang/java/api/",
         "javadoc.link_style" -> "direct",
         "extref.jsdoc.base_url" -> ".../user/lang/javascript/api/module-cloudstate.%s",
+        "extref.godoc.base_url" -> "https://cloudstate.io/docs/go/current/%s",
         "cloudstate.version" -> {
           if (isSnapshot.value) previousStableVersion.value.getOrElse("0.0.0") else version.value
         },
         "cloudstate.java-support.version" -> "0.4.3",
         "cloudstate.node-support.version" -> "0.0.1",
-        "cloudstate.go-support.version" -> "0.1.0",
-        "cloudstate.go.version" -> "1.13",
         "cloudstate.kotlin-support.version" -> "0.5.1",
         "cloudstate.dart-support.version" -> "0.5.5"
       ),
