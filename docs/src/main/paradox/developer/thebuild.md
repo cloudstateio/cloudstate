@@ -8,7 +8,7 @@ The Cloudstate Build uses `sbt` as its build tool.
 * Clone the Cloudstate repository using `git`: `git clone git@github.com:cloudstateio/cloudstate.git`
 * Install `sbt`, follow [these instructions](https://www.scala-sbt.org/download.html).
 
-To build Native Images, you'll need the GraalVM CE as your JRE and [`clang`](https://clang.llvm.org/) as your `cc`. The GraalVM CE provides the `native-image` command, which must be on the $PATH when building Native Images. See [GraalVM Integration](https://github.com/cloudstateio/cloudstate/blob/master/README.md#graal-integration) in the project README for further info.
+To build Native Images, you'll need the GraalVM CE as your JRE and [`clang`](https://clang.llvm.org/) as your `cc`. The GraalVM CE provides the `native-image` command, which must be on the $PATH when building Native Images. See [GraalVM Integration](https://github.com/cloudstateio/cloudstate/blob/master/README.md#user-content-graalvm-integration) in the project README for further info.
 
 To build node.js related samples, you'll need `nvm` to install the corresponding node.js version by running command `nvm install` and `nvm use`, then run `npm install` to install required modules.
 

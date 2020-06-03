@@ -498,7 +498,7 @@ A custom Akka cluster sharding rebalancing strategy may be able to be used to tr
 
 By default, we build a GraalVM native image for Linux. This is done inside a Docker container and so can be done on any platform with Docker installed. We also generate Docker images containing the native image, so the native image can be run on any platform using Docker too.
 
-For further information about setting up the build environment, see [The Cloudstate Build](https://cloudstate.io/docs/developer/thebuild.html#the-cloudstate-build) documentation.
+For further information about setting up the build environment, see [The Cloudstate Build](https://cloudstate.io/docs/core/current/developer/thebuild.html) documentation.
 
 ### Building the native image
 

@@ -63,7 +63,7 @@ val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
 val ProtobufVersion = "3.9.0" // We use this version because it is the latest which works with native-image 20.0.0
 val GraalVersion = "20.1.0"
-val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debian"
+val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debianslim-jre"
 val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
 
 val excludeTheseDependencies: Seq[ExclusionRule] = Seq(
@@ -170,12 +170,12 @@ lazy val protocols = (project in file("protocols"))
   )
 
 lazy val docs = (project in file("docs"))
-  .enablePlugins(ParadoxPlugin, ProtocPlugin)
+  .enablePlugins(CloudstateParadoxPlugin, ProtocPlugin)
   .dependsOn(`java-support` % Test)
   .settings(
     common,
     name := "Cloudstate Documentation",
-    paradoxTheme := Some(builtinParadoxTheme("generic")),
+    deployModule := "core",
     mappings in (Compile, paradox) ++= {
       val javaApiDocs = (doc in (`java-support`, Compile)).value
 
@@ -194,19 +194,20 @@ lazy val docs = (project in file("docs"))
       }
     },
     paradoxProperties in Compile ++= Map(
-        "canonical.base_url" -> "https://cloudstate.io/docs/",
+        "documentation.title" -> "Cloudstate Documentation",
+        "canonical.base_url" -> "https://cloudstate.io/docs/core/current/",
         "javadoc.io.cloudstate.javasupport.base_url" -> ".../user/lang/java/api/",
         "javadoc.link_style" -> "direct",
         "extref.jsdoc.base_url" -> ".../user/lang/javascript/api/module-cloudstate.%s",
-        "cloudstate.version" -> "0.4.3", // hardcode, otherwise we'll end up with the wrong version in the docs
+        "extref.godoc.base_url" -> "https://cloudstate.io/docs/go/current/%s",
+        "cloudstate.version" -> {
+          if (isSnapshot.value) previousStableVersion.value.getOrElse("0.0.0") else version.value
+        },
         "cloudstate.java-support.version" -> "0.4.3",
         "cloudstate.node-support.version" -> "0.0.1",
-        "cloudstate.go-support.version" -> "0.1.0",
-        "cloudstate.go.version" -> "1.13",
         "cloudstate.kotlin-support.version" -> "0.5.1",
         "cloudstate.dart-support.version" -> "0.5.5"
       ),
-    paradoxNavigationDepth := 3,
     inConfig(Test)(
       sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
         PB.protoSources += sourceDirectory.value / "proto",

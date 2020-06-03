@@ -9,7 +9,7 @@ Cloudstate Dart support requires Dart sdk >=2.7.0 <3.0.0.
 Use Dart [Pub](https://dart.dev/tools/pub/cmd) tool for build Cloudstate Dart projects.
 
 ### Protoc
-Since Cloudstate is based on gRPC, you need a protoc compiler to compile gRPC protobuf descriptors. While this can be done by downloading, [installing and running protoc manually](https://github.com/protocolbuffers/protobuf#protocol-compiler-installation). You will also need to add a plugin to compile the proto files for Dart classes.
+Since Cloudstate is based on gRPC, you need a protoc compiler to compile gRPC protobuf descriptors. While this can be done by downloading, [installing and running protoc manually](https://github.com/protocolbuffers/protobuf#user-content-protocol-compiler-installation). You will also need to add a plugin to compile the proto files for Dart classes.
 
 ```shell script
 pub global activate protoc_plugin
