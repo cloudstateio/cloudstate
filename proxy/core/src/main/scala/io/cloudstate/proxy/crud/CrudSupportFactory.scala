@@ -11,8 +11,17 @@ import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 import com.google.protobuf.ByteString
 import com.google.protobuf.Descriptors.ServiceDescriptor
-import io.cloudstate.protocol.crud.{CrudClient, CrudCommandType, CrudEntityCommand}
+import io.cloudstate.protocol.crud.{
+  CreateCommand,
+  CrudClient,
+  CrudCommandType,
+  CrudEntityCommand,
+  DeleteCommand,
+  FetchCommand,
+  UpdateCommand
+}
 import io.cloudstate.protocol.entity.Entity
+import io.cloudstate.proxy.EntityMethodDescriptor.CrudCommandOptionValue
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.eventsourced.DynamicLeastShardAllocationStrategy
@@ -74,6 +83,9 @@ class CrudSupportFactory(system: ActorSystem,
       )
     }
 
+    // FIXME crudSubEntityKey should be removed
+    // FIXME crudCommandType should be check only for method with payload like GET and DELETE
+    /*
     val methodsWithoutSubEntityKeys = methodDescriptors.values.filter(_.crudSubEntityKeyFieldsCount < 1)
     if (methodsWithoutSubEntityKeys.nonEmpty) {
       val offendingMethods = methodsWithoutSubEntityKeys.map(_.method.getName).mkString(",")
@@ -91,6 +103,7 @@ class CrudSupportFactory(system: ActorSystem,
            |"but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}""".stripMargin
       )
     }
+   */
   }
 }
 
@@ -101,13 +114,11 @@ private class CrudSupport(eventSourcedEntity: ActorRef, parallelism: Int, privat
 
   override def handler(method: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed] =
     Flow[EntityCommand].mapAsync(parallelism) { command =>
-      val subEntityId = method.extractCrudSubEntityId(command.payload.fold(ByteString.EMPTY)(_.value))
       val commandType = extractCommandType(method, command)
       val initCommand = CrudEntityCommand(entityId = command.entityId,
-                                          subEntityId = subEntityId,
                                           name = command.name,
                                           payload = command.payload,
-                                          `type` = commandType)
+                                          `type` = Some(commandType))
       (eventSourcedEntity ? initCommand).mapTo[UserFunctionReply]
     }
 
@@ -116,9 +127,14 @@ private class CrudSupport(eventSourcedEntity: ActorRef, parallelism: Int, privat
 
   private def extractCommandType(method: EntityMethodDescriptor, command: EntityCommand): CrudCommandType = {
     val commandType = method.extractCrudCommandType(command.payload.fold(ByteString.EMPTY)(_.value))
-    CrudCommandType.fromName(commandType.toUpperCase).getOrElse {
-      // cannot be empty here because the check is made in the validate method of CrudSupportFactory
-      throw new RuntimeException(s"Command - ${command.name} for CRUD entity should have a command type")
+    commandType match {
+      case CrudCommandOptionValue.CREATE => CrudCommandType.of(CrudCommandType.Command.Create(CreateCommand()))
+      case CrudCommandOptionValue.FETCH => CrudCommandType.of(CrudCommandType.Command.Fetch(FetchCommand()))
+      case CrudCommandOptionValue.UPDATE => CrudCommandType.of(CrudCommandType.Command.Update(UpdateCommand()))
+      case CrudCommandOptionValue.DELETE => CrudCommandType.of(CrudCommandType.Command.Delete(DeleteCommand()))
+      case CrudCommandOptionValue.UNKNOWN =>
+        // cannot be empty here because the check is made in the validate method of CrudSupportFactory
+        throw new RuntimeException(s"Command - ${command.name} for CRUD entity should have a command type")
     }
   }
 }
