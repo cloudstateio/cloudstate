@@ -65,14 +65,10 @@ final class CrudEntitySupervisor(client: CrudClient,
 
   import CrudEntitySupervisor._
 
-  override final def receive: Receive = PartialFunction.empty
-
-  override final def preStart(): Unit = {
+  override final def preStart(): Unit =
     self ! Start
-    context.become(waitingForRelay)
-  }
 
-  private[this] final def waitingForRelay: Receive = {
+  override final def receive: Receive = {
     case Start =>
       // Cluster sharding URL encodes entity ids, so to extract it we need to decode.
       val entityId = URLDecoder.decode(self.path.name, "utf-8")
@@ -82,6 +78,7 @@ final class CrudEntitySupervisor(client: CrudClient,
       )
       context.become(forwarding(manager))
       unstashAll()
+
     case _ => stash()
   }
 
@@ -114,10 +111,10 @@ object CrudEntity {
       replyTo: ActorRef
   )
 
-  // The entity state
+  // Represents the entity state with the sequence number fo the last snapshot
   private final case class InternalState(
-      payload: pbAny, // the state payload
-      sequenceNumber: Long // the sequence number of the last taken snapshot
+      payload: pbAny,
+      sequenceNumber: Long
   )
 
   final def props(configuration: Configuration,
@@ -220,27 +217,24 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
     commandStartTime = System.nanoTime()
     concurrencyEnforcer ! Action(
       currentCommand.actionId,
-      () => handleCommand(command, entityCommand.`type`)
+      () => handleCrudCommand(command, entityCommand.`type`)
     )
   }
 
-  private[this] final def handleCommand(command: CrudCommand, commandType: CrudCommandType): Unit =
+  private[this] final def handleCrudCommand(command: CrudCommand, commandType: Option[CrudCommandType]): Unit = {
+    import CrudCommandType.{Command => CrudCmd}
     commandType match {
-      case CrudCommandType.CREATE =>
-        client.create(command) pipeTo self
+      case Some(cmdType) =>
+        cmdType.command match {
+          case CrudCmd.Create(_) => client.create(command) pipeTo self
+          case CrudCmd.Fetch(_) => client.fetch(command) pipeTo self
+          case CrudCmd.Update(_) => client.update(command) pipeTo self
+          case CrudCmd.Delete(_) => client.delete(command) pipeTo self
+        }
 
-      case CrudCommandType.FETCH =>
-        client.fetch(command) pipeTo self
-
-      case CrudCommandType.UPDATE =>
-        client.save(command) pipeTo self
-
-      case CrudCommandType.DELETE =>
-        client.delete(command) pipeTo self
-
-      case CrudCommandType.FETCHALL =>
-        client.fetchAll(command) pipeTo self
+      case _ => // Nothing to do, commandType should not be None
     }
+  }
 
   private final def esReplyToUfReply(reply: CrudReply): UserFunctionReply =
     UserFunctionReply(
@@ -266,7 +260,7 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
   // the sequence number of the last taken snapshot
   private[this] final def sequenceNumber(): Long = state.map(_.sequenceNumber).getOrElse(0L)
 
-  override final def receiveCommand: PartialFunction[Any, Unit] = {
+  override final def receiveCommand: Receive = {
 
     case command: CrudEntityCommand if currentCommand != null =>
       stashedCommands = stashedCommands.enqueue((command, sender()))

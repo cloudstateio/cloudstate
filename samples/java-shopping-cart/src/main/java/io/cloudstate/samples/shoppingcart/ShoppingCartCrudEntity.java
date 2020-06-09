@@ -11,6 +11,7 @@ import io.cloudstate.javasupport.crud.SnapshotHandler;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /** A crud entity. */
 @CrudEntity
@@ -24,6 +25,7 @@ public class ShoppingCartCrudEntity {
 
   @SnapshotHandler
   public void handleState(Domain.Cart cart) {
+    // HINTS: this is called by the proxy for updating the state
     this.cart.clear();
     for (Domain.LineItem item : cart.getItemsList()) {
       this.cart.put(item.getProductId(), convert(item));
@@ -37,50 +39,48 @@ public class ShoppingCartCrudEntity {
 
   @CommandHandler
   public Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
+    // HINTS: CRUD Update
+    // HINTS: curl -vi -X POST localhost:9000/cart/{user_id}/items/add -H "Content-Type:
+    // application/json" -d '{"commandType":"update", "productId":"foo","name":"A
+    // foo","quantity":10}'
     if (item.getQuantity() <= 0) {
       ctx.fail("Cannot add negative quantity of to item" + item.getProductId());
     }
 
     Domain.LineItem lineItem =
-        Domain.LineItem.newBuilder()
-            .setUserId(item.getUserId())
-            .setProductId(item.getProductId())
-            .setName(item.getName())
-            .setQuantity(item.getQuantity())
-            .build();
-    ctx.emit(Domain.Cart.newBuilder().addItems(lineItem).build());
-    return Empty.getDefaultInstance(); // FIXME change return type
-  }
-
-  @CommandHandler
-  public Empty updateItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
-    if (item.getQuantity() <= 0) {
-      ctx.fail("Cannot add negative quantity of to item" + item.getProductId());
+        cart.get(item.getProductId()) == null ? null : convert(cart.get(item.getProductId()));
+    if (lineItem == null) {
+      lineItem =
+          Domain.LineItem.newBuilder()
+              .setUserId(item.getUserId())
+              .setProductId(item.getProductId())
+              .setName(item.getName())
+              .setQuantity(item.getQuantity())
+              .build();
+    } else {
+      lineItem =
+          lineItem.toBuilder().setQuantity(item.getQuantity() + lineItem.getQuantity()).build();
     }
+    Domain.Cart cart = convert(this.cart).toBuilder().addItems(lineItem).build(); // new state
+    ctx.emit(cart); // emit new state
 
-    Domain.LineItem lineItem =
-        Domain.LineItem.newBuilder()
-            .setUserId(item.getUserId())
-            .setProductId(item.getProductId())
-            .setName(item.getName())
-            .setQuantity(item.getQuantity())
-            .build();
-    ctx.emit(Domain.Cart.newBuilder().addItems(lineItem).build());
-    return Empty.getDefaultInstance(); // FIXME change return type
+    return Empty.getDefaultInstance();
   }
 
   @CommandHandler
   public Empty removeItem(Shoppingcart.RemoveLineItem item, CommandContext ctx) {
+    // HINTS: CRUD Delete
+    // HINTS: curl -vi -X POST localhost:9000/cart/{user_id}/items/{product_id}/remove -H
+    // "Content-Type: application/json" -d '{"commandType":"delete", "productId":"foo"}'
+
     if (!cart.containsKey(item.getProductId())) {
       ctx.fail("Cannot remove item " + item.getProductId() + " because it is not in the cart.");
     }
-    cart.remove(item.getProductId());
 
-    Domain.Cart.Builder builder = Domain.Cart.newBuilder();
-    cart.entrySet().stream()
-        .forEach(entry -> builder.addItems(convert(entry.getKey(), entry.getValue())));
-    ctx.emit(builder.build());
-    return Empty.getDefaultInstance(); // FIXME change return type
+    cart.remove(item.getProductId());
+    ctx.emit(convert(cart)); // emit the new state
+
+    return Empty.getDefaultInstance();
   }
 
   private Shoppingcart.LineItem convert(Domain.LineItem item) {
@@ -91,12 +91,17 @@ public class ShoppingCartCrudEntity {
         .build();
   }
 
-  private Domain.LineItem convert(String userId, Shoppingcart.LineItem item) {
+  private Domain.LineItem convert(Shoppingcart.LineItem item) {
     return Domain.LineItem.newBuilder()
-        .setUserId(userId)
         .setProductId(item.getProductId())
         .setName(item.getName())
         .setQuantity(item.getQuantity())
+        .build();
+  }
+
+  private Domain.Cart convert(Map<String, Shoppingcart.LineItem> cart) {
+    return Domain.Cart.newBuilder()
+        .addAllItems(cart.values().stream().map(this::convert).collect(Collectors.toList()))
         .build();
   }
 }

@@ -2,12 +2,14 @@ package io.cloudstate.proxy
 
 import akka.NotUsed
 import akka.stream.scaladsl.Flow
+import com.google.api.annotations.AnnotationsProto
 import com.google.protobuf.Descriptors.{MethodDescriptor, ServiceDescriptor}
 import com.google.protobuf.descriptor.FieldOptions
 import com.google.protobuf.{ByteString, Descriptors, DynamicMessage}
 import io.cloudstate.crud_command_type.CrudCommandTypeProto
 import io.cloudstate.entity_key.EntityKeyProto
 import io.cloudstate.protocol.entity.Entity
+import io.cloudstate.proxy.EntityMethodDescriptor.CrudCommandOptionValue
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionCommand, UserFunctionReply}
 import io.cloudstate.proxy.protobuf.Options
 import io.cloudstate.sub_entity_key.SubEntityKeyProto
@@ -53,6 +55,16 @@ abstract class EntityTypeSupportFactory extends UserFunctionTypeSupportFactory {
 
 private object EntityMethodDescriptor {
   final val Separator = "-"
+
+  // define the options type supported for CRUD commands
+  object CrudCommandOptionValue {
+    final val CREATE = "create"
+    final val FETCH = "fetch"
+    final val UPDATE = "update"
+    final val DELETE = "delete"
+    final val UNKNOWN = "unknown" // the command is not supported
+  }
+
 }
 
 final class EntityMethodDescriptor(val method: MethodDescriptor) {
@@ -76,7 +88,18 @@ final class EntityMethodDescriptor(val method: MethodDescriptor) {
 
   def extractCrudSubEntityId(bytes: ByteString): String = extract(crudSubEntityKeyFields, bytes)
 
-  def extractCrudCommandType(bytes: ByteString): String = extract(crudCommandTypeFields, bytes)
+  def extractCrudCommandType(bytes: ByteString): String =
+    // FIXME hack for checking if the method is a http method without payload like GET, DELETE and POST.
+    AnnotationsProto.http.get(Options.convertMethodOptions(method)) match {
+      case Some(rule) if rule.pattern.isGet => CrudCommandOptionValue.FETCH
+      case Some(rule) if rule.pattern.isDelete => CrudCommandOptionValue.DELETE
+      case Some(rule) if rule.pattern.isPost && rule.body == "" => CrudCommandOptionValue.DELETE
+      case Some(_) =>
+        extract(crudCommandTypeFields, bytes) match {
+          case "" => CrudCommandOptionValue.UNKNOWN
+          case other => other
+        }
+    }
 
   private def extract(fieldOptions: Array[Descriptors.FieldDescriptor], bytes: ByteString): String =
     fieldOptions.length match {

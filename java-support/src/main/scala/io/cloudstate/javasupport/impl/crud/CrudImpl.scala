@@ -16,6 +16,7 @@
 package io.cloudstate.javasupport.impl.crud
 
 import java.util.Optional
+import java.util.concurrent.atomic.AtomicBoolean
 
 import akka.actor.ActorSystem
 import com.google.protobuf.Descriptors
@@ -69,6 +70,7 @@ final class CrudImpl(_system: ActorSystem,
 
   override def create(command: CrudCommand): Future[CrudReplyOut] = Future.unit.map(_ => handleWriteCommand(command))
 
+  // it is a read operation, the state and the snapshot are not mandatory for the reply.
   override def fetch(command: CrudCommand): Future[CrudReplyOut] =
     Future.unit
       .map { _ =>
@@ -81,9 +83,7 @@ final class CrudImpl(_system: ActorSystem,
               CrudReply(
                 command.id,
                 clientAction,
-                context.sideEffects,
-                runner.event(command.id),
-                runner.snapshot()
+                context.sideEffects
               )
             )
           )
@@ -92,19 +92,16 @@ final class CrudImpl(_system: ActorSystem,
             CrudReplyOut.Message.Reply(
               CrudReply(
                 commandId = command.id,
-                clientAction = clientAction,
-                state = runner.event(command.id)
+                clientAction = clientAction
               )
             )
           )
         }
       }
 
-  override def save(command: CrudCommand): Future[CrudReplyOut] = Future.unit.map(_ => handleWriteCommand(command))
+  override def update(command: CrudCommand): Future[CrudReplyOut] = Future.unit.map(_ => handleWriteCommand(command))
 
   override def delete(command: CrudCommand): Future[CrudReplyOut] = Future.unit.map(_ => handleWriteCommand(command))
-
-  override def fetchAll(command: CrudCommand): Future[CrudReplyOut] = ???
 
   private def handleWriteCommand(command: CrudCommand): CrudReplyOut = {
     runner.handleState(command)
@@ -146,13 +143,13 @@ final class CrudImpl(_system: ActorSystem,
     import com.google.protobuf.{Any => JavaPbAny}
     import com.google.protobuf.any.{Any => ScalaPbAny}
 
-    private final var handlerInit = false
+    private final val handlerInit = new AtomicBoolean(false)
     private final var service: CrudStatefulService = _
     private final var handler: CrudEntityHandler = _
 
     private final var sequenceNumber: Long = 0
     private final var performSnapshot: Boolean = false
-    // map command id to corresponding state changes
+    // map command id to corresponding state changes. this can be used for replies
     private final var events = Map.empty[Long, ScalaPbAny]
 
     def handleCommand(command: CrudCommand): (Optional[JavaPbAny], CommandContextImpl) = {
@@ -173,7 +170,6 @@ final class CrudImpl(_system: ActorSystem,
 
     def handleState(command: CrudCommand): Unit = {
       maybeInitHandler(command)
-
       val context = new SnapshotContextImpl(command.entityId, sequenceNumber)
       command.state.map(s => handler.handleState(ScalaPbAny.toJavaProto(s.payload.get), context))
     }
@@ -194,14 +190,16 @@ final class CrudImpl(_system: ActorSystem,
         sequenceNumber = sequenceNumber + events.size
       }
 
-    // the snapshot of the entity which is the last state changes so far
+    // entity snapshot which is the last state changes so far
     def snapshot(): Option[ScalaPbAny] =
       if (performSnapshot) {
         val (_, lastEvent) = events.last
         Some(lastEvent)
-      } else None
+      } else {
+        None
+      }
 
-    // the state changes associated with the command id
+    // state changes associated with the command id
     def event(commandId: Long): Option[ScalaPbAny] = {
       val e = events.get(commandId)
       events -= commandId // remove the event for the command id
@@ -209,12 +207,11 @@ final class CrudImpl(_system: ActorSystem,
     }
 
     private def maybeInitHandler(command: CrudCommand): Unit =
-      if (!handlerInit) {
+      if (handlerInit.compareAndSet(false, true)) {
         service = services.getOrElse(command.serviceName,
                                      throw new RuntimeException(s"Service not found: ${command.serviceName}"))
         handler = service.factory.create(new CrudContextImpl(command.entityId))
         sequenceNumber = command.state.map(_.snapshotSequence).getOrElse(0L)
-        handlerInit = true
       }
   }
 
