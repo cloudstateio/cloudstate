@@ -4,7 +4,7 @@ This page documents how to implement Cloudstate event sourced entities in JavaSc
 
 ## Persistence types and serialization
 
-Event sourced entities persist events and snapshots, and these need to be serialized when persisted. A snapshot is the current state of the entity, and so the entities state must be serializable. The most straight forward way to persist events and the state is to use protobufs. Cloudstate will automatically detect if an emitted event or snapshot is a protobuf, and serialize it as such. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
+Event sourced entities persist events and snapshots, and these need to be serialized when persisted. A snapshot is the current state of the entity, and so the entities state must be serializable. The most straight forward way to persist events and the state is to use protobufs. Cloudstate will automatically detect if an emitted event or snapshot is a protobuf, and serialize it as such using `protobufjs`. See [https://www.npmjs.com/package/protobufjs](https://www.npmjs.com/package/protobufjs) for more information on `protobufjs`. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
 
 While protobufs are the recommended format for persisting events, it is recommended that you do not persist your services protobuf messages, rather, you should create new messages, even if they are identical to the services. While this may introduce some overhead in needing to convert from one type to the other, the reason for doing this is that it will allow the services public interface to evolve independently from its data storage format, which should be private.
 
