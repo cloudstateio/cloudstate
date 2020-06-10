@@ -108,7 +108,7 @@ object GrpcWebSupport {
   private def decodeText(newContentType: ContentType, entity: MessageEntity): MessageEntity =
     entity match {
       case HttpEntity.Strict(_, data) =>
-        HttpEntity.Strict(newContentType, base64Decode(data))
+        HttpEntity.Strict(newContentType, data.decodeBase64)
       case streamed =>
         HttpEntity.Chunked.fromData(newContentType, streamed.dataBytes.via(new Base64DecoderStage))
     }
@@ -120,17 +120,11 @@ object GrpcWebSupport {
       .get
     entity match {
       case HttpEntity.Strict(_, data) =>
-        HttpEntity.Strict(contentType, base64Encode(data))
+        HttpEntity.Strict(contentType, data.encodeBase64)
       case streamed =>
-        HttpEntity.Chunked.fromData(contentType, streamed.dataBytes.map(base64Encode))
+        HttpEntity.Chunked.fromData(contentType, streamed.dataBytes.map(_.encodeBase64))
     }
   }
-
-  private def base64Encode(bytes: ByteString): ByteString =
-    ByteString(Base64.getEncoder.encode(bytes.asByteBuffer))
-
-  private def base64Decode(bytes: ByteString): ByteString =
-    ByteString(Base64.getDecoder.decode(bytes.asByteBuffer))
 
   private class Base64DecoderStage extends GraphStage[FlowShape[ByteString, ByteString]] {
 
@@ -162,7 +156,7 @@ object GrpcWebSupport {
                     bytes.take(nextSize)
                 }
 
-              push(out, base64Decode(next))
+              push(out, next.decodeBase64)
             }
           }
 
@@ -171,7 +165,7 @@ object GrpcWebSupport {
             if (carry.nonEmpty) {
               carryOver = ByteString.empty // Clear this out to not retain it beyond this point
               // This will fail, but we let it so we get the base64 error.
-              emit(out, base64Decode(carry), () => completeStage())
+              emit(out, carry.decodeBase64, () => completeStage())
             } else {
               completeStage()
             }

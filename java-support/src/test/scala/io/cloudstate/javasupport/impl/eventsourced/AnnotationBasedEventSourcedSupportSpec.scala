@@ -4,7 +4,15 @@ import java.util.Optional
 
 import com.example.shoppingcart.Shoppingcart
 import com.google.protobuf.{ByteString, Descriptors, Any => JavaPbAny}
-import io.cloudstate.javasupport.{Context, EntityId, ServiceCall, ServiceCallFactory, ServiceCallRef}
+import io.cloudstate.javasupport.{
+  Context,
+  EntityContext,
+  EntityFactory,
+  EntityId,
+  ServiceCall,
+  ServiceCallFactory,
+  ServiceCallRef
+}
 import io.cloudstate.javasupport.eventsourced._
 import io.cloudstate.javasupport.impl.{AnySupport, ResolvedServiceMethod, ResolvedType}
 import org.scalatest.{Matchers, WordSpec}
@@ -56,9 +64,8 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
 
   case class Wrapped(value: String)
   val anySupport = new AnySupport(Array(Shoppingcart.getDescriptor), this.getClass.getClassLoader)
-  val descriptor = Shoppingcart.getDescriptor
-    .findServiceByName("ShoppingCart")
-    .findMethodByName("AddItem")
+  val serviceDescriptor = Shoppingcart.getDescriptor.findServiceByName("ShoppingCart")
+  val descriptor = serviceDescriptor.findMethodByName("AddItem")
   val method = ResolvedServiceMethod(descriptor, StringResolvedType, WrappedResolvedType)
 
   def create(behavior: AnyRef, methods: ResolvedServiceMethod[_, _]*) =
@@ -101,6 +108,16 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
 
       "fail if the constructor contains an unsupported parameter" in {
         a[RuntimeException] should be thrownBy create(classOf[UnsupportedConstructorParameter])
+      }
+
+      "there is a provided entity factory" in {
+        val factory = new EntityFactory {
+          override def create(context: EntityContext): AnyRef = new FactoryCreatedEntityTest(context)
+          override def entityClass: Class[_] = classOf[FactoryCreatedEntityTest]
+        }
+        val eventSourcedSupport = new AnnotationBasedEventSourcedSupport(factory, anySupport, serviceDescriptor)
+        val handler = eventSourcedSupport.create(MockContext)
+        handler.handleEvent(event("my-event"), eventCtx)
       }
 
     }
@@ -429,3 +446,10 @@ private class MultiArgConstructorTest(ctx: EventSourcedContext, @EntityId entity
 
 @EventSourcedEntity
 private class UnsupportedConstructorParameter(foo: String)
+
+private class FactoryCreatedEntityTest(ctx: EntityContext) {
+  ctx.entityId should ===("foo")
+
+  @EventHandler
+  def handle(event: String): Unit = event should ===("my-event")
+}

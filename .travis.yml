@@ -6,8 +6,8 @@ scala:
   - 2.12.11
 env:
   global:
-  # GitHub personal access token
-  - secure: nPtepdKPvidwnxijiaIQiKnwuNvy+P4YAQUe4+1UzsiNMLILC/8UgWlUHoJMmlcS9ycYM5G1EwQNiT3hJetJbRL4VN3/uhnNpntmucASpC1KbpGjl3gaMfx7yDnJj252aj0yrSDoxJHDXe9p7zBY+bV+Dvp/SWGO1216ZgpiEx+T2n7QJ7kj5dhU+j6AIPj2R1U2lGOiAjHaCudGlv7evswSYrfdXL9yRZGXxeM361vien1akwTjSJzZr/EZmXhVyBSEWKitWMLuboCmXaUvr+VZVm5FkY8X7FKKBre05/itWGQTrnrEaKaUMd1bW+GfPOyFTjmuJnLiwmSmeEx2o/krQt9EfyFJpSfiX/b5bxYQan+ozxiwrsDF0/7tYfGBVg48miccqN+oAtAD1X8cWYa9svLOwKnv82ELq/18QE5OY9DPc9zARGDnPxwZ96Zl6dDtQkJz2+qBo/EU8dU2q1uaNTvuImmtLAHQZ2PtzdaGkklQQ3YvfZeWyD/fTVZdMQi2NXv0LRHkwAxf65vwrf84Edyy+HlqD5zTpKzhr1q6+wj54oOsQDnK6gSmmguG5Nd2HbJQxQhDlEZQ6+b00TY5WxYPG5Qo5zH0TXbu+/txLZlZOyJ5qJqGCICC1QW3YNDvFbTBIYGQUKVZ6vadXD8SqFUNvYK/wXXLYmdoXm8=
+  # Encrypted with: travis encrypt --pro -r cloudstateio/cloudstate DEPLOY_DOCS_TOKEN=<cloudstate-bot.github.token>
+  - secure: "DCmB7Mq1Dl+/rDl46RVQplSoyC5nS1jkGf8OYoRG7lfc0fDj4ZPDSy6nEQX9BGUY0uJmmr77ojQWvnx0tHeXs6Ci4lHftJ7nmC1pttRmezbhjj5YRdYB7xfe1I2vT7qOhcv+qAHjAteXNxoLqqomp49ov2hzwsfesCbyKlJ3EtLyyWldUgOGad66VBgsVJjkXkarXngM1VEty/GINheSwNVaeF9aiX4eY/GksHKUNFn3N4vvubU9VlGHVjBAbPDXUp81L1rlkOHgSgKtehHy/FpcsHeStAoZMNNDCfnK0CKHCtKEJ8FhYKAwQR8WIEYU8cMjSYQVP0UQaC7mH//RwMECPEXZi8uB1mryIwfHu3l6AlIMh9tz9mgrZxSsX4Qba/v5IiM7hD4/IZCi83qCru1DPYBmd37LvUPWRB3m9tApxlDE+gspBFrqIc2u4524lLkWzu/gvsJam/VUDnrdmiJZblJi/XM+6FEo32o/aEiXi6l/cxDAu2kHJIO4MblSXvMu4hl69XTG/q9vc3rtkfVrzTtHJt2LWFNsHzN0odUH4FYmQz0bcqjBc6gI0elnM2gD+7EpxyAMNNBnAZ/oV7ktpfpmbc0/W7kw0t9f4kiYYR3ebO/efmuuIlFC1nJs2ouXVvuzP1GcMkq6lExpD4Fqulf1RXmDHcruj3Cr5a4="
   # DockerHub password for cloudstatebot
   - secure: "3YFGW7bUil+CFQSbgjCSMnFezWIGFdv6/eaNlKKhaxOueDoLmVrLqNhCXkS2Nz3f4tvPFzDN9VH3RyzEIG1u53nQvMw7vceV5szj4oyM4pGZ3TnugtEQFfRHJsUFAWFuRTr9etukBlxCo8HHT3FvcM5uKYQAmBt23wO/NuF8hFXDYQ6c6WHTvP6gzLP5lG70fVJ3ViA1QZEfOaEnOJNqknFtmGj8j0pQTE8oxXTSz61KDBzN3C9PtupDo2Xj0dtpurSZnGRt4BJYoBJkgBiQQJ0W/p5YWGHewdyV12/GgafhkyrPkSx02iOsq3yJrnX238xP/2QQCpMTtZ1lVMQsdXYmpX40hCoEXdxG1qlhH4ISNtXmck1J1VMRVg+sg8+PyFlRZObKcHtIWeGYOu8+T34zn0t+7VPswq0UY2xtPhetk9csNNtGQ7vTKKNFcFUdrROSEV/wmV/eudue473j5YZDDGEm43a04P81FsHVWxV9+uwuCiofMz3E1TcZJkySHYt3XnFhWGtdbJMHOkaYsrW++UA1wjWgn/EPcwNWpxiKJVoQmw3WYb0PH7ZXWaeQ/hqGpT+lhQzrNlP18us72c6kx7KW4aHgpWHEqsjceuSkoaAbCvxQxGbJqwDRyzOKdqTiVpapvd/wXAdatzcf1O+0n3C2lzLUbTpSkRx+s/8="
 services:
@@ -21,16 +21,16 @@ jobs:
   - stage: Unit tests
     name: npm tests
     before_script:
-    - cd node-support && npm install && cd -
-    - cd samples/js-shopping-cart && npm install && cd -
+    - cd node-support && nvm install && nvm use && npm install && cd -
+    - cd samples/js-shopping-cart && nvm install && nvm use && npm install && cd -
     script:
     - cd node-support && npm test && cd -
     - cd samples/js-shopping-cart && npm test && cd -
   
   - name: sbt tests
     before_script:
-      - cd node-support && npm install && cd -
-      - cd samples/js-shopping-cart && npm install && cd -
+      - cd node-support && nvm install && nvm use && npm install && cd -
+      - cd samples/js-shopping-cart && nvm install && nvm use && npm install && cd -
       - sbt update
       - docker pull google/cloud-sdk:latest
       - docker run --rm --expose=8085 --volume=/data -m 140MB --name=googlepubsub -d -p 8085:8085 google/cloud-sdk:latest /bin/sh -c "gcloud beta emulators pubsub start --project=test --host-port=0.0.0.0:8085 --data-dir=/data"
@@ -41,8 +41,8 @@ jobs:
   
   - name: docs tests
     before_script:
-    - cd node-support && npm install && cd -
-    - cd docs/src/test/js && npm install && cd -
+    - cd node-support && nvm install && nvm use && npm install && cd -
+    - cd docs/src/test/js && nvm install && nvm use && npm install && cd -
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' docs/paradox docs/test
     - cd docs/src/test/js && npm test && cd -
@@ -51,8 +51,8 @@ jobs:
     name: TCK
     before_script:
     - sbt update
-    - cd node-support && npm install && cd -
-    - cd samples/js-shopping-cart && npm install && cd -
+    - cd node-support && nvm install && nvm use && npm install && cd -
+    - cd samples/js-shopping-cart && nvm install && nvm use && npm install && cd -
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
   
@@ -65,35 +65,29 @@ jobs:
 
   - stage: Deploy
     name: Deploy documentation to cloudstate.io
+    if: tag =~ ^v
+    before_script: cd node-support && nvm install && nvm use && npm install && cd -
+    script: sbt docs/deploy
+
+  - stage: Deploy
+    name: Deploy snapshot documentation to cloudstate.io
     if: branch = master AND type = push
-    before_script: cd node-support && npm install && cd -
-    script: sbt docs/paradox
-    deploy:
-      provider: pages
-      github_token: "$GITHUB_TOKEN"
-      local_dir: docs/target/paradox/site/main
-      repo: cloudstateio/docs
-      target_branch: master
-      skip_cleanup: true
-      keep_history: true
-      email: deploy@cloudstate.io
-      name: Cloudstate Deployment Bot
-      on:
-        branch: master
+    before_script: cd node-support && nvm install && nvm use && npm install && cd -
+    script: sbt docs/deploy
   
   - stage: Deploy
     name: Publish release
     if: tag =~ ^v
     script:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
-    - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish
+    - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish tck/docker:publish
   
   - stage: Deploy
     name: Publish latest builds
     if: branch = master AND type = push
     script:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
-    - sbt -Duse.native.builds=false -Ddocker.tag=latest "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish
+    - sbt -Duse.native.builds=false -Ddocker.tag=latest "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish tck/docker:publish
 
 cache:
   directories:

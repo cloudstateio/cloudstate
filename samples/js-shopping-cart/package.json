@@ -7,6 +7,10 @@
     "cloudstate",
     "event-sourcing"
   ],
+  "engineStrict": true,
+  "engines": {
+    "node": "~12"
+  },
   "homepage": "https://github.com/cloudstateio/cloudstate",
   "bugs": {
     "url": "https://github.com/cloudstateio/cloudstate/issues"

@@ -1,30 +1,25 @@
 package io.cloudstate.graaltools
 
 import com.oracle.svm.core.annotate.AutomaticFeature
-import org.graalvm.nativeimage.hosted.Feature.QueryReachabilityAccess
 import org.graalvm.nativeimage.hosted.{Feature, RuntimeReflection}
-
-import scala.collection.JavaConverters._
-import java.util.concurrent.ConcurrentHashMap
 
 @AutomaticFeature
 final class AkkaActorRegisterFeature extends Feature {
-  private[this] final val cache = {
-    val c = ConcurrentHashMap.newKeySet[String]
+  private[this] final val ignoreClass = Set(
     // FIXME the following are configured in akka-graal-config, remove this when migrating from it
-    c.add("akka.io.TcpConnection")
-    c.add("akka.io.TcpListener")
-    c.add("akka.stream.impl.fusing.ActorGraphInterpreter")
-    c
-  }
+    "akka.io.TcpConnection",
+    "akka.io.TcpListener",
+    "akka.stream.impl.fusing.ActorGraphInterpreter"
+  )
 
-  override final def duringAnalysis(access: Feature.DuringAnalysisAccess): Unit = {
+  override final def beforeAnalysis(access: Feature.BeforeAnalysisAccess): Unit = {
     val akkaActorClass =
       access.findClassByName(classOf[akka.actor.Actor].getName) // We do this to get compile-time safety of the classes, and allow graalvm to resolve their names
-    if (akkaActorClass != null && access.isReachable(akkaActorClass)) {
+
+    def register(subtype: Class[_]) =
       for {
-        subtype <- access.reachableSubtypes(akkaActorClass).iterator.asScala
-        if subtype != null && !subtype.isInterface && cache.add(subtype.getName)
+        subtype <- Option(subtype)
+        if !subtype.isInterface && !ignoreClass(subtype.getName)
         _ = println("Automatically registering actor class for reflection purposes: " + subtype.getName)
         _ = RuntimeReflection.register(subtype)
         _ = RuntimeReflection.register(subtype.getDeclaredConstructors: _*)
@@ -34,7 +29,8 @@ final class AkkaActorRegisterFeature extends Feature {
       } {
         RuntimeReflection.register( /* finalIsWritable = */ true, context, self)
       }
-    }
+
+    access.registerSubtypeReachabilityHandler((_, subtype) => register(subtype), akkaActorClass)
   }
 
   private[this] final def getDeclaredField(cls: Class[_], name: String) =

@@ -12,7 +12,7 @@ This is achieved by having a gRPC based protocol between the Proxy and the User 
 
 ## Creating language support libraries
 
-In order to implement a [Support Library](https://cloudstate.io/docs/user/features/index.html#support-library) for a language, the Cloudstate protocol needs to be implemented as a gRPC server which is started when a Stateful Service is started. This gRPC server will then relay state and commands to the underlying User function.
+In order to implement a @ref:[Support Library](../../user/features/index.md#support-library) for a language, the Cloudstate protocol needs to be implemented as a gRPC server which is started when a Stateful Service is started. This gRPC server will then relay state and commands to the underlying User function.
 
 To obtain the necessary Cloudstate Protobuf descriptors that need to be implemented, your build can be set up to fetch the following compressed archives and extract the contents. The archives are available from version `v0.6.0` and forwards.
 
@@ -62,10 +62,10 @@ It is also possible to take a look at the various protobuf messages available in
     ```
     @@@
     
-- `protocol` is the protocol between the [proxy](https://cloudstate.io/docs/user/features/index.html#proxy) and what we call a [Language Support](https://cloudstate.io/docs/user/features/index.html#support-library), i.e. a bridge library which speaks with the proxy and exposes a native API for some programming language.
-- `proxy` contains the protocols which the [proxy](https://cloudstate.io/docs/user/features/index.html#proxy) itself speaks with the outside world.
+- `protocol` is the protocol between the @ref:[proxy](../../user/features/index.md#proxy) and what we call a @ref:[Language Support](../../user/features/index.md#support-library), i.e. a bridge library which speaks with the proxy and exposes a native API for some programming language.
+- `proxy` contains the protocols which the @ref:[proxy](../../user/features/index.md#proxy) itself speaks with the outside world.
 
-When implementing a [Support Library](https://cloudstate.io/docs/user/features/index.html#support-library), the implementation can be verified using the TCK. In order to run the TCK, one must create an implementation of the Shopping Cart application using the newly created [Support Library](https://cloudstate.io/docs/user/features/index.html#support-library) which is to be verified.
+When implementing a @ref:[Support Library](../../user/features/index.md#support-library), the implementation can be verified using the TCK. In order to run the TCK, one must create an implementation of the Shopping Cart application using the newly created @ref:[Support Library](../../user/features/index.md#support-library) which is to be verified.
 
 After that, the TCK [application.conf](https://github.com/cloudstateio/cloudstate/blob/master/tck/src/it/resources/application.conf) needs to be modified with a new section to instruct what combination of Proxy implementation will be verified against which implementation of the Shopping Cart application.
 
