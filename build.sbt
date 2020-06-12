@@ -16,7 +16,6 @@ inThisBuild(
     organizationHomepage := Some(url("https://lightbend.com")),
     startYear := Some(2019),
     licenses += ("Apache-2.0", new URL("https://www.apache.org/licenses/LICENSE-2.0.txt")),
-    resolvers += "Akka Snapshots" at "https://repo.akka.io/snapshots/", // FIXME for akka-protobuf-v390
     homepage := Some(url("https://cloudstate.io")),
     scmInfo := Some(
         ScmInfo(
@@ -55,13 +54,13 @@ val GrpcJavaVersion = "1.29.0"
 // native-image
 val GrpcNettyShadedVersion = "1.28.1"
 val GraalAkkaVersion = "0.5.0"
-val AkkaVersion = "2.6.5"
+val AkkaVersion = "2.6.6"
 val AkkaHttpVersion = "10.1.12"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
-val ProtobufVersion = "3.9.0" // We use this version because it is the latest which works with native-image 20.0.0
+val ProtobufVersion = "3.11.4" // We use this version because it is the latest which works with native-image 20
 val GraalVersion = "20.1.0"
 val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debianslim-jre"
 val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
@@ -94,7 +93,6 @@ def common: Seq[Setting[_]] = Seq(
     ),
   // Akka gRPC overrides the default ScalaPB setting including the file base name, let's override it right back.
   akkaGrpcCodeGeneratorSettings := Seq(),
-  excludeDependencies += "com.typesafe.akka" %% "akka-protobuf-v3", // akka-protobuf-v3 shades protobuf-java 3.10.0 which is not compatible with native-image 20.0.0
   excludeFilter in headerResources := HiddenFileFilter || GlobFilter("reflection.proto"),
   javaOptions in Test ++= Seq("-Xms1G", "-XX:+CMSClassUnloadingEnabled", "-XX:+UseConcMarkSweepGC")
 )
@@ -418,7 +416,6 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         // Since we exclude Aeron, we also exclude its transitive Agrona dependency, so we need to manually add it HERE
         "org.agrona" % "agrona" % "0.9.29",
         akkaDependency("akka-remote"),
-        "com.typesafe.akka" %% "akka-protobuf-v390" % (AkkaVersion + "-proto390") excludeAll (excludeTheseDependencies: _*), // FIXME since akka-protobuf-v3 uses a shaded protobuf-java 3.10.0 which is not supported in native-image yet…
         // For Eventing support of Google Pubsub
         "com.google.api.grpc" % "grpc-google-cloud-pubsub-v1" % "0.12.0" % "protobuf", // ApacheV2
         "io.grpc" % "grpc-auth" % GrpcJavaVersion, // ApacheV2
@@ -832,7 +829,6 @@ lazy val `graal-tools` = (project in file("graal-tools"))
     libraryDependencies ++= List(
         "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided",
         // Adds configuration to let Graal Native Image (SubstrateVM) work
-        "com.typesafe.akka" %% "akka-protobuf-v390" % (AkkaVersion + "-proto390") excludeAll (excludeTheseDependencies: _*),
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion,
         "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion,
         "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion,

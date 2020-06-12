@@ -38,6 +38,7 @@
   "dependencies": {
     "@grpc/proto-loader": "^0.1.0",
     "google-protobuf": "^3.0.0",
+    "minimist": ">=0.2.1",
     "grpc": "^1.11.0",
     "debug": "^4.1.1",
     "unzipper": "^0.9.15",
