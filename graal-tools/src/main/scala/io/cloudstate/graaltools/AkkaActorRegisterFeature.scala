@@ -16,24 +16,15 @@ final class AkkaActorRegisterFeature extends Feature {
     val akkaActorClass =
       access.findClassByName(classOf[akka.actor.Actor].getName) // We do this to get compile-time safety of the classes, and allow graalvm to resolve their names
 
-    def register(subtype: Class[_]) =
-      for {
-        subtype <- Option(subtype)
-        if !subtype.isInterface && !ignoreClass(subtype.getName)
-        _ = println("Automatically registering actor class for reflection purposes: " + subtype.getName)
-        _ = RuntimeReflection.register(subtype)
-        _ = RuntimeReflection.register(subtype.getDeclaredConstructors: _*)
-        _ = RuntimeReflection.register(subtype.getDeclaredFields: _*)
-        if subtype.getInterfaces.exists(_ == akkaActorClass)
-        (context, self) <- getDeclaredField(subtype, "context") zip getDeclaredField(subtype, "self")
-      } {
-        RuntimeReflection.register( /* finalIsWritable = */ true, context, self)
-      }
-
-    access.registerSubtypeReachabilityHandler((_, subtype) => register(subtype), akkaActorClass)
+    access.registerSubtypeReachabilityHandler(
+      (_, subtype) =>
+        if (subtype != null && !subtype.isInterface && !ignoreClass(subtype.getName)) { // TODO investigate whether we should cache the one's we've already added or not?
+          println("Automatically registering actor class for reflection purposes: " + subtype.getName)
+          RuntimeReflection.register(subtype)
+          RuntimeReflection.register(subtype.getDeclaredConstructors: _*)
+          RuntimeReflection.register(subtype.getDeclaredFields: _*)
+        },
+      akkaActorClass
+    )
   }
-
-  private[this] final def getDeclaredField(cls: Class[_], name: String) =
-    try Option(cls.getDeclaredField(name))
-    catch { case _: NoSuchFieldException => None }
 }

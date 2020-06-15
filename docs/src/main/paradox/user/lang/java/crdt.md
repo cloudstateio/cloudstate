@@ -6,15 +6,15 @@ A CRDT can be created by annotating it with the @javadoc[`@CrdtEntity`](io.cloud
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/crdt/ShoppingCartEntity.java) { #entity-class }
 
-## Accessing and creating an entities CRDT
+## Accessing and creating an entity's CRDT
 
 Each CRDT entity manages one root CRDT. That CRDT will either be supplied to the entity by the proxy when it is started, or, if no CRDT exists for the entity when it is started, it can be created by the entity using a @javadoc[`CrdtFactory`](io.cloudstate.javasupport.crdt.CrdtFactory) extending context.
 
 There are multiple ways that a CRDT entity may access its CRDT. It may have the CRDT injected directly into its constructor or a command handler - the value can be wrapped in an `Optional` to distinguish between entities that have been created and CRDTs that have not yet been created. If not wrapped in `Optional`, the CRDT will be created automatically, according to its type. The CRDT can also be read from any @javadoc[`CrdtContext`](io.cloudstate.javasupport.crdt.CrdtContext) via the @javadoc[`state`](io.cloudstate.javasupport.crdt.CrdtContext#state-java.lang.Class-) method.
 
-An entities CRDT can be created from the entities constructor using the `CrdtFactory` methods on @javadoc[`CrdtCreationContext`](io.cloudstate.javasupport.crdt.CrdtCreationContext), or using the same methods in a command handler using the @javadoc[`CommandContext`](io.cloudstate.javasupport.crdt.CommandContext). Note that the CRDT may only be created once, and only if it hasn't been provided by the Cloudstate proxy already. Any attempt to create a CRDT when one already exists will throw an `IllegalStateException`.
+An entity's CRDT can be created from the entity's constructor using the `CrdtFactory` methods on @javadoc[`CrdtCreationContext`](io.cloudstate.javasupport.crdt.CrdtCreationContext), or using the same methods in a command handler using the @javadoc[`CommandContext`](io.cloudstate.javasupport.crdt.CommandContext). Note that the CRDT may only be created once, and only if it hasn't been provided by the CloudState proxy already. Any attempt to create a CRDT when one already exists will throw an `IllegalStateException`.
 
-For most use cases, simply injecting the CRDT directly into the constructor, and storing in a local field, will be the most convenient and straight forward method of using a CRDT. In our shopping cart example, we're going to use an @javadoc[`LWWRegisterMap`](io.cloudstate.javasupport.crdt.LWWRegisterMap), this shows how it may be injected:
+For most use cases, simply injecting the CRDT directly into the constructor, and storing in a local field, will be the most convenient and straightforward method of using a CRDT. In our shopping cart example, we're going to use an @javadoc[`LWWRegisterMap`](io.cloudstate.javasupport.crdt.LWWRegisterMap), this shows how it may be injected:
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/crdt/ShoppingCartEntity.java) { #creation }
 
@@ -26,7 +26,7 @@ Command handlers can be declared by annotating a method with @javadoc[`@CommandH
 
 By default, the name of the command that the method handles will be the name of the method with the first letter capitalized. So, a method called `getCart` will handle gRPC service call command named `GetCart`. This can be overridden by setting the `name` parameter on the `@CommandHandler` annotation.
 
-The command handler also can take the gRPC service call input type as a parameter, to receive the command message. This is optional, sometimes it's not needed, for example, our `GetCart` service call doesn't need any information from the message, since it's just returning the current state as is. Meanwhile, the `AddItem` service call does need information from the message, since it needs to know the product id, description and quantity to add to the cart.
+The command handler also can take the gRPC service call input type as a parameter, to receive the command message. This is optional, sometimes it's not needed. For example, our `GetCart` service call doesn't need any information from the message, since it's just returning the current state as is. Meanwhile, the `AddItem` service call does need information from the message, since it needs to know the product id, description and quantity to add to the cart.
 
 The return type of the command handler must be the output type for the gRPC service call, this will be sent as the reply.
 
@@ -36,7 +36,7 @@ The following shows the implementation of the `GetCart` command handler. This co
 
 ## Updating a CRDT
 
-Due to Cloudstates @ref[take in turns approach](../../features/crdts.md#approach-to-crdts-in-cloudstate), CRDTs may only be updated in command handlers and @ref[stream cancellation callbacks](#responding-to-stream-cancellation).
+Due to CloudState's @ref[take in turns approach](../../features/crdts.md#approach-to-crdts-in-cloudstate), CRDTs may only be updated in command handlers and @ref[stream cancellation callbacks](#responding-to-stream-cancellation).
 
 Here's a command handler for the `AddItem` command that adds the item to the shopping cart:
 
@@ -74,7 +74,7 @@ The `onChange` callback can end the stream by invoking @javadoc[`endStream`](io.
 
 ### Responding to stream cancellation
 
-A streamed command handler may also register an @javadoc[`onCancel`](io.cloudstate.javasupport.crdt.StreamedCommandContext#onCancel-java.util.function.Consumer-) callback to be notified when the stream is cancelled. The cancellation callback handler may update the CRDT. This is useful if the CRDT is being used to track connections, for example, when using @javadoc[`Vote`](io.cloudstate.javasupport.crdt.Vote) CRDTs to track a users online status.
+A streamed command handler may also register an @javadoc[`onCancel`](io.cloudstate.javasupport.crdt.StreamedCommandContext#onCancel-java.util.function.Consumer-) callback to be notified when the stream is cancelled. The cancellation callback handler may update the CRDT. This is useful if the CRDT is being used to track connections, for example, when using @javadoc[`Vote`](io.cloudstate.javasupport.crdt.Vote) CRDTs to track a user's online status.
 
 ## Types of CRDTs
 
@@ -86,7 +86,7 @@ The Cloudstate Java support library offers Java classes for each of the @ref[CRD
 
 ### Vote
 
-@javadoc[`Vote`](io.cloudstate.javasupport.crdt.Vote) is available for the Vote CRDT. The Vote CRDT allows updating the current nodes vote using the @javadoc[`vote`](io.cloudstate.javasupport.crdt.Vote#vote-boolean-) method, the current nodes vote can be queried using the @javadoc[`getSelfVote`](io.cloudstate.javasupport.crdt.Vote#getSelfVote--) method.
+@javadoc[`Vote`](io.cloudstate.javasupport.crdt.Vote) is available for the Vote CRDT. The Vote CRDT allows updating the current node's vote using the @javadoc[`vote`](io.cloudstate.javasupport.crdt.Vote#vote-boolean-) method, the current nodes vote can be queried using the @javadoc[`getSelfVote`](io.cloudstate.javasupport.crdt.Vote#getSelfVote--) method.
  
  For determining the result of a vote, @javadoc[`getVoters`](io.cloudstate.javasupport.crdt.Vote#getVoters--) and @javadoc[`getVotesFor`](io.cloudstate.javasupport.crdt.Vote#getVotesFor--) can be used to check the total number of nodes, and the number of nodes that have voted for the condition, respectively. In addition, convenience methods are provided for common vote decision approaches, @javadoc[`isAtLeastOne`](io.cloudstate.javasupport.crdt.Vote#isAtLeastOne--) returns true if there is at least one voter for the condition, @javadoc[`isMajority`](io.cloudstate.javasupport.crdt.Vote#isMajority--) returns true if the number of votes for is more than half the number of voters, and @javadoc[`isAll`](io.cloudstate.javasupport.crdt.Vote#isUnanimous--) returns true if the number of votes for equals the number of voters.
 
@@ -109,7 +109,7 @@ myValue.setSomeField("foo");
 myLwwRegister.set(myValue);
 ```
 
-In general, we recommend that these values be immutable, as this will prevent accidentally mutating without realising the update won't be applied. If using protobufs as values, this will be straight forward, since compiled protobuf classes are immutable.
+In general, we recommend that these values be immutable, as this will prevent accidentally mutating without realising the update won't be applied. If using protobufs as values, this will be straightforward, since compiled protobuf classes are immutable.
 @@@
 
 ### Sets and Maps
@@ -125,7 +125,7 @@ The Cloudstate proxy uses the serialized form of the values to track changes in 
 This is particularly relevant when using protobufs. The ordering of map entries in a serialized protobuf is undefined, and very often will be different for two equal maps. Hence, maps should never be used as keys in `ORMap` or as values in `GSet`, `ORSet`.
 For the rest of the protobuf specification, while no guarantees are made on the stability by the protobuf specification itself, the Java libraries do produce stable orderings of fields and stable output of non-map values. Care should be taken when changing the protobuf structure. Many changes, that are backwards compatible from a protobuf standpoint, do not necessarily translate into stable serializations.
 
-If using JSON serialization, it is recommended that you explicitly define the field ordering using Jacksons `@JsonPropertyOrder` annotation. And as with protobufs, never use `Map` or `Set` in your JSON objects since the ordering of those is not stable.
+If using JSON serialization, it is recommended that you explicitly define the field ordering using Jackson's `@JsonPropertyOrder` annotation, and as with protobufs, never use `Map` or `Set` in your JSON objects since the ordering of those is not stable.
 @@@
 
 Some wrapper classes are also provided for ORMap. These provide more convenient APIs for working with values of particular CRDT types. They are:
