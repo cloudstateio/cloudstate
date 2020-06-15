@@ -74,7 +74,7 @@ private class EnsureTablesExistsActor(db: SlickDatabase) extends Actor with Acto
 
   import profile.api._
 
-  import context.dispatcher
+  implicit val ec = context.dispatcher
 
   private val journalCfg = new JournalTableConfiguration(context.system.settings.config.getConfig("jdbc-read-journal"))
   private val snapshotCfg = new SnapshotTableConfiguration(

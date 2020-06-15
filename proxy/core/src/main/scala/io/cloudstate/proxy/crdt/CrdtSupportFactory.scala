@@ -1,7 +1,7 @@
 package io.cloudstate.proxy.crdt
 
 import java.net.URLEncoder
-
+import java.nio.charset.StandardCharsets.UTF_8
 import akka.{Done, NotUsed}
 import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
 import akka.cluster.ddata.DistributedData
@@ -33,7 +33,12 @@ class CrdtSupportFactory(system: ActorSystem,
 
   private[this] final val crdtClient = CrdtClient(grpcClientSettings)
 
-  override def buildEntityTypeSupport(entity: Entity, serviceDescriptor: ServiceDescriptor): EntityTypeSupport = {
+  override def buildEntityTypeSupport(entity: Entity,
+                                      serviceDescriptor: ServiceDescriptor,
+                                      methodDescriptors: Map[String, EntityMethodDescriptor]): EntityTypeSupport = {
+
+    validate(serviceDescriptor, methodDescriptors)
+
     val crdtEntityConfig = CrdtEntity.Configuration(entity.serviceName,
                                                     entity.persistenceId,
                                                     config.passivationTimeout,
@@ -45,7 +50,7 @@ class CrdtSupportFactory(system: ActorSystem,
 
     val crdtEntityProps = CrdtEntity.props(crdtClient, crdtEntityConfig, discovery)
     val crdtEntityManager =
-      system.actorOf(CrdtEntityManager.props(crdtEntityProps), URLEncoder.encode(entity.serviceName, "utf-8"))
+      system.actorOf(CrdtEntityManager.props(crdtEntityProps), URLEncoder.encode(entity.serviceName, UTF_8.toString)) // toString is needed for Java 8 compatibility, as Charset method added post Java 8
 
     // Ensure the ddata replicator is started, to ensure state replication starts immediately, and also ensure the first
     // request to the first CRDT doesn't timeout
@@ -61,11 +66,21 @@ class CrdtSupportFactory(system: ActorSystem,
     new CrdtSupport(crdtEntityManager, config.proxyParallelism, config.relayTimeout)
   }
 
-  private def validate(serviceDescriptor: ServiceDescriptor): Unit = {
-    val streamedMethods = serviceDescriptor.getMethods.asScala.filter(m => m.toProto.getClientStreaming)
+  private def validate(serviceDescriptor: ServiceDescriptor,
+                       methodDescriptors: Map[String, EntityMethodDescriptor]): Unit = {
+    val streamedMethods = methodDescriptors.values.filter(m => m.method.toProto.getClientStreaming)
     if (streamedMethods.nonEmpty) {
+      val offendingMethods = streamedMethods.map(_.method.getName).mkString(",")
       throw EntityDiscoveryException(
-        s"CRDT entities do not support streaming in from the client, but ${serviceDescriptor.getFullName} has the following streamed methods: ${streamedMethods.map(_.getName).mkString(",")}"
+        s"CRDT entities do not support streaming in from the client, but ${serviceDescriptor.getFullName} has the following streamed methods: ${offendingMethods}"
+      )
+    }
+    val methodsWithoutKeys = methodDescriptors.values.filter(_.keyFieldsCount < 1)
+    if (methodsWithoutKeys.nonEmpty) {
+      val offendingMethods = methodsWithoutKeys.map(_.method.getName).mkString(",")
+      throw new EntityDiscoveryException(
+        s"CRDT entities do not support methods whose parameters do not have at least one field marked as entity_key, " +
+        "but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}"
       )
     }
   }
@@ -81,11 +96,11 @@ private class CrdtSupport(crdtEntity: ActorRef, parallelism: Int, private implic
         .mapAsync(parallelism)(command => (crdtEntity ? command).mapTo[Source[UserFunctionReply, NotUsed]])
         .flatMapConcat(identity)
     } else {
-      Flow[EntityCommand].mapAsync(parallelism)(command => (crdtEntity ? command).mapTo[UserFunctionReply])
+      Flow[EntityCommand].mapAsync(parallelism)(handleUnary)
     }
 
   override def handleUnary(command: EntityCommand): Future[UserFunctionReply] =
     (crdtEntity ? command).mapTo[UserFunctionReply]
 }
 
-case class StreamedCrdtCommand(command: EntityCommand)
+final case class StreamedCrdtCommand(command: EntityCommand)

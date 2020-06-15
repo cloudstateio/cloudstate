@@ -1,10 +1,10 @@
 # Event sourcing
 
-This page documents how to implement CloudState event sourced entities in JavaScript. For information on what CloudState event sourced entities are, please read the general @ref[Event sourcing](../../features/eventsourced.md) documentation first.
+This page documents how to implement Cloudstate event sourced entities in JavaScript. For information on what Cloudstate event sourced entities are, please read the general @ref[Event sourcing](../../features/eventsourced.md) documentation first.
 
 ## Persistence types and serialization
 
-Event sourced entities persist events and snapshots, and these need to be serialized when persisted. A snapshot is the current state of the entity, and so the entities state must be serializable. The most straight forward way to persist events and the state is to use protobufs. CloudState will automatically detect if an emitted event or snapshot is a protobuf, and serialize it as such. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
+Event sourced entities persist events and snapshots, and these need to be serialized when persisted. A snapshot is the current state of the entity, and so the entities state must be serializable. The most straight forward way to persist events and the state is to use protobufs. Cloudstate will automatically detect if an emitted event or snapshot is a protobuf, and serialize it as such using `protobufjs`. See [https://www.npmjs.com/package/protobufjs](https://www.npmjs.com/package/protobufjs) for more information on `protobufjs`. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
 
 While protobufs are the recommended format for persisting events, it is recommended that you do not persist your services protobuf messages, rather, you should create new messages, even if they are identical to the services. While this may introduce some overhead in needing to convert from one type to the other, the reason for doing this is that it will allow the services public interface to evolve independently from its data storage format, which should be private.
 
@@ -20,7 +20,7 @@ An event sourced entity can be created using the @extref:[EventSourced](jsdoc:Ev
 
 @@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #entity-class }
 
-Here we pass in the protobuf files that contain our service and our domain protocol, `shoppingcart.proto` and `domain.proto`. CloudState needs the protobuf file that your service lives in so that it can load it and read it. It also needs the protobuf file that your domain events and snapshots are in so that when it receives these events and snapshots from the proxy, and can know how to deserialize them.
+Here we pass in the protobuf files that contain our service and our domain protocol, `shoppingcart.proto` and `domain.proto`. Cloudstate needs the protobuf file that your service lives in so that it can load it and read it. It also needs the protobuf file that your domain events and snapshots are in so that when it receives these events and snapshots from the proxy, and can know how to deserialize them.
 
 We also pass in the fully qualified name of the service our event sourced entity implements, `example.shoppingcart.ShoppingCartService`. We also are specifying some options.
 
@@ -30,7 +30,7 @@ The `snapshotEvery` parameter controls how often snapshots are taken, so that th
 
 ## Using protobuf types
 
-When you pass an event or snapshot to CloudState to persist, it needs to know how to serialize that. Simply passing a regular object does not provide enough information to know how protobuf should serialize the objects. Hence, any event or snapshot types that you want to use, you have to lookup the protobuf type for, and then use the `create` method to create it.
+When you pass an event or snapshot to Cloudstate to persist, it needs to know how to serialize that. Simply passing a regular object does not provide enough information to know how protobuf should serialize the objects. Hence, any event or snapshot types that you want to use, you have to lookup the protobuf type for, and then use the `create` method to create it.
 
 The `EventSourced` class provides a helper method called @extref:[`lookupType`](jsdoc:EventSourced.html#lookupType) to facilitate this. So before implementing anything, we'll look up these types so we can use them later.
 
@@ -56,7 +56,7 @@ A @extref:[command handler](jsdoc:EventSourced.html#~commandHandler) is a functi
 
 The command is the input message type for the gRPC service call. For example, the `GetCart` service call has an input type of `GetShoppingCart`, while the `AddItem` service call has an input type of `AddLineItem`. The command will be an object that matches the structure of these protobuf types.
 
-The command handler must return a message of the same type as the output type of the gRPC service call, in the case of our `GetCart` command, this must be a `Cart` message. Note that unlike for the state and events, this message does not need to be created using a looked up protobuf message type - CloudState already knows the output type of the gRPC service call and so can infer it itself. It only has to be a plain JavaScript object that matches the structure of the protobuf type.
+The command handler must return a message of the same type as the output type of the gRPC service call, in the case of our `GetCart` command, this must be a `Cart` message. Note that unlike for the state and events, this message does not need to be created using a looked up protobuf message type - Cloudstate already knows the output type of the gRPC service call and so can infer it itself. It only has to be a plain JavaScript object that matches the structure of the protobuf type.
 
 The following shows the implementation of the `GetCart` command handler. This command handler is a read-only command handler, it doesn't emit any events, it just returns some state:
 
@@ -104,7 +104,7 @@ The event handlers are a mapping of event names to the event handler functions t
 
 #### Multiple behaviors
 
-In the examples above, our shopping cart entity only has one behavior. An entity may have different states, where command and event handling may differ according to the state it is currently in. While this could be implemented using if statements in the handlers, CloudState also provides multiple behavior support, so that an entity can change its behavior. This multiple behavior support allows implementing entities as finite state machines.
+In the examples above, our shopping cart entity only has one behavior. An entity may have different states, where command and event handling may differ according to the state it is currently in. While this could be implemented using if statements in the handlers, Cloudstate also provides multiple behavior support, so that an entity can change its behavior. This multiple behavior support allows implementing entities as finite state machines.
 
 The entities behavior can be changed by returning different sets of handlers from the `behavior` callback after inspecting the state. This callback is invoked each time a handler is needed, so there's no need to explicitly transition behaviors.
 
@@ -118,6 +118,6 @@ If you only have a single entity, as a convenience, you can start it directly, b
 
 @@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #start }
 
-Alternatively, you can add it to the `CloudState` server explicitly:
+Alternatively, you can add it to the `Cloudstate` server explicitly:
 
 @@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #add-entity }

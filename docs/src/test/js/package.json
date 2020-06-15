@@ -4,6 +4,10 @@
   "description": "Code samples for the CloudState documentation",
   "homepage": "https://cloudstate.io",
   "license": "Apache-2.0",
+  "engineStrict": true,
+  "engines": {
+    "node": "~12"
+  },
   "//": "https://npm.community/t/npm-install-does-not-install-transitive-dependencies-of-local-dependency/2264",
   "dependencies": {
     "@grpc/proto-loader": "^0.1.0",

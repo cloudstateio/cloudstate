@@ -25,11 +25,14 @@ import io.cloudstate.javasupport.{BuildInfo, StatefulService}
 
 class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, StatefulService]) extends EntityDiscovery {
 
+  private def configuredOrElse(key: String, default: String): String =
+    if (system.settings.config.hasPath(key)) system.settings.config.getString(key) else default
+
   private val serviceInfo = ServiceInfo(
-    serviceRuntime = sys.props.getOrElse("java.runtime.name", "") + " " + sys.props.getOrElse("java.runtime.version",
-                                                                                              ""),
-    supportLibraryName = BuildInfo.name,
-    supportLibraryVersion = BuildInfo.version
+    serviceRuntime = sys.props.getOrElse("java.runtime.name", "")
+      + " " + sys.props.getOrElse("java.runtime.version", ""),
+    supportLibraryName = configuredOrElse("cloudstate.library.name", BuildInfo.name),
+    supportLibraryVersion = configuredOrElse("cloudstate.library.version", BuildInfo.version)
   )
 
   /**

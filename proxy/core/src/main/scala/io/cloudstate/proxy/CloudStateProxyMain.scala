@@ -20,14 +20,14 @@ import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.atomic.AtomicLong
 
 import com.typesafe.config.Config
-import akka.actor.{ActorSelection, ActorSystem, Props}
+import akka.actor.{ActorSelection, ActorSystem}
 import akka.pattern.ask
 import akka.util.Timeout
 import akka.cluster.Cluster
 import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
 import akka.pattern.{BackoffOpts, BackoffSupervisor}
-import akka.stream.ActorMaterializer
+import akka.stream.SystemMaterializer
 import org.slf4j.LoggerFactory
 import sun.misc.Signal
 
@@ -124,17 +124,23 @@ object CloudStateProxyMain {
     field.get(null).asInstanceOf[AtomicLong].set(seed)
   }
 
-  def main(args: Array[String]): Unit =
+  final def main(args: Array[String]): Unit =
     start()
 
-  def start(): ActorSystem = {
+  final def start(): ActorSystem =
+    start(None)
+
+  final def start(config: Config): ActorSystem =
+    start(Option(config))
+
+  private def start(configuration: Option[Config]): ActorSystem = {
     // Must do this first, before anything uses ThreadLocalRandom
     if (isGraalVM) {
       initializeThreadLocalRandom()
     }
 
-    implicit val system = ActorSystem("cloudstate-proxy")
-    implicit val materializer = ActorMaterializer()
+    implicit val system = configuration.fold(ActorSystem("cloudstate-proxy"))(c => ActorSystem("cloudstate-proxy", c))
+    implicit val materializer = SystemMaterializer(system)
     import system.dispatcher
 
     val c = system.settings.config.getConfig("cloudstate.proxy")
@@ -149,7 +155,7 @@ object CloudStateProxyMain {
       // hooks don't get executed (so no graceful leaving of the cluster). Worse, if the process
       // is the entrypoint for a Docker container (ie, it has pid 1) then it won't respond to TERM
       // at all, because Linux does not implement the default TERM handling if pid is 1, the result
-      // being that the process will be killed after the configured termination timeout. So, we we
+      // being that the process will be killed after the configured termination timeout. So, we
       // need to register a TERM signal handler.
       Signal.handle(new Signal("TERM"), _ => System.exit(0))
 

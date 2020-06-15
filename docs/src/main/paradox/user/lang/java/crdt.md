@@ -1,6 +1,6 @@
 # Conflict-free Replicated Data Types
 
-This page documents how to implement CloudState CRDT entities in Java. For information on what CloudState CRDT entities are, please read the general @ref[Conflict-free Replicated Data Type](../../features/crdts.md) documentation first.
+This page documents how to implement Cloudstate CRDT entities in Java. For information on what Cloudstate CRDT entities are, please read the general @ref[Conflict-free Replicated Data Type](../../features/crdts.md) documentation first.
 
 A CRDT can be created by annotating it with the @javadoc[`@CrdtEntity`](io.cloudstate.javasupport.crdt.CrdtEntity) annotation.
 
@@ -78,7 +78,7 @@ A streamed command handler may also register an @javadoc[`onCancel`](io.cloudsta
 
 ## Types of CRDTs
 
-The CloudState Java support library offers Java classes for each of the @ref[CRDTs available in CloudState](../../features/crdts.md#crdts-available-in-cloudstate).
+The Cloudstate Java support library offers Java classes for each of the @ref[CRDTs available in Cloudstate](../../features/crdts.md#crdts-available-in-cloudstate).
 
 ### Counters and flags
 
@@ -114,14 +114,16 @@ In general, we recommend that these values be immutable, as this will prevent ac
 
 ### Sets and Maps
 
-CloudState Java support provides @javadoc[`GSet`](io.cloudstate.javasupport.crdt.GSet) and @javadoc[`ORSet`](io.cloudstate.javasupport.crdt.ORSet) that implement the `java.util.Set` interface, and @javadoc[`ORMap`](io.cloudstate.javasupport.crdt.ORMap) that implements the `java.util.Map`. However, not all operations are implemented - `GSet` doesn't support any removal operations, and `ORMap` does not support any operations that would replace an existing value in the map.
+Cloudstate Java support provides @javadoc[`GSet`](io.cloudstate.javasupport.crdt.GSet) and @javadoc[`ORSet`](io.cloudstate.javasupport.crdt.ORSet) that implement the `java.util.Set` interface, and @javadoc[`ORMap`](io.cloudstate.javasupport.crdt.ORMap) that implements the `java.util.Map`. However, not all operations are implemented - `GSet` doesn't support any removal operations, and `ORMap` does not support any operations that would replace an existing value in the map.
 
 To insert a value into an `ORMap`, you should use the @javadoc[`getOrCreate`](io.cloudstate.javasupport.crdt.ORMap#getOrCreate-K-java.util.function.Function-) method. The passed in callback will give you a @javadoc[`CrdtFactory`](io.cloudstate.javasupport.crdt.CrdtFactory) that you can use to create the CRDT value that you wish to use.
 
 @@@ note { title=Important }
-As with all maps and sets, the values used for map keys and set elements must be immutable, otherwise the elements will be lost, plus in CloudState, any changes made to them will not be replicated to other nodes. Furthermore, their serialized form must be stable. The CloudState proxy uses the serialized form of the values when it's tracking changes, so if the same value serializes to two different sets of bytes on different occasions, they will be treated as different elements in the set or map.
+With all maps and sets, map keys and set values must be immutable. Cloudstate ignores the individual mutation of the key or value (not replicated to other nodes). Furthermore, their serialized form must be stable.
+The Cloudstate proxy uses the serialized form of the values to track changes in the set or map. If the same value serializes to two different sets of bytes on different occasions, they will be treated as different elements in the set or map.
 
-This is particularly relevant when using protobufs. The ordering of map entries in a serialized protobuf is undefined, and very often will be different for two equal maps, hence, maps should never be used in `ORMap` keys or `GSet` or `ORSet` values. For the rest of the protobuf specification, while no guarantees are made on the stability of it by the protobuf specification itself, the Java libraries do produce stable orderings of fields and stable output of non map values. Care though needs to be taken when changing the protobuf structure, many changes that are backwards compatible from a protobuf standpoint do not produce serializations that are stable across the changes.
+This is particularly relevant when using protobufs. The ordering of map entries in a serialized protobuf is undefined, and very often will be different for two equal maps. Hence, maps should never be used as keys in `ORMap` or as values in `GSet`, `ORSet`.
+For the rest of the protobuf specification, while no guarantees are made on the stability by the protobuf specification itself, the Java libraries do produce stable orderings of fields and stable output of non-map values. Care should be taken when changing the protobuf structure. Many changes, that are backwards compatible from a protobuf standpoint, do not necessarily translate into stable serializations.
 
 If using JSON serialization, it is recommended that you explicitly define the field ordering using Jackson's `@JsonPropertyOrder` annotation, and as with protobufs, never use `Map` or `Set` in your JSON objects since the ordering of those is not stable.
 @@@
@@ -136,6 +138,7 @@ Some wrapper classes are also provided for ORMap. These provide more convenient 
 
 ## Registering the entity
 
-Once you've created your entity, you can register it with the @javadoc[`CloudState`](io.cloudstate.javasupport.CloudState) server, by invoking the @javadoc[`registerCrdtEntity`](io.cloudstate.javasupport.CloudState#registerCrdtEntity-java.lang.Class-com.google.protobuf.Descriptors.ServiceDescriptor-com.google.protobuf.Descriptors.FileDescriptor...-) method. In addition to passing your entity class and service descriptor, if you use protobufs for serialization and the protobufs are not declared in or depended on by the file of your service descriptor, then you'll need to pass those descriptors there too.
+Once you've created your entity, you can register it with the @javadoc[`CloudState`](io.cloudstate.javasupport.CloudState) server, by invoking the @javadoc[`registerCrdtEntity`](io.cloudstate.javasupport.CloudState#registerCrdtEntity-java.lang.Class-com.google.protobuf.Descriptors.ServiceDescriptor-com.google.protobuf.Descriptors.FileDescriptor...-) method.
+In addition to passing your entity class and service descriptor, if you use protobuf for serialization and any protobuf message definitions are missing from your service descriptor (they are not declared directly in the file, nor as dependencies), then you'll need to pass those protobuf descriptors as well.
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/crdt/ShoppingCartEntity.java) { #register }

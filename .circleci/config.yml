@@ -1,0 +1,49 @@
+version: 2.1
+# CircleCi Build Config for CloudState
+commands:
+  setup_sbt:
+    description: "Set up SBT"
+    parameters:
+      version:
+        type: string
+        default: "1.3.3"
+    steps:
+      - run:
+          name: Install SBT
+          command: |
+            curl -L -o sbt-<< parameters.version >>.deb https://dl.bintray.com/sbt/debian/sbt-<< parameters.version >>.deb
+            sudo dpkg -i sbt-<< parameters.version >>.deb
+            rm sbt-<< parameters.version >>.deb
+
+  save_sbt_cache:
+    description: "Save SBT cache"
+    steps:
+      - save_cache:
+          key: sbt-cache-23
+          paths:
+            - "~/.ivy2/cache"
+            - "~/.sbt"
+            - "~/.coursier"
+
+jobs:
+  native-image-it-test:
+    machine: true
+    resource_class: xlarge
+    description: "native image tck tests"
+    steps:
+      - checkout
+      - setup_sbt
+      - run: |
+          sbt -Dconfig.resource=native-image.conf \
+              'set concurrentRestrictions in Global += Tags.limitAll(1)' \
+              'set scalafmtOnCompile := false' \
+              'dockerBuildNativeDevMode publishLocal' \
+              tck/it:test
+      - save_sbt_cache
+
+
+workflows:
+  version: 2
+  native-image-tests:
+    jobs:
+      - native-image-it-test

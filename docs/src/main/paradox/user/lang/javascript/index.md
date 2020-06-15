@@ -1,6 +1,6 @@
 # JavaScript
 
-CloudState offers a straight forward JavaScript API for implements stateful service entities.
+Cloudstate offers a straight forward JavaScript API for implements stateful service entities.
 
 @@toc { depth=1 }
 

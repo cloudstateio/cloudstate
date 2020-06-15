@@ -30,35 +30,25 @@ import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.google.protobuf.empty.Empty
 import io.cloudstate.protocol.entity.{EntityDiscovery, EntityDiscoveryClient, EntitySpec, ProxyInfo, UserFunctionError}
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
+import io.cloudstate.proxy.PathTemplateParser.PathTemplateParseException
 import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
 
 import scala.concurrent.Future
 
 class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
-  implicit val timeout = Timeout(10.seconds)
-  import akka.pattern.ask
-
-  private val mockEntityDiscovery = new EntityDiscovery {
-    override def discover(in: ProxyInfo): Future[EntitySpec] = ???
-    override def reportError(in: UserFunctionError): Future[Empty] = ???
-  }
 
   def assertConfigurationFailure(d: FileDescriptor, n: String, msg: String): Assertion =
     intercept[ConfigurationException] {
       val service = d.findServiceByName(n)
       service must not be (null)
-      val probe = TestProbe().ref
-      val entity = ServableEntity(
-        service.getFullName,
-        service,
-        new UserFunctionTypeSupport {
-          override def handler(command: String): Flow[UserFunctionCommand, UserFunctionReply, NotUsed] =
-            Flow[UserFunctionCommand].mapAsync(1)(handleUnary)
-          override def handleUnary(command: UserFunctionCommand): Future[UserFunctionReply] =
-            (probe ? command).mapTo[UserFunctionReply]
-        }
-      )
-      HttpApi.serve(new UserFunctionRouter(Seq(entity), mockEntityDiscovery), Seq(entity), mockEntityDiscovery)
+      HttpApi.serve(List(service -> PartialFunction.empty))
+    }.getMessage must equal(msg)
+
+  def assertPathTemplateParseFailure(d: FileDescriptor, n: String, msg: String): Assertion =
+    intercept[PathTemplateParseException] {
+      val service = d.findServiceByName(n)
+      service must not be (null)
+      HttpApi.serve(List(service -> PartialFunction.empty))
     }.getMessage must equal(msg)
 
   "HTTP API" must {
@@ -66,7 +56,7 @@ class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
       assertConfigurationFailure(
         IllegalHttpConfig0.IllegalHttpConfig0Proto.javaDescriptor,
         "IllegalHttpConfig0",
-        "HTTP API Config: Pattern missing for rule [HttpRule(,,,Vector(),Empty)]!"
+        "HTTP API Config: Pattern missing for rule [HttpRule(,Empty,,,Vector(),UnknownFieldSet(Map()))]!"
       )
     }
 
@@ -79,10 +69,10 @@ class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
     }
 
     "not allow patterns which do not start with slash" in {
-      assertConfigurationFailure(
+      assertPathTemplateParseFailure(
         IllegalHttpConfig2.IllegalHttpConfig2Proto.javaDescriptor,
         "IllegalHttpConfig2",
-        "HTTP API Config: Configured pattern [no/initial/slash] does not start with slash"
+        "Template must start with a slash at character 1 of 'no/initial/slash'"
       )
     }
 
@@ -97,10 +87,10 @@ class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
     "not allow path extractors which refer to map fields" in pending
 
     "not allow path extractors to be duplicated in the same rule" in {
-      assertConfigurationFailure(
+      assertPathTemplateParseFailure(
         IllegalHttpConfig4.IllegalHttpConfig4Proto.javaDescriptor,
         "IllegalHttpConfig4",
-        "HTTP API Config: Path parameter [duplicated] occurs more than once"
+        "Duplicate path in template at character 16 of '/{duplicated}/{duplicated}'"
       )
     }
 
@@ -140,7 +130,7 @@ class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
       assertConfigurationFailure(
         IllegalHttpConfig9.IllegalHttpConfig9Proto.javaDescriptor,
         "IllegalHttpConfig9",
-        "HTTP API Config: Only one level of additionalBindings supported, but [HttpRule(,,,Vector(HttpRule(,,,Vector(HttpRule(,,,Vector(),Get(/baz))),Get(/bar))),Get(/foo))] has more than one!"
+        "HTTP API Config: Only one level of additionalBindings supported, but [HttpRule(,Get(/foo),,,Vector(HttpRule(,Get(/bar),,,Vector(HttpRule(,Get(/baz),,,Vector(),UnknownFieldSet(Map()))),UnknownFieldSet(Map()))),UnknownFieldSet(Map()))] has more than one!"
       )
     }
 

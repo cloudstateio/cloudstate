@@ -8,6 +8,12 @@ The Cloudstate Build uses `sbt` as its build tool.
 * Clone the Cloudstate repository using `git`: `git clone git@github.com:cloudstateio/cloudstate.git`
 * Install `sbt`, follow [these instructions](https://www.scala-sbt.org/download.html).
 
+To build Native Images, you'll need the GraalVM CE as your JRE and [`clang`](https://clang.llvm.org/) as your `cc`. The GraalVM CE provides the `native-image` command, which must be on the $PATH when building Native Images. See [GraalVM Integration](https://github.com/cloudstateio/cloudstate/blob/master/README.md#user-content-graalvm-integration) in the project README for further info.
+
+To build node.js related samples, you'll need `nvm` to install the corresponding node.js version by running command `nvm install` and `nvm use`, then run `npm install` to install required modules.
+
+To build the documentation using the `paradox` target, you'll need to use `npm` to install required modules from the `node-support` folder with `cd node-support && nvm install && nvm use && npm install && cd ..`
+
 ## Getting started
 
 It is possible to run `sbt` either on a command-by-command basis by running `sbt <command> parameters`. It is also possible to run `sbt` in interactive mode by running `sbt`, then you can interact with the build interactively by typing in commands and having them executed by pressing RETURN.

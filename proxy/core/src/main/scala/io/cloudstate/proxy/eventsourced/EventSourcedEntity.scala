@@ -122,6 +122,7 @@ object EventSourcedEntity {
 
   private final case class OutstandingCommand(
       commandId: Long,
+      actionId: String,
       replyTo: ActorRef
   )
 
@@ -154,7 +155,6 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
   private[this] final var stopped = false
   private[this] final var idCounter = 0L
   private[this] final var inited = false
-  private[this] final var currentActionId: String = null
   private[this] final var reportedDatabaseOperationStarted = false
   private[this] final var databaseOperationStartTime = 0L
   private[this] final var commandStartTime = 0L
@@ -166,8 +166,8 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
   reportDatabaseOperationStarted()
 
   override final def postStop(): Unit = {
-    if (currentActionId != null) {
-      log.warning("Stopped but we have a current action id {}", currentActionId)
+    if (currentCommand != null) {
+      log.warning("Stopped but we have a current action id {}", currentCommand.actionId)
       reportActionComplete()
     }
     if (reportedDatabaseOperationStarted) {
@@ -204,23 +204,21 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
     throw new Exception(msg)
   }
 
-  private[this] final def reportActionComplete() = {
-    concurrencyEnforcer ! ActionCompleted(currentActionId, System.nanoTime() - commandStartTime)
-    currentActionId = null
-  }
+  private[this] final def reportActionComplete() =
+    concurrencyEnforcer ! ActionCompleted(currentCommand.actionId, System.nanoTime() - commandStartTime)
 
   private[this] final def handleCommand(entityCommand: EntityCommand, sender: ActorRef): Unit = {
     idCounter += 1
-    currentActionId = actorId + ":" + entityId + ":" + idCounter
     val command = Command(
       entityId = entityId,
       id = idCounter,
       name = entityCommand.name,
       payload = entityCommand.payload
     )
-    currentCommand = EventSourcedEntity.OutstandingCommand(idCounter, sender)
+    currentCommand =
+      EventSourcedEntity.OutstandingCommand(idCounter, actorId + ":" + entityId + ":" + idCounter, sender)
     commandStartTime = System.nanoTime()
-    concurrencyEnforcer ! Action(currentActionId, () => {
+    concurrencyEnforcer ! Action(currentCommand.actionId, () => {
       relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Command(command))
     })
   }
@@ -244,7 +242,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
     case command: EntityCommand =>
       handleCommand(command, sender())
 
-    case EventSourcedStreamOut(m) =>
+    case EventSourcedStreamOut(m, _) =>
       import EventSourcedStreamOut.{Message => ESOMsg}
       m match {
 

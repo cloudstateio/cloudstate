@@ -29,23 +29,16 @@ The following additional fields are available to customize the service:
 `datastore`
 : Configures the datastore. This is discussed in detail in @ref[Stateful stores](stores/index.md). If not configured, no store will be used, and support for any entity types that require a store will not be available on the proxy.
 
-`autoscaling`
-: Configures autoscaling. This is discussed in detail in @ref[Autoscaling](autoscaling.md). This field is likely to change.
+`autoscaling`: Configures autoscaling. This is discussed in detail in @ref[Autoscaling](autoscaling.md). This field is likely to change.
 
-`serviceAccountName`
-: The name of the service account that the pod should run using. Defaults to the default service account.
+`serviceAccountName`: The name of the service account that the pod should run using. Defaults to the default service account.
 
-`volumes`
-: A list of [volumes to configure for pods](https://kubernetes.io/docs/concepts/storage/volumes/).
+`volumes`: A list of [volumes to configure for pods](https://kubernetes.io/docs/concepts/storage/volumes/).
 
-`sidecarResources`
-: Resource requirements to set for the sidecar. Uses the same structure as a container resources field. This field is likely to change.
+`sidecarResources`: Resource requirements to set for the sidecar. Uses the same structure as a container resources field. This field is likely to change.
 
-`sidecarJvmMemory`
-: Heap space to allocate for the sidecar, using the `-Xmx` option. This currently has [no effect for native images](https://github.com/cloudstateio/cloudstate/issues/112), and is likely to change.
+`sidecarJvmMemory`: Heap space to allocate for the sidecar, using the `-Xmx` option. This currently has [no effect for native images](https://github.com/cloudstateio/cloudstate/issues/112), and is likely to change.
 
-`nodeSelector`
-: Used to specify the [Pod nodeSelector](https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#nodeselector). This field is likely to change.
+`nodeSelector`: Used to specify the [Pod nodeSelector](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector). This field is likely to change.
 
-`tolerations`
-: Used to specify the [Pod tolerations](https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/). This field is likely to change.
+`tolerations`: Used to specify the [Pod tolerations](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/). This field is likely to change.

@@ -3,10 +3,11 @@ package io.cloudstate.proxy
 import akka.NotUsed
 import akka.stream.scaladsl.Flow
 import com.google.protobuf.Descriptors.{FieldDescriptor, MethodDescriptor, ServiceDescriptor}
-import com.google.protobuf.{ByteString, DynamicMessage, descriptor => ScalaPBDescriptorProtos}
+import com.google.protobuf.{ByteString, DynamicMessage}
 import io.cloudstate.protocol.entity.Entity
 import io.cloudstate.entity_key.EntityKeyProto
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionCommand, UserFunctionReply}
+import io.cloudstate.proxy.protobuf.Options
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
@@ -28,16 +29,21 @@ trait UserFunctionTypeSupportFactory {
  */
 abstract class EntityTypeSupportFactory extends UserFunctionTypeSupportFactory {
   override final def build(entity: Entity, serviceDescriptor: ServiceDescriptor): UserFunctionTypeSupport = {
-    val idExtractors = serviceDescriptor.getMethods.asScala
+    require(serviceDescriptor != null,
+            "ServiceDescriptor not found, please verify the spelling and package name provided when looking it up")
+
+    val methods = serviceDescriptor.getMethods.asScala
       .map(method => method.getName -> new EntityMethodDescriptor(method))
       .toMap
 
     new EntityUserFunctionTypeSupport(serviceDescriptor,
-                                      idExtractors,
-                                      buildEntityTypeSupport(entity, serviceDescriptor))
+                                      methods,
+                                      buildEntityTypeSupport(entity, serviceDescriptor, methods))
   }
 
-  protected def buildEntityTypeSupport(entity: Entity, serviceDescriptor: ServiceDescriptor): EntityTypeSupport
+  protected def buildEntityTypeSupport(entity: Entity,
+                                       serviceDescriptor: ServiceDescriptor,
+                                       methodDescriptors: Map[String, EntityMethodDescriptor]): EntityTypeSupport
 
 }
 
@@ -46,44 +52,25 @@ private object EntityMethodDescriptor {
 }
 
 final class EntityMethodDescriptor(val method: MethodDescriptor) {
-
-  /**
-   * ScalaPB doesn't do this conversion for us unfortunately.
-   * By doing it, we can use EntitykeyProto.entityKey.get() to read the entity key nicely.
-   */
-  private def convertFieldOptions(field: FieldDescriptor): ScalaPBDescriptorProtos.FieldOptions =
-    ScalaPBDescriptorProtos.FieldOptions
-      .fromJavaProto(field.toProto.getOptions)
-      .withUnknownFields(scalapb.UnknownFieldSet(field.getOptions.getUnknownFields.asMap.asScala.map {
-        case (idx, f) =>
-          idx.toInt -> scalapb.UnknownFieldSet.Field(
-            varint = f.getVarintList.asScala.map(_.toLong),
-            fixed64 = f.getFixed64List.asScala.map(_.toLong),
-            fixed32 = f.getFixed32List.asScala.map(_.toInt),
-            lengthDelimited = f.getLengthDelimitedList.asScala
-          )
-      }.toMap))
-
-  private val fields = method.getInputType.getFields.iterator.asScala
-    .filter(field => EntityKeyProto.entityKey.get(convertFieldOptions(field)))
+  private[this] val keyFields = method.getInputType.getFields.iterator.asScala
+    .filter(field => EntityKeyProto.entityKey.get(Options.convertFieldOptions(field)))
     .toArray
     .sortBy(_.getIndex)
 
-  if (fields.isEmpty) {
-    throw EntityDiscoveryException(
-      s"No field marked with [(cloudstate.entity_key) = true] found for in type ${method.getInputType.getName}, this is needed to associate commands sent to ${method.getFullName} with the entities that they are for."
-    )
-  }
+  def keyFieldsCount: Int = keyFields.length
 
-  def extractId(bytes: ByteString): String = {
-    val dm = DynamicMessage.parseFrom(method.getInputType, bytes)
-
-    fields.length match {
-      case 1 => dm.getField(fields.head).toString
-      case _ => fields.iterator.map(dm.getField).mkString(EntityMethodDescriptor.Separator)
+  def extractId(bytes: ByteString): String =
+    keyFields.length match {
+      case 0 =>
+        ""
+      case 1 =>
+        val dm = DynamicMessage.parseFrom(method.getInputType, bytes)
+        dm.getField(keyFields.head).toString
+      case _ =>
+        val dm = DynamicMessage.parseFrom(method.getInputType, bytes)
+        keyFields.iterator.map(dm.getField).mkString(EntityMethodDescriptor.Separator)
     }
 
-  }
 }
 
 private final class EntityUserFunctionTypeSupport(serviceDescriptor: ServiceDescriptor,

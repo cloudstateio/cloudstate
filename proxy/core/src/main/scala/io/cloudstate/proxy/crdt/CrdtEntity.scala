@@ -135,7 +135,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
   private[this] final var closingStreams = Set.empty[Long]
   private[this] final var stopping = false
 
-  import context.dispatcher
+  implicit val ec = context.dispatcher
 
   context.setReceiveTimeout(configuration.passivationTimeout.duration)
 
@@ -281,7 +281,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
     case StreamedCommandSourceMaterialized(commandId, command) =>
       handleCommand(commandId, command)
 
-    case CrdtStreamOut(CrdtStreamOut.Message.Reply(reply)) =>
+    case CrdtStreamOut(CrdtStreamOut.Message.Reply(reply), _) =>
       val userFunctionReply = UserFunctionReply(reply.clientAction, reply.sideEffects)
       outstanding.get(reply.commandId) match {
 
@@ -314,7 +314,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
           crash(s"Received reply for entity id $entityId for unknown command ${reply.commandId}")
       }
 
-    case CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(message)) =>
+    case CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(message), _) =>
       streamedCalls.get(message.commandId) match {
         case Some(actorRef) =>
           if (message.clientAction.isDefined || message.sideEffects.nonEmpty) {
@@ -334,7 +334,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
           )
       }
 
-    case CrdtStreamOut(CrdtStreamOut.Message.StreamCancelledResponse(response)) =>
+    case CrdtStreamOut(CrdtStreamOut.Message.StreamCancelledResponse(response), _) =>
       performAction(response.commandId,
                     response.stateAction.getOrElse(CrdtStateAction.defaultInstance),
                     UserFunctionReply(None, response.sideEffects),
@@ -369,7 +369,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
     case ModifyFailure(_, error, cause, Some(InitiatorReply(commandId, _, _))) =>
       failCommandAndCrash(commandId, "Error updating CRDT: " + error, Some(cause))
 
-    case CrdtStreamOut(CrdtStreamOut.Message.Failure(failure)) =>
+    case CrdtStreamOut(CrdtStreamOut.Message.Failure(failure), _) =>
       if (failure.commandId != 0) {
         failCommand(failure.commandId, failure.description)
       }
@@ -574,7 +574,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
     case Deleted(_) =>
     // Ignore, we know.
 
-    case EntityCommand(_, _, _, streamed) =>
+    case EntityCommand(_, _, _, streamed, _) =>
       val reply = UserFunctionReply(
         Some(ClientAction(ClientAction.Action.Failure(Failure(description = "Entity deleted"))))
       )
@@ -585,7 +585,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
         sender() ! reply
       }
 
-    case CrdtStreamOut(CrdtStreamOut.Message.Reply(reply)) =>
+    case CrdtStreamOut(CrdtStreamOut.Message.Reply(reply), _) =>
       val userFunctionReply = UserFunctionReply(
         sideEffects = reply.sideEffects,
         clientAction = reply.clientAction
@@ -595,7 +595,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
       // fail.
       sendReplyToInitiator(reply.commandId, userFunctionReply, true)
 
-    case CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(message)) =>
+    case CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(message), _) =>
       streamedCalls.get(message.commandId) match {
         case Some(actorRef) =>
           actorRef ! UserFunctionReply(message.clientAction, message.sideEffects)
@@ -607,7 +607,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
           )
       }
 
-    case CrdtStreamOut(CrdtStreamOut.Message.StreamCancelledResponse(response)) =>
+    case CrdtStreamOut(CrdtStreamOut.Message.StreamCancelledResponse(response), _) =>
       if (!closingStreams.contains(response.commandId)) {
         crash("Received stream cancelled response for stream that's not closing: " + response.commandId)
       } else {
@@ -632,7 +632,7 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
     case ModifyFailure(_, error, cause, Some(InitiatorReply(commandId, _, _))) =>
       failCommand(commandId, "Error Updating CRDT")
 
-    case CrdtStreamOut(CrdtStreamOut.Message.Failure(failure)) =>
+    case CrdtStreamOut(CrdtStreamOut.Message.Failure(failure), _) =>
       if (failure.commandId != 0) {
         failCommand(failure.commandId, failure.description)
       }

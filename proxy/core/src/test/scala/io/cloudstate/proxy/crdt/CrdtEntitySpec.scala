@@ -139,7 +139,7 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
       fromUserFunction ! CrdtStreamOut(
         CrdtStreamOut.Message.StreamCancelledResponse(
           CrdtStreamCancelledResponse(cid,
-                                      stateAction = Some(CrdtStateAction(CrdtWriteConsistency.LOCAL, updateCounter(3))))
+                                      stateAction = Some(CrdtStateAction(updateCounter(3), CrdtWriteConsistency.LOCAL)))
         )
       )
 

@@ -3,27 +3,27 @@
 ## Prerequisites
 
 Java version
-: CloudState Java support requires at least Java 8, though we recommend using Java 11, which has better support for running in containers. While it is possible to build a GraalVM native image for CloudState Java user functions, at this stage CloudState offers no specific assistance or configuration to aid in doing that.
+: Cloudstate Java support requires at least Java 8, though we recommend using Java 11, which has better support for running in containers. While it is possible to build a GraalVM native image for Cloudstate Java user functions, at this stage Cloudstate offers no specific assistance or configuration to aid in doing that.
 
 Build tool
-: CloudState does not require any particular build tool, you can select your own.
+: Cloudstate does not require any particular build tool, you can select your own.
 
 protoc
-: Since CloudState is based on gRPC, you need a protoc compiler to compile gRPC protobuf descriptors. While this can be done by downloading, installing and running protoc manually, most popular build tools have a protoc plugin which will automatically compile protobuf descriptors during your build for you.
+: Since Cloudstate is based on gRPC, you need a protoc compiler to compile gRPC protobuf descriptors. While this can be done by downloading, installing and running protoc manually, most popular build tools have a protoc plugin which will automatically compile protobuf descriptors during your build.
 
 docker
-: CloudState runs in Kubernetes with [Docker], hence you will need Docker to build a container that you can deploy to Kubernetes. Most popular build tools have plugins that assist in building Docker images.
+: Cloudstate runs in Kubernetes using Docker. Hence you will need Docker to build a container that you can deploy to Kubernetes. Most popular build tools have plugins that assist in building Docker images.
 
-In addition to the above, you will need to install the CloudState java support library, which can be done as follows:
+In addition to the above, you will need to install the Cloudstate java support library, which can be done as follows:
     
 Maven
 : @@@vars
 ```xml
-<depependency>
+<dependency>
   <groupId>io.cloudstate</groupId>
   <artifactId>cloudstate-java-support</artifactId>
   <version>$cloudstate.java-support.version$</version>
-</depependency>
+</dependency>
 ```
 @@@
   
@@ -152,7 +152,7 @@ Subsequent source locations and build commands will assume the above Maven proje
 
 ## Protobuf files
 
-The Xolstice Maven plugin assumes a location of `src/main/proto` for your protobuf files. In addition, it includes any protobuf files from your Java dependencies in the protoc include path, so there's nothing you need to do to pull in either the CloudState protobuf types, or any of the Google standard protobuf types, they are all automatically available for import.
+The Xolstice Maven plugin assumes a location of `src/main/proto` for your protobuf files. In addition, it includes any protobuf files from your Java dependencies in the protoc include path, so there's nothing you need to do to pull in either the Cloudstate protobuf types, or any of the Google standard protobuf types, they are all automatically available for import.
 
 So, if you were to build the example shopping cart application shown earlier in @ref:[gRPC descriptors](../../features/grpc.md), you could simply paste that protobuf into `src/main/proto/shoppingcart.proto`. You may wish to also define the Java package, to ensure the package name used conforms to Java package naming conventions:
 
@@ -164,7 +164,7 @@ Now if you run `mvn compile`, you'll find your generated protobuf files in `targ
 
 ## Creating a main class
 
-Your main class will be responsible for creating the CloudState gRPC server, registering the entities for it to serve, and starting it. To do this, you can use the @javadoc[`CloudState`](io.cloudstate.javasupport.CloudState) server builder, for example:
+Your main class will be responsible for creating the Cloudstate gRPC server, registering the entities for it to serve, and starting it. To do this, you can use the @javadoc[`CloudState`](io.cloudstate.javasupport.CloudState) server builder, for example:
 
 @@snip [ShoppingCartMain.java](/docs/src/test/java/docs/user/gettingstarted/ShoppingCartMain.java) { #shopping-cart-main }
 
@@ -172,12 +172,12 @@ We will see more details on registering entities in the coming pages.
 
 ## Parameter injection
 
-CloudState entities work by annotating classes and methods to be instantiated and invoked by the CloudState server. The methods and constructors invoked by the server can be injected with parameters of various types from the context of the invocation. For example, an `@CommandHandler` annotated method may take an argument for the message type for that gRPC service call, in addition it may take a `CommandContext` parameter.
+Cloudstate entities work by annotating classes and methods to be instantiated and invoked by the Cloudstate server. The methods and constructors invoked by the server can be injected with parameters of various types from the context of the invocation. For example, an `@CommandHandler` annotated method may take an argument for the message type for that gRPC service call, in addition it may take a `CommandContext` parameter.
 
 Exactly which context parameters are available depend on the type of entity and the type of handler, in subsequent pages we'll detail which parameters are available in which circumstances. The order of the parameters in the method signature can be anything, parameters are matched by type and sometimes by annotation. The following context parameters are available in every context:
 
 | Type                                                   | Annotation            | Description           |
 |--------------------------------------------------------|-----------------------|-----------------------|
-| @javadoc[`Context`](io.cloudstate.javasupport.Context) |                       | The super type of all CloudState contexts. Every invoker makes a subtype of this available for injection, and method or constructor may accept that sub type, or any super type of that subtype that is a subtype of `Context`. |
+| @javadoc[`Context`](io.cloudstate.javasupport.Context) |                       | The super type of all Cloudstate contexts. Every invoker makes a subtype of this available for injection, and method or constructor may accept that sub type, or any super type of that subtype that is a subtype of `Context`. |
 | `java.lang.String` | @javadoc[`@EntityId`](io.cloudstate.javasupport.EntityId) | The ID of the entity. |
 
