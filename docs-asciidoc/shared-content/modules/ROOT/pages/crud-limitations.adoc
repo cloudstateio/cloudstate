@@ -2,7 +2,7 @@
 
 We need to rethink the use of CRUD in Serverless. CRUD, in the general sense, means unconstrained database access, and is too broad and open-ended to be used effectively in Serverless environments (or any general Cloud development for that matter). 
 
-image::faas_with_crud.png[FAAS with CRUD,title="FAAS with CRUD"]
+image::cloudstateio-shared:ROOT:faas-crud.png[FAAS with CRUD]
 
 Unconstrained database access means that the user function itself needs to manage the nitty-gritty details about data access and storage, and you are thereby moving all the operational concerns from the Serverless framework into the user function. Now it's hard for the framework to know the intention of each access. For example: 
 
