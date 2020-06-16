@@ -1,0 +1,6 @@
+* xref:test.adoc[Testing]
+* xref:index.adoc[Introduction]
+** xref:stateless-limitations.adoc[Limitations of stateless FAAS]
+** xref:crud-limitations.adoc[Rethinking CRUD]
+** xref:cloudstate-solution.adoc[The Cloudstate solution]
+** xref:working.adoc[Working with Cloudstate]

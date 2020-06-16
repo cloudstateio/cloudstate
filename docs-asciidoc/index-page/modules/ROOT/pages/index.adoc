@@ -1,0 +1,15 @@
+= Cloudstate
+:page-type: simple
+
+Cloudstate paves the way for Serverless 2.0. It consists of two things:
+
+* A standards effort—defining a specification, protocol between the user functions and the backend, and a TCK.
+* A reference implementation—implementing the backend and a set of client API libraries in different languages.
+
+Lightbend sponsors an open source version of Cloudstate and offers a pay-for-use hosted version. View the Cloudstate documentation:
+
+* https://cloudstate.io/docs/current/index.html[Cloudstate Open Source]
+* https://docs.lbcs.io/docs/index.html[Lightbend Cloudstate]
+
+
+

@@ -1,0 +1,37 @@
+site:
+  title: "Cloudstate Documentation"
+  url: https://docs.lbcs.dev/
+  
+content:
+  sources:
+  - url: ./
+    branches: [HEAD]
+    start-path: docs-asciidoc/index-page
+  - url: ./
+    branches: [HEAD]
+    start-path: docs-asciidoc/src  
+  - url: ./
+    branches: [HEAD]
+    start-path: docs-asciidoc/shared-content
+    
+ui:
+  bundle:
+    url: https://github.com/lightbend/antora-ui-lightbend-theme/raw/master/build/ui-bundle.zip
+    snapshot: true
+  default_layout: default-lightbend-cloudstate
+        
+runtime:
+  fetch: true
+
+asciidoc:
+
+  attributes:
+
+    
+    # the following two attributes cause review and todo notes to display
+    # review: ''
+    # todo: ''
+    
+output:
+#   dir: ./
+   clean: true

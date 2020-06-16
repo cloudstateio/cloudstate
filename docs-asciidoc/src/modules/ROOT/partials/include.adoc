@@ -1,0 +1,12 @@
+// global attributes
+
+
+// enables right-side page TOC disable per page using :!toc:
+
+
+:cli_version: 0.0.7
+:cli_url: https://downloads.lbcs.io
+
+:minimum_kubectl_version: 1.17.0
+:minimum_protoc_version: 3.0.0
+:minimum_docker_version: 19.03
