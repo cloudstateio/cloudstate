@@ -1,0 +1,6 @@
+
+
+//The content for this page is shared across many repositories
+
+This page will contain the procedures for all Cloudstate prerequisites, including anything special they need to do/have in their Kubernetes cluster and installing Istio. It should also explain that there may be additional prereqs depending on the language the reader wants to write their services in and link to those pages.
+
