@@ -1,6 +1,6 @@
 # JavaScript
 
-Cloudstate offers a straight forward JavaScript API for writing stateful services.
+Cloudstate offers a straightforward JavaScript API for writing stateful services.
 
 @@toc { depth=1 }
 
