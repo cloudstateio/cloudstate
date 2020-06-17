@@ -198,7 +198,8 @@ lazy val docs = (project in file("docs"))
         "javadoc.link_style" -> "direct",
         "extref.jsdoc.base_url" -> ".../user/lang/javascript/api/module-cloudstate.%s",
         "extref.godoc.base_url" -> "https://cloudstate.io/docs/go/current/%s",
-        "extref.dartdoc.base_url" -> "https://cloudstate.io/docs/dart/current/%s",
+        "extref.dartdoc.base_url" -> "https://cloudstate.io/docs/dart/snapshot/%s",
+        "extref.dotnetdoc.base_url" -> "https://cloudstate.io/docs/dotnet/current/%s",
         "extref.springbootdoc.base_url" -> "https://cloudstate.io/docs/springboot/current/%s",
         "cloudstate.version" -> {
           if (isSnapshot.value) previousStableVersion.value.getOrElse("0.0.0") else version.value
