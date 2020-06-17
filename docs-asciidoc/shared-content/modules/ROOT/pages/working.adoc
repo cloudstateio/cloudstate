@@ -3,6 +3,7 @@
 Cloudstate uses https://grpc.io/[gRPC], which is not tied to any programming language, for communication between services. Cloudstate includes connectors to gRPC for a growing number of programming languages.  And, any language with reasonable support for gRPC can have a connector written for it in short order. If you don't see your chosen language, don't be concerned, just let us know, it may already be in the works!
 
 Currently, Cloudstate supports:
+
 * Dart
 * Go
 * Java

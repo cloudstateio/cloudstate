@@ -1,6 +1,4 @@
 
-:level-offset:
-
 Cloudstate offers a serverless platform for general-purpose application development with _stateful_ services, fast data/streaming, and the power of reactive technologies. With Cloudstate you can build cloud native applications for the Kubernetes ecosystem with true elastic scalability, high resilience, and global deployment. 
 
 The Serverless movement today often focuses on automating the underlying infrastructure. However, there are equally complicated requirements at the application layer. The move toward fast data, streaming, and event-driven stateful architectures creates new challenges for operating systems in production.

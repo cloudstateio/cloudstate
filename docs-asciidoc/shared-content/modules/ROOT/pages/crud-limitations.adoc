@@ -2,6 +2,8 @@
 
 We need to rethink the use of CRUD in Serverless. CRUD, in the general sense, means unconstrained database access, and is too broad and open-ended to be used effectively in Serverless environments (or any general Cloud development for that matter). 
 
+//Fully qualify image references in shared content with the component and module name.
+
 image::cloudstateio-shared:ROOT:faas-crud.png[FAAS with CRUD]
 
 Unconstrained database access means that the user function itself needs to manage the nitty-gritty details about data access and storage, and you are thereby moving all the operational concerns from the Serverless framework into the user function. Now it's hard for the framework to know the intention of each access. For example: 
@@ -39,6 +41,6 @@ In [CRDTs](https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type), _s
 
 In Key-Value, the _state out_ is the key and _state in_ the value.
 
-While most developers have worked with Key-Value stores, Event Sourcing and CRDTs might be a bit unfamiliar. What's interesting is that they fit an event-driven model very well while being on opposite sides of the state consistency spectrum, with the former providing strong (ACID) consistency (through event logging) and the latter providing eventual/causal consistency. Taken together, they give us a truly wide range of options for managing distributed state in a consistent fashion by allowing you to choose the optimal model for your specific use-case and data set[^7]. 
+While most developers have worked with Key-Value stores, Event Sourcing and CRDTs might be a bit unfamiliar. What's interesting is that they fit an event-driven model very well while being on opposite sides of the state consistency spectrum, with the former providing strong (ACID) consistency (through event logging) and the latter providing eventual/causal consistency. Taken together, they give us a truly wide range of options for managing distributed state in a consistent fashion by allowing you to choose the optimal model for your specific use-case and data set. Akka Multi-DC log replication is a great example of combining the two techniques to do amazing things. 
 
 
