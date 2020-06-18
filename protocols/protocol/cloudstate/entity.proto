@@ -27,35 +27,102 @@ import "google/protobuf/descriptor.proto";
 option java_package = "io.cloudstate.protocol";
 option go_package = "cloudstate/protocol";
 
+// Transport specific metadata associated with a message.
+//
+// The semantics of the metadata are not defined in this protocol, but rather, depend on the transport on which a
+// particular instance of the metadata maps to. What keys or values are allowed or disallowed, whether duplicate values
+// for the same key are allowed and how they are handled, and whether key names are case sensitive or not, are all
+// undefined in the context of the Cloudstate protocol.
+//
+// If a metadata entry associated with a message can't be expressed in an underlying transport, for example, due to
+// invalid characters in a key or value, the behavior of the proxy is undefined. This is because metadata is transport
+// specific, so if the user function chooses to use metadata, it is choosing to be specific to a particular transport,
+// which is beyond the scope of the Cloudstate protocol, and it's therefore the user functions responsibility to adhere
+// to the semantics of that transport. The proxy MAY decide to drop metadata entries if it knows they are invalid or
+// unsupported. If a metadata entry is dropped, the proxy MAY inform the user function that the entry was dropped by
+// sending an error message to the EntityDiscovery.ReportError gRPC call.
+//
+// The metadata MAY also contain CloudEvent metadata. If a message comes from a Cloudstate event source, the Cloudstate
+// proxy MUST attach CloudEvent metadata to it if the event doesn't already have CloudEvent metadata attached to it.
+// This metadata SHALL be encoded according to the binary mode of the CloudEvent HTTP protocol binding, which can be
+// found here:
+//
+// https://github.com/cloudevents/spec/blob/master/http-protocol-binding.md
+//
+// The Cloudstate proxy MAY synthesize appropriate values for Cloudstate metadata if no equivalent metadata exists in
+// the event source, for example, if there is no type, the Cloudstate proxy MAY use the name of the gRPC message as the
+// CloudEvent type, and if there is no source, the Cloudstate proxy MAY use the name of the topic as the source.
+//
+// If an incoming message does have CloudEvent metadata attached to it, the Cloudstate proxy MUST transcode that
+// CloudEvent metadata to the HTTP protocol binding as described above.
+//
+// Messages sent from the user function to an event destination MAY include CloudEvent metadata. If they include any
+// CloudEvent metadata, they MUST include all required CloudEvent attributes, including id, source, specversion and
+// type. The behavior of the proxy is undefined if some of these attributes, but not others, are included - the proxy
+// MAY ignore them all, or MAY generate values itself, but SHOULD NOT fail sending the message. If the destination for
+// the message is an event destination, the Cloudstate proxy MUST transcode the supplied Cloudstate metadata to a
+// binding appropriate for the underlying transport for that event destination, it MUST NOT pass the CloudEvent
+// metadata as is unless the transport uses the same binding rules.
 message Metadata {
+    // The metadata entries.
     repeated MetadataEntry entries = 1;
 }
 
+// A metadata entry.
 message MetadataEntry {
+
+    // Key for the entry. Valid keys depend on the transport from or to which this metadata is sent.
     string key = 1;
-    string value = 2;
+
+    // The value.
+    oneof value {
+
+        // A string value. Valid values depend on the transport from or which this metadata is sent.
+        //
+        // If the transport does not support string values, the behavior of the Cloudstate proxy is undefined from the
+        // point of view of this protocol. If there is a convention in the protocol for encoding string values as
+        // UTF-8 bytes, then the Cloudstate proxy MAY do that.
+        string string_value = 2;
+
+        // A bytes value. Valid values depend on the transport from or which this metadata is sent.
+        //
+        // If the transport does not support bytes values, the behavior of the Cloudstate proxy is undefined from the
+        // point of view of this protocol. If there is a convention in the protocol for encoding bytes values as
+        // Base64 encoded strings, then the Cloudstate proxy MAY do that.
+        bytes bytes_value = 3;
+    }
 }
 
 // A reply to the sender.
 message Reply {
+
     // The reply payload
     google.protobuf.Any payload = 1;
 
     // Metadata for the reply
     //
-    // Metadata attached to a reply will only be propagated if the underlying protocol supports per reply metadata.
-    // For example, message brokers may support this, but gRPC does not.
+    // Not all transports support per message metadata, for example, gRPC doesn't. The Cloudstate proxy MAY ignore the
+    // metadata in this case, or it MAY lift the metadata into another place, for example, in gRPC, a unary call MAY
+    // have its reply metadata placed in the headers of the HTTP response, or the first reply to a streamed call MAY
+    // if its metadata placed in the headers of the HTTP response.
+    //
+    // If the metadata is ignored, the Cloudstate proxy MAY notify the user function by sending an error message to the
+    // EntityDiscovery.ReportError gRPC call.
     cloudstate.Metadata metadata = 2;
 }
 
 // Forwards handling of this request to another entity.
 message Forward {
+
     // The name of the service to forward to.
     string service_name = 1;
+
     // The name of the command.
     string command_name = 2;
+
     // The payload.
     google.protobuf.Any payload = 3;
+
     // The metadata to include with the forward
     Metadata metadata = 4;
 }
@@ -110,10 +177,15 @@ message Command {
     // The command payload.
     google.protobuf.Any payload = 4;
 
-    // Whether the command is streamed or not
+    // Whether the command is streamed or not.
     bool streamed = 5;
 
-    // The command metadata
+    // The command metadata.
+    //
+    // Not all transports support per message metadata, for example, gRPC doesn't. The Cloudstate proxy MAY include
+    // metadata from other locations in this case, for example, in gRPC, a unary call MAY have the HTTP request headers
+    // attached to the command, while a streamed call MAY have the HTTP request headers attached as the metadata for
+    // either the first command, or every command. This specification leaves this behavior undefined.
     Metadata metadata = 6;
 }
 
