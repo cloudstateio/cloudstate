@@ -1,7 +1,8 @@
 package io.cloudstate.proxy.streams
 
+import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.{ActorMaterializer, SourceShape}
+import akka.stream.SourceShape
 import akka.stream.scaladsl.{GraphDSL, Sink, Source}
 import akka.testkit.TestKit
 import org.scalatest.{AsyncWordSpecLike, Matchers}
@@ -10,8 +11,6 @@ import scala.collection.immutable
 import scala.concurrent.Future
 
 class MergeSequenceSpec extends TestKit(ActorSystem("MergeSequenceSpec")) with AsyncWordSpecLike with Matchers {
-
-  private implicit val mat = ActorMaterializer()
 
   "MergeSequence" should {
     "merge interleaved streams" in {
@@ -65,19 +64,34 @@ class MergeSequenceSpec extends TestKit(ActorSystem("MergeSequenceSpec")) with A
       )
     }
 
+    "propagate errors" in recoverToSucceededIf[SpecificError] {
+      mergeSources(
+        Source(List(0L, 3L)),
+        Source(List(1L, 2L)).flatMapConcat {
+          case 1L => Source.single(1L)
+          case 2L => Source.failed(SpecificError())
+        }
+      )
+    }
+
   }
 
   private def merge(seqs: immutable.Seq[Long]*): Future[immutable.Seq[Long]] =
+    mergeSources(seqs.map(Source(_)): _*)
+
+  private def mergeSources(sources: Source[Long, NotUsed]*): Future[immutable.Seq[Long]] =
     Source
       .fromGraph(GraphDSL.create() { implicit builder =>
         import GraphDSL.Implicits._
-        val merge = builder.add(new MergeSequence[Long](seqs.size)(identity))
-        seqs.foreach { seq =>
-          Source(seq) ~> merge
+        val merge = builder.add(new MergeSequence[Long](sources.size)(identity))
+        sources.foreach { source =>
+          source ~> merge
         }
 
         SourceShape(merge.out)
       })
       .runWith(Sink.seq)
+
+  private case class SpecificError() extends Exception
 
 }

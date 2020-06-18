@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+/**
+ * CloudEvent data.
+ *
+ * @interface module:cloudstate.CloudEvent
+ * @property {string} specversion The CloudEvent spec version
+ */
 function toCloudevent(metadata) {
   return {
     get specversion() {

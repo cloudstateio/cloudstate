@@ -1,6 +1,7 @@
 package io.cloudstate.proxy.streams
 
-import akka.stream.{Attributes, Inlet, Outlet, UniformFanInShape}
+import akka.NotUsed
+import akka.stream.{Attributes, Graph, Inlet, Outlet, UniformFanInShape}
 import akka.stream.stage.{GraphStage, GraphStageLogic, InHandler, OutHandler}
 
 import scala.collection.mutable
@@ -10,9 +11,13 @@ object MergeSequence {
   private case class Pushed[T](in: Inlet[T], sequence: Long, elem: T)
 
   private implicit def ordering[T]: Ordering[Pushed[T]] = Ordering.by[Pushed[T], Long](_.sequence).reverse
+
+  def apply[T](inputPorts: Int = 2)(extractSequence: T => Long): Graph[UniformFanInShape[T, T], NotUsed] =
+    new MergeSequence(inputPorts)(extractSequence)
 }
 
-class MergeSequence[T](inputPorts: Int)(extractSequence: T => Long) extends GraphStage[UniformFanInShape[T, T]] {
+final class MergeSequence[T](val inputPorts: Int)(extractSequence: T => Long)
+    extends GraphStage[UniformFanInShape[T, T]] {
   private val in: IndexedSeq[Inlet[T]] = Vector.tabulate(inputPorts)(i => Inlet[T]("MergeSequence.in" + i))
   private val out: Outlet[T] = Outlet("MergeSequence.out")
   override val shape: UniformFanInShape[T, T] = UniformFanInShape(out, in: _*)

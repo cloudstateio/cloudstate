@@ -239,7 +239,7 @@ object Serve {
         val handler = rpcMethodSerializers(req.uri.path)
 
         val metadata = Metadata(req.headers.map { header =>
-          MetadataEntry(header.name(), header.value)
+          MetadataEntry(header.name(), MetadataEntry.Value.StringValue(header.value))
         })
 
         val reader = GrpcProtocolNative.newReader(Codecs.detect(req).get)
@@ -264,8 +264,8 @@ object Serve {
                   (Metadata.defaultInstance, Source(other).concat(rest))
               }
 
-              val headers = metadata.entries.map {
-                case MetadataEntry(key, value, _) => RawHeader(key, value)
+              val headers = metadata.entries.collect {
+                case MetadataEntry(key, MetadataEntry.Value.StringValue(value), _) => RawHeader(key, value)
               }.toList
 
               (headers, replies.via(handler.processReplies))

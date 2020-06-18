@@ -323,17 +323,18 @@ object EventingManager {
     }
 
   private def cloudEventToMetadata(cloudEvent: CloudEvent): Metadata = {
+    import MetadataEntry.Value.StringValue
     // We use the HTTP binary mode transcoding rules
     val builder = Seq.newBuilder[MetadataEntry]
-    builder += MetadataEntry("ce-id", cloudEvent.id)
-    builder += MetadataEntry("ce-source", cloudEvent.source)
-    builder += MetadataEntry("ce-specversion", cloudEvent.specversion)
-    builder += MetadataEntry("ce-type", cloudEvent.`type`)
-    builder += MetadataEntry("Content-Type", cloudEvent.datacontenttype)
+    builder += MetadataEntry("ce-id", StringValue(cloudEvent.id))
+    builder += MetadataEntry("ce-source", StringValue(cloudEvent.source))
+    builder += MetadataEntry("ce-specversion", StringValue(cloudEvent.specversion))
+    builder += MetadataEntry("ce-type", StringValue(cloudEvent.`type`))
+    builder += MetadataEntry("Content-Type", StringValue(cloudEvent.datacontenttype))
 
-    cloudEvent.dataschema.foreach(v => builder += MetadataEntry("ce-dataschema", v))
-    cloudEvent.subject.foreach(v => builder += MetadataEntry("ce-subject", v))
-    cloudEvent.time.foreach(v => builder += MetadataEntry("ce-time", v.toString))
+    cloudEvent.dataschema.foreach(v => builder += MetadataEntry("ce-dataschema", StringValue(v)))
+    cloudEvent.subject.foreach(v => builder += MetadataEntry("ce-subject", StringValue(v)))
+    cloudEvent.time.foreach(v => builder += MetadataEntry("ce-time", StringValue(v.toString)))
 
     Metadata(builder.result())
   }
@@ -421,7 +422,9 @@ object EventingManager {
     val metadata = maybeMetadata
       .getOrElse(Metadata.defaultInstance)
       .entries
-      .map(e => e.key -> e.value)
+      .collect {
+        case MetadataEntry(key, MetadataEntry.Value.StringValue(value), _) => key -> value
+      }
       .toMap
 
     val (ceType, contentType, bytes) = payload.typeUrl match {
