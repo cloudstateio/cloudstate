@@ -22,7 +22,7 @@ import akka.Done
 import akka.actor.ActorSystem
 import akka.http.scaladsl._
 import akka.http.scaladsl.model._
-import akka.stream.{ActorMaterializer, Materializer}
+import akka.stream.{Materializer, SystemMaterializer}
 import com.google.protobuf.Descriptors
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.javasupport.impl.eventsourced.{EventSourcedImpl, EventSourcedStatefulService}
@@ -59,9 +59,7 @@ object CloudStateRunner {
  *
  * CloudStateRunner can be seen as a low-level API for cases where [[io.cloudstate.javasupport.CloudState.start()]] isn't enough.
  */
-final class CloudStateRunner private[this] (_system: ActorSystem, services: Map[String, StatefulService]) {
-  private[this] implicit final val system = _system
-  private[this] implicit final val materializer: Materializer = ActorMaterializer()
+final class CloudStateRunner private[this] (system: ActorSystem, services: Map[String, StatefulService]) {
 
   private[this] final val configuration =
     new CloudStateRunner.Configuration(system.settings.config.getConfig("cloudstate"))
@@ -86,17 +84,16 @@ final class CloudStateRunner private[this] (_system: ActorSystem, services: Map[
 
     val serviceRoutes =
       services.groupBy(_._2.getClass).foldLeft(PartialFunction.empty[HttpRequest, Future[HttpResponse]]) {
-
         case (route, (serviceClass, eventSourcedServices: Map[String, EventSourcedStatefulService] @unchecked))
             if serviceClass == classOf[EventSourcedStatefulService] =>
-          val eventSourcedImpl = new EventSourcedImpl(system, eventSourcedServices, rootContext, configuration)
-          route orElse EventSourcedHandler.partial(eventSourcedImpl)
+          route orElse EventSourcedHandler
+            .partial(new EventSourcedImpl(system, eventSourcedServices, rootContext, configuration))(system)
 
         case (_, (serviceClass, _)) =>
           sys.error(s"Unknown StatefulService: $serviceClass")
       }
 
-    val entityDiscovery = EntityDiscoveryHandler.partial(new EntityDiscoveryImpl(system, services))
+    val entityDiscovery = EntityDiscoveryHandler.partial(new EntityDiscoveryImpl(system, services))(system)
 
     serviceRoutes orElse
     entityDiscovery orElse { case _ => Future.successful(HttpResponse(StatusCodes.NotFound)) }
@@ -110,10 +107,12 @@ final class CloudStateRunner private[this] (_system: ActorSystem, services: Map[
   def run(): CompletionStage[Done] = {
     val serverBindingFuture = Http
       .get(system)
-      .bindAndHandleAsync(createRoutes(),
-                          configuration.userFunctionInterface,
-                          configuration.userFunctionPort,
-                          HttpConnectionContext(UseHttp2.Always))
+      .bindAndHandleAsync(
+        createRoutes(),
+        configuration.userFunctionInterface,
+        configuration.userFunctionPort,
+        HttpConnectionContext(UseHttp2.Always)
+      )(SystemMaterializer(system).materializer)
     // FIXME Register an onTerminate callback to unbind the Http server
     FutureConverters
       .toJava(serverBindingFuture)

@@ -142,8 +142,8 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
 ) extends Actor
     with ActorLogging {
 
-  implicit val system = context.system
-  implicit val ec = context.dispatcher
+  private[this] implicit val system = context.system
+  private[this] implicit val ec = context.dispatcher
   import EntityDiscoveryManager.Ready
 
   private[this] final val clientSettings =
@@ -165,7 +165,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
 
       val singleton = context.actorOf(
         ClusterSingletonManager.props(
-          Autoscaler.props(autoscalerSettings, scalerFactory, new ClusterMembershipFacadeImpl(Cluster(context.system))),
+          Autoscaler.props(autoscalerSettings, scalerFactory, new ClusterMembershipFacadeImpl(Cluster(system))),
           terminationMessage = PoisonPill,
           managerSettings
         ),
@@ -184,13 +184,13 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
     context.actorOf(ConcurrencyEnforcer.props(config.concurrencySettings, statsCollector), "concurrencyEnforcer")
 
   private final val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
-      Crdt.name -> new CrdtSupportFactory(context.system,
+      Crdt.name -> new CrdtSupportFactory(system,
                                           config,
                                           entityDiscoveryClient,
                                           clientSettings,
                                           concurrencyEnforcer = concurrencyEnforcer,
                                           statsCollector = statsCollector),
-      StatelessFunction.name -> new StatelessFunctionSupportFactory(context.system,
+      StatelessFunction.name -> new StatelessFunctionSupportFactory(system,
                                                                     config,
                                                                     clientSettings,
                                                                     concurrencyEnforcer = concurrencyEnforcer,
@@ -198,7 +198,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
     ) ++ {
       if (config.journalEnabled)
         Map(
-          EventSourced.name -> new EventSourcedSupportFactory(context.system,
+          EventSourced.name -> new EventSourcedSupportFactory(system,
                                                               config,
                                                               clientSettings,
                                                               concurrencyEnforcer = concurrencyEnforcer,
