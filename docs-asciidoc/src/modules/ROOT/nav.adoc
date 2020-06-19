@@ -1,5 +1,5 @@
 * xref:index.adoc[Introduction]
-** xref:stateless-limitations.adoc[Limitations of stateless FAAS]
+** xref:stateless-limitations.adoc[Current limitations of Serverless platforms]
 ** xref:crud-limitations.adoc[Rethinking CRUD]
 ** xref:cloudstate-solution.adoc[The Cloudstate solution]
 ** xref:working.adoc[Working with Cloudstate]
@@ -11,12 +11,32 @@
 ** xref:develop:examples.adoc[Available Cloudstate examples]
 ** xref:develop:tutorial.adoc[The shopping cart tutorial]
 
+* xref:go:index.adoc[Implementing in Go]
+
 * xref:java:index.adoc[Implementing in Java]
 ** xref:java:getting-started.adoc[Getting started]
 ** xref:java:eventsourced-entities.adoc[Implementing event sourced entities]
 ** xref:java:crdt.adoc[Conflict free replicated data types]
-** xref:java:effects-and-forwarding.adoc[CRDT effects and forwarding]
+** xref:java:effects.adoc[CRDT effects and forwarding]
 ** xref:java:serialization.adoc[Serialization]
+
+* xref:javascript:index.adoc[Implementing in Javascript]
+** xref:javascript:getting-started.adoc[Getting started]
+** xref:javascript:eventsourced.adoc[Implementing event sourced entities]
+** xref:javascript:crdt.adoc[Conflict free replicated data types]
+** xref:javascript:effects.adoc[CRDT effects and forwarding]
+** xref:javascript:serialization.adoc[Serialization]
+
+* xref:deploy:index.adoc[Deploying to production]
+** xref:deploy:installing.adoc[Installing]
+** xref:deploy:deploying.adoc[Deploying stateful services]
+** xref:deploy:stateful-stores.adoc[Stateful stores]
+*** xref:deploy:cassandra.adoc[Cassandra]
+*** xref:deploy:postgresql.adoc[PostgresSQL]
+*** xref:deploy:inmemory.adoc[In memory store]
+** xref:deploy:monitoring.adoc[Monitoring]
+** xref:deploy:autoscaling.adoc[Autoscaling]
+** xref:deploy:security.adoc[Security]
 
 
 * xref:contribute:index.adoc[Contributing to the project]

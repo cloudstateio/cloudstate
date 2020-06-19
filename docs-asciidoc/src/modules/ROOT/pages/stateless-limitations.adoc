@@ -1,4 +1,4 @@
-= Limitations of stateless FAAS
+= Current limitations of Serverless platforms
 :toc:
 :toc-title: ON THIS PAGE
 :toclevels: 2
