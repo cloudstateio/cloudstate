@@ -1,41 +1,71 @@
-To get started writing Cloudstate services in Java, you need to install the Cloudstate library and create a main class. You will also be using protobuf. Cloudstate also uses parameter injection. This page outlines these basics.
+To get started writing Cloudstate services in Java, you need to install prerequisites.
+
+== Java Prerequisites
+
+The following are required to start writing Cloudstate services in Java:
+
+ifdef::todo[TODO: link to where the reader can find instructions for installing the components that we don't describe how to install]
+
+[cols="a,a"]
+|===
+ 
+| *Java version*
+| Cloudstate Java support requires at least Java {minimum-java-version}, though we recommend using Java {recommended-java-version}, which has better support for running in containers. While it is possible to build a GraalVM native image for Cloudstate Java user functions, at this stage Cloudstate offers no specific assistance or configuration to aid in doing that.
+
+| *Build tool*
+| Cloudstate does not require any particular build tool, you can select your own.
+
+| *`protoc`*
+| Since Cloudstate is based on gRPC, you need a protoc compiler to compile gRPC protobuf descriptors. While this can be done by downloading, installing and running protoc manually, most popular build tools have a protoc plugin which will automatically compile protobuf descriptors during your build.
+
+| *Docker*
+| Cloudstate runs in Kubernetes using Docker. Hence you will need Docker to build a container that you can deploy to Kubernetes. Most popular build tools have plugins that assist in building Docker images.
+
+| *Cloudstate Java support library*
+| See the instructions in <Install the Cloudstate library>.
+
+|===
+
 
 
 == Install the Cloudstate library
 
-Install the Java Cloudstate library as follows:
-    
-Maven
-: @@@vars
-```xml
+As mentioned, you can use the build tool of your choice. The following examples show how to install the Java Cloudstate library for Gradle, Maven, and sbt. 
+
+[.tabset]    
+Gradle::
+In your `build.gradle` file, add the following:
++
+[subs="attributes+"]
+----
+compile group: 'io.cloudstate', name: 'cloudstate-java-support', version: '{cloudstate_java_support_version}'
+----
+Maven::
+In your `.pom` file, add the following:
++
+[source,xml,subs="attributes+"]
+....
 <dependency>
   <groupId>io.cloudstate</groupId>
   <artifactId>cloudstate-java-support</artifactId>
-  <version>$cloudstate.java-support.version$</version>
+  <version>{cloudstate_java_support_version}</version>
 </dependency>
-```
-@@@
-  
-sbt
-: @@@vars
-```scala
-libraryDependencies += "io.cloudstate" % "cloudstate-java-support" % "$cloudstate.java-support.version$"
-```
-@@@
+....
+sbt::
+In your dependencies file, add the following:
++
+[subs="attributes+"]
+----
+libraryDependencies += "io.cloudstate" % "cloudstate-java-support" % "{cloudstate_java_support_version}"
+----
 
-gradle
-: @@@vars
-```groovy
-compile group: 'io.cloudstate', name: 'cloudstate-java-support', version: '$cloudstate.java-support.version$'
-```
-@@@
 
-## Maven example
+== Maven example
 
 A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffers Plugin](https://www.xolstice.org/protobuf-maven-plugin/) and the [Fabric8 Docker Maven Plugin](https://dmp.fabric8.io/), for a shopping cart service, is shown below:
 
-@@@vars
-```xml
+[source,xml, subs="attributes+"]
+....
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
@@ -134,12 +164,11 @@ A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffer
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 </project>
-```
-@@@
+....
 
 Subsequent source locations and build commands will assume the above Maven project, and may need to be adapted to your particular build tool and setup.
 
-## Protobuf files
+== Protobuf files
 
 The Xolstice Maven plugin assumes a location of `src/main/proto` for your protobuf files. In addition, it includes any protobuf files from your Java dependencies in the protoc include path, so there's nothing you need to do to pull in either the Cloudstate protobuf types, or any of the Google standard protobuf types, they are all automatically available for import.
 
@@ -151,7 +180,7 @@ option java_package = "com.example";
 
 Now if you run `mvn compile`, you'll find your generated protobuf files in `target/generated-sources/protobuf/java`.
 
-## Creating a main class
+== Creating a main class
 
 Your main class will be responsible for creating the Cloudstate gRPC server, registering the entities for it to serve, and starting it. To do this, you can use the @javadoc[`CloudState`](io.cloudstate.javasupport.CloudState) server builder, for example:
 
@@ -159,7 +188,7 @@ Your main class will be responsible for creating the Cloudstate gRPC server, reg
 
 We will see more details on registering entities in the coming pages.
 
-## Parameter injection
+== Parameter injection
 
 Cloudstate entities work by annotating classes and methods to be instantiated and invoked by the Cloudstate server. The methods and constructors invoked by the server can be injected with parameters of various types from the context of the invocation. For example, an `@CommandHandler` annotated method may take an argument for the message type for that gRPC service call, in addition it may take a `CommandContext` parameter.
 

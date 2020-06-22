@@ -2,22 +2,6 @@
 
 Cloudstate offers an idiomatic, annotation based Java support library for writing stateful services. Before you attempt to write your first service in Java, we recommend that you understand Cloudstate concepts and terminology. We also suggest that you work through one of the tutorials first.
 
-== Prerequisites
-
-Java version
-: Cloudstate Java support requires at least Java 8, though we recommend using Java 11, which has better support for running in containers. While it is possible to build a GraalVM native image for Cloudstate Java user functions, at this stage Cloudstate offers no specific assistance or configuration to aid in doing that.
-
-Build tool
-: Cloudstate does not require any particular build tool, you can select your own.
-
-protoc
-: Since Cloudstate is based on gRPC, you need a protoc compiler to compile gRPC protobuf descriptors. While this can be done by downloading, installing and running protoc manually, most popular build tools have a protoc plugin which will automatically compile protobuf descriptors during your build.
-
-docker
-: Cloudstate runs in Kubernetes using Docker. Hence you will need Docker to build a container that you can deploy to Kubernetes. Most popular build tools have plugins that assist in building Docker images.
-
-In addition to the above, you will need to install the Cloudstate java support library
-
 
 
 

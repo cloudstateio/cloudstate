@@ -27,8 +27,8 @@
 ** xref:javascript:effects.adoc[CRDT effects and forwarding]
 ** xref:javascript:serialization.adoc[Serialization]
 
-* xref:deploy:index.adoc[Deploying to production]
-** xref:deploy:installing.adoc[Installing]
+* xref:deploy:index.adoc[Deploying to production systems]
+** xref:deploy:install-production.adoc[Setting up a production cluster]
 ** xref:deploy:deploying.adoc[Deploying stateful services]
 ** xref:deploy:stateful-stores.adoc[Stateful stores]
 *** xref:deploy:cassandra.adoc[Cassandra]
