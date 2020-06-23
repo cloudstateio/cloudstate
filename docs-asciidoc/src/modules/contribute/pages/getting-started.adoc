@@ -9,42 +9,61 @@ The Cloudstate Build uses `sbt` as its build tool.
 
 ifdef::todo[TODO: This information needs to be better organized and it is unclear whether it only applies to those actually building Cloudstate and contributing or whether some of it applies equally to those building Cloudstate apps.]
 
-## Installation instructions
+== Installation instructions
 
-* Install the `git` source code manager from [here](https://git-scm.com/).
+* Install the `git` source code manager from https://git-scm.com/[https://git-scm.com/].
 * Clone the Cloudstate repository using `git`: `git clone git@github.com:cloudstateio/cloudstate.git`
-* Install `sbt`, follow [these instructions](https://www.scala-sbt.org/download.html).
+* Install `sbt`, follow https://www.scala-sbt.org/download.html[these instructions].
 
-To build Native Images, you'll need the GraalVM CE as your JRE and [`clang`](https://clang.llvm.org/) as your `cc`. The GraalVM CE provides the `native-image` command, which must be on the $PATH when building Native Images. See [GraalVM Integration](https://github.com/cloudstateio/cloudstate/blob/master/README.md#user-content-graalvm-integration) in the project README for further info.
+To build Native Images, you'll need the GraalVM CE as your JRE and https://clang.llvm.org/[`clang`] as your `cc`. The GraalVM CE provides the `native-image` command, which must be on the $PATH when building Native Images. See xref:graalvm-integration.adoc[GraalVM Integration] for further info.
 
 To build node.js related samples, you'll need `nvm` to install the corresponding node.js version by running command `nvm install` and `nvm use`, then run `npm install` to install required modules.
 
 To build the documentation using the `paradox` target, you'll need to use `npm` to install required modules from the `node-support` folder with `cd node-support && nvm install && nvm use && npm install && cd ..`
 
-## Getting started
+== Getting started
 
 It is possible to run `sbt` either on a command-by-command basis by running `sbt <command> parameters`. It is also possible to run `sbt` in interactive mode by running `sbt`, then you can interact with the build interactively by typing in commands and having them executed by pressing RETURN.
 
 The following is a list of sbt commands and use-cases:
 
-| Command        | Use-case                                     |
-| -------------: | -------------------------------------------- |
-| projects       | Prints a list of all projects in the build |
-| project <NAME> | Makes <NAME> the current project |
-| clean          | Deletes all generated files and compilation results for the current project and the projects it depends on |
-| compile        | Compiles all non-test sources for the current project and the projects it depends on |
-| test:compile   | Compiles all sources for the current project and the projects it depends on |
-| test | Executes all "regular" tests for the current project and the projects it depends on |
-| it:test | Executes all integration tests for the current project and the projects it depends on |
-| exit | Exits the interactive mode of `sbt` |
+[cols="a,a"]
+|===
+| Command        | Use-case                                     
 
-For more documentation about `sbt`, see [this page](https://www.scala-sbt.org/1.x/docs/index.html).
+| `projects`       
+| Prints a list of all projects in the build 
 
-## Running Cloudstate in Minikube
+| `project <NAME>` 
+| Makes `<NAME>` the current project 
+
+| `clean`          
+| Deletes all generated files and compilation results for the current project and the projects it depends on 
+
+| `compile`        
+| Compiles all non-test sources for the current project and the projects it depends on 
+
+| `test:compile`   
+| Compiles all sources for the current project and the projects it depends on 
+
+| `test` 
+| Executes all "regular" tests for the current project and the projects it depends on 
+
+| `it:test` 
+| Executes all integration tests for the current project and the projects it depends on 
+
+| `exit` 
+| Exits the interactive mode of `sbt` 
+
+|===
+
+For more documentation about `sbt`, see https://www.scala-sbt.org/1.x/docs/index.html[the `sbt` documentation].
+
+== Running Cloudstate in Minikube
 
 Cloudstate can be easily run in Minikube. If you wish to use Istio, be aware that it can be quite resource intensive, we recommend not using Istio in development unless you have specific requirements to test with Istio.
 
-### Installing a local build of Cloudstate
+=== Installing a local build of Cloudstate
 
 To install a local build of Cloudstate to Minikube, first setup your docker environment to use the Minikube Docker registry:
 
@@ -127,18 +146,20 @@ proxy {
 
 Once you have Cloudstate running, you will presumably want to deploy a stateful function to it. If your function needs a stateful store, then either install the necessary database along with a `StatefulStore` descriptor to point to it, or deploy an in memory store if you don't need to test any particular database:
 
-```yaml
+[source,yaml]
+....
 apiVersion: cloudstate.io/v1alpha1
 kind: StatefulStore
 metadata:
   name: inmemory
 spec:
   type: InMemory
-```
+....
 
 Now you can deploy a function, for example, the shopping cart:
 
-```yaml
+[source,yaml]
+....
 apiVersion: cloudstate.io/v1alpha1
 kind: StatefulService
 metadata:
@@ -148,7 +169,7 @@ spec:
     name: inmemory
   containers:
   - image: cloudstateio/samples-js-shopping-cart:latest
-```
+....
 
 The Cloudstate operator should now create the necessary deployment for the shopping cart. There are a few ways it can be accessed, one is to port forward into the pod, but perhaps the simpler way is to create a `NodePort` service for it, by running:
 
@@ -163,7 +184,7 @@ $ minikube service shopping-cart-deployment --url
 http://192.168.39.186:32121
 ```
 
-Using a tool like [`grpcurl`](https://github.com/fullstorydev/grpcurl), you can now inspect the services on it:
+Using a tool like https://github.com/fullstorydev/grpcurl[`grpcurl`], you can now inspect the services on it:
 
 ```
 $ ./grpcurl -plaintext 192.168.39.186:32121 describe
@@ -203,7 +224,7 @@ scala> client.getCart("foo")
 res3: com.example.shoppingcart.shoppingcart.Cart = Cart(Vector(LineItem(item-id-1,Eggs,12), LineItem(item-id-2,Milk,3)))
 ```
 
-### Development loops for the proxy
+=== Development loops for the proxy
 
 Once you've installed Cloudstate and got a user function running, the proxy can be iterated on by running the corresponding `dockerBuild*` command for the proxy backend you're using, for example, for the in memory proxy:
 
@@ -217,9 +238,9 @@ Now, after each time you make changes and rebuild the docker image, the simplest
 kubectl delete pods --all
 ```
 
-### Development loops for the operator
+=== Development loops for the operator
 
-The easiest way to iterate on the operator is to run it locally, from an IDE or from sbt, rather than deploying it to Minikube/Kubernetes. The only advantage to deploying to Kubernetes is that it will verify that the RBAC permissions that the operator has are correct. The Cloudstate operator uses [Skuber](https://github.com/doriordan/skuber), and when it runs outside of a Kubernetes container, it will use the credentials configured for `kubectl`. In the case of using Minikube, this will be the default cluster admin account.
+The easiest way to iterate on the operator is to run it locally, from an IDE or from sbt, rather than deploying it to Minikube/Kubernetes. The only advantage to deploying to Kubernetes is that it will verify that the RBAC permissions that the operator has are correct. The Cloudstate operator uses https://github.com/doriordan/skuber[Skuber], and when it runs outside of a Kubernetes container, it will use the credentials configured for `kubectl`. In the case of using Minikube, this will be the default cluster admin account.
 
 To use a locally running operator, first shutdown the operator running in Kubernetes, by scaling its deployment down to zero:
 

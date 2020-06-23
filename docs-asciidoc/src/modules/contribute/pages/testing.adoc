@@ -4,15 +4,15 @@
 :toclevels: 2
 
 include::ROOT:partial$include.adoc[]
-## Testing strategy
+== Testing strategy
 
-### Compliance Testing
+=== Compliance Testing
 
 The [TCK](tck/src/test/resources/application.conf) makes it possible to verify that combinations of backends and frontends behave as expected. In order to make a frontend eligible for testing in the TCK a sample application, implementing a simple [Shopping Cart](samples/js-shopping-cart) (here showcased with the Node.js frontend) is required.
 
 In order to make sure that each individual component performs its duties, and when combined has the expected outcome, the following categories need to be considered.
 
-### Verification of backend functionality
+=== Verification of backend functionality
 
 Answers the question: How do we know that a given backend performs the duties expected of it when paired with a frontend and a user function written for that given backend?
 
@@ -35,7 +35,7 @@ Implementation details:
   * Define a set of tests which simulates different types of networking / lag issues
   * Use the generated client library to call the user function
 
-### Verification of frontend functionality
+=== Verification of frontend functionality
 
 Answers the question: How do we know that a given frontend performs the duties expected of it when paired with a backend and a user function written for that given frontend?
 
@@ -49,7 +49,7 @@ Solution:
 
 Implementation details:
 
-### Managing external dependencies
+=== Managing external dependencies
 
 Answers the question: How do we know which the external dependencies are, and if they are configured properly, and that they are available to perform the duties assigned to them?
 
@@ -63,7 +63,7 @@ Implementation details:
   * Will vary on a per-backend and per-frontend basis
   * Verify using CI
 
-### End-to-end testing
+=== End-to-end testing
 
 Answers the question: How do we know that a given backend, frontend, and user function, we get the expected results when we call the user function?
 
@@ -77,7 +77,7 @@ Implementation details:
 
   * None for now
 
-### User function testing
+=== User function testing
 
 Answers the question: How does the user test their user functions?
 

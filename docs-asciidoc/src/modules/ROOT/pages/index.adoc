@@ -16,7 +16,7 @@ Stateless functions are a great tool that already have their place in the cloud 
 
 The https://cloudstate.io[Cloudstate] project takes on this challenge and paves the way for Serverless 2.0. It consists of two things: 
 
-. **A standards effort** — defining a specification, a protocol between the user functions and the backend, and a TCK.
+. **A standards effort** — defining a specification, a protocol between the user functions and the backend, and a Technology Compatibility Kit (TCK).
 . **A reference implementation** — implementing the backend and a set of client API libraries in different languages.
 
 Cloudstate's reference implementation leverages https://cloud.google.com/knative/[Knative], https://grpc.io/[gRPC], https://doc.akka.io/docs/akka/current/index-cluster.html[Akka Cluster], and https://www.graalvm.org/[GraalVM] running on https://kubernetes.io/[Kubernetes]. This combination results in applications that not only scale efficiently, but  manage distributed state reliably at scale while maintaining a global or a local level of data consistency, opening up for a whole range of new addressable use-cases.

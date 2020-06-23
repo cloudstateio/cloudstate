@@ -34,10 +34,10 @@ The following additional fields are available to customize the service:
 
 * `volumes`: A list of https://kubernetes.io/docs/concepts/storage/volumes/[volumes to configure for pods].
 
-`sidecarResources`: Resource requirements to set for the sidecar. Uses the same structure as a container resources field. This field is likely to change.
+* `sidecarResources`: Resource requirements to set for the sidecar. Uses the same structure as a container resources field. This field is likely to change.
 
-`sidecarJvmMemory`: Heap space to allocate for the sidecar, using the `-Xmx` option. This currently has [no effect for native images](https://github.com/cloudstateio/cloudstate/issues/112), and is likely to change.
+* `sidecarJvmMemory`: Heap space to allocate for the sidecar, using the `-Xmx` option. This currently has https://github.com/cloudstateio/cloudstate/issues/112[no effect for native images], and is likely to change.
 
-`nodeSelector`: Used to specify the [Pod nodeSelector](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector). This field is likely to change.
+* `nodeSelector`: Used to specify the https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector[Pod nodeSelector]. This field is likely to change.
 
-`tolerations`: Used to specify the [Pod tolerations](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/). This field is likely to change.
+* `tolerations`: Used to specify the https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/[Pod tolerations]. This field is likely to change.

@@ -15,17 +15,15 @@ All contributions are welcome: ideas, criticism, praise, code, bug fixes, docs, 
 * There are two weekly Cloudstate contributors' calls, which are scheduled so that people from around the world can attend. The schedule of calls can be found in https://calendar.google.com/calendar/embed?src=lightbend.com_3is0shfmmqgh4q57eo0n8m6bfc%40group.calendar.google.com[this Google calandar]. 
  ** Add this calendar to your Google calendar by clicking https://calendar.google.com/calendar/b/1?cid=bGlnaHRiZW5kLmNvbV8zaXMwc2hmbW1xZ2g0cTU3ZW8wbjhtNmJmY0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t[here].
  ** Import into calendar apps that support iCal using https://calendar.google.com/calendar/ical/lightbend.com_3is0shfmmqgh4q57eo0n8m6bfc%40group.calendar.google.com/public/basic.ics[this link].
-
-
-ifdef::review[REVIEWERS: The content seemed to me to be implementation detail that only contributors would care about. Please let me know whether it belongs in the doc or not and if this is a good place for it?]
-
+ 
+ 
 The remainder of this section describes how to get started with your own build of Cloudstate and rationale around implementation choices:
 
+* xref:archtecture.adoc[Architecture]
 * xref:getting-started.adoc[Getting started]
 * xref:serialization.adoc[Serialization conventions]
 * xref:language-support.adoc[Language support]
 * xref:build-native.adoc[Building native images]
-* xref:architecture.adoc[Architecture]
 * xref:knative-integration.adoc[Knative integration]
 * xref:graalvam-integration.adoc[GraalVM integration]
 * xref:testing.adoc[Testing]

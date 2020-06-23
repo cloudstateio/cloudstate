@@ -5,11 +5,20 @@
 ** xref:working.adoc[Working with Cloudstate]
 ** xref:examples.adoc[Example Applications]
 
+* xref:concepts:index.adoc[Important concepts]
+** xref:concepts:glossary.adoc[Glossary]
+** xref:concepts:grpc.adoc[gRPC]
+** xref:concepts:eventsource.adoc[Event sourcing]
+** xref:concepts:crdts.adoc[Conflict-free replicated data types]
+** xref:concepts:effects.adoc[Forwarding and effects]
+
 * xref:develop:index.adoc[Developing Cloudstate services]
 ** xref:develop:prerequisites.adoc[Prerequisites]
 ** xref:develop:install.adoc[Installing Cloudstate]
 ** xref:develop:examples.adoc[Available Cloudstate examples]
 ** xref:develop:tutorial.adoc[The shopping cart tutorial]
+
+
 
 * xref:go:index.adoc[Implementing in Go]
 
@@ -40,11 +49,11 @@
 
 
 * xref:contribute:index.adoc[Contributing to the project]
+** xref:contribute:architecture.adoc[Architecture]
 ** xref:contribute:getting-started.adoc[Getting started]
 ** xref:contribute:build-native.adoc[Building native images]
 ** xref:contribute:serialization.adoc[Serialization conventions]
 ** xref:contribute:language-support.adoc[Language support]
-** xref:contribute:architecture.adoc[Architecture]
 ** xref:contribute:knative-integration.adoc[Knative integration]
 ** xref:contribute:graalvm-integration.adoc[GraalVM integration]
 ** xref:contribute:testing.adoc[Testing]
