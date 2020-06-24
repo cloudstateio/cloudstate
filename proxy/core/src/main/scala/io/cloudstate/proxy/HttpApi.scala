@@ -90,7 +90,7 @@ import java.net.URLDecoder
 import java.util.regex.{Matcher, Pattern}
 
 import akka.grpc.GrpcProtocol
-import akka.grpc.internal.{GrpcProtocolNative, Identity}
+import akka.grpc.internal.{Codecs, GrpcProtocolNative, Identity}
 import akka.grpc.scaladsl.headers.`Message-Accept-Encoding`
 import akka.http.scaladsl.model.HttpEntity.LastChunk
 import akka.stream.scaladsl.{Sink, Source}
@@ -183,7 +183,7 @@ object HttpApi {
   final class HttpEndpoint(
       final val methDesc: MethodDescriptor,
       final val rule: HttpRule,
-      final val handler: PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]]
+      final val handler: PartialFunction[HttpRequest, Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]]
   )(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext)
       extends PartialFunction[HttpRequest, Future[HttpResponse]] {
     private[this] final val log = Logging(sys, rule.pattern.toString) // TODO use other name?
@@ -499,7 +499,8 @@ object HttpApi {
     }
 
     private[this] final def transformResponse(grpcRequest: HttpRequest,
-                                              data: Source[ProtobufAny, NotUsed]): Future[HttpResponse] = {
+        futureResponse: Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]
+    ): Future[HttpResponse] = {
       def extractContentTypeFromHttpBody(entityMessage: MessageOrBuilder): ContentType =
         entityMessage
           .getField(entityMessage.getDescriptorForType.findFieldByName("content_type")) match {
@@ -528,11 +529,13 @@ object HttpApi {
             .header[Accept]
             .exists(_.mediaRanges.exists(_.value.startsWith(MediaTypes.`text/event-stream`.toString)))
 
-        data
-          .prefixAndTail(1)
-          .runWith(Sink.head)
-          .flatMap {
+        (for {
+          (headers, data) <- futureResponse
+          firstMessage <- data.prefixAndTail(1).runWith(Sink.head)
+        } yield {
+          firstMessage match {
             case (Seq(protobuf: ProtobufAny), rest) =>
+
               if (isHttpBodyResponse) {
                 val entityMessage = parseResponseBody(protobuf) // We need to peek-ahead to check the content-type of the response we're sending out
                 Future.successful(
@@ -543,7 +546,8 @@ object HttpApi {
                         .single(entityMessage)
                         .concat(rest.map(parseResponseBody))
                         .map(em => HttpEntity.Chunk(extractDataFromHttpBody(em) ++ NEWLINE_BYTES))
-                    )
+                    ),
+                    headers = headers
                   )
                 )
               } else if (sseAccepted) {
@@ -555,6 +559,7 @@ object HttpApi {
                     .map(parseResponseBody)
                     .map(em => ServerSentEvent(jsonPrinter.print(em)))
                 ).to[HttpResponse]
+                  .map(response => response.withHeaders(headers))
               } else {
                 Future.successful(
                   HttpResponse(
@@ -565,24 +570,30 @@ object HttpApi {
                         .concat(rest)
                         .map(parseResponseBody)
                         .map(em => HttpEntity.Chunk(ByteString(jsonPrinter.print(em)) ++ NEWLINE_BYTES))
-                    )
+                    ),
+                    headers = headers
                   )
                 )
               }
             case (Seq(), _) =>
               throw new IllegalStateException("Empty response")
           }
+        }).flatten
       } else {
-        data
-          .runWith(Sink.head)
-          .map { protobuf: ProtobufAny =>
-            val entityMessage = parseResponseBody(protobuf)
-            HttpResponse(entity = if (isHttpBodyResponse) {
+        for {
+          (headers, data) <- futureResponse
+          protobuf <- data.runWith(Sink.head)
+        } yield {
+          val entityMessage = parseResponseBody(protobuf)
+          HttpResponse(
+            entity = if (isHttpBodyResponse) {
               HttpEntity(extractContentTypeFromHttpBody(entityMessage), extractDataFromHttpBody(entityMessage))
             } else {
               HttpEntity(ContentTypes.`application/json`, ByteString(jsonPrinter.print(entityMessage)))
-            })
-          }
+            },
+            headers = headers
+          )
+        }
       }
     }
 
@@ -643,7 +654,11 @@ object HttpApi {
     }
   }
 
-  final def serve(services: List[(ServiceDescriptor, PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]])])(
+  final def serve(
+      services: List[
+        (ServiceDescriptor, PartialFunction[HttpRequest, Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]])
+      ]
+  )(
       implicit sys: ActorSystem,
       mat: Materializer,
       ec: ExecutionContext
