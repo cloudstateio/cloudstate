@@ -266,7 +266,7 @@ object Serve {
                   (Metadata.defaultInstance, Source(other).concat(rest))
               }
 
-              val headers = metadata.entries.collect {
+              val headers = metadata.entries.iterator.collect {
                 case MetadataEntry(key, MetadataEntry.Value.StringValue(value), _) => RawHeader(key, value)
               }.toList
 
