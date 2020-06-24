@@ -31,7 +31,7 @@ class CrdtSupportFactory(system: ActorSystem,
 
   private[this] final val log = Logging.getLogger(system, this.getClass)
 
-  private[this] final val crdtClient = CrdtClient(grpcClientSettings)
+  private[this] final val crdtClient = CrdtClient(grpcClientSettings)(system)
 
   override def buildEntityTypeSupport(entity: Entity,
                                       serviceDescriptor: ServiceDescriptor,

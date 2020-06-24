@@ -27,7 +27,7 @@ class EventSourcedSupportFactory(system: ActorSystem,
 
   private final val log = Logging.getLogger(system, this.getClass)
 
-  private val eventSourcedClient = EventSourcedClient(grpcClientSettings)
+  private val eventSourcedClient = EventSourcedClient(grpcClientSettings)(system)
 
   override def buildEntityTypeSupport(entity: Entity,
                                       serviceDescriptor: ServiceDescriptor,

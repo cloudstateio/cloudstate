@@ -25,7 +25,7 @@ class StatelessFunctionSupportFactory(system: ActorSystem,
 
   private final val log = Logging.getLogger(system, this.getClass)
 
-  private final val statelessFunctionClient = StatelessFunctionClient(grpcClientSettings)
+  private final val statelessFunctionClient = StatelessFunctionClient(grpcClientSettings)(system)
 
   override def buildEntityTypeSupport(entity: Entity,
                                       serviceDescriptor: ServiceDescriptor,
