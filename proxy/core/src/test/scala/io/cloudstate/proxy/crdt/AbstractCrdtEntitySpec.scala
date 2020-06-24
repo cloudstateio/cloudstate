@@ -200,7 +200,7 @@ abstract class AbstractCrdtEntitySpec
 
   protected def expectCommand(name: String, payload: ProtoAny, streamed: Boolean = false): Long =
     inside(toUserFunction.expectMsgType[CrdtStreamIn].message) {
-      case CrdtStreamIn.Message.Command(Command(eid, cid, n, p, s, _)) =>
+      case CrdtStreamIn.Message.Command(Command(eid, cid, n, p, s, _, _)) =>
         eid should ===(entityId)
         n should ===(name)
         p shouldBe Some(payload)

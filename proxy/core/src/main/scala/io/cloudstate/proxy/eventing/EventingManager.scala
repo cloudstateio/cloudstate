@@ -52,6 +52,7 @@ trait EventingSupport {
 
 object EventingManager {
 
+  /* Commented out temporarily while projection support is developed
   final val log = LoggerFactory.getLogger("EventingManager")
 
   final case class EventMapping private (entity: ServableEntity, routes: Map[MethodDescriptor, Eventing])
@@ -215,4 +216,6 @@ object EventingManager {
             })
         )
     }
+
+ */
 }

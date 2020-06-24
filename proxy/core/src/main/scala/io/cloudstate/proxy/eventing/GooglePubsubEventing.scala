@@ -50,6 +50,9 @@ import com.google.pubsub.v1.pubsub.{
 }
 import java.util.Collections
 
+import akka.util.ByteString
+import io.cloudstate.protocol.entity.Metadata
+
 import scala.util.Try
 import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration._
@@ -243,7 +246,8 @@ class GCPubsubEventingSupport(config: Config, materializer: Materializer) extend
       .alsoTo(ackSink) // at-most-once // FIXME Add stats generation/collection so we can track progress here
       .collect({
         case ReceivedMessage(_, Some(msg), _) =>
-          commandHandler.serializer.parse(ProtobufAny.parseFrom(msg.data.newCodedInput))
+          commandHandler
+            .deserialize(Metadata.defaultInstance)(ByteString.fromByteBuffer(msg.data.asReadOnlyByteBuffer()))
       }) // TODO - investigate ProtobufAny.fromJavaAny(PbAnyJava.parseFrom(msg.data))
       .mapMaterializedValue(_ => cancellable.future)
   }

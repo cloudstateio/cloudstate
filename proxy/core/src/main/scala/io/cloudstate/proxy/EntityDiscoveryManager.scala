@@ -245,10 +245,10 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
 
         val router = new UserFunctionRouter(entities, entityDiscoveryClient)
 
+        /*
         val eventSupport = EventingManager.createSupport(config.getConfig("eventing"))
-
-        val (route, eventingGraph) =
-          Serve.createRoute(entities, router, statsCollector, entityDiscoveryClient, descriptors, eventSupport)
+         */
+        val route = Serve.createRoute(entities, router, statsCollector, entityDiscoveryClient, descriptors, Map.empty)
 
         log.debug("Starting gRPC proxy")
 
@@ -264,7 +264,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
         // Start warmup
         system.actorOf(Warmup.props(spec.entities.exists(_.entityType == EventSourced.name)), "state-manager-warm-up")
 
-        context.become(binding(eventingGraph))
+        context.become(binding(None))
 
       } catch {
         case e @ EntityDiscoveryException(message) =>

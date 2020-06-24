@@ -32,6 +32,7 @@ option (scalapb.options) = {
 message UserFunctionCommand {
     string name = 1;
     google.protobuf.Any payload = 2;
+    cloudstate.Metadata metadata = 3;
 }
 
 message EntityCommand {
@@ -39,6 +40,7 @@ message EntityCommand {
     string name = 2;
     google.protobuf.Any payload = 3;
     bool streamed = 4;
+    cloudstate.Metadata metadata = 5;
 }
 
 message UserFunctionReply {

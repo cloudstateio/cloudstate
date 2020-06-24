@@ -26,6 +26,14 @@ import "cloudstate/entity.proto";
 option java_package = "io.cloudstate.protocol";
 option go_package = "cloudstate/protocol";
 
+// A function command.
+//
+// For unary and streamed out calls, the service name, command name and payload will always be set.
+//
+// For streamed in and duplex streamed calls, the first command sent will just contain the service
+// name and command name, but no payload. This will indicate that the function has been invoked.
+// Subsequent commands on the stream will only have the payload set, the service name and command
+// name will not be set.
 message FunctionCommand {
     // The name of the service this function is on.
     string service_name = 2;
@@ -35,6 +43,9 @@ message FunctionCommand {
 
     // The command payload.
     google.protobuf.Any payload = 4;
+
+    // Metadata
+    Metadata metadata = 5;
 }
 
 message FunctionReply {
@@ -45,17 +56,67 @@ message FunctionReply {
         Forward forward = 3;
     }
 
-    repeated SideEffect side_effects = 4;
+    repeated SideEffect side_effects = 5;
 }
 
 service StatelessFunction {
 
+    // Handle a unary command.
+    //
+    // The input command will contain the service name, command name, request metadata and the command
+    // payload. The reply may contain a direct reply, a forward or a failure, and it may contain many
+    // side effects.
     rpc handleUnary(FunctionCommand) returns (FunctionReply) {}
 
+    // Handle a streamed in command.
+    //
+    // The first message in will contain the request metadata, including the service name and command
+    // name. It will not have an associated payload set. This will be followed by zero to many messages
+    // in with a payload, but no service name or command name set.
+    //
+    // The semantics of stream closure in this protocol map 1:1 with the semantics of gRPC stream closure,
+    // that is, when the client closes the stream, the stream is considered half closed, and the server
+    // should eventually, but not necessarily immediately, send a response message with a status code and
+    // trailers.
+    //
+    // If however the server sends a response message before the client closes the stream, the stream is
+    // completely closed, and the client should handle this and stop sending more messages.
+    //
+    // Either the client or the server may cancel the stream at any time, cancellation is indicated
+    // through an HTTP2 stream RST message.
     rpc handleStreamedIn(stream FunctionCommand) returns (FunctionReply) {}
 
+    // Handle a streamed out command.
+    //
+    // The input command will contain the service name, command name, request metadata and the command
+    // payload. Zero or more replies may be sent, each containing either a direct reply, a forward or a
+    // failure, and each may contain many side effects. The stream to the client will be closed when the
+    // this stream is closed, with the same status as this stream is closed with.
+    //
+    // Either the client or the server may cancel the stream at any time, cancellation is indicated
+    // through an HTTP2 stream RST message.
     rpc handleStreamedOut(FunctionCommand) returns (stream FunctionReply) {}
 
+    // Handle a full duplex streamed command.
+    //
+    // The first message in will contain the request metadata, including the service name and command
+    // name. It will not have an associated payload set. This will be followed by zero to many messages
+    // in with a payload, but no service name or command name set.
+    //
+    // Zero or more replies may be sent, each containing either a direct reply, a forward or a failure,
+    // and each may contain many side effects.
+    //
+    // The semantics of stream closure in this protocol map 1:1 with the semantics of gRPC stream closure,
+    // that is, when the client closes the stream, the stream is considered half closed, and the server
+    // should eventually, but not necessarily immediately, close the streamage with a status code and
+    // trailers.
+    //
+    // If however the server closes the stream with a status code and trailers, the stream is immediately
+    // considered completely closed, and no further messages sent by the client will be handled by the
+    // server.
+    //
+    // Either the client or the server may cancel the stream at any time, cancellation is indicated
+    // through an HTTP2 stream RST message.
     rpc handleStreamed(stream FunctionCommand) returns (stream FunctionReply) {}
 
 }
