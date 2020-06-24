@@ -19,10 +19,11 @@ const debug = require("debug")("cloudstate-crdt");
 const util = require("util");
 const grpc = require("grpc");
 const protoLoader = require("@grpc/proto-loader");
-const protoHelper = require("./protobuf-helper")
+const protoHelper = require("./protobuf-helper");
 const AnySupport = require("./protobuf-any");
 const crdts = require("./crdts");
 const CommandHelper = require("./command-helper");
+const Metadata = require("./metadata");
 
 class CrdtServices {
   constructor() {
@@ -214,7 +215,8 @@ class CrdtHandler {
             this.subscribers.set(ctx.commandId.toString(), {
               commandId: ctx.commandId,
               handler: handler,
-              grpcMethod: grpcMethod
+              grpcMethod: grpcMethod,
+              metadata: ctx.context.metadata
             });
             ctx.subscribed = true;
           }
@@ -402,7 +404,7 @@ class CrdtHandler {
        * @interface module:cloudstate.crdt.StateChangedContext
        * @extends module:cloudstate.CommandContext
        */
-      const ctx = this.commandHelper.createContext(subscriber.commandId);
+      const ctx = this.commandHelper.createContext(subscriber.commandId, subscriber.metadata);
 
       /**
        * The CRDT.
@@ -457,6 +459,11 @@ class CrdtHandler {
 
   handleStreamCancelled(cancelled) {
     const subscriberKey = cancelled.id.toString();
+    const subscriber = this.subscribers.get(subscriberKey);
+    let metadata = new Metadata([]);
+    if (subscriber && subscriber.metadata) {
+      metadata = subscriber.metadata;
+    }
     this.subscribers.delete(subscriberKey);
 
     if (this.cancelledCallbacks.has(subscriberKey)) {
@@ -471,7 +478,7 @@ class CrdtHandler {
        */
 
 
-      const ctx = this.commandHelper.createContext(cancelled.id);
+      const ctx = this.commandHelper.createContext(cancelled.id, metadata);
       ctx.reply = {
         commandId: cancelled.id
       };

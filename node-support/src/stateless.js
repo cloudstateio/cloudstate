@@ -24,10 +24,11 @@ const CloudState = require("./cloudstate");
 const statelessServices = new StatelessSupport();
 
 /**
- * A Stateless.
+ * A stateless entity
  *
- * @memberOf module:cloudstate
+ * @namespace module:cloudstate.stateless
  */
+
 class Stateless {
 
   /**
@@ -41,11 +42,7 @@ class Stateless {
 
     this.options = {
       ...{
-        persistenceId: "entity",
-        snapshotEvery: 100,
         includeDirs: ["."],
-        serializeAllowPrimitives: false,
-        serializeFallbackToJson: false
       },
       ...options
     };
@@ -72,7 +69,7 @@ class Stateless {
      *
      * The names of the properties must match the names of the service calls specified in the gRPC descriptor
      *
-     * @type {Object.<string, module:cloudstate.crdt.Crdt~commandHandler>}
+     * @type {Object.<string, module:cloudstate.stateless.Stateless~commandHandler>}
      */
     this.commandHandlers = {};
   }
@@ -90,42 +87,6 @@ class Stateless {
    */
   lookupType(messageType) {
     return this.root.lookupType(messageType);
-  }
-
-  /**
-   * The initial state callback.
-   *
-   * @member module:cloudstate.EventSourced#initial
-   * @type module:cloudstate.EventSourced~initialCallback
-   */
-
-  /**
-   * Set the initial state callback.
-   *
-   * @param {module:cloudstate.EventSourced~initialCallback} callback The initial state callback.
-   * @return {module:cloudstate.EventSourced} This entity.
-   */
-  setInitial(callback) {
-    this.initial = callback;
-    return this;
-  }
-
-  /**
-   * The behavior callback.
-   *
-   * @member module:cloudstate.EventSourced#behavior
-   * @type module:cloudstate.EventSourced~behaviorCallback
-   */
-
-  /**
-   * Set the behavior callback.
-   *
-   * @param {module:cloudstate.EventSourced~behaviorCallback} callback The behavior callback.
-   * @return {module:cloudstate.EventSourced} This entity.
-   */
-  setBehavior(callback) {
-    this.behavior = callback;
-    return this;
   }
 
   register(allEntities) {
