@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 
-/**
- * The CloudState module.
- *
- * @module cloudstate
- */
-
-module.exports.CloudState = require("./src/cloudstate");
-module.exports.EventSourced = require("./src/eventsourced");
-module.exports.crdt = require("./src/crdt");
-module.exports.Stateless = require("./src/stateless");
-module.exports.Metadata = require("./src/metadata");
+module.exports = class ContextFailure extends Error {
+  constructor(msg) {
+    super(msg);
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, ContextFailure);
+    }
+    this.name = "ContextFailure";
+  }
+};

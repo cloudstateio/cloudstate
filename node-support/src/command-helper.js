@@ -15,16 +15,10 @@
  */
 
 const AnySupport = require("./protobuf-any");
-
-class ContextFailure extends Error {
-  constructor(msg) {
-    super(msg);
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, ContextFailure);
-    }
-    this.name = "ContextFailure";
-  }
-}
+const EffectSerializer = require("./effect-serializer");
+const ContextFailure = require("./context-failure");
+const Metadata = require("./metadata");
+const CloudEvents = require("./cloudevents");
 
 /**
  * Creates the base for context objects.
@@ -37,7 +31,7 @@ module.exports = class CommandHelper {
     this.service = service;
     this.streamId = streamId;
     this.call = call;
-    this.allEntities = allEntities;
+    this.effectSerializer = new EffectSerializer(allEntities);
     this.debug = debug;
     this.handlerFactory = handlerFactory;
   }
@@ -49,7 +43,12 @@ module.exports = class CommandHelper {
    * @private
    */
   handleCommand(command) {
-    const ctx = this.createContext(command.id);
+    let metadata = new Metadata([]);
+    if (command.metadata && command.metadata.entries) {
+      metadata = new Metadata(command.metadata.entries);
+    }
+
+    const ctx = this.createContext(command.id, metadata);
 
     if (!this.service.methods.hasOwnProperty(command.name)) {
       ctx.commandDebug("Command '%s' unknown", command.name);
@@ -150,7 +149,10 @@ module.exports = class CommandHelper {
       } else if (userReply !== undefined) {
         ctx.reply.clientAction = {
           reply: {
-            payload: AnySupport.serialize(grpcMethod.resolvedResponseType.create(userReply), false, false)
+            payload: AnySupport.serialize(grpcMethod.resolvedResponseType.create(userReply), false, false),
+            metadata: {
+              entries: ctx.replyMetadata.entries
+            }
           }
         };
         ctx.commandDebug("%s reply with type [%s] with %d side effects.", desc, ctx.reply.clientAction.reply.payload.type_url, ctx.effects.length);
@@ -169,7 +171,11 @@ module.exports = class CommandHelper {
     this.debug("%s [%s] (%s) - " + msg, ...[this.streamId, this.entityId].concat(args));
   }
 
-  createContext(commandId) {
+  // This creates the context. Note that the context has two levels, first is the internal implementation context,
+  // this has everything the CRDT and EventSourced support needs to do its stuff, it's where effects and metadata
+  // are recorded, etc. The second is the user facing context, which is a property on the internal context called
+  // "context".
+  createContext(commandId, metadata) {
     const accessor = {};
 
     accessor.commandDebug = (msg, ...args) => {
@@ -186,6 +192,7 @@ module.exports = class CommandHelper {
     };
     accessor.error = null;
     accessor.forward = null;
+    accessor.replyMetadata = new Metadata([]);
 
     /**
      * Effect context.
@@ -193,6 +200,9 @@ module.exports = class CommandHelper {
      * @interface module:cloudstate.EffectContext
      * @property {string} entityId The id of the entity that the command is for.
      * @property {Long} commandId The id of the command.
+     * @property {module:cloudstate.Metadata} metadata The metadata associated with the command.
+     * @property {module:cloudstate.CloudEvent} cloudevent The CloudEvents metadata associated with the command.
+     * @property {module:cloudstate.Metadata} replyMetadata The metadata to send with a reply.
      */
 
     /**
@@ -204,6 +214,9 @@ module.exports = class CommandHelper {
     accessor.context = {
       entityId: this.entityId,
       commandId: commandId,
+      metadata: metadata,
+      cloudevent: CloudEvents.toCloudevent(metadata.getMap),
+      replyMetadata: accessor.replyMetadata,
 
       /**
        * Emit an effect after processing this command.
@@ -212,10 +225,11 @@ module.exports = class CommandHelper {
        * @param method The entity service method to invoke.
        * @param {object} message The message to send to that service.
        * @param {boolean} synchronous Whether the effect should be execute synchronously or not.
+       * @param {module:cloudstate.Metadata} metadata Metadata to send with the effect.
        */
-      effect: (method, message, synchronous = false) => {
+      effect: (method, message, synchronous = false, metadata) => {
         accessor.ensureActive();
-        accessor.effects.push(this.serializeSideEffect(method, message, synchronous))
+        accessor.effects.push(this.effectSerializer.serializeSideEffect(method, message, synchronous, metadata))
       },
 
       /**
@@ -224,10 +238,11 @@ module.exports = class CommandHelper {
        * @function module:cloudstate.CommandContext#thenForward
        * @param method The entity service method to invoke.
        * @param {object} message The message to send to that service.
+       * @param {module:cloudstate.Metadata} metadata Metadata to send with the forward.
        */
-      thenForward: (method, message) => {
+      thenForward: (method, message, metadata) => {
         accessor.ensureActive();
-        accessor.forward = this.serializeEffect(method, message);
+        accessor.forward = this.effectSerializer.serializeEffect(method, message, metadata);
       },
 
       /**
@@ -249,45 +264,4 @@ module.exports = class CommandHelper {
     };
     return accessor;
   }
-
-  serializeEffect(method, message) {
-    let serviceName, commandName;
-    // We support either the grpc method, or a protobufjs method being passed
-    if (typeof method.path === "string") {
-      const r = new RegExp("^/([^/]+)/([^/]+)$").exec(method.path);
-      if (r == null) {
-        throw new Error(util.format("Not a valid gRPC method path '%s' on object '%o'", method.path, method));
-      }
-      serviceName = r[1];
-      commandName = r[2];
-    } else if (method.type === "rpc") {
-      serviceName = method.parent.name;
-      commandName = method.name;
-    }
-
-    const service = this.allEntities[serviceName];
-
-    if (service !== undefined) {
-      const command = service.methods[commandName];
-      if (command !== undefined) {
-        const payload = AnySupport.serialize(command.resolvedRequestType.create(message), false, false);
-        return {
-          serviceName: serviceName,
-          commandName: commandName,
-          payload: payload
-        };
-      } else {
-        throw new Error(util.format("Command [%s] unknown on service [%s].", commandName, serviceName))
-      }
-    } else {
-      throw new Error(util.format("Service [%s] has not been registered as an entity in this user function, and so can't be used as a side effect or forward.", service))
-    }
-  }
-
-  serializeSideEffect(method, message, synchronous) {
-    const msg = this.serializeEffect(method, message);
-    msg.synchronous = synchronous;
-    return msg;
-  }
-
 };
