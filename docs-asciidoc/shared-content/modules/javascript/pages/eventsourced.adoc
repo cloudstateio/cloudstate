@@ -2,7 +2,7 @@
 
 This page documents how to implement Cloudstate event sourced entities in JavaScript. For information on what Cloudstate event sourced entities are, please read the general @ref[Event sourcing](../../features/eventsourced.md) documentation first.
 
-## Persistence types and serialization
+== Persistence types and serialization
 
 Event sourced entities persist events and snapshots, and these need to be serialized when persisted. A snapshot is the current state of the entity, and so the entities state must be serializable. The most straight forward way to persist events and the state is to use protobufs. Cloudstate will automatically detect if an emitted event or snapshot is a protobuf, and serialize it as such using `protobufjs`. See [https://www.npmjs.com/package/protobufjs](https://www.npmjs.com/package/protobufjs) for more information on `protobufjs`. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
 
@@ -28,7 +28,7 @@ The `persistenceId` is used to namespace events in the journal, useful for when 
 
 The `snapshotEvery` parameter controls how often snapshots are taken, so that the entity doesn't need to be recovered from the whole journal each time it's loaded. If left unset, it defaults to 100. Setting it to a negative number will result in snapshots never being taken. Typically, leaving it at the default is good enough, we only recommend changing it if you have specific data from performance tests to justify a change.
 
-## Using protobuf types
+== Using protobuf types
 
 When you pass an event or snapshot to Cloudstate to persist, it needs to know how to serialize that. Simply passing a regular object does not provide enough information to know how protobuf should serialize the objects. Hence, any event or snapshot types that you want to use, you have to lookup the protobuf type for, and then use the `create` method to create it.
 
@@ -90,7 +90,7 @@ Here's an example event handler for the `ItemAdded` event:
 
 @@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #item-added }
 
-### Setting the behavior
+=== Setting the behavior
 
 Once you have your command handler and event handler functions implemented, you can now set your behavior. The @extref:[behavior callback](jsdoc:EventSourced.html#~behaviorCallback) takes the current state of the entity, and returns an object with two properties, `commandHandlers` and `eventHandlers`. The callback may return different sets of handlers according to the current state, this will be explored more @ref:[a little later](#multiple-behaviors), for now we'll just implement an entity with one set of handlers.
 
@@ -102,7 +102,7 @@ The command handlers are a mapping of the gRPC service call names to the command
 
 The event handlers are a mapping of event names to the event handler functions that we implemented. The event names must match the type of the events that are being persisted. In the case of protobuf messages, this is either the fully qualified name of the protobuf message, or the unqualified name of the protobuf message. For JSON messages, this is the value of the `type` property in the message.
 
-#### Multiple behaviors
+=== Multiple behaviors
 
 In the examples above, our shopping cart entity only has one behavior. An entity may have different states, where command and event handling may differ according to the state it is currently in. While this could be implemented using if statements in the handlers, Cloudstate also provides multiple behavior support, so that an entity can change its behavior. This multiple behavior support allows implementing entities as finite state machines.
 
@@ -112,7 +112,7 @@ In the example below, we show a shopping cart that also has a checkout command. 
 
 @@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #multiple-behaviors }
 
-## Starting the entity
+== Starting the entity
 
 If you only have a single entity, as a convenience, you can start it directly, by invoking the @extref:[`start`](jsdoc:EventSourced.html#start) method, like so:
 

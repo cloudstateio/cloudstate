@@ -1,7 +1,7 @@
 
 
 Node version
-: Cloudstate uses the [grpc node package](https://github.com/grpc/grpc-node), which compiles a native gRPC implementation using node-gyp. It requires a minimum of node 4.0.
+: Cloudstate uses the https://github.com/grpc/grpc-node[grpc node package], which compiles a native gRPC implementation using node-gyp. It requires a minimum of node 4.0.
 
 Build tool
 : Cloudstate doesn't require any particular build tool, though npm install scripts do need to be run.

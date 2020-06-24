@@ -1,6 +1,6 @@
 
 
-This page documents how to implement Cloudstate event sourced entities in Java. For information on what Cloudstate event sourced entities are, please read the general @ref[Event sourcing](../../features/eventsourced.md) documentation first.
+This page documents how to implement Cloudstate event sourced entities in Java. For information on what Cloudstate event sourced entities are, please read the general xref:concepts:eventsource.adoc[Event sourcing] documentation first.
 
 An event sourced entity can be created by annotating it with the @javadoc[`@EventSourcedEntity`](io.cloudstate.javasupport.eventsourced.EventSourcedEntity) annotation.
 
@@ -46,13 +46,13 @@ The following shows the implementation of the `GetCart` command handler. This co
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #get-cart }
 
-### Emitting events
+=== Emitting events
 
 Commands that modify the state may do so by emitting events.
 
-@@@ warning
-The **only** way a command handler may modify its state is by emitting an event. Any modifications made directly to the state from the command handler will not be persisted, and when the entity is passivated and next reloaded, those modifications will not be present.
-@@@
+
+WARNING: The **only** way a command handler may modify its state is by emitting an event. Any modifications made directly to the state from the command handler will not be persisted, and when the entity is passivated and next reloaded, those modifications will not be present.
+
 
 A command handler may emit an event by taking in a @javadoc[`CommandContext`](io.cloudstate.javasupport.eventsourced.CommandContext) parameter, and invoking the `emit` method on it. Invoking `emit` will immediately invoke the associated event handler for that event - this both validates that the event can be applied to the current state, as well as updates the state so that subsequent processing in the command handler can use it.
 
@@ -62,7 +62,7 @@ Here's an example of a command handler that emits an event:
 
 This command handler also validates the command, ensuring the quantity items added is greater than zero. Invoking `ctx.fail` fails the command - this method throws so there's no need to explicitly throw an exception.
 
-## Handling events
+== Handling events
 
 Event handlers are invoked at two points, when restoring entities from the journal, before any commands are handled, and each time a new event is emitted. An event handlers responsibility is to update the state of the entity according to the event. Event handlers are the only place where its safe to mutate the state of the entity at all.
 
@@ -76,7 +76,7 @@ Here's an example event handler for the `ItemAdded` event. A utility method, `co
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #item-added }
 
-## Producing and handling snapshots
+== Producing and handling snapshots
 
 Snapshots are an important optimisation for event sourced entities that may contain many events, to ensure that they can be loaded quickly even when they have very long journals. To produce a snapshot, a method annotated with @javadoc[`@Snapshot`](io.cloudstate.javasupport.eventsourced.Snapshot) must be declared. It takes a context class of type @javadoc[`SnapshotContext`](io.cloudstate.javasupport.eventsourced.SnapshotContext), and must return a snapshot of the current state in serializable form. 
 
@@ -88,7 +88,7 @@ Multiple snapshot handlers may be defined to handle multiple different types of 
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #handle-snapshot }
 
-## Registering the entity
+== Registering the entity
 
 Once you've created your entity, you can register it with the @javadoc[`CloudState`](io.cloudstate.javasupport.CloudState) server, by invoking the `registerEventSourcedEntity` method. In addition to passing your entity class and service descriptor, you also need to pass any descriptors that you use for persisting events, for example, the `domain.proto` descriptor.
 
