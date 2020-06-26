@@ -84,14 +84,18 @@ def akkaDiscoveryDependency(name: String, excludeThese: ExclusionRule*) =
 def akkaPersistenceCassandraDependency(name: String, excludeThese: ExclusionRule*) =
   "com.typesafe.akka" %% name % AkkaPersistenceCassandraVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
 
-def common: Seq[Setting[_]] = Seq(
+def common: Seq[Setting[_]] = automateHeaderSettings(Compile, Test) ++ Seq(
   headerMappings := headerMappings.value ++ Seq(
       de.heikoseeberger.sbtheader.FileType("proto") -> HeaderCommentStyle.cppStyleLineComment,
       de.heikoseeberger.sbtheader.FileType("js") -> HeaderCommentStyle.cStyleBlockComment
     ),
   // Akka gRPC overrides the default ScalaPB setting including the file base name, let's override it right back.
   akkaGrpcCodeGeneratorSettings := Seq(),
-  excludeFilter in headerResources := HiddenFileFilter || GlobFilter("reflection.proto"),
+  headerSources / excludeFilter := (headerSources / excludeFilter).value || "package-info.java",
+  headerResources / excludeFilter := (headerResources / excludeFilter).value || {
+      val googleProtos = ((baseDirectory in ThisBuild).value / "protocols" / "frontend" / "google").getCanonicalPath
+      new SimpleFileFilter(_.getCanonicalPath startsWith googleProtos)
+    },
   javaOptions in Test ++= Seq("-Xms1G", "-XX:+CMSClassUnloadingEnabled", "-XX:+UseConcMarkSweepGC")
 )
 
@@ -707,7 +711,7 @@ lazy val `scala-support` = (project in file("scala-support"))
 
 lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
   .dependsOn(`java-support`)
-  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin)
+  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin)
   .settings(
     name := "java-shopping-cart",
     dockerSettings,
@@ -727,7 +731,7 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
 
 lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
   .dependsOn(`java-support`)
-  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin)
+  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin)
   .settings(
     name := "java-pingpong",
     dockerSettings,
@@ -816,6 +820,8 @@ lazy val `tck` = (project in file("tck"))
     dockerSettings,
     Compile / bashScriptDefines / mainClass := Some("org.scalatest.run"),
     bashScriptExtraDefines += "addApp io.cloudstate.tck.ConfiguredCloudStateTCK",
+    headerSettings(IntegrationTest),
+    automateHeaderSettings(IntegrationTest),
     javaOptions in IntegrationTest := sys.props.get("config.resource").map(r => s"-Dconfig.resource=$r").toSeq,
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
@@ -824,7 +830,7 @@ lazy val `tck` = (project in file("tck"))
   )
 
 lazy val `graal-tools` = (project in file("graal-tools"))
-  .enablePlugins(GraalVMPlugin)
+  .enablePlugins(GraalVMPlugin, AutomateHeaderPlugin)
   .settings(
     libraryDependencies ++= List(
         "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided",
