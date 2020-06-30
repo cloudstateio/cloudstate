@@ -18,6 +18,7 @@ package io.cloudstate.javasupport.eventsourced;
 
 import io.cloudstate.javasupport.ClientActionContext;
 import io.cloudstate.javasupport.EffectContext;
+import io.cloudstate.javasupport.MetadataContext;
 
 /**
  * An event sourced command context.
@@ -26,7 +27,8 @@ import io.cloudstate.javasupport.EffectContext;
  * new events in response to a command, along with forwarding the result to other entities, and
  * performing side effects on other entities.
  */
-public interface CommandContext extends EventSourcedContext, ClientActionContext, EffectContext {
+public interface CommandContext
+    extends EventSourcedContext, ClientActionContext, EffectContext, MetadataContext {
   /**
    * The current sequence number of events in this entity.
    *

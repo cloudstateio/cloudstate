@@ -16,9 +16,9 @@
 
 package io.cloudstate.javasupport.impl
 
-import io.cloudstate.javasupport.{ServiceCallFactory, ServiceCallRef, StatefulService}
+import io.cloudstate.javasupport.{Service, ServiceCallFactory, ServiceCallRef}
 
-class ResolvedServiceCallFactory(services: Map[String, StatefulService]) extends ServiceCallFactory {
+class ResolvedServiceCallFactory(services: Map[String, Service]) extends ServiceCallFactory {
   override def lookup[T](serviceName: String, methodName: String, methodType: Class[T]): ServiceCallRef[T] =
     services.get(serviceName) match {
       case Some(service) =>

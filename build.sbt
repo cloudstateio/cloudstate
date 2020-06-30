@@ -601,7 +601,7 @@ lazy val `java-support` = (project in file("java-support"))
         "com.fasterxml.jackson.core" % "jackson-databind" % JacksonDatabindVersion
       ),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
-    javacOptions in (Compile, compile) ++= Seq("-source", "1.8", "-target", "1.8"),
+    javacOptions in (Compile, compile) ++= Seq("-source", "11", "-target", "11"),
     akkaGrpcGeneratedSources in Compile := Seq(AkkaGrpc.Server),
     akkaGrpcGeneratedLanguages in Compile := Seq(AkkaGrpc.Scala), // FIXME should be Java, but here be dragons
     PB.protoSources in Compile ++= {
@@ -630,7 +630,7 @@ lazy val `java-support-docs` = (project in file("java-support/docs"))
     Test / PB.protoSources += (baseDirectory in ThisBuild).value / "protocols" / "frontend",
     Test / PB.protoSources += sourceDirectory.value / "modules" / "java" / "examples" / "proto",
     Test / PB.targets := Seq(PB.gens.java -> (Test / sourceManaged).value),
-    Compile / javacOptions ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8")
+    Compile / javacOptions ++= Seq("-encoding", "UTF-8", "-source", "11", "-target", "11")
   )
 
 lazy val `java-support-tck` = (project in file("java-support/tck"))
@@ -643,7 +643,7 @@ lazy val `java-support-tck` = (project in file("java-support/tck"))
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
     PB.protoSources in Compile += (baseDirectory in ThisBuild).value / "protocols" / "tck",
     PB.targets in Compile := Seq(PB.gens.java -> (sourceManaged in Compile).value),
-    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8"),
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "11", "-target", "11"),
     assemblySettings("cloudstate-java-tck.jar")
   )
 
@@ -663,7 +663,7 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
     PB.targets in Compile := Seq(
         PB.gens.java -> (sourceManaged in Compile).value
       ),
-    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8"),
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "11", "-target", "11"),
     assemblySettings("java-shopping-cart.jar")
   )
 
@@ -683,7 +683,7 @@ lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
     PB.targets in Compile := Seq(
         PB.gens.java -> (sourceManaged in Compile).value
       ),
-    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8"),
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "11", "-target", "11"),
     assemblySettings("java-pingpong.jar")
   )
 

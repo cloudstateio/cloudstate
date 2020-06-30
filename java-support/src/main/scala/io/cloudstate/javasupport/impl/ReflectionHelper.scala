@@ -20,11 +20,53 @@ import java.lang.annotation.Annotation
 import java.lang.reflect.{AccessibleObject, Executable, Member, Method, ParameterizedType, Type, WildcardType}
 import java.util.Optional
 
-import io.cloudstate.javasupport.{Context, EntityContext, EntityId, ServiceCallFactory}
+import io.cloudstate.javasupport.{
+  CloudEvent,
+  Context,
+  EntityContext,
+  EntityId,
+  Metadata,
+  MetadataContext,
+  ServiceCallFactory
+}
 import com.google.protobuf.{Any => JavaPbAny}
 
 import scala.reflect.ClassTag
 
+/**
+ * How we do reflection:
+ *
+ * Where possible, all reflection should be done up front, parameter handlers should be calculated, return type
+ * mappers should be calculated, and everything stored in maps for fast lookup in request hot paths.
+ *
+ * Where this isn't possible, eg because some things may be routed based on type, and supertypes may be supported,
+ * and the full type hierarchy isn't known up front, then the results of reflection should be cached.
+ *
+ * The general approach to reflective invocations is that each type of method (eg, command handler, event handler,
+ * etc) should have an invoker defined for it. This invoker is responsible for working out how to invoke the method,
+ * given a set of input parameters, and what to do with its result.
+ *
+ * Each invoker should store an array of parameter handlers. A parameter handler takes an input context, and converts
+ * it to the thing that needs to be passed to the method. When invoking the method, this array of handlers is mapped
+ * to the array of parameters, to be used in the reflective invocation. Determining the right parameter handler for
+ * a given parameter type is done by partial functions, the case statements check if the parameter type is of a
+ * particular type or has a particular annotation, and if it does, returns the handler for that. If nothing matches,
+ * the fall back is to treat that parameter as the "main argument", this is the command message or event message that
+ * is being handled by the method. If possible, validation is done on the main argument to ensure it is of the
+ * expected type.
+ *
+ * An invoker may also need to do some processing on the return type. It should, up front, define a mapping function
+ * up front that converts the type returned by the method to the type that the invoker needs to return.
+ *
+ * Invokers themselves are stored in a map - the key of the map depends on the type of invoker, so for example event
+ * handlers are looked up by type, so the key of the map will be the type of event that the invoker handles. Command
+ * handlers though are looked up by command name, so the key of the map will be the name of the command that the
+ * the handler handles.
+ *
+ * This helper class provides shared functionality for achieving the above, including some shared parameter handlers,
+ * and the common logic for command invokers. The helper methods in here are used by the various service types
+ * annotation support classes.
+ */
 private[impl] object ReflectionHelper {
 
   def getAllDeclaredMethods(clazz: Class[_]): Seq[Method] =
@@ -51,19 +93,36 @@ private[impl] object ReflectionHelper {
       member.getName.charAt(0).toUpper + member.getName.drop(1)
     } else member.getName
 
-  final case class InvocationContext[+C <: Context](mainArgument: AnyRef, context: C)
-  trait ParameterHandler[-C <: Context] extends (InvocationContext[C] => AnyRef)
-  case object ContextParameterHandler extends ParameterHandler[Context] {
-    override def apply(ctx: InvocationContext[Context]): AnyRef = ctx.context.asInstanceOf[AnyRef]
+  final case class InvocationContext[M, +C <: Context](mainArgument: M, context: C)
+  trait ParameterHandler[M, -C <: Context] extends (InvocationContext[M, C] => AnyRef)
+  case object ContextParameterHandler extends ParameterHandler[Nothing, Context] {
+    override def apply(ctx: InvocationContext[Nothing, Context]): AnyRef = ctx.context.asInstanceOf[AnyRef]
   }
-  final case class MainArgumentParameterHandler[C <: Context](argumentType: Class[_]) extends ParameterHandler[C] {
-    override def apply(ctx: InvocationContext[C]): AnyRef = ctx.mainArgument
+  final case class MainArgumentParameterHandler[M <: AnyRef, C <: Context](argumentType: Class[M])
+      extends ParameterHandler[M, C] {
+    override def apply(ctx: InvocationContext[M, C]): AnyRef = ctx.mainArgument
   }
-  final case object EntityIdParameterHandler extends ParameterHandler[EntityContext] {
-    override def apply(ctx: InvocationContext[EntityContext]): AnyRef = ctx.context.entityId()
+  final case object EntityIdParameterHandler extends ParameterHandler[Nothing, EntityContext] {
+    override def apply(ctx: InvocationContext[Nothing, EntityContext]): AnyRef = ctx.context.entityId()
   }
-  final case object ServiceCallFactoryParameterHandler extends ParameterHandler[Context] {
-    override def apply(ctx: InvocationContext[Context]): AnyRef = ctx.context.serviceCallFactory()
+  final case object ServiceCallFactoryParameterHandler extends ParameterHandler[Nothing, Context] {
+    override def apply(ctx: InvocationContext[Nothing, Context]): AnyRef = ctx.context.serviceCallFactory()
+  }
+  final case object MetadataParameterHandler extends ParameterHandler[Nothing, MetadataContext] {
+    override def apply(ctx: InvocationContext[Nothing, MetadataContext]): AnyRef =
+      ctx.context.metadata
+  }
+  final case object CloudEventParameterHandler extends ParameterHandler[Nothing, MetadataContext] {
+    override def apply(ctx: InvocationContext[Nothing, MetadataContext]): AnyRef =
+      ctx.context.metadata.asCloudEvent
+  }
+  final case object OptionalCloudEventParameterHandler extends ParameterHandler[Nothing, MetadataContext] {
+    override def apply(ctx: InvocationContext[Nothing, MetadataContext]): AnyRef =
+      if (ctx.context.metadata.isCloudEvent) {
+        Optional.of(ctx.context.metadata.asCloudEvent)
+      } else {
+        Optional.empty()
+      }
   }
 
   final case class MethodParameter(method: Executable, param: Int) {
@@ -75,14 +134,24 @@ private[impl] object ReflectionHelper {
         .find(a => implicitly[ClassTag[A]].runtimeClass.isInstance(a))
   }
 
-  def getParameterHandlers[C <: Context: ClassTag](method: Executable)(
-      extras: PartialFunction[MethodParameter, ParameterHandler[C]] = PartialFunction.empty
-  ): Array[ParameterHandler[C]] = {
-    val handlers = Array.ofDim[ParameterHandler[_]](method.getParameterCount)
+  /**
+   * Determine the parameter handler for the given method.
+   *
+   * @param method The method (or constructor).
+   * @param extras A partial function for any additional argument handlers other than the default one.
+   * @tparam M The type of the main argument.
+   * @tparam C The context type for this method.
+   * @return An array of parameter handlers the same length as the number of parameters accepted by this method.
+   */
+  def getParameterHandlers[M <: AnyRef, C <: Context: ClassTag](method: Executable)(
+      extras: PartialFunction[MethodParameter, ParameterHandler[M, C]] = PartialFunction.empty
+  ): Array[ParameterHandler[M, C]] = {
+    val handlers = Array.ofDim[ParameterHandler[_, _]](method.getParameterCount)
+    val contextClass = implicitly[ClassTag[C]].runtimeClass
+    val metadataContext = classOf[MetadataContext].isAssignableFrom(contextClass)
     for (i <- 0 until method.getParameterCount) {
       val parameter = MethodParameter(method, i)
       // First match things that we can be specific about
-      val contextClass = implicitly[ClassTag[C]].runtimeClass
       handlers(i) =
         if (isWithinBounds(parameter.parameterType, classOf[Context], contextClass))
           ContextParameterHandler
@@ -93,35 +162,52 @@ private[impl] object ReflectionHelper {
           )
         else if (parameter.parameterType == classOf[ServiceCallFactory])
           ServiceCallFactoryParameterHandler
-        else if (parameter.annotation[EntityId].isDefined) {
+        else if (parameter.annotation[EntityId].isDefined && classOf[EntityContext].isAssignableFrom(contextClass)) {
           if (parameter.parameterType != classOf[String]) {
             throw new RuntimeException(
               s"@EntityId annotated parameter on method ${method.getName} has type ${parameter.parameterType}, must be String."
             )
           }
           EntityIdParameterHandler
-        } else
-          extras.applyOrElse(parameter, (p: MethodParameter) => MainArgumentParameterHandler(p.parameterType))
+        } else if (metadataContext && parameter.parameterType == classOf[Metadata])
+          MetadataParameterHandler
+        else if (metadataContext && parameter.parameterType == classOf[CloudEvent])
+          CloudEventParameterHandler
+        else if (metadataContext && parameter.parameterType == classOf[Optional[_]] &&
+                 getFirstParameter(parameter.genericParameterType) == classOf[CloudEvent])
+          OptionalCloudEventParameterHandler
+        else
+          extras.applyOrElse(
+            parameter,
+            (p: MethodParameter) => MainArgumentParameterHandler(p.parameterType.asInstanceOf[Class[M]])
+          )
     }
-    handlers.asInstanceOf[Array[ParameterHandler[C]]]
+    handlers.asInstanceOf[Array[ParameterHandler[M, C]]]
   }
 
-  final class CommandHandlerInvoker[CommandContext <: Context: ClassTag](
-      val method: Method,
-      val serviceMethod: ResolvedServiceMethod[_, _],
-      extraParameters: PartialFunction[MethodParameter, ParameterHandler[CommandContext]] = PartialFunction.empty
-  ) {
-
-    private val name = serviceMethod.descriptor.getFullName
-    private val parameters = ReflectionHelper.getParameterHandlers[CommandContext](method)(extraParameters)
-
-    if (parameters.count(_.isInstanceOf[MainArgumentParameterHandler[_]]) > 1) {
+  def verifyAtMostOneMainArgument[M, C <: Context](name: String,
+                                                   method: Method,
+                                                   parameters: Array[ParameterHandler[M, C]]) =
+    if (parameters.count(_.isInstanceOf[MainArgumentParameterHandler[_, _]]) > 1) {
       throw new RuntimeException(
-        s"CommandHandler method $method must defined at most one non context parameter to handle commands, the parameters defined were: ${parameters
+        s"$name method $method must defined at most one non context parameter to handle commands, the parameters defined were: ${parameters
           .collect { case MainArgumentParameterHandler(clazz) => clazz.getName }
           .mkString(",")}"
       )
     }
+
+  final class CommandHandlerInvoker[CommandContext <: Context: ClassTag](
+      val method: Method,
+      val serviceMethod: ResolvedServiceMethod[_, _],
+      extraParameters: PartialFunction[MethodParameter, ParameterHandler[AnyRef, CommandContext]] =
+        PartialFunction.empty
+  ) {
+
+    private val name = serviceMethod.descriptor.getFullName
+    private val parameters = ReflectionHelper.getParameterHandlers[AnyRef, CommandContext](method)(extraParameters)
+
+    verifyAtMostOneMainArgument("CommandHandler", method, parameters)
+
     parameters.foreach {
       case MainArgumentParameterHandler(inClass) if !inClass.isAssignableFrom(serviceMethod.inputType.typeClass) =>
         throw new RuntimeException(
@@ -170,20 +256,35 @@ private[impl] object ReflectionHelper {
     }
   }
 
-  private def getRawType(t: Type): Class[_] = t match {
+  def getRawType(t: Type): Class[_] = t match {
     case clazz: Class[_] => clazz
     case pt: ParameterizedType => getRawType(pt.getRawType)
     case wct: WildcardType => getRawType(wct.getUpperBounds.headOption.getOrElse(classOf[Object]))
     case _ => classOf[Object]
   }
 
-  def getFirstParameter(t: Type): Class[_] =
+  /**
+   * Get the type of the first parameter of this parameterized type.
+   *
+   * If it's not a parameterized type, AnyRef is returned.
+   */
+  def getGenericFirstParameter(t: Type): Type =
     t match {
       case pt: ParameterizedType =>
-        getRawType(pt.getActualTypeArguments()(0))
+        pt.getActualTypeArguments()(0)
       case _ =>
         classOf[AnyRef]
     }
+
+  /**
+   * Get the class of the first parameter of this parameterized type.
+   *
+   * If it's not a parameterized type, AnyRef is returned.
+   *
+   * This is useful if, for example, you have a type who's raw type equals say java.util.Optional,
+   * and you want to find out what it's an optional of.
+   */
+  def getFirstParameter(t: Type): Class[_] = getRawType(getGenericFirstParameter(t))
 
   /**
    * Verifies that none of the given methods have CloudState annotations that are not allowed.
@@ -201,7 +302,7 @@ private[impl] object ReflectionHelper {
           val maybeAlternative = allowed.find(_.getSimpleName == annotation.annotationType().getSimpleName)
           throw new RuntimeException(
             s"Annotation @${annotation.annotationType().getName} on method ${method.getDeclaringClass.getName}." +
-            s"${method.getName} not allowed in @${entity.getName} annotated entity." +
+            s"${method.getName} not allowed in @${entity.getName} annotated service." +
             maybeAlternative.fold("")(alterative => s" Did you mean to use @${alterative.getName}?")
           )
         }
