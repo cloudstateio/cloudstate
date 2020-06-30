@@ -10,13 +10,10 @@ inThisBuild(
     version := dynverGitDescribeOutput.value.mkVersion(versionFmt, "latest"),
     dynver := sbtdynver.DynVer.getGitDescribeOutput(new Date).mkVersion(versionFmt, "latest"),
     scalaVersion := "2.12.11",
-    // Needed for the akka-grpc 0.8.4 snapshot
-    resolvers += Resolver.bintrayRepo("akka", "maven"), // TODO: Remove once we're switching to akka-grpc 0.8.5/1.0.0
     organizationName := "Lightbend Inc.",
     organizationHomepage := Some(url("https://lightbend.com")),
     startYear := Some(2019),
     licenses += ("Apache-2.0", new URL("https://www.apache.org/licenses/LICENSE-2.0.txt")),
-    resolvers += "Akka Snapshots" at "https://repo.akka.io/snapshots/", // FIXME for akka-protobuf-v390
     homepage := Some(url("https://cloudstate.io")),
     scmInfo := Some(
         ScmInfo(
@@ -55,15 +52,15 @@ val GrpcJavaVersion = "1.29.0"
 // native-image
 val GrpcNettyShadedVersion = "1.28.1"
 val GraalAkkaVersion = "0.5.0"
-val AkkaVersion = "2.6.5"
+val AkkaVersion = "2.6.6"
 val AkkaHttpVersion = "10.1.12"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.5"
-val ProtobufVersion = "3.9.0" // We use this version because it is the latest which works with native-image 20.0.0
+val ProtobufVersion = "3.11.4" // We use this version because it is the latest which works with native-image 20
 val GraalVersion = "20.1.0"
-val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debian"
+val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debianslim-jre"
 val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
 
 val excludeTheseDependencies: Seq[ExclusionRule] = Seq(
@@ -87,15 +84,18 @@ def akkaDiscoveryDependency(name: String, excludeThese: ExclusionRule*) =
 def akkaPersistenceCassandraDependency(name: String, excludeThese: ExclusionRule*) =
   "com.typesafe.akka" %% name % AkkaPersistenceCassandraVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
 
-def common: Seq[Setting[_]] = Seq(
+def common: Seq[Setting[_]] = automateHeaderSettings(Compile, Test) ++ Seq(
   headerMappings := headerMappings.value ++ Seq(
       de.heikoseeberger.sbtheader.FileType("proto") -> HeaderCommentStyle.cppStyleLineComment,
       de.heikoseeberger.sbtheader.FileType("js") -> HeaderCommentStyle.cStyleBlockComment
     ),
   // Akka gRPC overrides the default ScalaPB setting including the file base name, let's override it right back.
   akkaGrpcCodeGeneratorSettings := Seq(),
-  excludeDependencies += "com.typesafe.akka" %% "akka-protobuf-v3", // akka-protobuf-v3 shades protobuf-java 3.10.0 which is not compatible with native-image 20.0.0
-  excludeFilter in headerResources := HiddenFileFilter || GlobFilter("reflection.proto"),
+  headerSources / excludeFilter := (headerSources / excludeFilter).value || "package-info.java",
+  headerResources / excludeFilter := (headerResources / excludeFilter).value || {
+      val googleProtos = ((baseDirectory in ThisBuild).value / "protocols" / "frontend" / "google").getCanonicalPath
+      new SimpleFileFilter(_.getCanonicalPath startsWith googleProtos)
+    },
   javaOptions in Test ++= Seq("-Xms1G", "-XX:+CMSClassUnloadingEnabled", "-XX:+UseConcMarkSweepGC")
 )
 
@@ -154,8 +154,7 @@ lazy val protocols = (project in file("protocols"))
       IO.zip(
         archiveStructure(cloudstateProtocolsName,
                          (base / "frontend" ** "*.proto" +++
-                         base / "protocol" ** "*.proto" +++
-                         base / "proxy" ** "*.proto")),
+                         base / "protocol" ** "*.proto")),
         cloudstateProtos
       )
 
@@ -171,12 +170,12 @@ lazy val protocols = (project in file("protocols"))
   )
 
 lazy val docs = (project in file("docs"))
-  .enablePlugins(ParadoxPlugin, ProtocPlugin)
+  .enablePlugins(CloudstateParadoxPlugin, ProtocPlugin)
   .dependsOn(`java-support` % Test)
   .settings(
     common,
     name := "Cloudstate Documentation",
-    paradoxTheme := Some(builtinParadoxTheme("generic")),
+    deployModule := "core",
     mappings in (Compile, paradox) ++= {
       val javaApiDocs = (doc in (`java-support`, Compile)).value
 
@@ -195,19 +194,22 @@ lazy val docs = (project in file("docs"))
       }
     },
     paradoxProperties in Compile ++= Map(
-        "canonical.base_url" -> "https://cloudstate.io/docs/",
+        "documentation.title" -> "Cloudstate Documentation",
+        "canonical.base_url" -> "https://cloudstate.io/docs/core/current/",
         "javadoc.io.cloudstate.javasupport.base_url" -> ".../user/lang/java/api/",
         "javadoc.link_style" -> "direct",
         "extref.jsdoc.base_url" -> ".../user/lang/javascript/api/module-cloudstate.%s",
-        "cloudstate.version" -> "0.4.3", // hardcode, otherwise we'll end up with the wrong version in the docs
+        "extref.godoc.base_url" -> "https://cloudstate.io/docs/go/current/%s",
+        "extref.dartdoc.base_url" -> "https://cloudstate.io/docs/dart/snapshot/%s",
+        "extref.dotnetdoc.base_url" -> "https://cloudstate.io/docs/dotnet/current/%s",
+        "extref.springbootdoc.base_url" -> "https://cloudstate.io/docs/springboot/current/%s",
+        "cloudstate.version" -> {
+          if (isSnapshot.value) previousStableVersion.value.getOrElse("0.0.0") else version.value
+        },
         "cloudstate.java-support.version" -> "0.4.3",
         "cloudstate.node-support.version" -> "0.0.1",
-        "cloudstate.go-support.version" -> "0.1.0",
-        "cloudstate.go.version" -> "1.13",
-        "cloudstate.kotlin-support.version" -> "0.5.1",
-        "cloudstate.dart-support.version" -> "0.5.5"
+        "cloudstate.kotlin-support.version" -> "0.5.1"
       ),
-    paradoxNavigationDepth := 3,
     inConfig(Test)(
       sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
         PB.protoSources += sourceDirectory.value / "proto",
@@ -418,7 +420,6 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         // Since we exclude Aeron, we also exclude its transitive Agrona dependency, so we need to manually add it HERE
         "org.agrona" % "agrona" % "0.9.29",
         akkaDependency("akka-remote"),
-        "com.typesafe.akka" %% "akka-protobuf-v390" % (AkkaVersion + "-proto390") excludeAll (excludeTheseDependencies: _*), // FIXME since akka-protobuf-v3 uses a shaded protobuf-java 3.10.0 which is not supported in native-image yet…
         // For Eventing support of Google Pubsub
         "com.google.api.grpc" % "grpc-google-cloud-pubsub-v1" % "0.12.0" % "protobuf", // ApacheV2
         "io.grpc" % "grpc-auth" % GrpcJavaVersion, // ApacheV2
@@ -456,7 +457,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     },
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "proxy", baseDir / "frontend", baseDir / "protocol")
+      Seq(baseDir / "frontend", baseDir / "protocol")
     },
     PB.protoSources in Test ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
@@ -710,7 +711,7 @@ lazy val `scala-support` = (project in file("scala-support"))
 
 lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
   .dependsOn(`java-support`)
-  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin)
+  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin)
   .settings(
     name := "java-shopping-cart",
     dockerSettings,
@@ -730,7 +731,7 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
 
 lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
   .dependsOn(`java-support`)
-  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin)
+  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin)
   .settings(
     name := "java-pingpong",
     dockerSettings,
@@ -796,13 +797,13 @@ lazy val `load-generator` = (project in file("samples/js-shopping-cart-load-gene
   )
 
 lazy val `tck` = (project in file("tck"))
-  .enablePlugins(AkkaGrpcPlugin)
+  .enablePlugins(AkkaGrpcPlugin, JavaAppPackaging, DockerPlugin)
   .configs(IntegrationTest)
   .dependsOn(`akka-client`)
   .settings(
     Defaults.itSettings,
     common,
-    name := "tck",
+    name := "cloudstate-tck",
     libraryDependencies ++= Seq(
         akkaDependency("akka-stream"),
         akkaDependency("akka-discovery"),
@@ -814,8 +815,13 @@ lazy val `tck` = (project in file("tck"))
       ),
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "proxy", baseDir / "protocol")
+      Seq(baseDir / "protocol")
     },
+    dockerSettings,
+    Compile / bashScriptDefines / mainClass := Some("org.scalatest.run"),
+    bashScriptExtraDefines += "addApp io.cloudstate.tck.ConfiguredCloudStateTCK",
+    headerSettings(IntegrationTest),
+    automateHeaderSettings(IntegrationTest),
     javaOptions in IntegrationTest := sys.props.get("config.resource").map(r => s"-Dconfig.resource=$r").toSeq,
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
@@ -824,12 +830,11 @@ lazy val `tck` = (project in file("tck"))
   )
 
 lazy val `graal-tools` = (project in file("graal-tools"))
-  .enablePlugins(GraalVMPlugin)
+  .enablePlugins(GraalVMPlugin, AutomateHeaderPlugin)
   .settings(
     libraryDependencies ++= List(
         "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided",
         // Adds configuration to let Graal Native Image (SubstrateVM) work
-        "com.typesafe.akka" %% "akka-protobuf-v390" % (AkkaVersion + "-proto390") excludeAll (excludeTheseDependencies: _*),
         "com.github.vmencik" %% "graal-akka-actor" % GraalAkkaVersion,
         "com.github.vmencik" %% "graal-akka-stream" % GraalAkkaVersion,
         "com.github.vmencik" %% "graal-akka-http" % GraalAkkaVersion,

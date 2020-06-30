@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Lightbend Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.cloudstate.proxy
 
 import java.util.Base64
@@ -108,7 +124,7 @@ object GrpcWebSupport {
   private def decodeText(newContentType: ContentType, entity: MessageEntity): MessageEntity =
     entity match {
       case HttpEntity.Strict(_, data) =>
-        HttpEntity.Strict(newContentType, base64Decode(data))
+        HttpEntity.Strict(newContentType, data.decodeBase64)
       case streamed =>
         HttpEntity.Chunked.fromData(newContentType, streamed.dataBytes.via(new Base64DecoderStage))
     }
@@ -120,17 +136,11 @@ object GrpcWebSupport {
       .get
     entity match {
       case HttpEntity.Strict(_, data) =>
-        HttpEntity.Strict(contentType, base64Encode(data))
+        HttpEntity.Strict(contentType, data.encodeBase64)
       case streamed =>
-        HttpEntity.Chunked.fromData(contentType, streamed.dataBytes.map(base64Encode))
+        HttpEntity.Chunked.fromData(contentType, streamed.dataBytes.map(_.encodeBase64))
     }
   }
-
-  private def base64Encode(bytes: ByteString): ByteString =
-    ByteString(Base64.getEncoder.encode(bytes.asByteBuffer))
-
-  private def base64Decode(bytes: ByteString): ByteString =
-    ByteString(Base64.getDecoder.decode(bytes.asByteBuffer))
 
   private class Base64DecoderStage extends GraphStage[FlowShape[ByteString, ByteString]] {
 
@@ -162,7 +172,7 @@ object GrpcWebSupport {
                     bytes.take(nextSize)
                 }
 
-              push(out, base64Decode(next))
+              push(out, next.decodeBase64)
             }
           }
 
@@ -171,7 +181,7 @@ object GrpcWebSupport {
             if (carry.nonEmpty) {
               carryOver = ByteString.empty // Clear this out to not retain it beyond this point
               // This will fail, but we let it so we get the base64 error.
-              emit(out, base64Decode(carry), () => completeStage())
+              emit(out, carry.decodeBase64, () => completeStage())
             } else {
               completeStage()
             }
