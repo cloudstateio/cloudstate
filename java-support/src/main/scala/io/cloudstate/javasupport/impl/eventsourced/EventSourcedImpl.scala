@@ -25,7 +25,7 @@ import akka.stream.scaladsl.Flow
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import io.cloudstate.javasupport.CloudStateRunner.Configuration
-import io.cloudstate.javasupport.{Context, ServiceCallFactory, StatefulService}
+import io.cloudstate.javasupport.{Context, Metadata, Service, ServiceCallFactory}
 import io.cloudstate.javasupport.eventsourced._
 import io.cloudstate.javasupport.impl.{
   AbstractClientActionContext,
@@ -33,6 +33,7 @@ import io.cloudstate.javasupport.impl.{
   ActivatableContext,
   AnySupport,
   FailInvoked,
+  MetadataImpl,
   ResolvedEntityFactory,
   ResolvedServiceMethod
 }
@@ -52,7 +53,7 @@ final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
                                         val anySupport: AnySupport,
                                         override val persistenceId: String,
                                         val snapshotEvery: Int)
-    extends StatefulService {
+    extends Service {
 
   override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] =
     factory match {
@@ -186,8 +187,9 @@ final class EventSourcedImpl(_system: ActorSystem,
             throw ProtocolException(command, "Receiving entity is not the intended recipient of command")
           val cmd =
             ScalaPbAny.toJavaProto(command.payload.getOrElse(throw ProtocolException(command, "No command payload")))
+          val metadata = new MetadataImpl(command.metadata.map(_.entries.toVector).getOrElse(Nil))
           val context =
-            new CommandContextImpl(thisEntityId, sequence, command.name, command.id, service.anySupport, log)
+            new CommandContextImpl(thisEntityId, sequence, command.name, command.id, metadata, service.anySupport, log)
 
           val reply = try {
             handler.handleCommand(cmd, context)
@@ -260,6 +262,7 @@ final class EventSourcedImpl(_system: ActorSystem,
                            override val sequenceNumber: Long,
                            override val commandName: String,
                            override val commandId: Long,
+                           override val metadata: Metadata,
                            val anySupport: AnySupport,
                            val log: LoggingAdapter)
       extends CommandContext

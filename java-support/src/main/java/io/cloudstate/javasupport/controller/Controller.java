@@ -14,23 +14,17 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.crdt;
+package io.cloudstate.javasupport.controller;
 
-import io.cloudstate.javasupport.EffectContext;
-import io.cloudstate.javasupport.MetadataContext;
+import io.cloudstate.javasupport.impl.CloudStateAnnotation;
 
-import java.util.function.Consumer;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-/**
- * Context for a stream cancelled event.
- *
- * <p>This is sent to callbacks registered by {@link StreamedCommandContext#onCancel(Consumer)}.
- */
-public interface StreamCancelledContext extends CrdtContext, EffectContext, MetadataContext {
-  /**
-   * The id of the command that the stream was for.
-   *
-   * @return The ID of the command.
-   */
-  long commandId();
-}
+/** A controller. */
+@CloudStateAnnotation
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface Controller {}

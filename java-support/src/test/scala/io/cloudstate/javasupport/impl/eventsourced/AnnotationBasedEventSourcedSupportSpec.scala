@@ -25,6 +25,7 @@ import io.cloudstate.javasupport.{
   EntityContext,
   EntityFactory,
   EntityId,
+  Metadata,
   ServiceCall,
   ServiceCallFactory,
   ServiceCallRef
@@ -57,6 +58,7 @@ class AnnotationBasedEventSourcedSupportSpec extends WordSpec with Matchers {
     override def fail(errorMessage: String): RuntimeException = ???
     override def forward(to: ServiceCall): Unit = ???
     override def effect(effect: ServiceCall, synchronous: Boolean): Unit = ???
+    override def metadata(): Metadata = Metadata.EMPTY
   }
 
   val eventCtx = new EventContext with BaseContext {

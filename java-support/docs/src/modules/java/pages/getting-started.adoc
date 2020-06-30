@@ -211,4 +211,12 @@ Exactly which context parameters are available depend on the type of entity and 
 | link:{attachmentsdir}/api/io/cloudstate/javasupport/EntityId.html[`@EntityId`]
 | The ID of the entity.
 
+| link:{attachmentsdir}/api/io/cloudstate/javasupport/Metadata.html[`Metadata`]
+|
+| The metadata associated with the command.
+
+| link:{attachmentsdir}/api/io/cloudstate/javasupport/CloudEvent.html[`CloudEvent`]
+|
+| The CloudEvent metadata associated with the command. May be wrapped in `java.util.Optional`.
+
 |====

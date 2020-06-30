@@ -14,23 +14,19 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.crdt;
+package io.cloudstate.javasupport.controller;
 
-import io.cloudstate.javasupport.EffectContext;
-import io.cloudstate.javasupport.MetadataContext;
+import io.cloudstate.javasupport.ServiceCall;
 
-import java.util.function.Consumer;
+/** A forward reply. */
+public interface ForwardReply<T> extends ControllerReply<T> {
 
-/**
- * Context for a stream cancelled event.
- *
- * <p>This is sent to callbacks registered by {@link StreamedCommandContext#onCancel(Consumer)}.
- */
-public interface StreamCancelledContext extends CrdtContext, EffectContext, MetadataContext {
   /**
-   * The id of the command that the stream was for.
+   * The service call that is being forwarded to.
    *
-   * @return The ID of the command.
+   * @return The service call.
    */
-  long commandId();
+  ServiceCall serviceCall();
+
+  ForwardReply<T> withEffects(Effect... effect);
 }

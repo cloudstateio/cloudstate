@@ -14,32 +14,26 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport;
+package io.cloudstate.javasupport.controller;
 
-import com.google.protobuf.Any;
-import com.google.protobuf.Descriptors;
+import io.cloudstate.javasupport.Metadata;
 
-/** Represents a call to a service, performed either as a forward, or as an effect. */
-public interface ServiceCall {
+/** A message reply. */
+public interface MessageReply<T> extends ControllerReply<T> {
 
   /**
-   * The reference to the call.
+   * The payload of the message reply.
    *
-   * @return The reference to the call.
+   * @return The payload.
    */
-  ServiceCallRef<?> ref();
+  T payload();
 
   /**
-   * The message to pass to the call when the call is invoked.
-   *
-   * @return The message to pass to the call, serialized as an {@link Any}.
-   */
-  Any message();
-
-  /**
-   * The metadata to pass with the message when the call is invoked.
+   * The metadata associated with the message.
    *
    * @return The metadata.
    */
   Metadata metadata();
+
+  MessageReply<T> withEffects(Effect... effect);
 }

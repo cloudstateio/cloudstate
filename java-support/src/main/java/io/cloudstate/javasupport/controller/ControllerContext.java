@@ -14,32 +14,22 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport;
+package io.cloudstate.javasupport.controller;
 
-import com.google.protobuf.Any;
-import com.google.protobuf.Descriptors;
+import io.cloudstate.javasupport.Metadata;
+import io.cloudstate.javasupport.MetadataContext;
 
-/** Represents a call to a service, performed either as a forward, or as an effect. */
-public interface ServiceCall {
-
+/** Context for controller calls. */
+public interface ControllerContext extends MetadataContext {
   /**
-   * The reference to the call.
+   * Get the metadata associated with this call.
    *
-   * @return The reference to the call.
-   */
-  ServiceCallRef<?> ref();
-
-  /**
-   * The message to pass to the call when the call is invoked.
+   * <p>Note, this only returns call level associated metadata. For unary in calls, this will be the
+   * same as the message metadata, but for streamed calls, it will contain metadata associated with
+   * the whole stream, so for example if this was a gRPC call, it will contain the HTTP headers for
+   * that gRPC call.
    *
-   * @return The message to pass to the call, serialized as an {@link Any}.
-   */
-  Any message();
-
-  /**
-   * The metadata to pass with the message when the call is invoked.
-   *
-   * @return The metadata.
+   * @return The call level metadata.
    */
   Metadata metadata();
 }

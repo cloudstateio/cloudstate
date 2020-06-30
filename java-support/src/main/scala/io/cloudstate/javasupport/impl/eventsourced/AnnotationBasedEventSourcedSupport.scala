@@ -256,7 +256,8 @@ private object EventBehaviorReflection {
 
 private class EntityConstructorInvoker(constructor: Constructor[_])
     extends (EventSourcedEntityCreationContext => AnyRef) {
-  private val parameters = ReflectionHelper.getParameterHandlers[EventSourcedEntityCreationContext](constructor)()
+  private val parameters =
+    ReflectionHelper.getParameterHandlers[AnyRef, EventSourcedEntityCreationContext](constructor)()
   parameters.foreach {
     case MainArgumentParameterHandler(clazz) =>
       throw new RuntimeException(s"Don't know how to handle argument of type $clazz in constructor")
@@ -264,7 +265,7 @@ private class EntityConstructorInvoker(constructor: Constructor[_])
   }
 
   def apply(context: EventSourcedEntityCreationContext): AnyRef = {
-    val ctx = InvocationContext("", context)
+    val ctx = InvocationContext(null.asInstanceOf[AnyRef], context)
     constructor.newInstance(parameters.map(_.apply(ctx)): _*).asInstanceOf[AnyRef]
   }
 }
@@ -273,7 +274,7 @@ private class EventHandlerInvoker(val method: Method) {
 
   private val annotation = method.getAnnotation(classOf[EventHandler])
 
-  private val parameters = ReflectionHelper.getParameterHandlers[EventContext](method)()
+  private val parameters = ReflectionHelper.getParameterHandlers[AnyRef, EventContext](method)()
 
   private def annotationEventClass = annotation.eventClass() match {
     case obj if obj == classOf[Object] => None
@@ -311,7 +312,7 @@ private class EventHandlerInvoker(val method: Method) {
 private class SnapshotHandlerInvoker(val method: Method) {
   private val annotation = method.getAnnotation(classOf[SnapshotHandler])
 
-  private val parameters = ReflectionHelper.getParameterHandlers[SnapshotContext](method)()
+  private val parameters = ReflectionHelper.getParameterHandlers[AnyRef, SnapshotContext](method)()
 
   // Verify that there is at most one event handler
   val snapshotClass: Class[_] = parameters.collect {
@@ -333,7 +334,7 @@ private class SnapshotHandlerInvoker(val method: Method) {
 
 private class SnapshotInvoker(val method: Method) {
 
-  private val parameters = ReflectionHelper.getParameterHandlers[SnapshotContext](method)()
+  private val parameters = ReflectionHelper.getParameterHandlers[AnyRef, SnapshotContext](method)()
 
   parameters.foreach {
     case MainArgumentParameterHandler(clazz) =>
@@ -344,7 +345,7 @@ private class SnapshotInvoker(val method: Method) {
   }
 
   def invoke(obj: AnyRef, context: SnapshotContext): AnyRef = {
-    val ctx = InvocationContext("", context)
+    val ctx = InvocationContext(null.asInstanceOf[AnyRef], context)
     method.invoke(obj, parameters.map(_.apply(ctx)): _*)
   }
 
