@@ -451,6 +451,8 @@ lazy val `proxy-core` = (project in file("proxy/core"))
 
       old.map(_.copy(outputPath = ct / "akka-grpc" / "main"))
     },
+    // add protobuf targets to managed source directories for IDEs
+    Compile / managedSourceDirectories ++= (Compile / PB.targets).value.map(_.outputPath).distinct,
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "frontend", baseDir / "protocol")
