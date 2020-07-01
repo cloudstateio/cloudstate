@@ -37,7 +37,7 @@ option go_package = "cloudstate/protocol";
 // If a metadata entry associated with a message can't be expressed in an underlying transport, for example, due to
 // invalid characters in a key or value, the behavior of the proxy is undefined. This is because metadata is transport
 // specific, so if the user function chooses to use metadata, it is choosing to be specific to a particular transport,
-// which is beyond the scope of the Cloudstate protocol, and it's therefore the user functions responsibility to adhere
+// which is beyond the scope of the Cloudstate protocol, and it's therefore the user function's responsibility to adhere
 // to the semantics of that transport. The proxy MAY decide to drop metadata entries if it knows they are invalid or
 // unsupported. If a metadata entry is dropped, the proxy MAY inform the user function that the entry was dropped by
 // sending an error message to the EntityDiscovery.ReportError gRPC call.
