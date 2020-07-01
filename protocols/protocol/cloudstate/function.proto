@@ -108,7 +108,7 @@ service StatelessFunction {
     //
     // The semantics of stream closure in this protocol map 1:1 with the semantics of gRPC stream closure,
     // that is, when the client closes the stream, the stream is considered half closed, and the server
-    // should eventually, but not necessarily immediately, close the streamage with a status code and
+    // should eventually, but not necessarily immediately, close the stream with a status code and
     // trailers.
     //
     // If however the server closes the stream with a status code and trailers, the stream is immediately
