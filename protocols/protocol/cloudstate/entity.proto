@@ -103,7 +103,7 @@ message Reply {
     // Not all transports support per message metadata, for example, gRPC doesn't. The Cloudstate proxy MAY ignore the
     // metadata in this case, or it MAY lift the metadata into another place, for example, in gRPC, a unary call MAY
     // have its reply metadata placed in the headers of the HTTP response, or the first reply to a streamed call MAY
-    // if its metadata placed in the headers of the HTTP response.
+    // have its metadata placed in the headers of the HTTP response.
     //
     // If the metadata is ignored, the Cloudstate proxy MAY notify the user function by sending an error message to the
     // EntityDiscovery.ReportError gRPC call.
