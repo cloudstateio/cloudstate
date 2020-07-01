@@ -29,8 +29,6 @@ jobs:
   
   - name: sbt tests
     before_script:
-      - cd node-support && nvm install && nvm use && npm install && cd -
-      - cd samples/js-shopping-cart && nvm install && nvm use && npm install && cd -
       - sbt update
       - docker pull google/cloud-sdk:latest
       - docker run --rm --expose=8085 --volume=/data -m 140MB --name=googlepubsub -d -p 8085:8085 google/cloud-sdk:latest /bin/sh -c "gcloud beta emulators pubsub start --project=test --host-port=0.0.0.0:8085 --data-dir=/data"
