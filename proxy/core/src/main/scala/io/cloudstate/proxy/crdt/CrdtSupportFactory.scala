@@ -18,6 +18,7 @@ package io.cloudstate.proxy.crdt
 
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets.UTF_8
+
 import akka.{Done, NotUsed}
 import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
 import akka.cluster.ddata.DistributedData
@@ -29,7 +30,7 @@ import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
 import io.cloudstate.protocol.crdt.CrdtClient
-import io.cloudstate.protocol.entity.{Entity, EntityDiscovery}
+import io.cloudstate.protocol.entity.{Entity, EntityDiscovery, Metadata}
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 
@@ -106,13 +107,20 @@ private class CrdtSupport(crdtEntity: ActorRef, parallelism: Int, private implic
     extends EntityTypeSupport {
   import akka.pattern.ask
 
-  override def handler(method: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed] =
+  override def handler(method: EntityMethodDescriptor,
+                       metadata: Metadata): Flow[EntityCommand, UserFunctionReply, NotUsed] =
     if (method.method.toProto.getServerStreaming) {
       Flow[EntityCommand]
-        .mapAsync(parallelism)(command => (crdtEntity ? command).mapTo[Source[UserFunctionReply, NotUsed]])
+        .mapAsync(parallelism)(
+          command =>
+            (crdtEntity ? EntityTypeSupport.mergeStreamLevelMetadata(metadata, command))
+              .mapTo[Source[UserFunctionReply, NotUsed]]
+        )
         .flatMapConcat(identity)
     } else {
-      Flow[EntityCommand].mapAsync(parallelism)(handleUnary)
+      Flow[EntityCommand].mapAsync(parallelism)(
+        command => handleUnary(EntityTypeSupport.mergeStreamLevelMetadata(metadata, command))
+      )
     }
 
   override def handleUnary(command: EntityCommand): Future[UserFunctionReply] =

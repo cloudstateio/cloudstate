@@ -56,7 +56,7 @@ message FunctionReply {
         Forward forward = 3;
     }
 
-    repeated SideEffect side_effects = 5;
+    repeated SideEffect side_effects = 4;
 }
 
 service StatelessFunction {
@@ -73,6 +73,11 @@ service StatelessFunction {
     // The first message in will contain the request metadata, including the service name and command
     // name. It will not have an associated payload set. This will be followed by zero to many messages
     // in with a payload, but no service name or command name set.
+    //
+    // If the underlying transport supports per stream metadata, rather than per message metadata, then
+    // that metadata will only be included in the metadata of the first message. In contrast, if the
+    // underlying transport supports per message metadata, there will be no metadata on the first message,
+    // the metadata will instead be found on each subsequent message.
     //
     // The semantics of stream closure in this protocol map 1:1 with the semantics of gRPC stream closure,
     // that is, when the client closes the stream, the stream is considered half closed, and the server
@@ -105,6 +110,11 @@ service StatelessFunction {
     //
     // Zero or more replies may be sent, each containing either a direct reply, a forward or a failure,
     // and each may contain many side effects.
+    //
+    // If the underlying transport supports per stream metadata, rather than per message metadata, then
+    // that metadata will only be included in the metadata of the first message. In contrast, if the
+    // underlying transport supports per message metadata, there will be no metadata on the first message,
+    // the metadata will instead be found on each subsequent message.
     //
     // The semantics of stream closure in this protocol map 1:1 with the semantics of gRPC stream closure,
     // that is, when the client closes the stream, the stream is considered half closed, and the server

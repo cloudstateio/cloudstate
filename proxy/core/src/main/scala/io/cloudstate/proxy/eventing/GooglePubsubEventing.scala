@@ -16,6 +16,7 @@
 
 package io.cloudstate.proxy.eventing
 
+/*
 import com.typesafe.config.{Config, ConfigFactory}
 import akka.NotUsed
 import akka.actor.{ActorSystem, Cancellable}
@@ -85,24 +86,24 @@ final class PubSubSettings private (
   }
 
   /**
-   * Endpoint hostname where the gRPC connection is made.
-   */
+ * Endpoint hostname where the gRPC connection is made.
+ */
   def withHost(host: String): PubSubSettings = copy(host = host)
 
   /**
-   * Endpoint port where the gRPC connection is made.
-   */
+ * Endpoint port where the gRPC connection is made.
+ */
   def withPort(port: Int): PubSubSettings = copy(port = port)
 
   /**
-   * A filename on the classpath which contains the root certificate authority
-   * that is going to be used to verify certificate presented by the gRPC endpoint.
-   */
+ * A filename on the classpath which contains the root certificate authority
+ * that is going to be used to verify certificate presented by the gRPC endpoint.
+ */
   def withRootCa(rootCa: String): PubSubSettings = copy(rootCa = Some(rootCa))
 
   /**
-   * Credentials that are going to be used for gRPC call authorization.
-   */
+ * Credentials that are going to be used for gRPC call authorization.
+ */
   def withCallCredentials(callCredentials: gRPCCallCredentials): PubSubSettings =
     copy(callCredentials = Some(callCredentials))
 
@@ -113,8 +114,8 @@ final class PubSubSettings private (
     new PubSubSettings(host, port, rootCa, callCredentials)
 
   /**
-   * Creates a GrpcClientSettings from this PubSubSettings
-   */
+ * Creates a GrpcClientSettings from this PubSubSettings
+ */
   def createClientSettings()(implicit sys: ActorSystem): GrpcClientSettings = {
     val sslConfig = rootCa.fold("") { rootCa =>
       s"""
@@ -350,3 +351,4 @@ class GCPubsubEventingSupport(config: Config, materializer: Materializer) extend
       }
     }
 }
+ */

@@ -26,7 +26,6 @@ import akka.grpc.internal.{
   GrpcResponseHelpers,
   ServerReflectionImpl
 }
-import akka.grpc.scaladsl.headers.`Message-Encoding`
 import akka.NotUsed
 import akka.grpc.{ProtobufSerializer, Trailers}
 import akka.http.scaladsl.model.{HttpEntity, HttpHeader, HttpRequest, HttpResponse, StatusCodes}
@@ -38,12 +37,12 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
 import com.google.protobuf.{ByteString => ProtobufByteString}
 import com.google.protobuf.any.{Any => ProtobufAny}
-import com.google.protobuf.Descriptors.{Descriptor, FileDescriptor, MethodDescriptor}
+import com.google.protobuf.Descriptors.{FileDescriptor, MethodDescriptor}
 import grpc.reflection.v1alpha.reflection.ServerReflectionHandler
 import io.cloudstate.protocol.entity._
 import io.cloudstate.proxy.eventing.Emitter
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
-import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
+import io.cloudstate.proxy.entity.UserFunctionReply
 import io.cloudstate.proxy.protobuf.Types
 import io.grpc.{Status, StatusRuntimeException}
 import org.slf4j.{Logger, LoggerFactory}
@@ -74,22 +73,6 @@ object Serve {
       throw new UnsupportedOperationException("operation not supported")
   }
 
-  final class CommandSerializer(val commandName: String, desc: Descriptor, metadata: Metadata)
-      extends ProtobufSerializer[UserFunctionCommand] {
-    final val commandTypeUrl = Types.AnyTypeUrlHostName + desc.getFullName
-
-    override final def serialize(command: UserFunctionCommand): ByteString = command.payload match {
-      case None => ByteString.empty
-      case Some(payload) => ByteString.fromArrayUnsafe(payload.value.toByteArray)
-    }
-
-    override final def deserialize(bytes: ByteString): UserFunctionCommand =
-      parse(ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer)), metadata)
-
-    final def parse(any: ProtobufAny, metadata: Metadata): UserFunctionCommand =
-      UserFunctionCommand(name = commandName, payload = Some(any), metadata = Some(metadata))
-  }
-
   final class CommandHandler(final val entity: ServableEntity,
                              final val method: MethodDescriptor,
                              final val router: UserFunctionRouter,
@@ -102,13 +85,13 @@ object Serve {
     final val expectedReplyTypeUrl: String = Types.AnyTypeUrlHostName + method.getOutputType.getFullName
     final val commandTypeUrl = Types.AnyTypeUrlHostName + method.getInputType.getFullName
 
-    final def deserialize(metadata: Metadata)(bytes: ByteString): UserFunctionCommand = {
+    final def deserialize(bytes: ByteString): UserFunctionRouter.Message = {
       val payload = ProtobufAny(typeUrl = commandTypeUrl, value = ProtobufByteString.copyFrom(bytes.asByteBuffer))
-      UserFunctionCommand(name = method.getName, payload = Some(payload), metadata = Some(metadata))
+      UserFunctionRouter.Message(payload, Metadata.defaultInstance)
     }
 
-    final val handler: Flow[UserFunctionCommand, UserFunctionReply, NotUsed] =
-      router.handle(entity.serviceName)
+    def handle(metadata: Metadata): Flow[UserFunctionRouter.Message, UserFunctionReply, NotUsed] =
+      router.handle(entity.serviceName, method.getName, metadata)
 
     final val processReplies: Flow[UserFunctionReply, ProtobufAny, NotUsed] = {
       val handler = Flow[UserFunctionReply]
@@ -248,9 +231,9 @@ object Serve {
 
         req.entity.dataBytes
           .viaMat(reader.dataFrameDecoder)(Keep.none)
-          .map(handler.deserialize(metadata))
+          .map(handler.deserialize)
           .via(new CancellationBarrierGraphStage) // In gRPC we signal failure by returning an error code, so we don't want the cancellation bubbled out
-          .via(handler.handler)
+          .via(handler.handle(metadata))
           .prefixAndTail(1)
           .runWith(Sink.head)
           .map {
