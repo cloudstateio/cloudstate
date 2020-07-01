@@ -498,7 +498,8 @@ object HttpApi {
       result.build()
     }
 
-    private[this] final def transformResponse(grpcRequest: HttpRequest,
+    private[this] final def transformResponse(
+        grpcRequest: HttpRequest,
         futureResponse: Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]
     ): Future[HttpResponse] = {
       def extractContentTypeFromHttpBody(entityMessage: MessageOrBuilder): ContentType =
@@ -535,7 +536,6 @@ object HttpApi {
         } yield {
           firstMessage match {
             case (Seq(protobuf: ProtobufAny), rest) =>
-
               if (isHttpBodyResponse) {
                 val entityMessage = parseResponseBody(protobuf) // We need to peek-ahead to check the content-type of the response we're sending out
                 Future.successful(

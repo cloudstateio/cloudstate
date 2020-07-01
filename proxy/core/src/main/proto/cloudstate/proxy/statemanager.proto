@@ -29,12 +29,6 @@ option (scalapb.options) = {
     flat_package: true
 };
 
-message UserFunctionCommand {
-    string name = 1;
-    google.protobuf.Any payload = 2;
-    cloudstate.Metadata metadata = 3;
-}
-
 message EntityCommand {
     string entity_id = 1;
     string name = 2;

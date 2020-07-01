@@ -26,7 +26,7 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
-import io.cloudstate.protocol.entity.Entity
+import io.cloudstate.protocol.entity.{Entity, Metadata}
 import io.cloudstate.protocol.event_sourced.EventSourcedClient
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
@@ -98,8 +98,13 @@ private class EventSourcedSupport(eventSourcedEntity: ActorRef,
     extends EntityTypeSupport {
   import akka.pattern.ask
 
-  override def handler(method: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed] =
-    Flow[EntityCommand].mapAsync(parallelism)(command => (eventSourcedEntity ? command).mapTo[UserFunctionReply])
+  override def handler(method: EntityMethodDescriptor,
+                       metadata: Metadata): Flow[EntityCommand, UserFunctionReply, NotUsed] =
+    Flow[EntityCommand].mapAsync(parallelism)(
+      command =>
+        (eventSourcedEntity ? EntityTypeSupport.mergeStreamLevelMetadata(metadata, command))
+          .mapTo[UserFunctionReply]
+    )
 
   override def handleUnary(command: EntityCommand): Future[UserFunctionReply] =
     (eventSourcedEntity ? command).mapTo[UserFunctionReply]

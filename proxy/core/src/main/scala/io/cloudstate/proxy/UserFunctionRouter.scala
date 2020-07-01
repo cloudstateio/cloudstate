@@ -21,7 +21,8 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Sink, Source}
 import io.cloudstate.protocol.entity.{ClientAction, EntityDiscovery, Forward, Metadata, SideEffect, UserFunctionError}
 import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
-import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
+import io.cloudstate.proxy.entity.UserFunctionReply
+import com.google.protobuf.any.{Any => ScalaPbAny}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
@@ -38,19 +39,15 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
                                     serviceDescriptor.getMethods.asScala.map(_.getName).toSet)
   }.toMap
 
-  final def handle(serviceName: String): Flow[UserFunctionCommand, UserFunctionReply, NotUsed] =
-    Flow[UserFunctionCommand].flatMapConcat { command =>
-      routeMessage(Nil,
-                   RouteReason.Initial,
-                   serviceName,
-                   command.name,
-                   command.payload,
-                   synchronous = true,
-                   command.metadata)
-    }
+  final def handle(serviceName: String,
+                   command: String,
+                   metadata: Metadata): Flow[UserFunctionRouter.Message, UserFunctionReply, NotUsed] =
+    routeStream(Nil, RouteReason.Initial, serviceName, command, metadata)
 
-  final def handleUnary(serviceName: String, command: UserFunctionCommand): Future[UserFunctionReply] =
-    routeMessageUnary(Nil, RouteReason.Initial, serviceName, command.name, command.payload, command.metadata)
+  final def handleUnary(serviceName: String,
+                        command: String,
+                        message: UserFunctionRouter.Message): Future[UserFunctionReply] =
+    routeMessageUnary(Nil, RouteReason.Initial, serviceName, command, message)
 
   private final def route(
       trace: List[(RouteReason, String, String)]
@@ -59,14 +56,30 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
       val sideEffects = Source(response.sideEffects.toList)
         .flatMapConcat {
           case SideEffect(serviceName, commandName, payload, synchronous, metadata, _) =>
-            routeMessage(trace, RouteReason.SideEffect, serviceName, commandName, payload, synchronous, metadata)
+            routeMessage(
+              trace,
+              RouteReason.SideEffect,
+              serviceName,
+              commandName,
+              payload.getOrElse(ScalaPbAny.defaultInstance),
+              synchronous,
+              metadata.getOrElse(Metadata.defaultInstance)
+            )
         }
 
       val nextAction = response.clientAction match {
         case Some(
             ClientAction(ClientAction.Action.Forward(Forward(serviceName, commandName, payload, metadata, _)), _)
             ) =>
-          routeMessage(trace, RouteReason.Forwarded, serviceName, commandName, payload, synchronous = true, metadata)
+          routeMessage(
+            trace,
+            RouteReason.Forwarded,
+            serviceName,
+            commandName,
+            payload.getOrElse(ScalaPbAny.defaultInstance),
+            synchronous = true,
+            metadata.getOrElse(Metadata.defaultInstance)
+          )
         case None | Some(ClientAction(ClientAction.Action.Empty, _)) =>
           Source.empty
         case _ =>
@@ -83,12 +96,14 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
                                response: UserFunctionReply): Future[UserFunctionReply] =
     response.sideEffects.foldLeft(Future.unit: Future[Any]) { (future, sideEffect) =>
       future.flatMap { _ =>
-        val sideEffectFuture = routeMessageUnary(trace,
-                                                 RouteReason.SideEffect,
-                                                 sideEffect.serviceName,
-                                                 sideEffect.commandName,
-                                                 sideEffect.payload,
-                                                 sideEffect.metadata)
+        val sideEffectFuture = routeMessageUnary(
+          trace,
+          RouteReason.SideEffect,
+          sideEffect.serviceName,
+          sideEffect.commandName,
+          UserFunctionRouter.Message(sideEffect.payload.getOrElse(ScalaPbAny.defaultInstance),
+                                     sideEffect.metadata.getOrElse(Metadata.defaultInstance))
+        )
         if (sideEffect.synchronous) {
           sideEffectFuture
         } else {
@@ -100,7 +115,14 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
         case Some(
             ClientAction(ClientAction.Action.Forward(Forward(serviceName, commandName, payload, metadata, _)), _)
             ) =>
-          routeMessageUnary(trace, RouteReason.Forwarded, serviceName, commandName, payload, metadata)
+          routeMessageUnary(
+            trace,
+            RouteReason.Forwarded,
+            serviceName,
+            commandName,
+            UserFunctionRouter.Message(payload.getOrElse(ScalaPbAny.defaultInstance),
+                                       metadata.getOrElse(Metadata.defaultInstance))
+          )
         case _ =>
           Future.successful(response)
       }
@@ -110,23 +132,13 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
                                  routeReason: RouteReason,
                                  serviceName: String,
                                  commandName: String,
-                                 payload: Option[com.google.protobuf.any.Any],
+                                 payload: com.google.protobuf.any.Any,
                                  synchronous: Boolean,
-                                 metadata: Option[Metadata]): Source[UserFunctionReply, NotUsed] = {
+                                 metadata: Metadata): Source[UserFunctionReply, NotUsed] = {
 
-    val source = entityCommands.get(serviceName) match {
-      case Some(EntityCommands(_, entitySupport, commands)) =>
-        if (commands(commandName)) {
-          Source
-            .single(UserFunctionCommand(commandName, payload, metadata))
-            .via(entitySupport.handler(commandName))
-            .via(route((routeReason, serviceName, commandName) :: trace))
-        } else {
-          reportErrorSource(routeReason, trace, s"Service [$serviceName] does not have a command named: [$commandName]")
-        }
-      case None =>
-        reportErrorSource(routeReason, trace, s"Service [$serviceName] unknown")
-    }
+    val flow = routeStream(trace, routeReason, serviceName, commandName, metadata)
+
+    val source = Source.single(UserFunctionRouter.Message(payload, metadata)) via flow
 
     if (synchronous) {
       // Return the source as is so that it gets executed as part of the main flow
@@ -139,16 +151,35 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
     }
   }
 
+  private final def routeStream(
+      trace: List[(RouteReason, String, String)],
+      routeReason: RouteReason,
+      serviceName: String,
+      commandName: String,
+      metadata: Metadata
+  ): Flow[UserFunctionRouter.Message, UserFunctionReply, NotUsed] =
+    entityCommands.get(serviceName) match {
+      case Some(EntityCommands(_, entitySupport, commands)) =>
+        if (commands(commandName)) {
+          entitySupport
+            .handler(commandName, metadata)
+            .via(route((routeReason, serviceName, commandName) :: trace))
+        } else {
+          reportErrorFlow(routeReason, trace, s"Service [$serviceName] does not have a command named: [$commandName]")
+        }
+      case None =>
+        reportErrorFlow(routeReason, trace, s"Service [$serviceName] unknown")
+    }
+
   private final def routeMessageUnary(trace: List[(RouteReason, String, String)],
                                       routeReason: RouteReason,
                                       serviceName: String,
                                       commandName: String,
-                                      payload: Option[com.google.protobuf.any.Any],
-                                      metadata: Option[Metadata]): Future[UserFunctionReply] =
+                                      message: UserFunctionRouter.Message): Future[UserFunctionReply] =
     entityCommands.get(serviceName) match {
       case Some(EntityCommands(_, entitySupport, commands)) =>
         if (commands(commandName)) {
-          entitySupport.handleUnary(UserFunctionCommand(commandName, payload, metadata)).flatMap { result =>
+          entitySupport.handleUnary(commandName, message).flatMap { result =>
             routeUnary((routeReason, serviceName, commandName) :: trace, result)
           }
         } else {
@@ -174,16 +205,20 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
     new Exception("Error")
   }
 
-  private final def reportErrorSource(routeReason: RouteReason,
-                                      trace: List[(RouteReason, String, String)],
-                                      error: String): Source[Nothing, NotUsed] =
-    Source.failed(reportError(routeReason, trace, error))
+  private final def reportErrorFlow(routeReason: RouteReason,
+                                    trace: List[(RouteReason, String, String)],
+                                    error: String): Flow[Any, Nothing, NotUsed] =
+    Flow.fromSinkAndSource(Sink.ignore, Source.failed(reportError(routeReason, trace, error)))
 
   private final def reportErrorUnary(routeReason: RouteReason,
                                      trace: List[(RouteReason, String, String)],
                                      error: String): Future[Nothing] =
     Future.failed(reportError(routeReason, trace, error))
 
+}
+
+object UserFunctionRouter {
+  case class Message(payload: ScalaPbAny, metadata: Metadata)
 }
 
 private final case class EntityCommands(name: String, entitySupport: UserFunctionTypeSupport, commands: Set[String])
