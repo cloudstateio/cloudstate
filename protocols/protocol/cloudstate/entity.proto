@@ -153,7 +153,7 @@ message SideEffect {
     // sent, or not.
     bool synchronous = 4;
 
-    // The metadata to include with the forward
+    // The metadata to include with the side effect
     Metadata metadata = 5;
 }
 
