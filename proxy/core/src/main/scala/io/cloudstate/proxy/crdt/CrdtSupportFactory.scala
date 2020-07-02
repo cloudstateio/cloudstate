@@ -1,7 +1,24 @@
+/*
+ * Copyright 2019 Lightbend Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.cloudstate.proxy.crdt
 
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets.UTF_8
+
 import akka.{Done, NotUsed}
 import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
 import akka.cluster.ddata.DistributedData
@@ -13,7 +30,7 @@ import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
 import io.cloudstate.protocol.crdt.CrdtClient
-import io.cloudstate.protocol.entity.{Entity, EntityDiscovery}
+import io.cloudstate.protocol.entity.{Entity, EntityDiscovery, Metadata}
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 
@@ -90,13 +107,20 @@ private class CrdtSupport(crdtEntity: ActorRef, parallelism: Int, private implic
     extends EntityTypeSupport {
   import akka.pattern.ask
 
-  override def handler(method: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed] =
+  override def handler(method: EntityMethodDescriptor,
+                       metadata: Metadata): Flow[EntityCommand, UserFunctionReply, NotUsed] =
     if (method.method.toProto.getServerStreaming) {
       Flow[EntityCommand]
-        .mapAsync(parallelism)(command => (crdtEntity ? command).mapTo[Source[UserFunctionReply, NotUsed]])
+        .mapAsync(parallelism)(
+          command =>
+            (crdtEntity ? EntityTypeSupport.mergeStreamLevelMetadata(metadata, command))
+              .mapTo[Source[UserFunctionReply, NotUsed]]
+        )
         .flatMapConcat(identity)
     } else {
-      Flow[EntityCommand].mapAsync(parallelism)(handleUnary)
+      Flow[EntityCommand].mapAsync(parallelism)(
+        command => handleUnary(EntityTypeSupport.mergeStreamLevelMetadata(metadata, command))
+      )
     }
 
   override def handleUnary(command: EntityCommand): Future[UserFunctionReply] =

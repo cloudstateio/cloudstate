@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Lightbend Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.cloudstate.proxy.function
 
 import akka.NotUsed
@@ -5,13 +21,13 @@ import akka.actor.{ActorRef, ActorSystem}
 import akka.event.Logging
 import akka.grpc.GrpcClientSettings
 import akka.stream.Materializer
-import akka.stream.scaladsl.{Flow, Keep, Sink, Source}
+import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
-import com.google.protobuf.Descriptors.ServiceDescriptor
-import io.cloudstate.protocol.entity.{ClientAction, Entity}
+import com.google.protobuf.Descriptors.{MethodDescriptor, ServiceDescriptor}
+import io.cloudstate.protocol.entity.{ClientAction, Entity, Metadata}
 import io.cloudstate.proxy._
 import io.cloudstate.protocol.function._
-import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
+import io.cloudstate.proxy.entity.UserFunctionReply
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.collection.JavaConverters._
@@ -21,87 +37,96 @@ class StatelessFunctionSupportFactory(system: ActorSystem,
                                       grpcClientSettings: GrpcClientSettings,
                                       concurrencyEnforcer: ActorRef,
                                       statsCollector: ActorRef)(implicit ec: ExecutionContext, mat: Materializer)
-    extends EntityTypeSupportFactory {
+    extends UserFunctionTypeSupportFactory {
 
   private final val log = Logging.getLogger(system, this.getClass)
 
   private final val statelessFunctionClient = StatelessFunctionClient(grpcClientSettings)(system)
 
-  override def buildEntityTypeSupport(entity: Entity,
-                                      serviceDescriptor: ServiceDescriptor,
-                                      methodDescriptors: Map[String, EntityMethodDescriptor]): EntityTypeSupport = {
+  override def build(entity: Entity, serviceDescriptor: ServiceDescriptor): UserFunctionTypeSupport = {
     log.debug("Starting StatelessFunction entity for {}", entity.persistenceId)
 
-    validate(serviceDescriptor, methodDescriptors)
+    val methodDescriptors = serviceDescriptor.getMethods.asScala.map { method =>
+      method.getName -> method
+    }.toMap
 
     new StatelessFunctionSupport(entity.serviceName,
+                                 methodDescriptors,
                                  statelessFunctionClient,
                                  config.proxyParallelism,
                                  config.relayTimeout,
                                  ec)
   }
-
-  private[this] final def validate(serviceDescriptor: ServiceDescriptor,
-                                   methodDescriptors: Map[String, EntityMethodDescriptor]): Unit = ()
 }
 
 private final class StatelessFunctionSupport(serviceName: String,
+                                             methodDescriptors: Map[String, MethodDescriptor],
                                              statelessFunctionClient: StatelessFunctionClient,
                                              parallelism: Int,
                                              private implicit val relayTimeout: Timeout,
                                              private implicit val ec: ExecutionContext)
-    extends EntityTypeSupport {
-  import akka.pattern.ask
+    extends UserFunctionTypeSupport {
 
-  private final val unaryFlow =
-    Flow[EntityCommand].mapAsync(1)(handleUnary)
+  private def methodDescriptor(name: String): MethodDescriptor =
+    methodDescriptors.getOrElse(name, throw EntityDiscoveryException(s"Unknown command $name on service $serviceName"))
 
-  private final val streamOutFlow =
-    Flow[EntityCommand]
+  private def unaryFlow(commandName: String, metadata: Metadata) =
+    Flow[UserFunctionRouter.Message]
+      .mapAsync(1)(
+        message => handleUnary(commandName, UserFunctionTypeSupport.mergeStreamLevelMetadata(metadata, message))
+      )
+
+  private def streamOutFlow(commandName: String, metadata: Metadata) =
+    Flow[UserFunctionRouter.Message]
       .flatMapConcat(
-        ec =>
+        message =>
           statelessFunctionClient
-            .handleStreamedOut(entityCommandToFunctionCommand(ec))
+            .handleStreamedOut(
+              convertUnaryIn(commandName, UserFunctionTypeSupport.mergeStreamLevelMetadata(metadata, message))
+            )
             .map(functionReplyToUserFunctionReply)
       )
 
-  private final val streamInFlow =
-    Flow
-      .setup[EntityCommand, UserFunctionReply, NotUsed] { (mat, attr) =>
-        implicit val materializer = mat
+  private def streamInFlow(commandName: String, metadata: Metadata) =
+    sourceToSourceToFlow((in: Source[UserFunctionRouter.Message, NotUsed]) => {
+      Source.future(statelessFunctionClient.handleStreamedIn(convertStreamIn(commandName, metadata, in)))
+    }).map(functionReplyToUserFunctionReply)
 
-        val (outSubscriber, outSource) = Source.asSubscriber[FunctionCommand].preMaterialize()
-        val outSink = Flow[EntityCommand].map(entityCommandToFunctionCommand).to(Sink.fromSubscriber(outSubscriber))
+  private def streamedFlow(commandName: String, metadata: Metadata) =
+    sourceToSourceToFlow(
+      (in: Source[UserFunctionRouter.Message, NotUsed]) =>
+        statelessFunctionClient.handleStreamed(convertStreamIn(commandName, metadata, in))
+    ).map(functionReplyToUserFunctionReply)
 
-        val inSource =
-          Source.fromFuture(statelessFunctionClient.handleStreamedIn(outSource)).map(functionReplyToUserFunctionReply)
+  private def convertStreamIn(commandName: String,
+                              metadata: Metadata,
+                              in: Source[UserFunctionRouter.Message, NotUsed]): Source[FunctionCommand, NotUsed] =
+    Source
+      .single(
+        FunctionCommand(
+          serviceName = serviceName,
+          name = commandName,
+          metadata = Some(metadata)
+        )
+      )
+      .concat(
+        in.map { message =>
+          FunctionCommand(
+            payload = Some(message.payload),
+            metadata = Some(message.metadata)
+          )
+        }
+      )
 
-        Flow.fromSinkAndSource(outSink, inSource)
-      }
-      .mapMaterializedValue(_ => NotUsed)
-
-  private final val streamedFlow = Flow
-    .setup[EntityCommand, UserFunctionReply, NotUsed] { (mat, attr) =>
-      implicit val materializer = mat
-
-      val (outSubscriber, outSource) = Source.asSubscriber[FunctionCommand].preMaterialize()
-      val outSink = Flow[EntityCommand].map(entityCommandToFunctionCommand).to(Sink.fromSubscriber(outSubscriber))
-
-      val (publisher, inSink) = Sink.asPublisher[FunctionReply](false).preMaterialize()
-      val inSource = Source.fromPublisher(publisher).map(functionReplyToUserFunctionReply)
-
-      statelessFunctionClient.handleStreamed(outSource).runWith(inSink)
-      Flow.fromSinkAndSource(outSink, inSource)
-    }
-    .mapMaterializedValue(_ => NotUsed)
-
-  override final def handler(method: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed] = {
-    val streamIn = method.method.isClientStreaming
-    val streamOut = method.method.isServerStreaming
-    if (streamIn && streamOut) streamedFlow
-    else if (streamIn) streamInFlow
-    else if (streamOut) streamOutFlow
-    else unaryFlow
+  override def handler(commandName: String,
+                       metadata: Metadata): Flow[UserFunctionRouter.Message, UserFunctionReply, NotUsed] = {
+    val method = methodDescriptor(commandName)
+    val streamIn = method.isClientStreaming
+    val streamOut = method.isServerStreaming
+    if (streamIn && streamOut) streamedFlow(commandName, metadata)
+    else if (streamIn) streamInFlow(commandName, metadata)
+    else if (streamOut) streamOutFlow(commandName, metadata)
+    else unaryFlow(commandName, metadata)
   }
 
   private def functionReplyToUserFunctionReply(reply: FunctionReply): UserFunctionReply = {
@@ -118,19 +143,20 @@ private final class StatelessFunctionSupport(serviceName: String,
     )
   }
 
-  private def entityCommandToFunctionCommand(command: EntityCommand): FunctionCommand =
+  private def convertUnaryIn(commandName: String, message: UserFunctionRouter.Message): FunctionCommand =
     FunctionCommand(
       serviceName = serviceName,
-      name = command.name,
-      payload = command.payload
+      name = commandName,
+      payload = Some(message.payload),
+      metadata = Some(message.metadata)
     )
 
-  override final def handleUnary(entityCommand: EntityCommand): Future[UserFunctionReply] =
-    if (entityCommand.streamed) {
-      throw new IllegalStateException("Request streaming is not yet supported for StatelessFunctions")
-    } else {
-      statelessFunctionClient
-        .handleUnary(entityCommandToFunctionCommand(entityCommand))
-        .map(functionReplyToUserFunctionReply)
-    }
+  override def handleUnary(commandName: String, message: UserFunctionRouter.Message): Future[UserFunctionReply] =
+    statelessFunctionClient
+      .handleUnary(convertUnaryIn(commandName, message))
+      .map(functionReplyToUserFunctionReply)
+
+  private def sourceToSourceToFlow[In, Out, MOut](f: Source[In, NotUsed] => Source[Out, MOut]): Flow[In, Out, NotUsed] =
+    Flow[In].prefixAndTail(0).flatMapConcat { case (Nil, in) => f(in) }
+
 }

@@ -22,7 +22,7 @@ import akka.cluster.Cluster
 import akka.util.Timeout
 import akka.pattern.pipe
 import akka.stream.scaladsl.RunnableGraph
-import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
+import akka.http.scaladsl.Http
 import akka.http.scaladsl.Http.ServerBinding
 import akka.cluster.singleton.{
   ClusterSingletonManager,
@@ -52,15 +52,10 @@ import io.cloudstate.proxy.autoscaler.{
 }
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
-import io.cloudstate.proxy.eventing.EventingManager
 import io.cloudstate.proxy.function.StatelessFunctionSupportFactory
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
-
-//import io.cloudstate.protocol.entity.{ClientAction, EntityDiscovery, Failure, Reply, UserFunctionError}
-import io.cloudstate.protocol.entity.EntityDiscovery
-import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 
 object EntityDiscoveryManager {
   final case class Configuration(
@@ -245,10 +240,10 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
 
         val router = new UserFunctionRouter(entities, entityDiscoveryClient)
 
+        /*
         val eventSupport = EventingManager.createSupport(config.getConfig("eventing"))
-
-        val (route, eventingGraph) =
-          Serve.createRoute(entities, router, statsCollector, entityDiscoveryClient, descriptors, eventSupport)
+         */
+        val route = Serve.createRoute(entities, router, statsCollector, entityDiscoveryClient, descriptors, Map.empty)
 
         log.debug("Starting gRPC proxy")
 
@@ -264,7 +259,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
         // Start warmup
         system.actorOf(Warmup.props(spec.entities.exists(_.entityType == EventSourced.name)), "state-manager-warm-up")
 
-        context.become(binding(eventingGraph))
+        context.become(binding(None))
 
       } catch {
         case e @ EntityDiscoveryException(message) =>

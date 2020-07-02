@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Lightbend Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.cloudstate.proxy
 
 import java.util.Base64
@@ -33,7 +49,7 @@ object GrpcWebSupport {
   private val GrpcWebContentTypeParser = "application/grpc-web(-text)?(?:\\+(\\w+))?".r
 
   def wrapGrpcHandler(
-      partial: PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]]
+      partial: PartialFunction[HttpRequest, Future[HttpResponse]]
   )(implicit ec: ExecutionContext, system: ActorSystem): PartialFunction[HttpRequest, Future[HttpResponse]] =
     Function.unlift { request =>
       request.entity.contentType.mediaType.value match {
@@ -54,18 +70,13 @@ object GrpcWebSupport {
 
           val newRequest = request.withEntity(decoded)
           partial
-            .andThen { protobufs =>
-              // This can likely be simplified further without going via createResponse
-              Some(Serve.createResponse(request, protobufs).map { response =>
-                encode(request, response, proto)
-              })
+            .andThen { futureResponse =>
+              Some(futureResponse.map(response => encode(request, response, proto)))
             }
             .applyOrElse(newRequest, (_: HttpRequest) => None)
 
         case _ =>
-          partial
-            .andThen(protobufs => Some(Serve.createResponse(request, protobufs)))
-            .applyOrElse(request, (_: HttpRequest) => None)
+          partial.andThen(Some(_)).applyOrElse(request, (_: HttpRequest) => None)
       }
     }
 

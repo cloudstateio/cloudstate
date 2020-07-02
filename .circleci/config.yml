@@ -28,7 +28,7 @@ commands:
 jobs:
   native-image-it-test:
     machine: true
-    resource_class: xlarge
+    resource_class: large
     description: "native image tck tests"
     steps:
       - checkout
