@@ -80,7 +80,11 @@ object CloudStateTCK {
       fromBackend.ref ! info
       client.discover(info).andThen {
         case Success(es) => fromFrontend.ref ! es
-        case Failure(f) => fromFrontend.ref ! f
+        case Failure(f) =>
+          // If a failure occurs during discovery, don't record it. The proxy will continue retrying until it
+          // succeeds.
+          //fromFrontend.ref ! f
+          println(s"[warn] TCK: Intercepted discovery call failed: $f")
       }
     }
 
