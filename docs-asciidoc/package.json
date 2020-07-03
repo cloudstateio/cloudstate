@@ -1,0 +1,13 @@
+{
+  "description": "Antora extensions for Cloudstate docs",
+  "scripts": {
+    "build": "antora --generator @djencks/site-generator-default site.yml --cache-dir=.cache/antora --stacktrace",
+    "build-author-mode": "antora --generator @djencks/site-generator-default author-mode-site.yml --cache-dir=.cache/antora --stacktrace"
+  },
+  "devDependencies": {
+    "@djencks/antora-aggregate-collector": "https://experimental-repo.s3-us-west-1.amazonaws.com/djencks-antora-aggregate-collector-v0.0.1.tgz",
+    "@djencks/content-aggregator": "https://experimental-repo.s3-us-west-1.amazonaws.com/djencks-content-aggregator-v2.3.1.tgz",
+    "@djencks/playbook-builder": "https://experimental-repo.s3-us-west-1.amazonaws.com/djencks-playbook-builder-v2.3.1.tgz",
+    "@djencks/site-generator-default": "https://experimental-repo.s3-us-west-1.amazonaws.com/djencks-site-generator-default-v2.3.1.tgz"
+  }
+}

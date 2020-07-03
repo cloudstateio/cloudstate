@@ -27,10 +27,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-// #entity-class
+// #entity-class tag::entity-class[]
 @EventSourcedEntity(persistenceId = "shopping-cart", snapshotEvery = 20)
 public class ShoppingCartEntity {
-  // #entity-class
+  // #entity-class end::entity-class[]
 
   // #entity-state
   private final Map<String, Shoppingcart.LineItem> cart = new LinkedHashMap<>();

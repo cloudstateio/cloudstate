@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// #entity-class
+// #entity-class tag::entity-class[]
 const EventSourced = require("cloudstate").EventSourced;
 
 const entity = new EventSourced(
@@ -25,7 +25,7 @@ const entity = new EventSourced(
         snapshotEvery: 100
     }
 );
-// #entity-class
+// #entity-class end::entity-class[]
 
 // #lookup-type
 const pkg = "example.shoppingcart.domain.";
