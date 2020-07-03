@@ -1,0 +1,11 @@
+
+
+//The content for this page is shared across many repositories
+
+Cloudstate offers an idiomatic, annotation based Java support library for writing stateful services. Before you attempt to write your first service in Java, we recommend that you understand Cloudstate concepts and terminology. We also suggest that you work through one of the tutorials first.
+
+ifdef::todo[TODO: code includes must be resolved, all @@snip and @@javadoc references.]
+
+
+
+
