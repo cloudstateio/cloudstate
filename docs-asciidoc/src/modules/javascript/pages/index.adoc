@@ -1,0 +1,19 @@
+= Implementing in Javascript
+:toc:
+:toc-title: ON THIS PAGE
+:toclevels: 2
+include::ROOT:partial$include.adoc[]
+
+
+
+
+
+//The source of this file is in the ../shared-content folder so that it can be shared with other Cloudstate doc repos
+include::cloudstateio-shared:javascript:page$index.adoc[]
+
+* [Getting started](gettingstarted.md)
+* [Event sourcing](eventsourced.md)
+* [Conflict-free Replicated Data Types](crdt.md)
+* [Forwarding and effects](effects.md)
+* [Serialization](serialization.md)
+* [API docs](api.md)
