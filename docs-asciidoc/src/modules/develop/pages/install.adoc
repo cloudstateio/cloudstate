@@ -1,0 +1,9 @@
+= Installing Cloudstate
+:toc:
+:toc-title: ON THIS PAGE
+:toclevels: 2
+include::ROOT:partial$include.adoc[]
+
+//The source of this file is in the ../shared-content folder so that it can be shared with other Cloudstate doc repos
+include::cloudstateio-shared:develop:page$install.adoc[]
+

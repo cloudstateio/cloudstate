@@ -1,0 +1,9 @@
+= Implementing in Go
+:toc:
+:toc-title: ON THIS PAGE
+:toclevels: 2
+include::ROOT:partial$include.adoc[]
+
+
+Information on implementing stateful services in Go is published at: https://cloudstate.io/docs/go/current/[https://cloudstate.io/docs/go/current/].
+
