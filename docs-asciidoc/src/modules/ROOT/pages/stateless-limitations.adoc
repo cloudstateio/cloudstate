@@ -1,0 +1,10 @@
+= Current limitations of Serverless platforms
+:toc:
+:toc-title: ON THIS PAGE
+:toclevels: 2
+
+include::partial$include.adoc[]
+
+//The source of this file is in the ../shared-content folder so that it can be shared with other Cloudstate doc repos
+include::cloudstateio-shared:ROOT:page$stateless-limitations.adoc[]
+
