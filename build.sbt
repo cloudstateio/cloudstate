@@ -1,5 +1,4 @@
 import java.io.File
-import java.util.Date
 
 import sbt.Keys.{developers, scmInfo}
 import sbt.url
@@ -7,8 +6,6 @@ import sbt.url
 inThisBuild(
   Seq(
     organization := "io.cloudstate",
-    version := dynverGitDescribeOutput.value.mkVersion(versionFmt, "latest"),
-    dynver := sbtdynver.DynVer.getGitDescribeOutput(new Date).mkVersion(versionFmt, "latest"),
     scalaVersion := "2.12.11",
     organizationName := "Lightbend Inc.",
     organizationHomepage := Some(url("https://lightbend.com")),
@@ -28,20 +25,10 @@ inThisBuild(
                   email = "viktor.klang@gmail.com",
                   url = url("https://viktorklang.com"))
       ),
-    sonatypeProfileName := "io.cloudstate",
     scalafmtOnCompile := true,
     closeClassLoaders := false
   )
 )
-
-// Make sure the version doesn't change each time it gets built, this ensures we don't rebuild the native image
-// every time we build a docker image based on it, since we actually build 3 different docker images for the proxy
-// command.
-def versionFmt(out: sbtdynver.GitDescribeOutput): String = {
-  val dirtySuffix = if (out.isDirty()) "-dev" else ""
-  if (out.isCleanAfterTag) out.ref.dropV.value
-  else out.ref.dropV.value + out.commitSuffix.mkString("-", "-", "") + dirtySuffix
-}
 
 name := "cloudstate"
 
@@ -113,14 +100,12 @@ headerSources in Compile ++= {
 }
 
 lazy val root = (project in file("."))
+  .enablePlugins(NoPublish)
 // Don't forget to add your sbt module here!
 // A missing module here can lead to failing Travis test results
   .aggregate(
     `protocols`,
-    `proxy-core`,
-    `proxy-cassandra`,
-    `proxy-postgres`,
-    `proxy-tests`,
+    `proxy`,
     `java-support`,
     `scala-support`,
     `java-shopping-cart`,
@@ -137,9 +122,9 @@ val cloudstateProtocolsName = "cloudstate-protocols"
 val cloudstateTCKProtocolsName = "cloudstate-tck-protocols"
 
 lazy val protocols = (project in file("protocols"))
+  .enablePlugins(NoPublish)
   .settings(
     name := "protocols",
-    publish / skip := true,
     packageBin in Compile := {
       val base = baseDirectory.value
       val cloudstateProtos = base / s"$cloudstateProtocolsName.zip"
@@ -170,7 +155,7 @@ lazy val protocols = (project in file("protocols"))
   )
 
 lazy val docs = (project in file("docs"))
-  .enablePlugins(CloudstateParadoxPlugin, ProtocPlugin)
+  .enablePlugins(CloudstateParadoxPlugin, ProtocPlugin, NoPublish)
   .dependsOn(`java-support` % Test)
   .settings(
     common,
@@ -407,6 +392,16 @@ def sharedNativeImageSettings(targetDir: File, buildServer: Boolean) = Seq(
   ).mkString("=", ",", "")
 )
 
+lazy val `proxy` = (project in file("proxy"))
+  .enablePlugins(NoPublish)
+  .aggregate(
+    `proxy-core`,
+    `proxy-cassandra`,
+    `proxy-jdbc`,
+    `proxy-postgres`,
+    `proxy-tests`
+  )
+
 lazy val `proxy-core` = (project in file("proxy/core"))
   .enablePlugins(DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin, GraalVMPlugin, BuildInfoPlugin)
   .dependsOn(`graal-tools` % Provided) // Only needed for compilation
@@ -530,6 +525,7 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
   )
 
 lazy val `proxy-tests` = (project in file("proxy/proxy-tests"))
+  .enablePlugins(NoPublish)
   .dependsOn(`proxy-core`, `akka-client`, `java-pingpong`)
   .settings(
     common,
@@ -546,7 +542,7 @@ lazy val `proxy-tests` = (project in file("proxy/proxy-tests"))
 val compileK8sDescriptors = taskKey[File]("Compile the K8s descriptors into one")
 
 lazy val operator = (project in file("operator"))
-  .enablePlugins(JavaAppPackaging, DockerPlugin)
+  .enablePlugins(JavaAppPackaging, DockerPlugin, NoPublish)
   .settings(
     common,
     name := "cloudstate-operator",
@@ -576,10 +572,11 @@ lazy val `java-support` = (project in file("java-support"))
   .enablePlugins(AkkaGrpcPlugin, BuildInfoPlugin)
   .settings(
     name := "cloudstate-java-support",
+    dynverTagPrefix := "java-support-",
     common,
     crossPaths := false,
     publishMavenStyle := true,
-    publishTo := sonatypePublishTo.value,
+    bintrayPackage := name.value,
     buildInfoKeys := Seq[BuildInfoKey](name, version),
     buildInfoPackage := "io.cloudstate.javasupport",
     // Generate javadocs by just including non generated Java sources
@@ -652,10 +649,11 @@ lazy val `scala-support` = (project in file("scala-support"))
   .enablePlugins(AkkaGrpcPlugin, BuildInfoPlugin)
   .settings(
     name := "cloudstate-scala-support",
+    dynverTagPrefix := "scala-support-",
     common,
     crossPaths := false,
     publishMavenStyle := true,
-    publishTo := sonatypePublishTo.value,
+    bintrayPackage := name.value,
     buildInfoKeys := Seq[BuildInfoKey](name, version),
     buildInfoPackage := "io.cloudstate.scalasupport",
     // Generate javadocs by just including non generated Java sources
@@ -711,7 +709,7 @@ lazy val `scala-support` = (project in file("scala-support"))
 
 lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
   .dependsOn(`java-support`)
-  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin)
+  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
   .settings(
     name := "java-shopping-cart",
     dockerSettings,
@@ -731,7 +729,7 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
 
 lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
   .dependsOn(`java-support`)
-  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin)
+  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
   .settings(
     name := "java-pingpong",
     dockerSettings,
@@ -751,7 +749,7 @@ lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
 
 lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart"))
   .dependsOn(`scala-support`)
-  .enablePlugins(AkkaGrpcPlugin, DockerPlugin, JavaAppPackaging)
+  .enablePlugins(AkkaGrpcPlugin, DockerPlugin, JavaAppPackaging, NoPublish)
   .settings(
     name := "scala-shopping-cart",
     dockerSettings,
@@ -764,7 +762,7 @@ lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart")
   )
 
 lazy val `akka-client` = (project in file("samples/akka-client"))
-  .enablePlugins(AkkaGrpcPlugin)
+  .enablePlugins(AkkaGrpcPlugin, NoPublish)
   .settings(
     common,
     name := "akka-client",
@@ -787,7 +785,7 @@ lazy val `akka-client` = (project in file("samples/akka-client"))
   )
 
 lazy val `load-generator` = (project in file("samples/js-shopping-cart-load-generator"))
-  .enablePlugins(JavaAppPackaging, DockerPlugin)
+  .enablePlugins(JavaAppPackaging, DockerPlugin, NoPublish)
   .dependsOn(`akka-client`)
   .settings(
     common,
@@ -797,7 +795,7 @@ lazy val `load-generator` = (project in file("samples/js-shopping-cart-load-gene
   )
 
 lazy val `tck` = (project in file("tck"))
-  .enablePlugins(AkkaGrpcPlugin, JavaAppPackaging, DockerPlugin)
+  .enablePlugins(AkkaGrpcPlugin, JavaAppPackaging, DockerPlugin, NoPublish)
   .configs(IntegrationTest)
   .dependsOn(`akka-client`)
   .settings(
@@ -830,7 +828,7 @@ lazy val `tck` = (project in file("tck"))
   )
 
 lazy val `graal-tools` = (project in file("graal-tools"))
-  .enablePlugins(GraalVMPlugin, AutomateHeaderPlugin)
+  .enablePlugins(GraalVMPlugin, AutomateHeaderPlugin, NoPublish)
   .settings(
     libraryDependencies ++= List(
         "org.graalvm.nativeimage" % "svm" % GraalVersion % "provided",
