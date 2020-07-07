@@ -4,9 +4,11 @@ jdk:
   - openjdk11
 scala:
   - 2.12.11
+before_install:
+  - sudo apt-get -y install jq
 env:
   global:
-  # Encrypted with: travis encrypt --pro -r cloudstateio/cloudstate DEPLOY_DOCS_TOKEN=<cloudstate-bot.github.token>
+  # Docs deploy token; encrypted with: travis encrypt --pro -r cloudstateio/cloudstate DEPLOY_DOCS_TOKEN=<cloudstate-bot.github.token>
   - secure: "DCmB7Mq1Dl+/rDl46RVQplSoyC5nS1jkGf8OYoRG7lfc0fDj4ZPDSy6nEQX9BGUY0uJmmr77ojQWvnx0tHeXs6Ci4lHftJ7nmC1pttRmezbhjj5YRdYB7xfe1I2vT7qOhcv+qAHjAteXNxoLqqomp49ov2hzwsfesCbyKlJ3EtLyyWldUgOGad66VBgsVJjkXkarXngM1VEty/GINheSwNVaeF9aiX4eY/GksHKUNFn3N4vvubU9VlGHVjBAbPDXUp81L1rlkOHgSgKtehHy/FpcsHeStAoZMNNDCfnK0CKHCtKEJ8FhYKAwQR8WIEYU8cMjSYQVP0UQaC7mH//RwMECPEXZi8uB1mryIwfHu3l6AlIMh9tz9mgrZxSsX4Qba/v5IiM7hD4/IZCi83qCru1DPYBmd37LvUPWRB3m9tApxlDE+gspBFrqIc2u4524lLkWzu/gvsJam/VUDnrdmiJZblJi/XM+6FEo32o/aEiXi6l/cxDAu2kHJIO4MblSXvMu4hl69XTG/q9vc3rtkfVrzTtHJt2LWFNsHzN0odUH4FYmQz0bcqjBc6gI0elnM2gD+7EpxyAMNNBnAZ/oV7ktpfpmbc0/W7kw0t9f4kiYYR3ebO/efmuuIlFC1nJs2ouXVvuzP1GcMkq6lExpD4Fqulf1RXmDHcruj3Cr5a4="
   # DockerHub password for cloudstatebot
   - secure: "3YFGW7bUil+CFQSbgjCSMnFezWIGFdv6/eaNlKKhaxOueDoLmVrLqNhCXkS2Nz3f4tvPFzDN9VH3RyzEIG1u53nQvMw7vceV5szj4oyM4pGZ3TnugtEQFfRHJsUFAWFuRTr9etukBlxCo8HHT3FvcM5uKYQAmBt23wO/NuF8hFXDYQ6c6WHTvP6gzLP5lG70fVJ3ViA1QZEfOaEnOJNqknFtmGj8j0pQTE8oxXTSz61KDBzN3C9PtupDo2Xj0dtpurSZnGRt4BJYoBJkgBiQQJ0W/p5YWGHewdyV12/GgafhkyrPkSx02iOsq3yJrnX238xP/2QQCpMTtZ1lVMQsdXYmpX40hCoEXdxG1qlhH4ISNtXmck1J1VMRVg+sg8+PyFlRZObKcHtIWeGYOu8+T34zn0t+7VPswq0UY2xtPhetk9csNNtGQ7vTKKNFcFUdrROSEV/wmV/eudue473j5YZDDGEm43a04P81FsHVWxV9+uwuCiofMz3E1TcZJkySHYt3XnFhWGtdbJMHOkaYsrW++UA1wjWgn/EPcwNWpxiKJVoQmw3WYb0PH7ZXWaeQ/hqGpT+lhQzrNlP18us72c6kx7KW4aHgpWHEqsjceuSkoaAbCvxQxGbJqwDRyzOKdqTiVpapvd/wXAdatzcf1O+0n3C2lzLUbTpSkRx+s/8="
@@ -18,6 +20,8 @@ env:
   - secure: "uzrFSzBPe+TnkRZlCnJ8r46FEgrxXBp9E2K3HfMg6HW+yUcYkv0z1Zf+QZHjD/ZKMd/XAg457IvOwxx1dPlIVgYjxpgGSkdiTimii/c7xkH0f8tg8PdZKqTw1WAO70ut3dtcH96HjtL0bsdKGtcDm60LbyPUKoXOQyfilUIUERmbpMx5cEbKauZdl6E+3wEz5bPD+MdWDWElFONCSJHpoOgl6Z6jAc1Z3VbXT932/WKBGwEedjPTgwtHkVa0FK4a0ehWQ41ZfXbQgyiF9LOiuuL+wFmOh9QTFixhvkLLtiD73ywkFRePEWul8IAFNClZEIGvc1SdsHhKVKPkDfgvI6RRtxjly62Y8VmnXFDe7Pi2UZwFNTYZkmBz0R+7zCb52NlUwUGNl6YwthmxInB1bU1BDJSwxnpAkZ85OEbyl92VXXtgFTxOhylzg976SQPR9qzT6Dl0gUmsq9VxiQaRYZNXarAWUVJlseEmq+RMMjYK35K+RlkC+J19u54F8ob5mbUSTsPhnnsHqZG61o9uVsfKBkK+k9MVwZqk/SF9eHAPiv6vW8DN4KS6gPQQSPuBxI4Ruj6RyYz9IGh05fT0NrbP0xJaqox4lrCCtZ72VsxXTp8qfI8NHE8CUpHM072YMHR5BR1bPbptMcqIkfnmYqWTyqWdczcJaYF07WYwS2w="
   # Sonatype user token password; encrypted with: travis encrypt --pro -r cloudstateio/cloudstate SONA_PASS=<sonatype.token.username>
   - secure: "1+YZiGEGRfCcFqYqwJPwFk1TI15weQHbBxP9elnQa5gsc4a+YpdoyOA9y30BcoUPiB0xNpLwG449k5xUVKmpaNjU4iRlfvIGKF6tSEwuQ1BKyihNXgh9Iin+500BprRF7jXXaf96cJv45lEQRDv9Obsygtsv6VU0wbt/Ixc93PTf/Kk2DEetDxQuMN3abIC+tpFw5vtdIyE4UqC0FbmW/9MEO35Vdd9doxO5YCOvs3rDxw6GKs3x3Am88UD8FLhI6UnjGkSsii0rmXniNG18im5Gtyqr2vZXDrVaWYAf9dJd7j2TUJ0muVJZOhLlNc9RUP2dWs9zU0s0YAlxg6F8sdp4BEB1YpgWCWImRjgPjMTDS4FwcI5cjJ2FOOlU03VoeWxNhKKAK5kDTQ9+A+NA/a8sauBa5X4pituiXsuXb0aXC98EaL7UowtJu3UlKCIh7sbyFqItJbLGUxLB25TdOH146A5NMsc/ftXhutp4JV02ozy81oBI+o6Mv287vXqVdKWSATkwGdZmN01Lm+IITc3t6U7ZtiBXCL6iF3slPcAaI/Rj1Air4tAh252Nzi2uLpsj8Hyk9sPiDPPIhS3p6ccaPCYYI2+MuJ5acxd/gjqYQL18q54vJxjrfkJiLzQgFmaDAd84n1fNJ15rdb/Thh80l5pNt8WtMwrPuiTmKKM="
+  # Github release token; encrypted with: travis encrypt --pro -r cloudstateio/cloudstate GITHUB_TOKEN=<cloudstate-bot.github.token>
+  - secure: "CO7MKtUWdsXRv0g798GZxa79vb4SwhD5+g9DlHPNLfMfXq17P34Ukdiz6vx04GjuIWA5s82ZTHXUkq/gr5CheS5SwTaji5D4Uy1IApYStCallHoXEuI+W6nXSe0fEnSyW9EfGyLou+4VM/pbuWH9FvEg+Lvci/nLiQq9g1I9aDFCxYYfr8ka+XxTOESb6Z9XHqoXpiNufgyQRYTPgvM5ImE0bdY21xSDR3IqsgtZZ40AQRgVyrZNIxNGPqkhVtGoSshquF/yXdk6A5Kuaw2m5HP7v9ohWnr8PGe6Y4t0X2cjTyowHnj0yqwD09xp/zBlMcWkoLY0ujNm7yooalTGCwySdKuB6QgLxZpXDshGHkVn+Z/pHW0//NrfsQpQcLEiG1XQ/8MlKTF1e1CuItGjO4WFDjOrQBvEQLxMhQXQY2po8VRUsZxRwBCf+A67PAkyI3cX1foH/JKa/plFxdNDEdmTZJUqk7huKrq9JQVUseH1zNSYX+HwDOAaugkwGIfm4YB+AIkWALUpka8fugc3FgVfLYAuLN6QYgMSi/vpqt6CBFrkTtZyuTr+seX8mqSPBrrlbjuQ8sInrHZgXVUXRNeDX8Sb2zk877Bn8CWw89XPred/SpJQ9Mvb0ke/Mu4kJ048wexjT2ken3gq6TYuCU3qcqScGhB13onTlQWAoqQ="
 services:
   - docker
 jobs:
@@ -34,7 +38,7 @@ jobs:
     script:
     - cd node-support && npm test && cd -
     - cd samples/js-shopping-cart && npm test && cd -
-  
+
   - name: sbt tests
     before_script:
       - sbt update
@@ -44,7 +48,7 @@ jobs:
     script: sbt -jvm-opts travis/jvmopts 'set concurrentRestrictions in Global += Tags.limitAll(1)' test
     after_script:
       - docker stop googlepubsub
-  
+
   - name: docs tests
     before_script:
     - cd node-support && nvm install && nvm use && npm install && cd -
@@ -52,7 +56,7 @@ jobs:
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' docs/paradox docs/test
     - cd docs/src/test/js && npm test && cd -
-  
+
   - stage: Integration tests
     name: TCK
     before_script:
@@ -61,8 +65,8 @@ jobs:
     - cd samples/js-shopping-cart && nvm install && nvm use && npm install && cd -
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
-  
-  - name: Minikube smoke test 
+
+  - name: Minikube smoke test
     before_script:
     - bin/prepare-minikube-travis.sh
     script:
@@ -80,7 +84,7 @@ jobs:
     if: branch = master AND type = push
     before_script: cd node-support && nvm install && nvm use && npm install && cd -
     script: sbt docs/deploy
-  
+
   - stage: Deploy
     name: Publish release
     if: tag =~ ^v
@@ -88,7 +92,9 @@ jobs:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
     - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish tck/docker:publish
     - sbt proxy/publish proxy/bintrayRelease proxy/bintraySyncMavenCentral
-  
+    - sbt -Duse.native.builds=false operator/compileK8sDescriptors
+    - travis/upload-release-assets.sh
+
   - stage: Deploy
     name: Publish latest builds
     if: branch = master AND type = push
