@@ -49,7 +49,7 @@ object GrpcWebSupport {
   private val GrpcWebContentTypeParser = "application/grpc-web(-text)?(?:\\+(\\w+))?".r
 
   def wrapGrpcHandler(
-      partial: PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]]
+      partial: PartialFunction[HttpRequest, Future[HttpResponse]]
   )(implicit ec: ExecutionContext, system: ActorSystem): PartialFunction[HttpRequest, Future[HttpResponse]] =
     Function.unlift { request =>
       request.entity.contentType.mediaType.value match {
@@ -70,18 +70,13 @@ object GrpcWebSupport {
 
           val newRequest = request.withEntity(decoded)
           partial
-            .andThen { protobufs =>
-              // This can likely be simplified further without going via createResponse
-              Some(Serve.createResponse(request, protobufs).map { response =>
-                encode(request, response, proto)
-              })
+            .andThen { futureResponse =>
+              Some(futureResponse.map(response => encode(request, response, proto)))
             }
             .applyOrElse(newRequest, (_: HttpRequest) => None)
 
         case _ =>
-          partial
-            .andThen(protobufs => Some(Serve.createResponse(request, protobufs)))
-            .applyOrElse(request, (_: HttpRequest) => None)
+          partial.andThen(Some(_)).applyOrElse(request, (_: HttpRequest) => None)
       }
     }
 

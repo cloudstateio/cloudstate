@@ -42,7 +42,7 @@ import io.cloudstate.javasupport.{CloudState, CloudStateRunner}
  `docker run --rm --expose=8085 --volume=/data --name=googlepubsub -d -p 8085:8085 google/cloud-sdk:latest /bin/sh -c "gcloud beta emulators pubsub start --project=test --host-port=0.0.0.0:8085 --data-dir=/data"`
  */
 class GooglePubsubSpec extends WordSpec with BeforeAndAfterAll with Eventually with Matchers with ScalaFutures {
-
+  /*
   lazy val projectId = System.getenv("PUBSUB_PROJECT_ID")
 
   final def runTheseTests: Boolean = projectId != null
@@ -135,4 +135,6 @@ class GooglePubsubSpec extends WordSpec with BeforeAndAfterAll with Eventually w
     try socket.getLocalPort
     finally socket.close()
   }
+
+ */
 }
