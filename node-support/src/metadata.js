@@ -38,7 +38,7 @@ function valueFromEntry(entry) {
  * setting a value will add it to the current values for that key. You should delete first if you wish to replace a
  * value.
  *
- * Values can either by strings or byte buffers. If a non string or byte buffer value is set, it will be converted to
+ * Values can either be strings or byte buffers. If a non string or byte buffer value is set, it will be converted to
  * a string using toString.
  *
  * @interface module:cloudstate.Metadata
