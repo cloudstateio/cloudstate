@@ -20,3 +20,5 @@ addSbtPlugin("org.foundweekends" % "sbt-bintray" % "0.5.6")
 addSbtPlugin("io.cloudstate" % "sbt-cloudstate-paradox" % "0.1.2")
 
 addSbtPlugin("net.virtual-void" % "sbt-dependency-graph" % "0.10.0-RC1")
+
+addSbtPlugin("com.lightbend.cinnamon" % "sbt-cinnamon" % "2.14.0")

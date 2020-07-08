@@ -25,6 +25,13 @@ inThisBuild(
                   email = "viktor.klang@gmail.com",
                   url = url("https://viktorklang.com"))
       ),
+    resolvers ++= Seq(
+      // Needed for our fork of skuber
+      Resolver.bintrayRepo("akka", "snapshots"),
+      // lightbend commercial support
+      "lightbend-commercial-mvn" at
+        "https://repo.lightbend.com/pass/" + lbCommercialAccessToken + "/commercial-releases",
+    ),
     scalafmtOnCompile := true,
     closeClassLoaders := false
   )
@@ -402,8 +409,10 @@ lazy val `proxy` = (project in file("proxy"))
     `proxy-tests`
   )
 
+val lbCommercialAccessToken = sys.env.get("LB_COMMERCIAL_ACCESS_TOKEN").getOrElse("")
+
 lazy val `proxy-core` = (project in file("proxy/core"))
-  .enablePlugins(DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin, GraalVMPlugin, BuildInfoPlugin)
+  .enablePlugins(DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin, GraalVMPlugin, BuildInfoPlugin, Cinnamon)
   .dependsOn(`graal-tools` % Provided) // Only needed for compilation
   .settings(
     common,
@@ -440,7 +449,11 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
         "io.prometheus" % "simpleclient" % PrometheusClientVersion,
         "io.prometheus" % "simpleclient_common" % PrometheusClientVersion,
-        "org.slf4j" % "slf4j-simple" % "1.7.26"
+        "org.slf4j" % "slf4j-simple" % "1.7.26",
+        Cinnamon.library.cinnamonAkka,
+        Cinnamon.library.cinnamonAkkaTyped,
+        Cinnamon.library.cinnamonPrometheus,
+        Cinnamon.library.cinnamonPrometheusHttpServer
         //"ch.qos.logback"                 % "logback-classic"                   % "1.2.3", // Doesn't work well with SubstrateVM: https://github.com/vmencik/akka-graal-native/blob/master/README.md#logging
       ),
     // Work around for https://github.com/akka/akka-grpc/pull/673
