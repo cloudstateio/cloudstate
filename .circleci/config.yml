@@ -49,8 +49,7 @@ commands:
             fi
 
             url_auth_path=cloudstateengine.lightbend.com/v1alpha/users%3Aauthenticate
-            curl -s -H 'Content-Type: application/json' https://"${url}"/"${url_auth_path}" -d' \
-              '{password: {"email_or_friendly_name":"cloudstate-dev@lightbend.com", "password":"${CS_DEV_PASSWORD}"}}'
+            curl -s -H 'Content-Type: application/json' https://"${url}"/"${url_auth_path}" -d '{password: {"email_or_friendly_name":"cloudstate-dev@lightbend.com", "password":"${CS_DEV_PASSWORD}"}}'
 
 
 jobs:
