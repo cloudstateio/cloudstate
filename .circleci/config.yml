@@ -4,6 +4,7 @@ version: 2.1
 # use this orb to notify slack License:MIT
 orbs:
   slack: circleci/slack@3.4.2
+  pagerduty: amanjain97/pagerduty@0.1.5
 
 commands:
   setup_sbt:
@@ -91,6 +92,17 @@ jobs:
           # mentions: "@edc,@srikanth"
           # fail_only: true
           only_for_branches: master,cron-test
+      - pagerduty/notify-on-failure:
+          escalation_policy: ""
+          from_account: "srikanth.koneru@lightbend.com"
+          incident_description: Unable to authentticate on stage environment
+          incident_key:  "AUTHENTICATION_FAILED_ON_STAGE"
+          incident_title: $CIRCLE_JOB failed
+          only_for_branches: master, cron-test
+          priority: ""
+          service: "cloudstate-test"
+          urgency: low
+
 
 workflows:
   version: 2
