@@ -49,7 +49,8 @@ commands:
             fi
             set -x
             url_auth_path=cloudstateengine.lightbend.com/v1alpha/users%3Aauthenticate
-            curl --fail -s -H 'Content-Type: application/json' https://"${url}"/"${url_auth_path}" -d '{password: {"email_or_friendly_name":"cloudstate-dev@lightbend.com", "password":"${CS_DEV_PASSWORD}"}}'
+            curl --fail -s -H 'Content-Type: application/json' https://"${url}"/"${url_auth_path}" -d \
+              '{password: {"email_or_friendly_name":"cloudstate-dev@lightbend.com", "password":"${CS_DEV_PASSWORD}"}}'
 
 
 jobs:
@@ -87,11 +88,9 @@ jobs:
           channel: cloudstate-notifications
           success_message: Successful authentication on stage
           failure_message: Unable to authenticate on stage environment
-          mentions: "@edc,@srikanth"
-          fail_only: true
-          only_for_branches: master
-
-
+          # mentions: "@edc,@srikanth"
+          # fail_only: true
+          only_for_branches: master,cron-test
 
 workflows:
   version: 2
