@@ -5,6 +5,7 @@ version: 2.1
 orbs:
   slack: circleci/slack@3.4.2
   pagerduty: amanjain97/pagerduty@0.1.5
+  jq: circleci/jq@2.2.0
 
 commands:
   setup_sbt:
@@ -53,6 +54,62 @@ commands:
             curl --fail -s -H 'Content-Type: application/json' https://"${url}"/"${url_auth_path}" -d \
               "{password: {\"email_or_friendly_name\":\"cloudstate-dev@lightbend.com\", \"password\":\"${CS_DEV_PASSWORD}\"}}"
 
+  cs_sc_test:
+    parameters:
+      cart_uri:
+        type: string
+        default: ""
+      sc_test_user:
+        type: string
+        default: "test-user"
+    steps:
+      - run:
+          name: "Shopping Cart Tests"
+          command: |
+            SHOP_TEST_USER=<< parameters.sc_test_user >>
+            CART_URI=<< parameters.cart_uri >>
+            echo "Testing Shopping Data Access: ${CART_URI}"
+
+            get_test_cart=$(curl -s -o /dev/null -w "%{http_code}" $CART_URI/com.example.shoppingcart.ShoppingCart/carts/test-user)
+
+            if [ "${get_test_cart}" -eq 200 ] ; then
+                cart_orig_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
+
+                # Add items
+                curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
+                    -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test1", name: "test1", "quantity":1}' \
+                    $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
+                curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
+                    -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test2", name: "test2", "quantity":2}' \
+                    $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
+                curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
+                    -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test3", name: "test3", "quantity":3}' \
+                    $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
+
+                cart_new_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
+                cart_size_diff=$(expr "${cart_new_size}" - "${cart_orig_size}" )
+                if [ "${cart_size_diff}" -ne 3 ]; then
+                      echo Problem adding items to "'${SHOP_TEST_USER}'" cart !!!
+                fi
+
+                # Remove items
+                curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test1/remove
+                curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test2/remove
+                curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test3/remove
+                cart_final_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
+
+                if [ "${cart_final_size}" != "${cart_orig_size}" ] ; then
+                    echo Cart NOT restored to original size. Please check!!!
+                else
+                    echo
+                    date
+                    echo Shopping Test Complete! User: "${SHOP_TEST_USER}"
+                fi
+
+            else
+                echo Unable to Shop "${SHOP_TEST_USER}" Cart not found!
+            fi
+
 
 jobs:
   native-image-it-test:
@@ -70,15 +127,7 @@ jobs:
               tck/it:test
       - save_sbt_cache
 
-  prod-authenticate-test:
-    docker:
-      - image: circleci/buildpack-deps:focal-curl
-    description: "Prod Authentication Test"
-    steps:
-      - cs_authenticate_test:
-          target_env: "prod"
-
-  stage-authenticate-test:
+  stage_authenticate_test:
     docker:
       - image: circleci/buildpack-deps:focal-curl
     description: "Stage Authentication Test"
@@ -89,20 +138,78 @@ jobs:
           channel: cloudstate-notifications
           success_message: Successful authentication on stage
           failure_message: Unable to authenticate on stage environment
-          # mentions: "@edc,@srikanth"
-          # fail_only: true
+          mentions: "@edc,@srikanth"
+          fail_only: true
           only_for_branches: master,cron-test
       - pagerduty/notify-on-failure:
           escalation_policy: ""
           from_account: "srikanth.koneru@lightbend.com"
           incident_description: Unable to authentticate on stage environment
           incident_key:  "AUTHENTICATION_FAILED_ON_STAGE"
-          incident_title: $CIRCLE_JOB failed
+          incident_title: $CIRCLE_JOB authentication to stage failed
           only_for_branches: master, cron-test
-          priority: ""
-          service: "cloudstate-test"
+          # S2 https://developer.pagerduty.com/api-reference/reference/REST/openapiv3.json/paths/~1priorities/get
+          priority: "PBT5H5L"
+          # cloudstate-test
+          service: "PR1M8QK"
           urgency: low
 
+  prod_sc_test:
+    docker:
+      - image: circleci/buildpack-deps:focal-curl
+    description: "Stage Authentication Test"
+    steps:
+      - run: jq --help || true
+      - jq/install
+      - cs_sc_test:
+          cart_uri: "https://frosty-cloud-8068.us-east1.apps.cloudstate.com"
+      - slack/status:
+          channel: cloudstate-notifications
+          success_message: Shopping cart tests successful on prod
+          failure_message: Shopping cart tests failed on prod
+          #mentions: "@edc,@srikanth"
+          #fail_only: true
+          only_for_branches: master,cron-test
+      - pagerduty/notify-on-failure:
+          escalation_policy: ""
+          from_account: "srikanth.koneru@lightbend.com"
+          incident_description: Shopping cart tests failed on prod.
+          incident_key:  "SHOPPING_CART_TESTS_FAILED_ON_PROD"
+          incident_title: $CIRCLE_JOB Shopping Cart tests failed on prod.
+          only_for_branches: master, cron-test
+          # S2 https://developer.pagerduty.com/api-reference/reference/REST/openapiv3.json/paths/~1priorities/get
+          priority: "PBT5H5L"
+          # cloudstate-test
+          service: "PR1M8QK"
+          urgency: high
+
+
+  prod_authenticate_test:
+    docker:
+      - image: circleci/buildpack-deps:focal-curl
+    description: "Prod Authentication Test"
+    steps:
+      - cs_authenticate_test:
+          target_env: "prod"
+      - slack/status:
+          channel: cloudstate-notifications
+          success_message: Successful authentication on stage
+          failure_message: Unable to authenticate on stage environment
+          mentions: "@edc,@srikanth"
+          fail_only: true
+          only_for_branches: master,cron-test
+      - pagerduty/notify-on-failure:
+          escalation_policy: ""
+          from_account: "srikanth.koneru@lightbend.com"
+          incident_description: Unable to authentticate on stage environment
+          incident_key:  "AUTHENTICATION_FAILED_ON_PROD"
+          incident_title: $CIRCLE_JOB authentication to prod failed
+          only_for_branches: master, cron-test
+          # S1
+          priority: "PF2THIO"
+          # cloudstate-test
+          service: "PR1M8QK"
+          urgency: low
 
 workflows:
   version: 2
@@ -116,14 +223,23 @@ workflows:
 
   authenticate-state-test2:
     jobs:
-      - stage-authenticate-test:
+      - stage_authenticate_test:
           filters:
             branches:
               only:
                 - cron-test
+  
+  prod-shopping-cart-test:
+    jobs:
+      - prod_sc_test:
+          filters:
+            branches:
+              only:
+                - cron-test
+    
 
   # Scheduled at every hour 5 minutes
-  authenticate-stage-test:
+  scheduled-stage-test:
     triggers:
       - schedule:
           cron: "5 * * * *"
@@ -133,5 +249,17 @@ workflows:
                 - master
                 - cron-test
     jobs:
-      - stage-authenticate-test
+      - stage_authenticate_test
 
+  # Scheduled at every hour 5 minutes
+  scheduled-prod-test:
+    triggers:
+      - schedule:
+          cron: "5 * * * *"
+          filters:
+            branches:
+              only:
+                - master
+                - cron-test
+    jobs:
+      - prod_authenticate_test
