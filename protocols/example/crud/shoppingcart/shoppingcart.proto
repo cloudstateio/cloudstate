@@ -24,7 +24,7 @@ import "google/api/httpbody.proto";
 
 package com.example.crud.shoppingcart;
 
-option go_package = "tck/crudshoppingcart";
+option go_package = "tck/crud/shoppingcart";
 
 message AddLineItem {
     string user_id = 1 [(.cloudstate.entity_key) = true];

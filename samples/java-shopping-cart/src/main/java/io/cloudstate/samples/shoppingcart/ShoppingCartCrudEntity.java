@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-/** An CRUD entity. */
+/** A CRUD entity. */
 @CrudEntity
 public class ShoppingCartCrudEntity {
 

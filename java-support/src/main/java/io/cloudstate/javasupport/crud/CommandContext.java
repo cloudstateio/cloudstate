@@ -20,7 +20,7 @@ import io.cloudstate.javasupport.ClientActionContext;
 import io.cloudstate.javasupport.EffectContext;
 
 /**
- * An CRUD command context.
+ * A CRUD command context.
  *
  * <p>Methods annotated with {@link CommandHandler} may take this is a parameter. It allows updating
  * or deleting the entity state in response to a command, along with forwarding the result to other

@@ -101,7 +101,7 @@ message CrudReply {
 // A snapshot of the entity.
 message CrudSnapshot {
   // The value of the snapshot, if a snapshot has already been created.
-  google.protobuf.Any value = 3;
+  google.protobuf.Any value = 1;
 }
 
 // An action to take for changing the entity state.

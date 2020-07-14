@@ -20,7 +20,7 @@ import io.cloudstate.javasupport.eventsourced.CommandHandler;
 import io.cloudstate.javasupport.eventsourced.EventHandler;
 
 /**
- * Low level interface for handling commands on an CRUD entity.
+ * Low level interface for handling commands on a CRUD entity.
  *
  * <p>Generally, this should not be needed, instead, a class annotated with the {@link
  * CommandHandler} and similar annotations should be used.

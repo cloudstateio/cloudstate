@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // These are the messages that get persisted - the events, plus the current state (Cart) for snapshots.
-    syntax = "proto3";
+syntax = "proto3";
 
 package com.example.crud.shoppingcart.persistence;
 
