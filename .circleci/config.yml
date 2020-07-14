@@ -88,8 +88,9 @@ commands:
 
                 cart_new_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
                 cart_size_diff=$(expr "${cart_new_size}" - "${cart_orig_size}" )
-                if [ "${cart_size_diff}" -ne 3 ]; then
+                if [ "${cart_size_diff}" -ne 4 ]; then
                       echo Problem adding items to "'${SHOP_TEST_USER}'" cart !!!
+                      false
                 fi
 
                 # Remove items
@@ -100,14 +101,15 @@ commands:
 
                 if [ "${cart_final_size}" != "${cart_orig_size}" ] ; then
                     echo Cart NOT restored to original size. Please check!!!
+                    false
                 else
                     echo
                     date
                     echo Shopping Test Complete! User: "${SHOP_TEST_USER}"
                 fi
-
             else
                 echo Unable to Shop "${SHOP_TEST_USER}" Cart not found!
+                false
             fi
 
 
