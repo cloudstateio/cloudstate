@@ -58,10 +58,10 @@ object CloudStateRunner {
 
 /**
  * The CloudStateRunner is responsible for handle the bootstrap of entities,
- * and is used by [[io.cloudstate.javasupport.CloudState.start()]] to set up the local
+ * and is used by [[io.cloudstate.javasupport.CloudState#start()]] to set up the local
  * server with the given configuration.
  *
- * CloudStateRunner can be seen as a low-level API for cases where [[io.cloudstate.javasupport.CloudState.start()]] isn't enough.
+ * CloudStateRunner can be seen as a low-level API for cases where [[io.cloudstate.javasupport.CloudState#start()]] isn't enough.
  */
 final class CloudStateRunner private[this] (_system: ActorSystem, services: Map[String, StatefulService]) {
   private[this] implicit final val system = _system

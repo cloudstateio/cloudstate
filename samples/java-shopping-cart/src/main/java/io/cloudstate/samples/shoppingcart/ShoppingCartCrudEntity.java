@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Lightbend Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.cloudstate.samples.shoppingcart;
 
 import com.example.crud.shoppingcart.Shoppingcart;
@@ -7,15 +23,18 @@ import io.cloudstate.javasupport.EntityId;
 import io.cloudstate.javasupport.crud.CommandContext;
 import io.cloudstate.javasupport.crud.CommandHandler;
 import io.cloudstate.javasupport.crud.CrudEntity;
-import io.cloudstate.javasupport.crud.SnapshotHandler;
+import io.cloudstate.javasupport.crud.StateHandler;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
-/** A crud entity. */
+/** An CRUD entity. */
 @CrudEntity
 public class ShoppingCartCrudEntity {
+
   private final String entityId;
   private final Map<String, Shoppingcart.LineItem> cart = new LinkedHashMap<>();
 
@@ -23,13 +42,15 @@ public class ShoppingCartCrudEntity {
     this.entityId = entityId;
   }
 
-  @SnapshotHandler
-  public void handleState(Domain.Cart cart) {
-    // HINTS: this is called by the proxy for updating the state
+  @StateHandler
+  public void handleState(Optional<Domain.Cart> cart) {
     this.cart.clear();
-    for (Domain.LineItem item : cart.getItemsList()) {
-      this.cart.put(item.getProductId(), convert(item));
-    }
+    cart.ifPresent(
+        c -> {
+          for (Domain.LineItem item : c.getItemsList()) {
+            this.cart.put(item.getProductId(), convert(item));
+          }
+        });
   }
 
   @CommandHandler
@@ -38,48 +59,52 @@ public class ShoppingCartCrudEntity {
   }
 
   @CommandHandler
+  public Empty removeCart(Shoppingcart.RemoveShoppingCart cartItem, CommandContext ctx) {
+    if (!entityId.equals(cartItem.getUserId())) {
+      ctx.fail("Cannot remove unknown cart " + cartItem.getUserId());
+    }
+    cart.clear();
+
+    ctx.delete();
+    return Empty.getDefaultInstance();
+  }
+
+  @CommandHandler
   public Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
-    // HINTS: CRUD Update
-    // HINTS: curl -vi -X POST localhost:9000/cart/{user_id}/items/add -H "Content-Type:
-    // application/json" -d '{"commandType":"update", "productId":"foo","name":"A
-    // foo","quantity":10}'
     if (item.getQuantity() <= 0) {
-      ctx.fail("Cannot add negative quantity of to item" + item.getProductId());
+      ctx.fail("Cannot add negative quantity of to item " + item.getProductId());
     }
 
-    Domain.LineItem lineItem =
-        cart.get(item.getProductId()) == null ? null : convert(cart.get(item.getProductId()));
+    Shoppingcart.LineItem lineItem = cart.get(item.getProductId());
     if (lineItem == null) {
       lineItem =
-          Domain.LineItem.newBuilder()
-              .setUserId(item.getUserId())
+          Shoppingcart.LineItem.newBuilder()
               .setProductId(item.getProductId())
               .setName(item.getName())
               .setQuantity(item.getQuantity())
               .build();
     } else {
       lineItem =
-          lineItem.toBuilder().setQuantity(item.getQuantity() + lineItem.getQuantity()).build();
+          lineItem.toBuilder().setQuantity(lineItem.getQuantity() + item.getQuantity()).build();
     }
-    Domain.Cart cart = convert(this.cart).toBuilder().addItems(lineItem).build(); // new state
-    ctx.emit(cart); // emit new state
+    cart.put(item.getProductId(), lineItem);
 
+    List<Domain.LineItem> lineItems =
+        cart.values().stream().map(this::convert).collect(Collectors.toList());
+    ctx.update(Domain.Cart.newBuilder().addAllItems(lineItems).build());
     return Empty.getDefaultInstance();
   }
 
   @CommandHandler
   public Empty removeItem(Shoppingcart.RemoveLineItem item, CommandContext ctx) {
-    // HINTS: CRUD Delete
-    // HINTS: curl -vi -X POST localhost:9000/cart/{user_id}/items/{product_id}/remove -H
-    // "Content-Type: application/json" -d '{"commandType":"delete", "productId":"foo"}'
-
     if (!cart.containsKey(item.getProductId())) {
       ctx.fail("Cannot remove item " + item.getProductId() + " because it is not in the cart.");
     }
-
     cart.remove(item.getProductId());
-    ctx.emit(convert(cart)); // emit the new state
 
+    List<Domain.LineItem> lineItems =
+        cart.values().stream().map(this::convert).collect(Collectors.toList());
+    ctx.update(Domain.Cart.newBuilder().addAllItems(lineItems).build());
     return Empty.getDefaultInstance();
   }
 
@@ -96,12 +121,6 @@ public class ShoppingCartCrudEntity {
         .setProductId(item.getProductId())
         .setName(item.getName())
         .setQuantity(item.getQuantity())
-        .build();
-  }
-
-  private Domain.Cart convert(Map<String, Shoppingcart.LineItem> cart) {
-    return Domain.Cart.newBuilder()
-        .addAllItems(cart.values().stream().map(this::convert).collect(Collectors.toList()))
         .build();
   }
 }

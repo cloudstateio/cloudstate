@@ -1,4 +1,22 @@
+/*
+ * Copyright 2019 Lightbend Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.cloudstate.javasupport.impl.crud
+
+import java.util.Optional
 
 import com.example.crud.shoppingcart.Shoppingcart
 import com.google.protobuf.any.{Any => ScalaPbAny}
@@ -9,12 +27,14 @@ import io.cloudstate.javasupport.crud.{
   CrudContext,
   CrudEntity,
   CrudEntityCreationContext,
-  SnapshotContext,
-  SnapshotHandler
+  StateContext,
+  StateHandler
 }
 import io.cloudstate.javasupport.impl.{AnySupport, ResolvedServiceMethod, ResolvedType}
 import io.cloudstate.javasupport.{Context, EntityId, ServiceCall, ServiceCallFactory, ServiceCallRef}
 import org.scalatest.{Matchers, WordSpec}
+
+import scala.compat.java8.OptionConverters._
 
 class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
   trait BaseContext extends Context {
@@ -29,11 +49,12 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
   }
 
   class MockCommandContext extends CommandContext with BaseContext {
-    var emitted = Seq.empty[AnyRef]
+    var action: Option[AnyRef] = None
     override def sequenceNumber(): Long = 10
     override def commandName(): String = "AddItem"
     override def commandId(): Long = 20
-    override def emit(event: AnyRef): Unit = emitted :+= event
+    override def update(state: AnyRef): Unit = action = Some(state)
+    override def delete(): Unit = action = None
     override def entityId(): String = "foo"
     override def fail(errorMessage: String): RuntimeException = ???
     override def forward(to: ServiceCall): Unit = ???
@@ -139,12 +160,12 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         decodeWrapped(handler.handleCommand(command("blah"), new MockCommandContext).get) should ===(Wrapped("blah"))
       }
 
-      "allow emitting events" in {
+      "allow updating the state" in {
         val handler = create(
           new {
             @CommandHandler
             def addItem(msg: String, ctx: CommandContext): Wrapped = {
-              ctx.emit(msg + " event")
+              ctx.update(msg + " event")
               ctx.commandName() should ===("AddItem")
               Wrapped(msg)
             }
@@ -153,13 +174,13 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         )
         val ctx = new MockCommandContext
         decodeWrapped(handler.handleCommand(command("blah"), ctx).get) should ===(Wrapped("blah"))
-        ctx.emitted should ===(Seq("blah event"))
+        ctx.action should ===(Some("blah event"))
       }
 
       "fail if there's a bad context type" in {
         a[RuntimeException] should be thrownBy create(new {
           @CommandHandler
-          def addItem(msg: String, ctx: SnapshotContext) =
+          def addItem(msg: String, ctx: StateContext) =
             Wrapped(msg)
         }, method)
       }
@@ -205,7 +226,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
     }
 
     "support state handlers" when {
-      val ctx = new SnapshotContext with BaseContext {
+      val ctx = new StateContext with BaseContext {
         override def sequenceNumber(): Long = 10
         override def entityId(): String = "foo"
       }
@@ -213,50 +234,50 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
       "single parameter" in {
         var invoked = false
         val handler = create(new {
-          @SnapshotHandler
-          def handleState(state: String): Unit = {
-            state should ===("snap!")
+          @StateHandler
+          def handleState(state: Optional[String]): Unit = {
+            state should ===(Option("state!").asJava)
             invoked = true
           }
         })
-        handler.handleState(state("snap!"), ctx)
+        handler.handleState(Option(state("state!")).asJava, ctx)
         invoked shouldBe true
       }
 
       "context parameter" in {
         var invoked = false
         val handler = create(new {
-          @SnapshotHandler
-          def handleState(state: String, context: SnapshotContext): Unit = {
-            state should ===("snap!")
+          @StateHandler
+          def handleState(state: Optional[String], context: StateContext): Unit = {
+            state should ===(Option("state!").asJava)
             context.sequenceNumber() should ===(10)
             invoked = true
           }
         })
-        handler.handleState(state("snap!"), ctx)
+        handler.handleState(Option(state("state!")).asJava, ctx)
         invoked shouldBe true
       }
 
       "fail if there's a bad context" in {
         a[RuntimeException] should be thrownBy create(new {
-          @SnapshotHandler
-          def handleState(state: String, context: CommandContext) = ()
+          @StateHandler
+          def handleState(state: Optional[String], context: CommandContext) = ()
         })
       }
 
       "fail if there's no snapshot parameter" in {
         a[RuntimeException] should be thrownBy create(new {
-          @SnapshotHandler
-          def handleState(context: SnapshotContext) = ()
+          @StateHandler
+          def handleState(context: StateContext) = ()
         })
       }
 
-      "fail if there's no snapshot handler for the given type" in {
+      "fail if there's no state handler for the given type" in {
         val handler = create(new {
-          @SnapshotHandler
+          @StateHandler
           def handleState(state: Int) = ()
         })
-        a[RuntimeException] should be thrownBy handler.handleState(state(10), ctx)
+        a[RuntimeException] should be thrownBy handler.handleState(Option(state(10)).asJava, ctx)
       }
 
     }

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Lightbend Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.cloudstate.javasupport.impl.crud
 
 import java.lang.reflect.{Constructor, InvocationTargetException, Method}
@@ -13,8 +29,8 @@ import io.cloudstate.javasupport.crud.{
   CrudEntityCreationContext,
   CrudEntityFactory,
   CrudEntityHandler,
-  SnapshotContext,
-  SnapshotHandler
+  StateContext,
+  StateHandler
 }
 import io.cloudstate.javasupport.impl.ReflectionHelper.{InvocationContext, MainArgumentParameterHandler}
 import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEntityFactory, ResolvedServiceMethod}
@@ -35,7 +51,7 @@ private[impl] class AnnotationBasedCrudSupport(
   def this(entityClass: Class[_], anySupport: AnySupport, serviceDescriptor: Descriptors.ServiceDescriptor) =
     this(entityClass, anySupport, anySupport.resolveServiceDescriptor(serviceDescriptor))
 
-  private val behavior = EventBehaviorReflection(entityClass, resolvedMethods)
+  private val behavior = CrudBehaviorReflection(entityClass, resolvedMethods)
 
   private val constructor: CrudEntityCreationContext => AnyRef = factory.getOrElse {
     entityClass.getConstructors match {
@@ -66,12 +82,13 @@ private[impl] class AnnotationBasedCrudSupport(
       }
     }
 
-    override def handleState(anyState: JavaPbAny, context: SnapshotContext): Unit = unwrap {
-      val state = anySupport.decode(anyState).asInstanceOf[AnyRef]
+    override def handleState(anyState: Optional[JavaPbAny], context: StateContext): Unit = unwrap {
+      import scala.compat.java8.OptionConverters._
+      val state = anyState.asScala.map(s => anySupport.decode(s)).asJava.asInstanceOf[AnyRef]
 
-      behavior.getCachedSnapshotHandlerForClass(state.getClass) match {
+      behavior.getCachedStateHandlerForClass(state.getClass) match {
         case Some(handler) =>
-          val ctx = new DelegatingCrudContext(context) with SnapshotContext {
+          val ctx = new DelegatingCrudContext(context) with StateContext {
             override def sequenceNumber(): Long = context.sequenceNumber()
           }
           handler.invoke(entity, state, ctx)
@@ -99,19 +116,15 @@ private[impl] class AnnotationBasedCrudSupport(
   }
 }
 
-private class EventBehaviorReflection(
+private class CrudBehaviorReflection(
     val commandHandlers: Map[String, ReflectionHelper.CommandHandlerInvoker[CommandContext]],
-    snapshotHandlers: Map[Class[_], SnapshotHandlerInvoker]
+    val stateHandlers: Map[Class[_], StateHandlerInvoker]
 ) {
 
-  /**
-   * We use a cache in addition to the info we've discovered by reflection so that an event handler can be declared
-   * for a superclass of an event.
-   */
-  private val snapshotHandlerCache = TrieMap.empty[Class[_], Option[SnapshotHandlerInvoker]]
+  private val stateHandlerCache = TrieMap.empty[Class[_], Option[StateHandlerInvoker]]
 
-  def getCachedSnapshotHandlerForClass(clazz: Class[_]): Option[SnapshotHandlerInvoker] =
-    snapshotHandlerCache.getOrElseUpdate(clazz, getHandlerForClass(snapshotHandlers)(clazz))
+  def getCachedStateHandlerForClass(clazz: Class[_]): Option[StateHandlerInvoker] =
+    stateHandlerCache.getOrElseUpdate(clazz, getHandlerForClass(stateHandlers)(clazz))
 
   private def getHandlerForClass[T](handlers: Map[Class[_], T])(clazz: Class[_]): Option[T] =
     handlers.get(clazz) match {
@@ -125,9 +138,9 @@ private class EventBehaviorReflection(
     }
 }
 
-private object EventBehaviorReflection {
+private object CrudBehaviorReflection {
   def apply(behaviorClass: Class[_],
-            serviceMethods: Map[String, ResolvedServiceMethod[_, _]]): EventBehaviorReflection = {
+            serviceMethods: Map[String, ResolvedServiceMethod[_, _]]): CrudBehaviorReflection = {
 
     val allMethods = ReflectionHelper.getAllDeclaredMethods(behaviorClass)
     val commandHandlers = allMethods
@@ -156,10 +169,10 @@ private object EventBehaviorReflection {
           )
       }
 
-    val snapshotHandlers = allMethods
-      .filter(_.getAnnotation(classOf[SnapshotHandler]) != null)
+    val stateHandlers = allMethods
+      .filter(_.getAnnotation(classOf[StateHandler]) != null)
       .map { method =>
-        new SnapshotHandlerInvoker(ReflectionHelper.ensureAccessible(method))
+        new StateHandlerInvoker(ReflectionHelper.ensureAccessible(method))
       }
       .groupBy(_.snapshotClass)
       .map {
@@ -169,15 +182,15 @@ private object EventBehaviorReflection {
             s"Multiple methods found for handling snapshot of type $clazz: ${many.map(_.method.getName)}"
           )
       }
-      .asInstanceOf[Map[Class[_], SnapshotHandlerInvoker]]
+      .asInstanceOf[Map[Class[_], StateHandlerInvoker]]
 
     ReflectionHelper.validateNoBadMethods(
       allMethods,
       classOf[CrudEntity],
-      Set(classOf[CommandHandler], classOf[SnapshotHandler])
+      Set(classOf[CommandHandler], classOf[StateHandler])
     )
 
-    new EventBehaviorReflection(commandHandlers, snapshotHandlers)
+    new CrudBehaviorReflection(commandHandlers, stateHandlers)
   }
 }
 
@@ -195,22 +208,22 @@ private class EntityConstructorInvoker(constructor: Constructor[_]) extends (Cru
   }
 }
 
-private class SnapshotHandlerInvoker(val method: Method) {
-  private val parameters = ReflectionHelper.getParameterHandlers[SnapshotContext](method)()
+private class StateHandlerInvoker(val method: Method) {
+  private val parameters = ReflectionHelper.getParameterHandlers[StateContext](method)()
 
-  // Verify that there is at most one event handler
+  // Verify that there is at most one state handler
   val snapshotClass: Class[_] = parameters.collect {
     case MainArgumentParameterHandler(clazz) => clazz
   } match {
     case Array(handlerClass) => handlerClass
     case other =>
       throw new RuntimeException(
-        s"SnapshotHandler method $method must defined at most one non context parameter to handle snapshots, the parameters defined were: ${other
+        s"StateHandler method $method must defined at most one non context parameter to handle state, the parameters defined were: ${other
           .mkString(",")}"
       )
   }
 
-  def invoke(obj: AnyRef, snapshot: AnyRef, context: SnapshotContext): Unit = {
+  def invoke(obj: AnyRef, snapshot: AnyRef, context: StateContext): Unit = {
     val ctx = InvocationContext(snapshot, context)
     method.invoke(obj, parameters.map(_.apply(ctx)): _*)
   }

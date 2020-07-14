@@ -24,31 +24,16 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a method as a command handler.
+ * Marks a method as a state handler.
  *
- * <p>This method will be invoked whenever the service call with name that matches this command
- * handlers name is invoked.
+ * <p>If, when recovering an entity, that entity has a state, the state will be passed to a
+ * corresponding state handler method whose argument matches its type. The entity must set its
+ * current state to that state.
  *
- * <p>The method may take the command object as a parameter, its type must match the gRPC service
- * input type.
- *
- * <p>The return type of the method must match the gRPC services output type.
- *
- * <p>The method may also take a {@link CommandContext}, and/or a {@link
- * io.cloudstate.javasupport.EntityId} annotated {@link String} parameter.
+ * <p>The state handler method may additionally accept a {@link StateContext} parameter, allowing it
+ * to access context for the state, if required.
  */
 @CloudStateAnnotation
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface CommandHandler {
-
-  /**
-   * The name of the command to handle.
-   *
-   * <p>If not specified, the name of the method will be used as the command name, with the first
-   * letter capitalized to match the gRPC convention of capitalizing rpc method names.
-   *
-   * @return The command name.
-   */
-  String name() default "";
-}
+public @interface StateHandler {}

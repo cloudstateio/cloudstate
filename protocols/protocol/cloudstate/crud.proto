@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// gRPC interface for CRUD Entity user functions.
+// gRPC interface for common messages and services for CRUD Entity user functions.
 
 syntax = "proto3";
 
@@ -21,153 +21,102 @@ package cloudstate.crud;
 // Any is used so that domain events defined according to the functions business domain can be embedded inside
 // the protocol.
 import "google/protobuf/any.proto";
-import "google/protobuf/empty.proto";
 import "cloudstate/entity.proto";
 
 option java_package = "io.cloudstate.protocol";
 option go_package = "cloudstate/protocol";
 
-message CreateCommand {
-}
-message FetchCommand {
-}
-message UpdateCommand {
-}
-message DeleteCommand {
-}
+// The CRUD Entity service
+service Crud {
 
-// Type of command supported
-message CrudCommandType {
-    oneof command {
-        CreateCommand create = 1;
-        FetchCommand fetch = 2;
-        UpdateCommand update = 3;
-        DeleteCommand delete = 4;
-    }
+  // One stream will be established per active entity.
+  // Once established, the first message sent will be Init, which contains the entity ID, and,
+  // a state if the entity has previously persisted one. The entity is expected to apply the
+  // received state to its state. Once the Init message is sent, one to many commands are sent,
+  // with new commands being sent as new requests for the entity come in. The entity is expected
+  // to reply to each command with exactly one reply message. The entity should reply in order
+  // and any state update that the entity requests to be persisted the entity should handle itself.
+  // The entity handles state update by replacing its own state with the update,
+  // as if they had arrived as state update when the stream was being replayed on load.
+  rpc handle(stream CrudStreamIn) returns (stream CrudStreamOut) {}
 }
 
-// The persisted state with the sequence number of the last snapshot
-message CrudState {
-    // The state payload
-    google.protobuf.Any payload = 2;
-
-    // The sequence number when the snapshot was taken.
-    int64 snapshot_sequence = 1;
+// Input message type for the gRPC stream in.
+message CrudStreamIn {
+  oneof message {
+    CrudInit init = 1;
+    Command command = 2;
+  }
 }
 
-// Message for initiating the command execution.
-// The message contains the command type to be able to identify the crud operation being called
-message CrudEntityCommand {
-    // The ID of the entity.
-    string entity_id = 1;
+// The init message. This will always be the first message sent to the entity when it is loaded.
+message CrudInit {
+  // The name of the service that implements this entity.
+  string service_name = 1;
 
-    // The ID of a sub entity.
-    //string sub_entity_id = 2;
+  // The id of the entity.
+  string entity_id = 2;
 
-    // Command name
-    string name = 2;
-
-    // The command payload.
-    google.protobuf.Any payload = 3;
-
-    // The command type.
-    CrudCommandType type = 4;
+  // The initial state of the entity.
+  CrudInitState state = 3;
 }
 
-// The command to be executed.
-// The supported crud operations are create, fetch, update, delete.
-message CrudCommand {
-    // The name of the service this crud entity is on.
-    string service_name = 1;
+// The state of the entity when it is first activated.
+message CrudInitState {
+  // The value of the entity state, if the entity has already been created.
+  google.protobuf.Any value = 3;
 
-    // The ID of the entity.
-    string entity_id = 2;
+  // The sequence number of the entity state.
+  int64 sequence = 4;
+}
 
-    // The ID of a sub entity.
-    string sub_entity_id = 3;
-
-    // A command id.
-    int64 id = 4;
-
-    // Command name
-    string name = 5;
-
-    // The command payload.
-    google.protobuf.Any payload = 6;
-
-    // The persisted state to be conveyed between the CRUD entity and the user function.
-    CrudState state = 7;
+// Output message type for the gRPC stream out.
+message CrudStreamOut {
+  oneof message {
+    CrudReply reply = 1;
+    Failure failure = 2;
+  }
 }
 
 // A reply to a command.
 message CrudReply {
+  // The command being replied to
+  int64 command_id = 1;
 
-    // The id of the command being replied to. Must match the input command.
-    int64 command_id = 1;
+  // The action to take for the client response
+  ClientAction client_action = 2;
 
-    // The action to take
-    ClientAction client_action = 2;
+  // Any side effects to perform
+  repeated SideEffect side_effects = 3;
 
-    // Any side effects to perform
-    repeated SideEffect side_effects = 3;
+  // The action to take on the CRUD entity
+  CrudAction crud_action = 4;
 
-    // An optional state to persist.
-    google.protobuf.Any state = 4;
-
-    // An optional snapshot to persist. It is assumed that this snapshot represents any state in the state field
-    // persisted before. It is illegal to send a snapshot without sending any events.
-    // Note that the state overrides the snapshot and the state is not applied to the snapshot.
-    google.protobuf.Any snapshot = 5;
+  // An optional snapshot to persist.
+  // It is assumed that this snapshot will have the state of any actions in the crud action field applied to it.
+  // It is illegal to send a snapshot without sending any crud action.
+  CrudSnapshot snapshot = 5;
 }
 
-// A reply message type for the gRPC call.
-message CrudReplyOut {
-    oneof message {
-        CrudReply reply = 1;
-        Failure failure = 2;
-    }
+// A snapshot of the entity.
+message CrudSnapshot {
+  // The value of the snapshot, if a snapshot has already been created.
+  google.protobuf.Any value = 3;
 }
 
-// CRUD Protocol
-//
-// Each operation sent across this protocol has among others information the state of the CRUD entity.
-// The Cloudstate proxy is responsible to load the state, if any exists, from the CRUD entity and to pass it to
-// the user function which holds it in memory to handle the operation being executed. The Cloudstate proxy updates
-// the state in the user function successfully before executing the operation. The Cloudstate proxy executes one
-// operation waits for the result and replies before executing the next operation, the operations are executed in order.
-// This way the state is always in sync in the user function. Write operations could emit new state and
-// read operations should not. The CRUD entity is backed by an event sourced entity, it means emitted state is an
-// event sourced event.
-//
-// For each operation the first message sent to the CRUD entity is CrudEntityCommand which contains the entity ID and
-// the command type to know which operation to call. The CrudEntityCommand is mapped to CrudCommand which contains the
-// entity ID, the state and the snapshot sequence number. The state exists if the entity has previously persisted a
-// state. It is the same with the snapshot sequence number. Once an operation is called the CrudCommand is passed to it.
-// Each operation returns a reply message CrudReplyOut to each CrudCommand. The reply message contains the new state
-// and the snapshot to be persisted. For CrudReplyOut the state exists if the user function emits a state change.
-// Snapshot for CrudReplyOut exists if the snapshot configuration is fulfilled. The CRUD entity is expected to reply to
-// each CrudEntityCommand.
-//
-// The user function is not responsible for updating its state in memory, it should rather emit the new state to
-// the Cloudstate proxy. The Cloudstate proxy is responsible to pass the new state to the CRUD entity,
-// so that it can be applied. The Cloudstate proxy loads the persisted state for subsequents operations.
-// The user function could emit new state for write operations.
-//
-// The service could not been initialized before an operation is executed. In this case this operation will init
-// the service. Each operation always check if the service is initialized.
-//
-//
-service Crud {
-
-    // This operation creates a sub entity.
-    rpc create(CrudCommand) returns (CrudReplyOut) {}
-
-    // This operation fetches the CRUD entity or a sub entity.
-    rpc fetch(CrudCommand) returns (CrudReplyOut) {}
-
-    // This operation updates the the CRUD entity or a sub entity.
-    rpc update(CrudCommand) returns (CrudReplyOut) {}
-
-    // This operation deletes a sub entity.
-    rpc delete(CrudCommand) returns (CrudReplyOut) {}
+// An action to take for changing the entity state.
+message CrudAction {
+  oneof action {
+    CrudUpdate update = 1;
+    CrudDelete delete = 2;
+  }
 }
+
+// An action which updates the persisted value of the CRUD entity. If the entity is not yet persisted, it will be created.
+message CrudUpdate {
+  // The value to set.
+  google.protobuf.Any value = 1;
+}
+
+// An action which deletes the persisted value of the CRUD entity.
+message CrudDelete {}

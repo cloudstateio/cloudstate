@@ -19,25 +19,35 @@ package io.cloudstate.proxy.crud
 import java.net.URLDecoder
 import java.util.concurrent.atomic.AtomicLong
 
+import akka.NotUsed
 import akka.actor._
 import akka.cluster.sharding.ShardRegion
 import akka.persistence._
-import akka.stream.Materializer
+import akka.stream.scaladsl._
+import akka.stream.{CompletionStrategy, Materializer, OverflowStrategy}
 import akka.util.Timeout
 import com.google.protobuf.any.{Any => pbAny}
-import io.cloudstate.protocol.crud._
+import io.cloudstate.protocol.crud.CrudAction.Action.{Delete, Update}
+import io.cloudstate.protocol.crud.{
+  CrudClient,
+  CrudInit,
+  CrudInitState,
+  CrudReply,
+  CrudSnapshot,
+  CrudStreamIn,
+  CrudStreamOut,
+  CrudUpdate
+}
 import io.cloudstate.protocol.entity._
 import io.cloudstate.proxy.ConcurrencyEnforcer.{Action, ActionCompleted}
 import io.cloudstate.proxy.StatsCollector
-import io.cloudstate.proxy.crud.CrudEntity.InternalState
-import io.cloudstate.proxy.entity.UserFunctionReply
+import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 
 import scala.collection.immutable.Queue
 
 object CrudEntitySupervisor {
 
   private final case class Relay(actorRef: ActorRef)
-  private final case object Start
 
   def props(client: CrudClient,
             configuration: CrudEntity.Configuration,
@@ -65,30 +75,66 @@ final class CrudEntitySupervisor(client: CrudClient,
 
   import CrudEntitySupervisor._
 
-  override final def preStart(): Unit =
-    self ! Start
+  private var streamTerminated: Boolean = false
 
-  override final def receive: Receive = {
-    case Start =>
+  override final def receive: Receive = PartialFunction.empty
+
+  override final def preStart(): Unit = {
+    client
+      .handle(
+        Source
+          .actorRef[CrudStreamIn](configuration.sendQueueSize, OverflowStrategy.fail)
+          .mapMaterializedValue { ref =>
+            self ! Relay(ref)
+            NotUsed
+          }
+      )
+      .runWith(Sink.actorRef(self, CrudEntity.StreamClosed))
+    context.become(waitingForRelay)
+  }
+
+  private[this] final def waitingForRelay: Receive = {
+    case Relay(relayRef) =>
       // Cluster sharding URL encodes entity ids, so to extract it we need to decode.
       val entityId = URLDecoder.decode(self.path.name, "utf-8")
       val manager = context.watch(
         context
-          .actorOf(CrudEntity.props(configuration, entityId, client, concurrencyEnforcer, statsCollector), "entity")
+          .actorOf(CrudEntity.props(configuration, entityId, relayRef, concurrencyEnforcer, statsCollector), "entity")
       )
-      context.become(forwarding(manager))
+      context.become(forwarding(manager, relayRef))
       unstashAll()
-
     case _ => stash()
   }
 
-  private[this] final def forwarding(manager: ActorRef): Receive = {
+  private[this] final def forwarding(manager: ActorRef, relay: ActorRef): Receive = {
     case Terminated(`manager`) =>
-      context.stop(self)
+      if (streamTerminated) {
+        context.stop(self)
+      } else {
+        relay ! Status.Success(CompletionStrategy.draining)
+        context.become(stopping)
+      }
+
     case toParent if sender() == manager =>
       context.parent ! toParent
+
+    case CrudEntity.StreamClosed =>
+      streamTerminated = true
+      manager forward CrudEntity.StreamClosed
+
+    case failed: CrudEntity.StreamFailed =>
+      streamTerminated = true
+      manager forward failed
+
     case msg =>
       manager forward msg
+  }
+
+  private def stopping: Receive = {
+    case CrudEntity.StreamClosed =>
+      context.stop(self)
+    case _: CrudEntity.StreamFailed =>
+      context.stop(self)
   }
 
   override def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
@@ -97,6 +143,9 @@ final class CrudEntitySupervisor(client: CrudClient,
 object CrudEntity {
 
   final case object Stop
+
+  final case object StreamClosed extends DeadLetterSuppression
+  final case class StreamFailed(cause: Throwable) extends DeadLetterSuppression
 
   final case class Configuration(
       serviceName: String,
@@ -111,43 +160,33 @@ object CrudEntity {
       replyTo: ActorRef
   )
 
-  // Represents the entity state with the sequence number fo the last snapshot
-  private final case class InternalState(
-      payload: pbAny,
-      sequenceNumber: Long
-  )
-
   final def props(configuration: Configuration,
                   entityId: String,
-                  client: CrudClient,
+                  relay: ActorRef,
                   concurrencyEnforcer: ActorRef,
                   statsCollector: ActorRef): Props =
-    Props(new CrudEntity(configuration, entityId, client, concurrencyEnforcer, statsCollector))
+    Props(new CrudEntity(configuration, entityId, relay, concurrencyEnforcer, statsCollector))
 
   /**
    * Used to ensure the action ids sent to the concurrency enforcer are indeed unique.
    */
   private val actorCounter = new AtomicLong(0)
+
 }
 
 final class CrudEntity(configuration: CrudEntity.Configuration,
                        entityId: String,
-                       client: CrudClient,
+                       relay: ActorRef,
                        concurrencyEnforcer: ActorRef,
                        statsCollector: ActorRef)
     extends PersistentActor
     with ActorLogging {
-
-  import akka.pattern.pipe
-  import context.dispatcher
-
   override final def persistenceId: String = configuration.userFunctionName + entityId
 
   private val actorId = CrudEntity.actorCounter.incrementAndGet()
 
-  private[this] final var state: Option[InternalState] = None
-
-  private[this] final var stashedCommands = Queue.empty[(CrudEntityCommand, ActorRef)] // PERFORMANCE: look at options for data structures
+  private[this] final var recoveredState: Option[pbAny] = None
+  private[this] final var stashedCommands = Queue.empty[(EntityCommand, ActorRef)] // PERFORMANCE: look at options for data structures
   private[this] final var currentCommand: CrudEntity.OutstandingCommand = null
   private[this] final var stopped = false
   private[this] final var idCounter = 0L
@@ -170,6 +209,8 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
     if (reportedDatabaseOperationStarted) {
       reportDatabaseOperationFinished()
     }
+    // This will shutdown the stream (if not already shut down)
+    relay ! Status.Success(())
   }
 
   private[this] final def commandHandled(): Unit = {
@@ -188,7 +229,7 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       case null =>
       case req => req.replyTo ! createFailure(msg)
     }
-    val errorNotification = createFailure("CRUD entity terminated")
+    val errorNotification = createFailure("Entity terminated")
     stashedCommands.foreach {
       case (_, replyTo) => replyTo ! errorNotification
     }
@@ -202,41 +243,22 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
   private[this] final def reportActionComplete() =
     concurrencyEnforcer ! ActionCompleted(currentCommand.actionId, System.nanoTime() - commandStartTime)
 
-  private[this] final def handleCommand(entityCommand: CrudEntityCommand, sender: ActorRef): Unit = {
+  private[this] final def handleCommand(entityCommand: EntityCommand, sender: ActorRef): Unit = {
     idCounter += 1
-    val command = CrudCommand(
-      serviceName = configuration.serviceName,
+    val command = Command(
       entityId = entityId,
-      subEntityId = entityCommand.entityId,
       id = idCounter,
       name = entityCommand.name,
-      payload = entityCommand.payload,
-      state = state.map(s => CrudState(Some(s.payload), sequenceNumber()))
+      payload = entityCommand.payload
     )
     currentCommand = CrudEntity.OutstandingCommand(idCounter, actorId + ":" + entityId + ":" + idCounter, sender)
     commandStartTime = System.nanoTime()
-    concurrencyEnforcer ! Action(
-      currentCommand.actionId,
-      () => handleCrudCommand(command, entityCommand.`type`)
-    )
+    concurrencyEnforcer ! Action(currentCommand.actionId, () => {
+      relay ! CrudStreamIn(CrudStreamIn.Message.Command(command))
+    })
   }
 
-  private[this] final def handleCrudCommand(command: CrudCommand, commandType: Option[CrudCommandType]): Unit = {
-    import CrudCommandType.{Command => CrudCmd}
-    commandType match {
-      case Some(cmdType) =>
-        cmdType.command match {
-          case CrudCmd.Create(_) => client.create(command) pipeTo self
-          case CrudCmd.Fetch(_) => client.fetch(command) pipeTo self
-          case CrudCmd.Update(_) => client.update(command) pipeTo self
-          case CrudCmd.Delete(_) => client.delete(command) pipeTo self
-        }
-
-      case _ => // Nothing to do, commandType should not be None
-    }
-  }
-
-  private final def esReplyToUfReply(reply: CrudReply): UserFunctionReply =
+  private final def esReplyToUfReply(reply: CrudReply) =
     UserFunctionReply(
       clientAction = reply.clientAction,
       sideEffects = reply.sideEffects
@@ -247,49 +269,45 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       clientAction = Some(ClientAction(ClientAction.Action.Failure(Failure(description = message))))
     )
 
-  private[this] final def maybeInit(snapshot: Option[SnapshotOffer]): Unit =
-    if (!inited) {
-      state = snapshot.map {
-        case SnapshotOffer(metadata, offeredSnapshot: pbAny) =>
-          InternalState(offeredSnapshot, metadata.sequenceNr)
-        case other => throw new IllegalStateException(s"Unexpected snapshot type received: ${other.getClass}")
-      }
-      inited = true
-    }
+  override final def receiveCommand: PartialFunction[Any, Unit] = {
 
-  // the sequence number of the last taken snapshot
-  private[this] final def sequenceNumber(): Long = state.map(_.sequenceNumber).getOrElse(0L)
-
-  override final def receiveCommand: Receive = {
-
-    case command: CrudEntityCommand if currentCommand != null =>
+    case command: EntityCommand if currentCommand != null =>
       stashedCommands = stashedCommands.enqueue((command, sender()))
 
-    case command: CrudEntityCommand =>
+    case command: EntityCommand =>
       handleCommand(command, sender())
 
-    case CrudReplyOut(m, _) =>
-      import CrudReplyOut.{Message => CrudOMsg}
+    case CrudStreamOut(m, _) =>
+      import CrudStreamOut.{Message => CrudSOMsg}
       m match {
-        case CrudOMsg.Reply(r) if currentCommand == null =>
+
+        case CrudSOMsg.Reply(r) if currentCommand == null =>
           crash(s"Unexpected reply, had no current command: $r")
 
-        case CrudOMsg.Reply(r) if currentCommand.commandId != r.commandId =>
+        case CrudSOMsg.Reply(r) if currentCommand.commandId != r.commandId =>
           crash(s"Incorrect command id in reply, expecting ${currentCommand.commandId} but got ${r.commandId}")
 
-        case CrudOMsg.Reply(r) =>
+        case CrudSOMsg.Reply(r) =>
           reportActionComplete()
           val commandId = currentCommand.commandId
-          r.state match {
-            case None =>
-              currentCommand.replyTo ! esReplyToUfReply(r)
-              commandHandled()
-            case Some(event) =>
-              reportDatabaseOperationStarted()
-              persist(event) { _ =>
+          if (r.crudAction.isEmpty) {
+            currentCommand.replyTo ! esReplyToUfReply(r)
+            commandHandled()
+          } else {
+            reportDatabaseOperationStarted()
+            r.crudAction map { a =>
+              // map the CrudAction to state
+              val state = a.action match {
+                case Update(CrudUpdate(Some(value), _)) => Some(value)
+                case Delete(_) => None
+              }
+
+              persist(state) { _ =>
                 reportDatabaseOperationFinished()
-                state = Some(InternalState(event, sequenceNumber))
-                r.snapshot.foreach(saveSnapshot)
+                // try to save a snapshot
+                r.snapshot.foreach {
+                  case CrudSnapshot(value, _) => saveSnapshot(value)
+                }
                 // Make sure that the current request is still ours
                 if (currentCommand == null || currentCommand.commandId != commandId) {
                   crash("Internal error - currentRequest changed before all events were persisted")
@@ -297,37 +315,42 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
                 currentCommand.replyTo ! esReplyToUfReply(r)
                 commandHandled()
               }
+            }
           }
 
-        case CrudOMsg.Failure(f) if f.commandId == 0 =>
+        case CrudSOMsg.Failure(f) if f.commandId == 0 =>
           crash(s"Non command specific error from entity: ${f.description}")
 
-        case CrudOMsg.Failure(f) if currentCommand == null =>
+        case CrudSOMsg.Failure(f) if currentCommand == null =>
           crash(s"Unexpected failure, had no current command: $f")
 
-        case CrudOMsg.Failure(f) if currentCommand.commandId != f.commandId =>
+        case CrudSOMsg.Failure(f) if currentCommand.commandId != f.commandId =>
           crash(s"Incorrect command id in failure, expecting ${currentCommand.commandId} but got ${f.commandId}")
 
-        case CrudOMsg.Failure(f) =>
+        case CrudSOMsg.Failure(f) =>
           reportActionComplete()
           currentCommand.replyTo ! createFailure(f.description)
           commandHandled()
 
-        case CrudOMsg.Empty =>
+        case CrudSOMsg.Empty =>
           // Either the reply/failure wasn't set, or its set to something unknown.
           // todo see if scalapb can give us unknown fields so we can possibly log more intelligently
           crash("Empty or unknown message from entity output stream")
       }
 
-    case Status.Failure(error) =>
-      notifyOutstandingRequests("Unexpected entity termination")
+    case CrudEntity.StreamClosed =>
+      notifyOutstandingRequests("Unexpected CRUD entity termination")
+      context.stop(self)
+
+    case CrudEntity.StreamFailed(error) =>
+      notifyOutstandingRequests("Unexpected CRUD entity termination")
       throw error
 
     case SaveSnapshotSuccess(metadata) =>
     // Nothing to do
 
     case SaveSnapshotFailure(metadata, cause) =>
-      log.error("Error saving snapshot", cause)
+      log.error("Error saving snapshot for CRUD entity", cause)
 
     case ReceiveTimeout =>
       context.parent ! ShardRegion.Passivate(stopMessage = CrudEntity.Stop)
@@ -341,15 +364,38 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
 
   override final def receiveRecover: PartialFunction[Any, Unit] = {
     case offer: SnapshotOffer =>
-      maybeInit(Some(offer))
+      if (!inited) {
+        // apply snapshot on recoveredState only when the entity is not fully initialized
+        recoveredState = offer.snapshot match {
+          case Some(updated: pbAny) => Some(updated)
+          case other =>
+            throw new IllegalStateException(s"CRUD entity received a unexpected snapshot type : ${other.getClass}")
+        }
+      }
 
     case RecoveryCompleted =>
       reportDatabaseOperationFinished()
-      maybeInit(None)
+      if (!inited) {
+        relay ! CrudStreamIn(
+          CrudStreamIn.Message.Init(
+            CrudInit(
+              serviceName = configuration.serviceName,
+              entityId = entityId,
+              state = Some(CrudInitState(recoveredState, lastSequenceNr))
+            )
+          )
+        )
+        inited = true
+      }
 
-    case event: pbAny =>
-      maybeInit(None)
-      state = Some(InternalState(event, sequenceNumber))
+    case event: Any =>
+      if (!inited) {
+        // apply event on recoveredState only when the entity is not fully initialized
+        recoveredState = event match {
+          case Some(updated: pbAny) => Some(updated)
+          case _ => None
+        }
+      }
   }
 
   private def reportDatabaseOperationStarted(): Unit =

@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Lightbend Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.cloudstate.proxy.crud
 
 import akka.NotUsed
@@ -9,22 +25,11 @@ import akka.grpc.GrpcClientSettings
 import akka.stream.Materializer
 import akka.stream.scaladsl.Flow
 import akka.util.Timeout
-import com.google.protobuf.ByteString
 import com.google.protobuf.Descriptors.ServiceDescriptor
-import io.cloudstate.protocol.crud.{
-  CreateCommand,
-  CrudClient,
-  CrudCommandType,
-  CrudEntityCommand,
-  DeleteCommand,
-  FetchCommand,
-  UpdateCommand
-}
-import io.cloudstate.protocol.entity.Entity
-import io.cloudstate.proxy.EntityMethodDescriptor.CrudCommandOptionValue
+import io.cloudstate.protocol.crud.CrudClient
+import io.cloudstate.protocol.entity.{Entity, Metadata}
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
-import io.cloudstate.proxy.eventsourced.DynamicLeastShardAllocationStrategy
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -37,7 +42,7 @@ class CrudSupportFactory(system: ActorSystem,
 
   private final val log = Logging.getLogger(system, this.getClass)
 
-  private val crudClient = CrudClient(grpcClientSettings)
+  private val crudClient = CrudClient(grpcClientSettings)(system)
 
   override def buildEntityTypeSupport(entity: Entity,
                                       serviceDescriptor: ServiceDescriptor,
@@ -49,19 +54,19 @@ class CrudSupportFactory(system: ActorSystem,
                                                       config.passivationTimeout,
                                                       config.relayOutputBufferSize)
 
-    log.debug("Starting Crud Entity for {}", entity.persistenceId)
+    log.debug("Starting CrudEntity for {}", entity.persistenceId)
     val clusterSharding = ClusterSharding(system)
     val clusterShardingSettings = ClusterShardingSettings(system)
-    val eventSourcedEntity = clusterSharding.start(
+    val crudEntity = clusterSharding.start(
       typeName = entity.persistenceId,
       entityProps = CrudEntitySupervisor.props(crudClient, stateManagerConfig, concurrencyEnforcer, statsCollector),
       settings = clusterShardingSettings,
-      messageExtractor = new EntityIdExtractor(config.numberOfShards),
+      messageExtractor = new CrudEntityIdExtractor(config.numberOfShards),
       allocationStrategy = new DynamicLeastShardAllocationStrategy(1, 10, 2, 0.0),
       handOffStopMessage = CrudEntity.Stop
     )
 
-    new CrudSupport(eventSourcedEntity, config.proxyParallelism, config.relayTimeout)
+    new CrudSupport(crudEntity, config.proxyParallelism, config.relayTimeout)
   }
 
   private def validate(serviceDescriptor: ServiceDescriptor,
@@ -71,76 +76,39 @@ class CrudSupportFactory(system: ActorSystem,
     if (streamedMethods.nonEmpty) {
       val offendingMethods = streamedMethods.map(_.method.getName).mkString(",")
       throw EntityDiscoveryException(
-        s"Crud entities do not support streamed methods, but ${serviceDescriptor.getFullName} has the following streamed methods: ${offendingMethods}"
+        s"CRUD entities do not support streamed methods, but ${serviceDescriptor.getFullName} has the following streamed methods: ${offendingMethods}"
       )
     }
     val methodsWithoutKeys = methodDescriptors.values.filter(_.keyFieldsCount < 1)
     if (methodsWithoutKeys.nonEmpty) {
       val offendingMethods = methodsWithoutKeys.map(_.method.getName).mkString(",")
       throw EntityDiscoveryException(
-        s"""Crud entities do not support methods whose parameters do not have at least one field marked as entity_key,
-            |"but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}""".stripMargin
+        s"""CRUD entities do not support methods whose parameters do not have at least one field marked as entity_key,
+            |but ${serviceDescriptor.getFullName} has the following methods without keys: $offendingMethods""".stripMargin
+          .replaceAll("\n", " ")
       )
     }
-
-    // FIXME crudSubEntityKey should be removed
-    // FIXME crudCommandType should be check only for method with payload like GET and DELETE
-    /*
-    val methodsWithoutSubEntityKeys = methodDescriptors.values.filter(_.crudSubEntityKeyFieldsCount < 1)
-    if (methodsWithoutSubEntityKeys.nonEmpty) {
-      val offendingMethods = methodsWithoutSubEntityKeys.map(_.method.getName).mkString(",")
-      throw EntityDiscoveryException(
-        s"""Crud entities do not support methods whose parameters do not have at least one field marked as sub_entity_key,
-           |"but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}""".stripMargin
-      )
-    }
-
-    val methodsWithoutCommandType = methodDescriptors.values.filter(_.crudCommandTypeFieldsCount < 1)
-    if (methodsWithoutCommandType.nonEmpty) {
-      val offendingMethods = methodsWithoutCommandType.map(_.method.getName).mkString(",")
-      throw EntityDiscoveryException(
-        s"""Crud entities do not support methods whose parameters do not have at least one field marked as crud_command_type,
-           |"but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}""".stripMargin
-      )
-    }
-   */
   }
 }
 
-private class CrudSupport(eventSourcedEntity: ActorRef, parallelism: Int, private implicit val relayTimeout: Timeout)
+private class CrudSupport(crudEntity: ActorRef, parallelism: Int, private implicit val relayTimeout: Timeout)
     extends EntityTypeSupport {
-
   import akka.pattern.ask
 
-  override def handler(method: EntityMethodDescriptor): Flow[EntityCommand, UserFunctionReply, NotUsed] =
-    Flow[EntityCommand].mapAsync(parallelism) { command =>
-      val commandType = extractCommandType(method, command)
-      val initCommand = CrudEntityCommand(entityId = command.entityId,
-                                          name = command.name,
-                                          payload = command.payload,
-                                          `type` = Some(commandType))
-      (eventSourcedEntity ? initCommand).mapTo[UserFunctionReply]
-    }
+  override def handler(method: EntityMethodDescriptor,
+                       metadata: Metadata): Flow[EntityCommand, UserFunctionReply, NotUsed] =
+    Flow[EntityCommand].mapAsync(parallelism)(
+      command =>
+        (crudEntity ? EntityTypeSupport.mergeStreamLevelMetadata(metadata, command))
+          .mapTo[UserFunctionReply]
+    )
 
   override def handleUnary(command: EntityCommand): Future[UserFunctionReply] =
-    (eventSourcedEntity ? command).mapTo[UserFunctionReply]
-
-  private def extractCommandType(method: EntityMethodDescriptor, command: EntityCommand): CrudCommandType = {
-    val commandType = method.extractCrudCommandType(command.payload.fold(ByteString.EMPTY)(_.value))
-    commandType match {
-      case CrudCommandOptionValue.CREATE => CrudCommandType.of(CrudCommandType.Command.Create(CreateCommand()))
-      case CrudCommandOptionValue.FETCH => CrudCommandType.of(CrudCommandType.Command.Fetch(FetchCommand()))
-      case CrudCommandOptionValue.UPDATE => CrudCommandType.of(CrudCommandType.Command.Update(UpdateCommand()))
-      case CrudCommandOptionValue.DELETE => CrudCommandType.of(CrudCommandType.Command.Delete(DeleteCommand()))
-      case CrudCommandOptionValue.UNKNOWN =>
-        // cannot be empty here because the check is made in the validate method of CrudSupportFactory
-        throw new RuntimeException(s"Command - ${command.name} for CRUD entity should have a command type")
-    }
-  }
+    (crudEntity ? command).mapTo[UserFunctionReply]
 }
 
-private final class EntityIdExtractor(shards: Int) extends HashCodeMessageExtractor(shards) {
+private final class CrudEntityIdExtractor(shards: Int) extends HashCodeMessageExtractor(shards) {
   override final def entityId(message: Any): String = message match {
-    case command: CrudEntityCommand => command.entityId
+    case command: EntityCommand => command.entityId
   }
 }
