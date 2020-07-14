@@ -39,6 +39,6 @@ The following additional fields are available to customize the service:
 
 `sidecarJvmMemory`: Heap space to allocate for the sidecar, using the `-Xmx` option. This currently has [no effect for native images](https://github.com/cloudstateio/cloudstate/issues/112), and is likely to change.
 
-`nodeSelector`: Used to specify the [Pod nodeSelector](https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#nodeselector). This field is likely to change.
+`nodeSelector`: Used to specify the [Pod nodeSelector](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector). This field is likely to change.
 
-`tolerations`: Used to specify the [Pod tolerations](https://kubernetes.io/docs/concepts/configuration/taint-and-toleration/). This field is likely to change.
+`tolerations`: Used to specify the [Pod tolerations](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/). This field is likely to change.

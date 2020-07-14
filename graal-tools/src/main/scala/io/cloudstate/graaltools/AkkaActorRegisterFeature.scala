@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Lightbend Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.cloudstate.graaltools
 
 import com.oracle.svm.core.annotate.AutomaticFeature
@@ -16,24 +32,15 @@ final class AkkaActorRegisterFeature extends Feature {
     val akkaActorClass =
       access.findClassByName(classOf[akka.actor.Actor].getName) // We do this to get compile-time safety of the classes, and allow graalvm to resolve their names
 
-    def register(subtype: Class[_]) =
-      for {
-        subtype <- Option(subtype)
-        if !subtype.isInterface && !ignoreClass(subtype.getName)
-        _ = println("Automatically registering actor class for reflection purposes: " + subtype.getName)
-        _ = RuntimeReflection.register(subtype)
-        _ = RuntimeReflection.register(subtype.getDeclaredConstructors: _*)
-        _ = RuntimeReflection.register(subtype.getDeclaredFields: _*)
-        if subtype.getInterfaces.exists(_ == akkaActorClass)
-        (context, self) <- getDeclaredField(subtype, "context") zip getDeclaredField(subtype, "self")
-      } {
-        RuntimeReflection.register( /* finalIsWritable = */ true, context, self)
-      }
-
-    access.registerSubtypeReachabilityHandler((_, subtype) => register(subtype), akkaActorClass)
+    access.registerSubtypeReachabilityHandler(
+      (_, subtype) =>
+        if (subtype != null && !subtype.isInterface && !ignoreClass(subtype.getName)) { // TODO investigate whether we should cache the one's we've already added or not?
+          println("Automatically registering actor class for reflection purposes: " + subtype.getName)
+          RuntimeReflection.register(subtype)
+          RuntimeReflection.register(subtype.getDeclaredConstructors: _*)
+          RuntimeReflection.register(subtype.getDeclaredFields: _*)
+        },
+      akkaActorClass
+    )
   }
-
-  private[this] final def getDeclaredField(cls: Class[_], name: String) =
-    try Option(cls.getDeclaredField(name))
-    catch { case _: NoSuchFieldException => None }
 }

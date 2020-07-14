@@ -13,7 +13,7 @@ Installing Cloudstate requires cluster admin, so that the necessary Custom Resou
 
 The Cloudstate operator typically gets deployed to its own namespace, for the rest of this guide we will assume that is called `cloudstate`, and needs permissions to manage deployments, services, roles and role bindings in every namespace that it manages Cloudstate services in. Cloudstate provides a single deployment descriptor, available from the [Cloudstate GitHub release page](https://github.com/cloudstateio/cloudstate/releases).
 
-The deployment descriptor is built from the descriptors found in the [operator `deploy` directory](https://github.com/cloudstateio/cloudstate/blob/master/operator/deploy/), and can be modified accordingly if, for example, more fine grained access controls wish to be granted.
+The deployment descriptor is built from the descriptors found in the [operator `deploy` directory](https://github.com/cloudstateio/cloudstate/tree/master/operator/deploy), and can be modified accordingly if, for example, more fine grained access controls wish to be granted.
 
 ## Operator configuration
 

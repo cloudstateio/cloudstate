@@ -22,7 +22,7 @@ import akka.cluster.Cluster
 import akka.util.Timeout
 import akka.pattern.pipe
 import akka.stream.scaladsl.RunnableGraph
-import akka.http.scaladsl.{Http, HttpConnectionContext, UseHttp2}
+import akka.http.scaladsl.Http
 import akka.http.scaladsl.Http.ServerBinding
 import akka.cluster.singleton.{
   ClusterSingletonManager,
@@ -54,15 +54,10 @@ import io.cloudstate.proxy.autoscaler.{
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
 import io.cloudstate.proxy.crud.CrudSupportFactory
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
-import io.cloudstate.proxy.eventing.EventingManager
 import io.cloudstate.proxy.function.StatelessFunctionSupportFactory
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
-
-//import io.cloudstate.protocol.entity.{ClientAction, EntityDiscovery, Failure, Reply, UserFunctionError}
-import io.cloudstate.protocol.entity.EntityDiscovery
-import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 
 object EntityDiscoveryManager {
   final case class Configuration(
@@ -144,8 +139,8 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
 ) extends Actor
     with ActorLogging {
 
-  implicit val system = context.system
-  implicit val ec = context.dispatcher
+  private[this] implicit val system = context.system
+  private[this] implicit val ec = context.dispatcher
   import EntityDiscoveryManager.Ready
 
   private[this] final val clientSettings =
@@ -167,7 +162,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
 
       val singleton = context.actorOf(
         ClusterSingletonManager.props(
-          Autoscaler.props(autoscalerSettings, scalerFactory, new ClusterMembershipFacadeImpl(Cluster(context.system))),
+          Autoscaler.props(autoscalerSettings, scalerFactory, new ClusterMembershipFacadeImpl(Cluster(system))),
           terminationMessage = PoisonPill,
           managerSettings
         ),
@@ -186,13 +181,13 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
     context.actorOf(ConcurrencyEnforcer.props(config.concurrencySettings, statsCollector), "concurrencyEnforcer")
 
   private final val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
-      Crdt.name -> new CrdtSupportFactory(context.system,
+      Crdt.name -> new CrdtSupportFactory(system,
                                           config,
                                           entityDiscoveryClient,
                                           clientSettings,
                                           concurrencyEnforcer = concurrencyEnforcer,
                                           statsCollector = statsCollector),
-      StatelessFunction.name -> new StatelessFunctionSupportFactory(context.system,
+      StatelessFunction.name -> new StatelessFunctionSupportFactory(system,
                                                                     config,
                                                                     clientSettings,
                                                                     concurrencyEnforcer = concurrencyEnforcer,
@@ -200,7 +195,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
     ) ++ {
       if (config.journalEnabled)
         Map(
-          EventSourced.name -> new EventSourcedSupportFactory(context.system,
+          EventSourced.name -> new EventSourcedSupportFactory(system,
                                                               config,
                                                               clientSettings,
                                                               concurrencyEnforcer = concurrencyEnforcer,
@@ -252,10 +247,10 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
 
         val router = new UserFunctionRouter(entities, entityDiscoveryClient)
 
+        /*
         val eventSupport = EventingManager.createSupport(config.getConfig("eventing"))
-
-        val (route, eventingGraph) =
-          Serve.createRoute(entities, router, statsCollector, entityDiscoveryClient, descriptors, eventSupport)
+         */
+        val route = Serve.createRoute(entities, router, statsCollector, entityDiscoveryClient, descriptors, Map.empty)
 
         log.debug("Starting gRPC proxy")
 
@@ -271,7 +266,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
         // Start warmup
         system.actorOf(Warmup.props(spec.entities.exists(_.entityType == EventSourced.name)), "state-manager-warm-up")
 
-        context.become(binding(eventingGraph))
+        context.become(binding(None))
 
       } catch {
         case e @ EntityDiscoveryException(message) =>

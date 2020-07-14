@@ -3,7 +3,6 @@
 Cloudstate user functions can be implemented in any language that supports gRPC. That said, the Cloudstate gRPC protocol is typically too low level for user functions to effectively implement their business logic in. Hence, Cloudstate provides support libraries for multiple languages to allow developers to implement entities using idiomatic APIs.
 
 @@toc { depth=1 }
-
 @@@ index
 
 * [JavaScript](javascript/index.md)
@@ -11,6 +10,8 @@ Cloudstate user functions can be implemented in any language that supports gRPC.
 * [Go](go/index.md)
 * [Kotlin](kotlin/index.md)
 * [Dart](dart/index.md)
+* [Spring Boot](springboot/index.md)
+* [.Net](dotnet/index.md)
 
 @@@
 
@@ -24,8 +25,6 @@ Here is a list of other, **non-official** libraries in various other languages:
 | Library Name                                                                                          | Language  | Event-sourcing support?   | CRDT support?         | Stateless support?    |
 |-------------------------------------------------------------------------------------------------------|-----------|---------------------------|-----------------------|-----------------------|
 | [scala-support](https://github.com/cloudstateio/cloudstate/tree/master/scala-support/src/main)        | Scala     | **❗️**                    | **❗️**               | **❌**                 |
-| [cloudstate-csharp](https://github.com/nagytech/cloudstate-csharp)                                    | C#        | **✅**                    | **✅**               | **❌**                 |
-| [python-support](https://github.com/marcellanz/cloudstate_python-support/tree/feature/python-support) | Python    | **❓**                    | **❓**               | **❌**                 |
 | [cloudstate-rust](https://github.com/sleipnir/cloudstate-rust)                                        | Rust      | **❓**                    | **❓**               | **❌**                 |
 
 ### Legend:
