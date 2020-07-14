@@ -137,19 +137,19 @@ jobs:
       - cs_authenticate_test:
           target_env: "stage"
       - slack/status:
-          channel: cloudstate-notifications
+          channel: cloudstate-alerts
           success_message: Successful authentication on stage
           failure_message: Unable to authenticate on stage environment
           mentions: "@edc,@srikanth"
           fail_only: true
-          only_for_branches: master,cron-test
+          only_for_branches: "master,cron-test"
       - pagerduty/notify-on-failure:
           escalation_policy: ""
           from_account: "srikanth.koneru@lightbend.com"
           incident_description: Unable to authentticate on stage environment
           incident_key:  "AUTHENTICATION_FAILED_ON_STAGE"
           incident_title: $CIRCLE_JOB authentication to stage failed
-          only_for_branches: master, cron-test
+          only_for_branches: "master,cron-test"
           # S2 https://developer.pagerduty.com/api-reference/reference/REST/openapiv3.json/paths/~1priorities/get
           priority: "PBT5H5L"
           # cloudstate-test
@@ -166,19 +166,19 @@ jobs:
       - cs_sc_test:
           cart_uri: "https://frosty-cloud-8068.us-east1.apps.cloudstate.com"
       - slack/status:
-          channel: cloudstate-notifications
+          channel: cloudstate-alerts
           success_message: Shopping cart tests successful on prod
           failure_message: Shopping cart tests failed on prod
           #mentions: "@edc,@srikanth"
           #fail_only: true
-          only_for_branches: master,cron-test
+          only_for_branches: "master,cron-test"
       - pagerduty/notify-on-failure:
           escalation_policy: ""
           from_account: "srikanth.koneru@lightbend.com"
           incident_description: Shopping cart tests failed on prod.
           incident_key:  "SHOPPING_CART_TESTS_FAILED_ON_PROD"
           incident_title: $CIRCLE_JOB Shopping Cart tests failed on prod.
-          only_for_branches: master, cron-test
+          only_for_branches: "master,cron-test"
           # S2 https://developer.pagerduty.com/api-reference/reference/REST/openapiv3.json/paths/~1priorities/get
           priority: "PBT5H5L"
           # cloudstate-test
@@ -194,19 +194,19 @@ jobs:
       - cs_authenticate_test:
           target_env: "prod"
       - slack/status:
-          channel: cloudstate-notifications
+          channel: cloudstate-alerts
           success_message: Successful authentication on stage
           failure_message: Unable to authenticate on stage environment
           mentions: "@edc,@srikanth"
           fail_only: true
-          only_for_branches: master,cron-test
+          only_for_branches: "master,cron-test"
       - pagerduty/notify-on-failure:
           escalation_policy: ""
           from_account: "srikanth.koneru@lightbend.com"
           incident_description: Unable to authentticate on stage environment
           incident_key:  "AUTHENTICATION_FAILED_ON_PROD"
           incident_title: $CIRCLE_JOB authentication to prod failed
-          only_for_branches: master, cron-test
+          only_for_branches: "master,cron-test"
           # S1
           priority: "PF2THIO"
           # cloudstate-test
@@ -265,3 +265,4 @@ workflows:
                 - cron-test
     jobs:
       - prod_authenticate_test
+      - prod_sc_test
