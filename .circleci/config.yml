@@ -89,6 +89,7 @@ commands:
                     $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
                 echo " test3 added"
                 cart_new_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
+                echo -e "\n"Added "${cart_size_diff}" items to cart
                 cart_size_diff=$(expr "${cart_new_size}" - "${cart_orig_size}" )
                 if [ "${cart_size_diff}" -ne 3 ]; then
                       echo Problem adding items to "'${SHOP_TEST_USER}'" cart !!!
