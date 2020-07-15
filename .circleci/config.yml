@@ -89,7 +89,7 @@ commands:
                     $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
                 echo " test3 added"
                 cart_new_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
-                echo -e "\n"Added "${cart_size_diff}" items to cart
+                echo -e "\n"Added "${cart_new_size}" items to cart
                 cart_size_diff=$(expr "${cart_new_size}" - "${cart_orig_size}" )
                 if [ "${cart_size_diff}" -ne 3 ]; then
                       echo Problem adding items to "'${SHOP_TEST_USER}'" cart !!!
@@ -167,15 +167,14 @@ jobs:
       - image: circleci/buildpack-deps:focal-curl
     description: "Stage Authentication Test"
     steps:
-      - run: jq --help || true
       - cs_sc_test:
           cart_uri: "https://frosty-cloud-8068.us-east1.apps.cloudstate.com"
       - slack/status:
           channel: cloudstate-alerts
           success_message: Shopping cart tests successful on prod
           failure_message: Shopping cart tests failed on prod
-          #mentions: "@edc,@srikanth"
-          #fail_only: true
+          mentions: "@edc,@srikanth"
+          fail_only: true
           only_for_branches: "master,cron-test"
       - pagerduty/notify-on-failure:
           escalation_policy: ""
