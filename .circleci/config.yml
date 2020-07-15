@@ -79,15 +79,15 @@ commands:
                 curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
                     -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test1", name: "test1", "quantity":1}' \
                     $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
-                echo "test1 added"
+                echo " test1 added"
                 curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
                     -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test2", name: "test2", "quantity":2}' \
                     $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
-                echo "test2 added"
+                echo " test2 added"
                 curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
                     -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test3", name: "test3", "quantity":3}' \
                     $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
-                echo "test3 added"
+                echo " test3 added"
                 cart_new_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
                 cart_size_diff=$(expr "${cart_new_size}" - "${cart_orig_size}" )
                 if [ "${cart_size_diff}" -ne 3 ]; then
@@ -167,7 +167,6 @@ jobs:
     description: "Stage Authentication Test"
     steps:
       - run: jq --help || true
-      - jq/install
       - cs_sc_test:
           cart_uri: "https://frosty-cloud-8068.us-east1.apps.cloudstate.com"
       - slack/status:
