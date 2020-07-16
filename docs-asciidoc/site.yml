@@ -1,34 +1,26 @@
 site:
   title: "Cloudstate Documentation"
   url: https://cloudstate.io/
-  
+
 content:
   sources:
-  - url: ./
+  - url: ..
     branches: [HEAD]
-    start-path: docs-asciidoc/src  
-  - url: ./
+    start-path: docs-asciidoc/src
+  - url: ..
     branches: [HEAD]
     start-path: docs-asciidoc/shared-content
-    
+
 ui:
   bundle:
     url: https://github.com/lightbend/antora-ui-lightbend-cloud-theme-cloudstate/raw/master/build/ui-bundle.zip
     snapshot: true
-  
-        
+
+extensions:
+  - path: "@djencks/antora-aggregate-collector"
+
 runtime:
   fetch: true
 
-asciidoc:
-
-  attributes:
-
-    
-    # the following two attributes cause review and todo notes to display
-    review: ''
-    todo: ''
-    
 output:
-#   dir: ./
-   clean: true
+  clean: true

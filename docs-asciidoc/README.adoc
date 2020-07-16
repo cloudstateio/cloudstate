@@ -1,0 +1,21 @@
+= Cloudstate documentation
+
+Build the docs using the Makefile:
+
+....
+make build
+....
+
+Open the docs index page:
+
+....
+open build/site/docs/current/index.html
+....
+
+Or build in author mode, served locally:
+
+....
+make preview
+....
+
+Browse at http://localhost:8000/docs/current/

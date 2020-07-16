@@ -1,0 +1,6 @@
+/.cache/
+/build/
+/node_modules/
+
+# we can't use package lock with the @djencks dependencies
+/package-lock.json
