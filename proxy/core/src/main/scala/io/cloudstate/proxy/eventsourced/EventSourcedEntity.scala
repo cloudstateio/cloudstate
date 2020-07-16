@@ -24,7 +24,7 @@ import akka.actor._
 import akka.cluster.sharding.ShardRegion
 import akka.persistence._
 import akka.stream.scaladsl._
-import akka.stream.{Materializer, OverflowStrategy}
+import akka.stream.{CompletionStrategy, Materializer, OverflowStrategy}
 import akka.util.Timeout
 import com.google.protobuf.any.{Any => pbAny}
 import io.cloudstate.protocol.entity._
@@ -66,6 +66,8 @@ final class EventSourcedEntitySupervisor(client: EventSourcedClient,
 
   import EventSourcedEntitySupervisor._
 
+  private var streamTerminated: Boolean = false
+
   override final def receive: Receive = PartialFunction.empty
 
   override final def preStart(): Unit = {
@@ -91,18 +93,36 @@ final class EventSourcedEntitySupervisor(client: EventSourcedClient,
           .actorOf(EventSourcedEntity.props(configuration, entityId, relayRef, concurrencyEnforcer, statsCollector),
                    "entity")
       )
-      context.become(forwarding(manager))
+      context.become(forwarding(manager, relayRef))
       unstashAll()
     case _ => stash()
   }
 
-  private[this] final def forwarding(manager: ActorRef): Receive = {
+  private[this] final def forwarding(manager: ActorRef, relay: ActorRef): Receive = {
     case Terminated(`manager`) =>
-      context.stop(self)
+      if (streamTerminated) {
+        context.stop(self)
+      } else {
+        relay ! Status.Success(CompletionStrategy.draining)
+        context.become(stopping)
+      }
     case toParent if sender() == manager =>
       context.parent ! toParent
+    case EventSourcedEntity.StreamClosed =>
+      streamTerminated = true
+      manager forward EventSourcedEntity.StreamClosed
+    case failed: EventSourcedEntity.StreamFailed =>
+      streamTerminated = true
+      manager forward failed
     case msg =>
       manager forward msg
+  }
+
+  private def stopping: Receive = {
+    case EventSourcedEntity.StreamClosed =>
+      context.stop(self)
+    case _: EventSourcedEntity.StreamFailed =>
+      context.stop(self)
   }
 
   override def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
@@ -184,8 +204,6 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
     if (reportedDatabaseOperationStarted) {
       reportDatabaseOperationFinished()
     }
-    // This will shutdown the stream (if not already shut down)
-    relay ! Status.Success(())
     instrumentation.entityPassivated()
   }
 
