@@ -14,38 +14,33 @@
  * limitations under the License.
  */
 
-package io.cloudstate.proxy
-
-import java.io.OutputStreamWriter
-import java.util
+package io.cloudstate.proxy.telemetry
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
-import io.prometheus.client.CollectorRegistry
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.server.Directives._
-import akka.stream.Materializer
 import akka.util.ByteString
+import io.prometheus.client.CollectorRegistry
 import io.prometheus.client.exporter.common.TextFormat
-
-import scala.concurrent.Future
+import java.io.OutputStreamWriter
+import scala.util.{Failure, Success}
 
 /**
- * Serves Prometheus metrics
+ * Serves Prometheus metrics using Akka HTTP
  */
-class AkkaHttpPrometheusExporter(metricsPort: Int, registry: CollectorRegistry = CollectorRegistry.defaultRegistry)(
-    implicit system: ActorSystem,
-    mat: Materializer
+class PrometheusExporter(registry: CollectorRegistry, metricsHost: String, metricsPort: Int)(
+    implicit system: ActorSystem
 ) {
 
-  private[this] final val PrometheusContentType = ContentType.parse(TextFormat.CONTENT_TYPE_004).right.get
+  private[this] val PrometheusContentType = ContentType.parse(TextFormat.CONTENT_TYPE_004).right.get
 
   private def routes = get {
     (path("metrics") | pathSingleSlash) {
       encodeResponse {
         parameter(Symbol("name[]").*) { names =>
           complete {
-            val namesSet = new util.HashSet[String]()
+            val namesSet = new java.util.HashSet[String]()
             names.foreach(namesSet.add)
             val builder = ByteString.newBuilder
             val writer = new OutputStreamWriter(builder.asOutputStream)
@@ -59,6 +54,14 @@ class AkkaHttpPrometheusExporter(metricsPort: Int, registry: CollectorRegistry =
     }
   }
 
-  def start(): Future[Http.ServerBinding] =
-    Http().bindAndHandle(routes, "0.0.0.0", metricsPort)
+  def start(): Unit = {
+    import system.dispatcher
+    Http().bindAndHandle(routes, metricsHost, metricsPort).onComplete {
+      case Success(binding) =>
+        system.log.info("Prometheus exporter started on {}", binding.localAddress)
+      case Failure(error) =>
+        system.log.error(error, "Error starting Prometheus exporter!")
+        system.terminate()
+    }
+  }
 }
