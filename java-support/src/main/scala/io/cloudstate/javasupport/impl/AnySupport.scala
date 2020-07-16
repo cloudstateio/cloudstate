@@ -174,7 +174,8 @@ object AnySupport {
         if (results.contains(descriptorName)) results
         else {
           val withDesc = results.updated(descriptorName, descriptor)
-          flattenDescriptors(withDesc, descriptor.getDependencies.asScala ++ descriptor.getPublicDependencies.asScala)
+          flattenDescriptors(withDesc,
+                             descriptor.getDependencies.asScala.toSeq ++ descriptor.getPublicDependencies.asScala)
         }
     }
 }

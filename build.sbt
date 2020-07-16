@@ -6,7 +6,7 @@ import sbt.url
 inThisBuild(
   Seq(
     organization := "io.cloudstate",
-    scalaVersion := "2.12.11",
+    scalaVersion := "2.13.3",
     organizationName := "Lightbend Inc.",
     organizationHomepage := Some(url("https://lightbend.com")),
     startYear := Some(2019),
@@ -44,7 +44,7 @@ val AkkaHttpVersion = "10.1.12"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
 val PrometheusClientVersion = "0.6.0"
-val ScalaTestVersion = "3.0.5"
+val ScalaTestVersion = "3.0.8"
 val ProtobufVersion = "3.11.4" // We use this version because it is the latest which works with native-image 20
 val GraalVersion = "20.1.0"
 val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debianslim-jre"
