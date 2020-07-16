@@ -78,7 +78,7 @@ final class EventSourcedEntitySupervisor(client: EventSourcedClient,
             NotUsed
           }
       )
-      .runWith(Sink.actorRef(self, EventSourcedEntity.StreamClosed))
+      .runWith(Sink.actorRef(self, EventSourcedEntity.StreamClosed, EventSourcedEntity.StreamFailed.apply))
     context.become(waitingForRelay)
   }
 
@@ -113,6 +113,7 @@ object EventSourcedEntity {
   final case object Stop
 
   final case object StreamClosed extends DeadLetterSuppression
+  final case class StreamFailed(cause: Throwable) extends DeadLetterSuppression
 
   final case class Configuration(
       serviceName: String,
@@ -327,7 +328,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
       notifyOutstandingRequests("Unexpected entity termination")
       context.stop(self)
 
-    case Status.Failure(error) =>
+    case EventSourcedEntity.StreamFailed(error) =>
       notifyOutstandingRequests("Unexpected entity termination")
       throw error
 
