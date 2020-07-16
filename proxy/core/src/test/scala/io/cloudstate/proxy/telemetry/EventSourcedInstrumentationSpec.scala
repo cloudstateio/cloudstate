@@ -16,7 +16,7 @@
 
 package io.cloudstate.proxy.telemetry
 
-import akka.actor.{ActorRef, Status}
+import akka.actor.ActorRef
 import akka.testkit.TestProbe
 import com.google.protobuf.ByteString
 import com.google.protobuf.any.{Any => ProtoAny}
@@ -239,8 +239,6 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
       // passivate the entity
 
       entity ! EventSourcedEntity.Stop
-
-      userFunction.expectMsg(Status.Success(()))
 
       expectTerminated(entity)
 
