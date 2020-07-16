@@ -4,7 +4,10 @@ This page documents how to implement Cloudstate event sourced entities in Java. 
 
 An event sourced entity can be created by annotating it with the @javadoc[`@EventSourcedEntity`](io.cloudstate.javasupport.eventsourced.EventSourcedEntity) annotation.
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #entity-class }
+[source,java]
+----
+include::example$eventsourced/ShoppingCartEntity.java[tag=entity-class]
+----
 
 The `persistenceId` is used to namespace events in the journal. This is useful when you share the same database between multiple entities. It defaults to the simple name for the entity class (in this case, `ShoppingCartEntity`). It is good practice to explicitly define a `persistenceId`. This helps to decouple the journal data from the classnames in your code—the event naming in the journal remains coherent, even if the underlying entity classname may have changed.
 
@@ -78,7 +81,7 @@ Here's an example event handler for the `ItemAdded` event. A utility method, `co
 
 == Producing and handling snapshots
 
-Snapshots are an important optimisation for event sourced entities that may contain many events, to ensure that they can be loaded quickly even when they have very long journals. To produce a snapshot, a method annotated with @javadoc[`@Snapshot`](io.cloudstate.javasupport.eventsourced.Snapshot) must be declared. It takes a context class of type @javadoc[`SnapshotContext`](io.cloudstate.javasupport.eventsourced.SnapshotContext), and must return a snapshot of the current state in serializable form. 
+Snapshots are an important optimisation for event sourced entities that may contain many events, to ensure that they can be loaded quickly even when they have very long journals. To produce a snapshot, a method annotated with @javadoc[`@Snapshot`](io.cloudstate.javasupport.eventsourced.Snapshot) must be declared. It takes a context class of type @javadoc[`SnapshotContext`](io.cloudstate.javasupport.eventsourced.SnapshotContext), and must return a snapshot of the current state in serializable form.
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #snapshot }
 
