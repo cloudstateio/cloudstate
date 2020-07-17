@@ -1,5 +1,22 @@
+/*
+ * Copyright 2019 Lightbend Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.cloudstate.proxy.eventing
 
+/*
 import com.typesafe.config.{Config, ConfigFactory}
 import akka.NotUsed
 import akka.actor.{ActorSystem, Cancellable}
@@ -34,6 +51,9 @@ import com.google.pubsub.v1.pubsub.{
 }
 import java.util.Collections
 
+import akka.util.ByteString
+import io.cloudstate.protocol.entity.Metadata
+
 import scala.util.Try
 import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration._
@@ -66,24 +86,24 @@ final class PubSubSettings private (
   }
 
   /**
-   * Endpoint hostname where the gRPC connection is made.
-   */
+ * Endpoint hostname where the gRPC connection is made.
+ */
   def withHost(host: String): PubSubSettings = copy(host = host)
 
   /**
-   * Endpoint port where the gRPC connection is made.
-   */
+ * Endpoint port where the gRPC connection is made.
+ */
   def withPort(port: Int): PubSubSettings = copy(port = port)
 
   /**
-   * A filename on the classpath which contains the root certificate authority
-   * that is going to be used to verify certificate presented by the gRPC endpoint.
-   */
+ * A filename on the classpath which contains the root certificate authority
+ * that is going to be used to verify certificate presented by the gRPC endpoint.
+ */
   def withRootCa(rootCa: String): PubSubSettings = copy(rootCa = Some(rootCa))
 
   /**
-   * Credentials that are going to be used for gRPC call authorization.
-   */
+ * Credentials that are going to be used for gRPC call authorization.
+ */
   def withCallCredentials(callCredentials: gRPCCallCredentials): PubSubSettings =
     copy(callCredentials = Some(callCredentials))
 
@@ -94,8 +114,8 @@ final class PubSubSettings private (
     new PubSubSettings(host, port, rootCa, callCredentials)
 
   /**
-   * Creates a GrpcClientSettings from this PubSubSettings
-   */
+ * Creates a GrpcClientSettings from this PubSubSettings
+ */
   def createClientSettings()(implicit sys: ActorSystem): GrpcClientSettings = {
     val sslConfig = rootCa.fold("") { rootCa =>
       s"""
@@ -227,7 +247,8 @@ class GCPubsubEventingSupport(config: Config, materializer: Materializer) extend
       .alsoTo(ackSink) // at-most-once // FIXME Add stats generation/collection so we can track progress here
       .collect({
         case ReceivedMessage(_, Some(msg), _) =>
-          commandHandler.serializer.parse(ProtobufAny.parseFrom(msg.data.newCodedInput))
+          commandHandler
+            .deserialize(Metadata.defaultInstance)(ByteString.fromByteBuffer(msg.data.asReadOnlyByteBuffer()))
       }) // TODO - investigate ProtobufAny.fromJavaAny(PbAnyJava.parseFrom(msg.data))
       .mapMaterializedValue(_ => cancellable.future)
   }
@@ -330,3 +351,4 @@ class GCPubsubEventingSupport(config: Config, materializer: Materializer) extend
       }
     }
 }
+ */

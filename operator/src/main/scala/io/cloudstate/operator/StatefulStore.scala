@@ -23,6 +23,8 @@ import skuber.{CustomResource, ListResource, ResourceDefinition}
 
 object StatefulStore {
 
+  import OperatorConstants._
+
   type Resource = CustomResource[StatefulStore.Spec, Status]
   type ResourceList = ListResource[Resource]
 
@@ -39,9 +41,9 @@ object StatefulStore {
   }
 
   implicit val statefulStoreResourceDefinition = ResourceDefinition[Resource](
-    group = "cloudstate.io",
-    version = "v1alpha1",
-    kind = "StatefulStore",
+    group = CloudStateGroup,
+    version = CloudStateApiVersionNumber,
+    kind = StatefulStoreKind,
     shortNames = Nil,
     subresources = Some(Subresources().withStatusSubresource)
   )

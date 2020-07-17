@@ -37,10 +37,10 @@ object Options {
       .withUnknownFields(scalapb.UnknownFieldSet(field.getOptions.getUnknownFields.asMap.asScala.map {
         case (idx, f) =>
           idx.toInt -> scalapb.UnknownFieldSet.Field(
-            varint = f.getVarintList.asScala.map(_.toLong),
-            fixed64 = f.getFixed64List.asScala.map(_.toLong),
-            fixed32 = f.getFixed32List.asScala.map(_.toInt),
-            lengthDelimited = f.getLengthDelimitedList.asScala
+            varint = f.getVarintList.iterator.asScala.map(_.toLong).toSeq,
+            fixed64 = f.getFixed64List.iterator.asScala.map(_.toLong).toSeq,
+            fixed32 = f.getFixed32List.iterator.asScala.map(_.toInt).toSeq,
+            lengthDelimited = f.getLengthDelimitedList.asScala.toSeq
           )
       }.toMap))
 
@@ -55,10 +55,10 @@ object Options {
         scalapb.UnknownFieldSet(method.getOptions.getUnknownFields.asMap.asScala.map {
           case (idx, f) =>
             idx.toInt -> scalapb.UnknownFieldSet.Field(
-              varint = f.getVarintList.asScala.map(_.toLong),
-              fixed64 = f.getFixed64List.asScala.map(_.toLong),
-              fixed32 = f.getFixed32List.asScala.map(_.toInt),
-              lengthDelimited = f.getLengthDelimitedList.asScala
+              varint = f.getVarintList.iterator.asScala.map(_.toLong).toSeq,
+              fixed64 = f.getFixed64List.iterator.asScala.map(_.toLong).toSeq,
+              fixed32 = f.getFixed32List.iterator.asScala.map(_.toInt).toSeq,
+              lengthDelimited = f.getLengthDelimitedList.asScala.toSeq
             )
         }.toMap)
       )

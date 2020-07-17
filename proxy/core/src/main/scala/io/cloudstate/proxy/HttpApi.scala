@@ -34,19 +34,26 @@ import akka.http.scaladsl.model.{
   HttpHeader,
   HttpMethod,
   HttpMethods,
+  HttpProtocol,
+  HttpProtocols,
   HttpRequest,
   HttpResponse,
   IllegalRequestException,
   IllegalResponseException,
+  MediaTypes,
   RequestEntity,
   RequestEntityAcceptance,
   ResponseEntity,
   StatusCodes,
   Uri
 }
-import akka.http.scaladsl.model.headers.`User-Agent`
+import akka.http.scaladsl.model.headers.{`User-Agent`, Accept}
 import akka.http.scaladsl.model.Uri.Path
+import akka.http.scaladsl.model.sse.ServerSentEvent
+import akka.http.scaladsl.server.MediaTypeNegotiator
+import akka.http.scaladsl.marshalling.Marshal
 import akka.http.scaladsl.unmarshalling.Unmarshal
+import akka.http.scaladsl.marshalling.sse.EventStreamMarshalling
 import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.stream.Materializer
@@ -85,7 +92,7 @@ import java.net.URLDecoder
 import java.util.regex.{Matcher, Pattern}
 
 import akka.grpc.GrpcProtocol
-import akka.grpc.internal.{GrpcProtocolNative, Identity}
+import akka.grpc.internal.{Codecs, GrpcProtocolNative, Identity}
 import akka.grpc.scaladsl.headers.`Message-Accept-Encoding`
 import akka.http.scaladsl.model.HttpEntity.LastChunk
 import akka.stream.scaladsl.{Sink, Source}
@@ -178,7 +185,7 @@ object HttpApi {
   final class HttpEndpoint(
       final val methDesc: MethodDescriptor,
       final val rule: HttpRule,
-      final val handler: PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]]
+      final val handler: PartialFunction[HttpRequest, Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]]
   )(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext)
       extends PartialFunction[HttpRequest, Future[HttpResponse]] {
     private[this] final val log = Logging(sys, rule.pattern.toString) // TODO use other name?
@@ -416,7 +423,7 @@ object HttpApi {
     private[this] final def processRequest(req: HttpRequest, matcher: Matcher): Future[HttpResponse] =
       transformRequest(req, matcher)
         .transformWith {
-          case Success(request) => transformResponse(handler(request))
+          case Success(request) => transformResponse(request, handler(request))
           case Failure(f) =>
             log.debug("Unable to transform request due to '{}' of type '{}' ", f.getMessage, f.getClass.getName)
             requestError("Malformed request")
@@ -451,7 +458,7 @@ object HttpApi {
             grpcWriter.encodeFrame(GrpcProtocol.DataFrame(ByteString.fromArrayUnsafe(message.toByteArray)))
           )
         ),
-        protocol = req.protocol
+        protocol = HttpProtocols.`HTTP/2.0`
       )
     }
 
@@ -493,7 +500,10 @@ object HttpApi {
       result.build()
     }
 
-    private[this] final def transformResponse(data: Source[ProtobufAny, NotUsed]): Future[HttpResponse] = {
+    private[this] final def transformResponse(
+        grpcRequest: HttpRequest,
+        futureResponse: Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]
+    ): Future[HttpResponse] = {
       def extractContentTypeFromHttpBody(entityMessage: MessageOrBuilder): ContentType =
         entityMessage
           .getField(entityMessage.getDescriptorForType.findFieldByName("content_type")) match {
@@ -517,49 +527,66 @@ object HttpApi {
         )
 
       if (methDesc.isServerStreaming) {
-        def toChunk(entityMessage: MessageOrBuilder): HttpEntity.Chunk =
-          HttpEntity.Chunk(
-            if (isHttpBodyResponse) extractDataFromHttpBody(entityMessage) ++ NEWLINE_BYTES
-            else ByteString(jsonPrinter.print(entityMessage)) ++ NEWLINE_BYTES
-          )
+        val sseAccepted =
+          grpcRequest
+            .header[Accept]
+            .exists(_.mediaRanges.exists(_.value.startsWith(MediaTypes.`text/event-stream`.toString)))
 
-        data
-          .prefixAndTail(1)
-          .runWith(Sink.head)
-          .map {
-            case (Seq(protobuf: ProtobufAny), rest) =>
-              val entityMessage: MessageOrBuilder = parseResponseBody(protobuf)
-              val contentType =
-                if (isHttpBodyResponse) extractContentTypeFromHttpBody(entityMessage)
-                else ContentTypes.`application/json`
-
-              val first =
-                Source.single(toChunk(entityMessage))
-              val following =
-                rest.map(protobuf => toChunk(parseResponseBody(protobuf)))
-
-              //val extensions = extractExtensionsFromHttpBody(entityMessage) // FIXME / TODO HttpBody.extensions not supported yet
-
-              HttpResponse(
-                entity = HttpEntity.Chunked(
-                  contentType,
-                  first.concat(following)
+        futureResponse.flatMap {
+          case (headers, data) =>
+            if (sseAccepted) {
+              import EventStreamMarshalling._
+              Marshal(
+                data
+                  .map(parseResponseBody)
+                  .map { em =>
+                    ServerSentEvent(jsonPrinter.print(em))
+                  }
+              ).to[HttpResponse]
+                .map(response => response.withHeaders(headers))
+            } else if (isHttpBodyResponse) {
+              Future.successful(
+                HttpResponse(
+                  entity = HttpEntity.Chunked(
+                    headers
+                      .find(_.lowercaseName() == "content-type")
+                      .flatMap(ct => ContentType.parse(ct.value()).toOption)
+                      .getOrElse(ContentTypes.`application/octet-stream`),
+                    data.map(em => HttpEntity.Chunk(extractDataFromHttpBody(parseResponseBody(em))))
+                  ),
+                  headers = headers.filterNot(_.lowercaseName() == "content-type")
                 )
               )
-            case (Seq(), _) =>
-              throw new IllegalStateException("Empty response")
-          }
+            } else {
+              Future.successful(
+                HttpResponse(
+                  entity = HttpEntity.Chunked(
+                    ContentTypes.`application/json`,
+                    data
+                      .map(parseResponseBody)
+                      .map(em => HttpEntity.Chunk(ByteString(jsonPrinter.print(em)) ++ NEWLINE_BYTES))
+                  ),
+                  headers = headers
+                )
+              )
+            }
+        }
+
       } else {
-        data
-          .runWith(Sink.head)
-          .map { protobuf: ProtobufAny =>
-            val entityMessage = parseResponseBody(protobuf)
-            HttpResponse(entity = if (isHttpBodyResponse) {
+        for {
+          (headers, data) <- futureResponse
+          protobuf <- data.runWith(Sink.head)
+        } yield {
+          val entityMessage = parseResponseBody(protobuf)
+          HttpResponse(
+            entity = if (isHttpBodyResponse) {
               HttpEntity(extractContentTypeFromHttpBody(entityMessage), extractDataFromHttpBody(entityMessage))
             } else {
               HttpEntity(ContentTypes.`application/json`, ByteString(jsonPrinter.print(entityMessage)))
-            })
-          }
+            },
+            headers = headers
+          )
+        }
       }
     }
 
@@ -620,7 +647,11 @@ object HttpApi {
     }
   }
 
-  final def serve(services: List[(ServiceDescriptor, PartialFunction[HttpRequest, Source[ProtobufAny, NotUsed]])])(
+  final def serve(
+      services: List[
+        (ServiceDescriptor, PartialFunction[HttpRequest, Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]])
+      ]
+  )(
       implicit sys: ActorSystem,
       mat: Materializer,
       ec: ExecutionContext
