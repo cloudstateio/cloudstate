@@ -39,7 +39,7 @@ commands:
         default: "dev"
     steps:
       - run:
-          name: Curl authenticate
+          name: Authenticate
           command: |
             target=<< parameters.target_env >>
             if [[ "${target}" == "prod" ]]; then
@@ -189,6 +189,33 @@ jobs:
           service: "PR1M8QK"
           urgency: high
 
+  stage_sc_test:
+    docker:
+      - image: circleci/buildpack-deps:focal-curl
+    description: "Stage Authentication Test"
+    steps:
+      - cs_sc_test:
+          cart_uri: "https://little-moon-7069.us-east1.apps.lbcs.io"
+      - slack/status:
+          channel: cloudstate-alerts
+          success_message: Shopping cart tests successful on stage
+          failure_message: Shopping cart tests failed on stage
+          mentions: "@edc,@srikanth"
+          fail_only: true
+          only_for_branches: "master,cron-test"
+      - pagerduty/notify-on-failure:
+          escalation_policy: ""
+          from_account: "srikanth.koneru@lightbend.com"
+          incident_description: Shopping cart tests failed on stage.
+          incident_key:  "SHOPPING_CART_TESTS_FAILED_ON_PROD"
+          incident_title: $CIRCLE_JOB Shopping Cart tests failed on stage.
+          only_for_branches: "master,cron-test"
+          # S2 https://developer.pagerduty.com/api-reference/reference/REST/openapiv3.json/paths/~1priorities/get
+          priority: "PBT5H5L"
+          # cloudstate-test
+          service: "PR1M8QK"
+          urgency: high
+
 
   prod_authenticate_test:
     docker:
@@ -280,6 +307,7 @@ workflows:
       - prod_authenticate_test
       - stage_authenticate_test
       - prod_sc_test
+      - stage_sc_test
       - validate_api_resources:
           name: "validate-prod-api-resources"
           gcp_cluster_name: "prod-us-east-execution-1"
