@@ -195,20 +195,47 @@ jobs:
     description: "Stage Authentication Test"
     steps:
       - cs_sc_test:
-          cart_uri: "https://little-moon-7069.us-east1.apps.lbcs.io"
+          cart_uri: "https://"
       - slack/status:
           channel: cloudstate-alerts
-          success_message: Shopping cart tests successful on stage
-          failure_message: Shopping cart tests failed on stage
+          success_message: Shopping cart tests successful on Stage
+          failure_message: Shopping cart tests failed on Stage
           mentions: "@edc,@srikanth"
           fail_only: true
           only_for_branches: "master,cron-test"
       - pagerduty/notify-on-failure:
           escalation_policy: ""
           from_account: "srikanth.koneru@lightbend.com"
-          incident_description: Shopping cart tests failed on stage.
-          incident_key:  "SHOPPING_CART_TESTS_FAILED_ON_PROD"
-          incident_title: $CIRCLE_JOB Shopping Cart tests failed on stage.
+          incident_description: Shopping cart tests failed on Stage.
+          incident_key:  "SHOPPING_CART_TESTS_FAILED_ON_STAGE"
+          incident_title: $CIRCLE_JOB Shopping Cart tests failed on Stage.
+          only_for_branches: "master,cron-test"
+          # S2 https://developer.pagerduty.com/api-reference/reference/REST/openapiv3.json/paths/~1priorities/get
+          priority: "PBT5H5L"
+          # cloudstate-test
+          service: "PR1M8QK"
+          urgency: high
+
+  dev_sc_test:
+    docker:
+      - image: circleci/buildpack-deps:focal-curl
+    description: "Stage Authentication Test"
+    steps:
+      - cs_sc_test:
+          cart_uri: "https://lingering-art-1733.us-east1.apps.lbcs.dev"
+      - slack/status:
+          channel: cloudstate-alerts
+          success_message: Shopping cart tests successful on Dev
+          failure_message: Shopping cart tests failed on Dev
+          mentions: "@edc,@srikanth"
+          fail_only: true
+          only_for_branches: "master,cron-test"
+      - pagerduty/notify-on-failure:
+          escalation_policy: ""
+          from_account: "srikanth.koneru@lightbend.com"
+          incident_description: Shopping cart tests failed on Dev.
+          incident_key:  "SHOPPING_CART_TESTS_FAILED_ON_DEV"
+          incident_title: $CIRCLE_JOB Shopping Cart tests failed on Dev.
           only_for_branches: "master,cron-test"
           # S2 https://developer.pagerduty.com/api-reference/reference/REST/openapiv3.json/paths/~1priorities/get
           priority: "PBT5H5L"
@@ -308,6 +335,7 @@ workflows:
       - stage_authenticate_test
       - prod_sc_test
       # - stage_sc_test
+      - dev_sc_test
       - validate_api_resources:
           name: "validate-prod-api-resources"
           gcp_cluster_name: "prod-us-east-execution-1"
