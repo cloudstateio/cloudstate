@@ -25,6 +25,7 @@ import com.google.spanner.admin.database.v1.DatabaseAdminClient
 import com.typesafe.config.{ConfigFactory, Config => TypesafeConfig}
 import io.cloudstate.proxy.CloudStateProxyMain
 import io.grpc.auth.MoreCallCredentials
+import scala.compat.java8.DurationConverters.DurationOps
 import scala.concurrent.duration.FiniteDuration
 
 /**
@@ -77,7 +78,6 @@ object CloudstateSpannerProxyMain {
 
     implicit val classicSystem: ClassicSystem = CloudStateProxyMain.start()
 
-    import classicSystem.dispatcher
     val clientSettings =
       GrpcClientSettings
         .fromConfig("spanner-client")
