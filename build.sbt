@@ -346,7 +346,8 @@ def assemblySettings(jarName: String) =
       case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
       case PathList(ps @ _*) if ps.last endsWith ".proto" => MergeStrategy.last
       case "module-info.class" => MergeStrategy.discard
-      case "META-INF/native-image/com.typesafe.akka/dynamic-from-reference-conf/reflect-config.json" => MergeStrategy.discard
+      case "META-INF/native-image/com.typesafe.akka/dynamic-from-reference-conf/reflect-config.json" =>
+        MergeStrategy.discard
       case x =>
         val oldStrategy = (assemblyMergeStrategy in assembly).value
         oldStrategy(x)
@@ -488,16 +489,15 @@ lazy val `proxy-spanner` = (project in file("proxy/spanner"))
     common,
     name := "cloudstate-proxy-spanner",
     libraryDependencies ++= Seq(
-      "com.lightbend.akka" %% "akka-persistence-spanner" % AkkaPersistenceSpannerVersion,
-      akkaDependency("akka-cluster-typed"), // Transitive dependency of akka-persistence-spanner
-      akkaDependency("akka-persistence-typed"), // Transitive dependency of akka-persistence-spanner
-    ),
+        "com.lightbend.akka" %% "akka-persistence-spanner" % AkkaPersistenceSpannerVersion,
+        akkaDependency("akka-cluster-typed"), // Transitive dependency of akka-persistence-spanner
+        akkaDependency("akka-persistence-typed") // Transitive dependency of akka-persistence-spanner
+      ),
     fork in run := true,
     mainClass in Compile := Some("io.cloudstate.proxy.spanner.CloudstateSpannerProxyMain"),
     assemblySettings("akka-proxy.jar"),
     nativeImageDockerSettings,
-    graalVMNativeImageOptions ++= Seq(
-    )
+    graalVMNativeImageOptions ++= Seq()
   )
 
 lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
@@ -514,8 +514,8 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
     nativeImageDockerSettings,
     graalVMNativeImageOptions ++= Seq(
-      "-H:IncludeResourceBundles=com.datastax.driver.core.Driver"
-    )
+        "-H:IncludeResourceBundles=com.datastax.driver.core.Driver"
+      )
   )
 
 lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
