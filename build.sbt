@@ -774,6 +774,20 @@ lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
     assemblySettings("java-pingpong.jar")
   )
 
+lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart"))
+  .dependsOn(`scala-support`)
+  .enablePlugins(AkkaGrpcPlugin, DockerPlugin, JavaAppPackaging)
+  .settings(
+    name := "scala-shopping-cart",
+    dockerSettings,
+    PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`scala-support`, Compile)).value,
+    PB.protoSources in Compile ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "frontend", baseDir / "example")
+    },
+    assemblySettings("scala-shopping-cart.jar")
+  )
+
 lazy val `akka-client` = (project in file("samples/akka-client"))
   .enablePlugins(AkkaGrpcPlugin)
   .settings(
@@ -836,7 +850,7 @@ lazy val `tck` = (project in file("tck"))
     javaOptions in IntegrationTest := sys.props.get("config.resource").map(r => s"-Dconfig.resource=$r").toSeq,
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
-        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly)
+        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly, `scala-shopping-cart` / assembly)
         .value
   )
 
