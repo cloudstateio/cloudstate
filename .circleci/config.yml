@@ -168,7 +168,7 @@ jobs:
     description: "Stage Authentication Test"
     steps:
       - cs_sc_test:
-          cart_uri: "https://frosty-cloud-8068.us-east1.apps.cloudstate.com"
+          cart_uri: "https://shrill-shadow-4688.us-east1.apps.cloudstate.com"
       - slack/status:
           channel: cloudstate-alerts
           success_message: Shopping cart tests successful on prod
