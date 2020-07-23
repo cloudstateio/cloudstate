@@ -94,7 +94,7 @@ commands:
                     cart_new_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
                     echo -e "\n"Added "${cart_new_size}" items to cart
                     cart_size_diff=$(expr "${cart_new_size}" - "${cart_orig_size}" )
-                    if [ "${cart_size_diff}" -ne 4 ]; then
+                    if [ "${cart_size_diff}" -ne 3 ]; then
                           echo Problem adding items to "'${SHOP_TEST_USER}'" cart !!!
                           return 1
                     fi
@@ -120,10 +120,15 @@ commands:
                     echo Unable to Shop "${SHOP_TEST_USER}" Cart not found!
                     return 1
                 fi
-                return 0
+                if [ -f /tmp/pass ]; then
+                  return 0
+                else
+                  touch /tmp/pass
+                  return 1
+                fi
             }
             exitCode=0
-            for i in 1 2 3; do
+            for i in 5 10 0; do
                 if ! add_delete_items "$CART_URI" "${SHOP_TEST_USER}" ; then
                     echo "Failed"
                     exitCode=1
