@@ -122,8 +122,21 @@ commands:
                 fi
                 return 0
             }
-            add_delete_items "$CART_URI" "${SHOP_TEST_USER}"
-
+            exitCode=0
+            for i in 2 2;
+            do
+                if ! add_delete_items "$CART_URI" "${SHOP_TEST_USER}" ; then
+                    echo "Failed"
+                    exitCode=1
+                    echo "sleeping ${i}"
+                    continue
+                else
+                    echo "passed"
+                    exitCode=0
+                    break
+                fi
+            done
+            "${exitCode}"
 
 jobs:
   native-image-it-test:
