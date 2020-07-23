@@ -94,7 +94,7 @@ commands:
                     cart_new_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
                     echo -e "\n"Added "${cart_new_size}" items to cart
                     cart_size_diff=$(expr "${cart_new_size}" - "${cart_orig_size}" )
-                    if [ "${cart_size_diff}" -ne 3 ]; then
+                    if [ "${cart_size_diff}" -ne 4 ]; then
                           echo Problem adding items to "'${SHOP_TEST_USER}'" cart !!!
                           return 1
                     fi
@@ -233,21 +233,21 @@ jobs:
           channel: cloudstate-alerts
           success_message: Shopping cart tests successful on Dev
           failure_message: Shopping cart tests failed on Dev
-          mentions: "@edc,@srikanth"
+          mentions: "edc,srikanth"
           fail_only: true
           only_for_branches: "master,cron-test"
-      - pagerduty/notify-on-failure:
-          escalation_policy: ""
-          from_account: "srikanth.koneru@lightbend.com"
-          incident_description: Shopping cart tests failed on Dev.
-          incident_key:  "SHOPPING_CART_TESTS_FAILED_ON_DEV"
-          incident_title: $CIRCLE_JOB Shopping Cart tests failed on Dev.
-          only_for_branches: "master,cron-test"
-          # S2 https://developer.pagerduty.com/api-reference/reference/REST/openapiv3.json/paths/~1priorities/get
-          priority: "PBT5H5L"
-          # cloudstate-test
-          service: "PR1M8QK"
-          urgency: high
+#      - pagerduty/notify-on-failure:
+#          escalation_policy: ""
+#          from_account: "srikanth.koneru@lightbend.com"
+#          incident_description: Shopping cart tests failed on Dev.
+#          incident_key:  "SHOPPING_CART_TESTS_FAILED_ON_DEV"
+#          incident_title: $CIRCLE_JOB Shopping Cart tests failed on Dev.
+#          only_for_branches: "master,cron-test"
+#          # S2 https://developer.pagerduty.com/api-reference/reference/REST/openapiv3.json/paths/~1priorities/get
+#          priority: "PBT5H5L"
+#          # cloudstate-test
+#          service: "PR1M8QK"
+#          urgency: high
 
 
   prod_authenticate_test:
@@ -314,8 +314,8 @@ workflows:
   test:
     jobs:
       - stage_authenticate_test
-      - prod_sc_test
-      - stage_sc_test
+      #- prod_sc_test
+      #- stage_sc_test
       - dev_sc_test
       - validate_api_resources:
           name: "validate-prod-api-resources"
@@ -341,8 +341,8 @@ workflows:
     jobs:
       - prod_authenticate_test
       - stage_authenticate_test
-      - prod_sc_test
-      - stage_sc_test
+      #- prod_sc_test
+      #- stage_sc_test
       - dev_sc_test
       - validate_api_resources:
           name: "validate-prod-api-resources"
