@@ -309,6 +309,8 @@ workflows:
     jobs:
       - stage_authenticate_test
       - prod_sc_test
+      - stage_sc_test
+      - dev_sc_test
       - validate_api_resources:
           name: "validate-prod-api-resources"
           gcp_cluster_name: "prod-us-east-execution-1"
