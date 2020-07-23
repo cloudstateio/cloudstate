@@ -350,7 +350,7 @@ workflows:
             branches:
               only:
                 - master
-                - cron-test
+#                - cron-test
     jobs:
       - prod_authenticate_test
       - stage_authenticate_test
