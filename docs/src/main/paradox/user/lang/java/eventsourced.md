@@ -12,7 +12,7 @@ The `snapshotEvery` parameter controls how often snapshots are taken, so that th
 
 ## Persistence types and serialization
 
-Event sourced entities persist events and snapshots, and these need to be serialized when persisted. The most straight forward way to persist events and snapshots is to use protobufs. Cloudstate will automatically detect if an emitted event is a protobuf, and serialize it as such. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
+Event sourced entities persist events and snapshots, and these need to be serialized when persisted. The most straightforward way to persist events and snapshots is to use protobufs. Cloudstate will automatically detect if an emitted event is a protobuf, and serialize it as such. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
 
 While protobuf is the recommended format for persisting events, it is recommended that you do not persist the protobuf messages from your service interface. Rather, you should create new messages, even if they are identical to those of the service messages. While this may introduce some overhead in needing to convert from one type to the other, the reason for doing this is that it will allow the public interface of the service to evolve independently from its data storage format, which should be private.
 
@@ -78,7 +78,7 @@ Here's an example event handler for the `ItemAdded` event. A utility method, `co
 
 ## Producing and handling snapshots
 
-Snapshots are an important optimisation for event sourced entities that may contain many events, to ensure that they can be loaded quickly even when they have very long journals. To produce a snapshot, a method annotated with @javadoc[`@Snapshot`](io.cloudstate.javasupport.eventsourced.Snapshot) must be declared. It takes a context class of type @javadoc[`SnapshotContext`](io.cloudstate.javasupport.eventsourced.SnapshotContext), and must return a snapshot of the current state in serializable form. 
+Snapshots are an important optimisation for event sourced entities that may contain many events, to ensure that they can be loaded quickly even when they have very long journals. To produce a snapshot, a method annotated with @javadoc[`@Snapshot`](io.cloudstate.javasupport.eventsourced.Snapshot) must be declared. It takes a context class of type @javadoc[`SnapshotContext`](io.cloudstate.javasupport.eventsourced.SnapshotContext), and must return a snapshot of the current state in serializable form.
 
 @@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #snapshot }
 

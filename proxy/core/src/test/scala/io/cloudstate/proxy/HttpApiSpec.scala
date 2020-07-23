@@ -16,24 +16,12 @@
 
 package io.cloudstate.proxy
 
-import akka.actor.ActorRef
-
-import scala.concurrent.duration._
-import akka.{ConfigurationException, Done, NotUsed}
-import akka.util.Timeout
+import akka.ConfigurationException
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import akka.stream.scaladsl.Flow
 import org.scalatest._
-import akka.testkit.TestProbe
 import io.cloudstate.proxy.test._
-import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
-import com.google.protobuf.empty.Empty
-import io.cloudstate.protocol.entity.{EntityDiscovery, EntityDiscoveryClient, EntitySpec, ProxyInfo, UserFunctionError}
-import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
+import com.google.protobuf.Descriptors.FileDescriptor
 import io.cloudstate.proxy.PathTemplateParser.PathTemplateParseException
-import io.cloudstate.proxy.entity.{UserFunctionCommand, UserFunctionReply}
-
-import scala.concurrent.Future
 
 class HttpApiSpec extends WordSpec with MustMatchers with ScalatestRouteTest {
 

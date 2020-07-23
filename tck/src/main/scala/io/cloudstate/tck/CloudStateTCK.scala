@@ -80,7 +80,11 @@ object CloudStateTCK {
       fromBackend.ref ! info
       client.discover(info).andThen {
         case Success(es) => fromFrontend.ref ! es
-        case Failure(f) => fromFrontend.ref ! f
+        case Failure(f) =>
+          // If a failure occurs during discovery, don't record it. The proxy will continue retrying until it
+          // succeeds.
+          //fromFrontend.ref ! f
+          println(s"[warn] TCK: Intercepted discovery call failed: $f")
       }
     }
 
@@ -143,11 +147,11 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
     val clientSettings =
       GrpcClientSettings.connectToServiceAt(settings.frontend.hostname, settings.frontend.port)(system).withTls(false)
 
-    val edc = EntityDiscoveryClient(clientSettings)(mat, mat.executionContext)
+    val edc = EntityDiscoveryClient(clientSettings)(system)
 
     entityDiscoveryClient = edc
 
-    val esc = EventSourcedClient(clientSettings)(mat, mat.executionContext)
+    val esc = EventSourcedClient(clientSettings)(system)
 
     eventSourcedClient = esc
 
@@ -168,7 +172,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
 
     val sc = ShoppingCartClient(
       GrpcClientSettings.connectToServiceAt(settings.proxy.hostname, settings.proxy.port)(system).withTls(false)
-    )(mat, mat.executionContext)
+    )(system)
 
     shoppingClient = sc
   }
@@ -356,7 +360,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
 
       val reflectionClient = ServerReflectionClient(
         GrpcClientSettings.connectToServiceAt(settings.proxy.hostname, settings.proxy.port)(system).withTls(false)
-      )(mat, mat.executionContext)
+      )(system)
 
       val Host = settings.proxy.hostname
       val ShoppingCart = "com.example.shoppingcart.ShoppingCart"

@@ -24,7 +24,7 @@ import akka.actor._
 import akka.cluster.sharding.ShardRegion
 import akka.persistence._
 import akka.stream.scaladsl._
-import akka.stream.{Materializer, OverflowStrategy}
+import akka.stream.{CompletionStrategy, Materializer, OverflowStrategy}
 import akka.util.Timeout
 import com.google.protobuf.any.{Any => pbAny}
 import io.cloudstate.protocol.entity._
@@ -32,6 +32,7 @@ import io.cloudstate.protocol.event_sourced._
 import io.cloudstate.proxy.ConcurrencyEnforcer.{Action, ActionCompleted}
 import io.cloudstate.proxy.StatsCollector
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
+import io.cloudstate.proxy.telemetry.CloudstateTelemetry
 
 import scala.collection.immutable.Queue
 
@@ -65,6 +66,8 @@ final class EventSourcedEntitySupervisor(client: EventSourcedClient,
 
   import EventSourcedEntitySupervisor._
 
+  private var streamTerminated: Boolean = false
+
   override final def receive: Receive = PartialFunction.empty
 
   override final def preStart(): Unit = {
@@ -77,7 +80,7 @@ final class EventSourcedEntitySupervisor(client: EventSourcedClient,
             NotUsed
           }
       )
-      .runWith(Sink.actorRef(self, EventSourcedEntity.StreamClosed))
+      .runWith(Sink.actorRef(self, EventSourcedEntity.StreamClosed, EventSourcedEntity.StreamFailed.apply))
     context.become(waitingForRelay)
   }
 
@@ -90,18 +93,36 @@ final class EventSourcedEntitySupervisor(client: EventSourcedClient,
           .actorOf(EventSourcedEntity.props(configuration, entityId, relayRef, concurrencyEnforcer, statsCollector),
                    "entity")
       )
-      context.become(forwarding(manager))
+      context.become(forwarding(manager, relayRef))
       unstashAll()
     case _ => stash()
   }
 
-  private[this] final def forwarding(manager: ActorRef): Receive = {
+  private[this] final def forwarding(manager: ActorRef, relay: ActorRef): Receive = {
     case Terminated(`manager`) =>
-      context.stop(self)
+      if (streamTerminated) {
+        context.stop(self)
+      } else {
+        relay ! Status.Success(CompletionStrategy.draining)
+        context.become(stopping)
+      }
     case toParent if sender() == manager =>
       context.parent ! toParent
+    case EventSourcedEntity.StreamClosed =>
+      streamTerminated = true
+      manager forward EventSourcedEntity.StreamClosed
+    case failed: EventSourcedEntity.StreamFailed =>
+      streamTerminated = true
+      manager forward failed
     case msg =>
       manager forward msg
+  }
+
+  private def stopping: Receive = {
+    case EventSourcedEntity.StreamClosed =>
+      context.stop(self)
+    case _: EventSourcedEntity.StreamFailed =>
+      context.stop(self)
   }
 
   override def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
@@ -112,6 +133,7 @@ object EventSourcedEntity {
   final case object Stop
 
   final case object StreamClosed extends DeadLetterSuppression
+  final case class StreamFailed(cause: Throwable) extends DeadLetterSuppression
 
   final case class Configuration(
       serviceName: String,
@@ -146,11 +168,14 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
                                statsCollector: ActorRef)
     extends PersistentActor
     with ActorLogging {
+
+  import io.cloudstate.proxy.telemetry.EventSourcedInstrumentation.StashContext
+
   override final def persistenceId: String = configuration.userFunctionName + entityId
 
   private val actorId = EventSourcedEntity.actorCounter.incrementAndGet()
 
-  private[this] final var stashedCommands = Queue.empty[(EntityCommand, ActorRef)] // PERFORMANCE: look at options for data structures
+  private[this] final var stashedCommands = Queue.empty[(EntityCommand, ActorRef, StashContext)] // PERFORMANCE: look at options for data structures
   private[this] final var currentCommand: EventSourcedEntity.OutstandingCommand = null
   private[this] final var stopped = false
   private[this] final var idCounter = 0L
@@ -158,6 +183,12 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
   private[this] final var reportedDatabaseOperationStarted = false
   private[this] final var databaseOperationStartTime = 0L
   private[this] final var commandStartTime = 0L
+
+  private[this] val instrumentation =
+    CloudstateTelemetry(context.system).eventSourcedEntityInstrumentation(configuration.userFunctionName)
+
+  instrumentation.entityActivated()
+  instrumentation.recoveryStarted()
 
   // Set up passivation timer
   context.setReceiveTimeout(configuration.passivationTimeout.duration)
@@ -173,15 +204,16 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
     if (reportedDatabaseOperationStarted) {
       reportDatabaseOperationFinished()
     }
-    // This will shutdown the stream (if not already shut down)
-    relay ! Status.Success(())
+    instrumentation.entityPassivated()
   }
 
   private[this] final def commandHandled(): Unit = {
     currentCommand = null
+    instrumentation.commandCompleted()
     if (stashedCommands.nonEmpty) {
-      val ((request, sender), newStashedCommands) = stashedCommands.dequeue
+      val ((request, sender, context), newStashedCommands) = stashedCommands.dequeue
       stashedCommands = newStashedCommands
+      instrumentation.commandUnstashed(context)
       handleCommand(request, sender)
     } else if (stopped) {
       context.stop(self)
@@ -189,13 +221,14 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
   }
 
   private[this] final def notifyOutstandingRequests(msg: String): Unit = {
+    instrumentation.entityFailed()
     currentCommand match {
       case null =>
       case req => req.replyTo ! createFailure(msg)
     }
     val errorNotification = createFailure("Entity terminated")
     stashedCommands.foreach {
-      case (_, replyTo) => replyTo ! errorNotification
+      case (_, replyTo, _) => replyTo ! errorNotification
     }
   }
 
@@ -208,6 +241,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
     concurrencyEnforcer ! ActionCompleted(currentCommand.actionId, System.nanoTime() - commandStartTime)
 
   private[this] final def handleCommand(entityCommand: EntityCommand, sender: ActorRef): Unit = {
+    instrumentation.commandStarted()
     idCounter += 1
     val command = Command(
       entityId = entityId,
@@ -237,9 +271,10 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
   override final def receiveCommand: PartialFunction[Any, Unit] = {
 
     case command: EntityCommand if currentCommand != null =>
-      stashedCommands = stashedCommands.enqueue((command, sender()))
+      stashedCommands = stashedCommands.enqueue((command, sender(), instrumentation.commandStashed()))
 
     case command: EntityCommand =>
+      instrumentation.commandReceived()
       handleCommand(command, sender())
 
     case EventSourcedStreamOut(m, _) =>
@@ -253,6 +288,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
           crash(s"Incorrect command id in reply, expecting ${currentCommand.commandId} but got ${r.commandId}")
 
         case ESOMsg.Reply(r) =>
+          instrumentation.commandProcessed()
           reportActionComplete()
           val commandId = currentCommand.commandId
           val events = r.events.toVector
@@ -260,13 +296,20 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
             currentCommand.replyTo ! esReplyToUfReply(r)
             commandHandled()
           } else {
+            instrumentation.persistStarted()
             reportDatabaseOperationStarted()
             var eventsLeft = events.size
-            persistAll(events) { _ =>
+            persistAll(events) { event =>
               eventsLeft -= 1
+              instrumentation.eventPersisted(event.serializedSize)
               if (eventsLeft <= 0) { // Remove this hack when switching to Akka Persistence Typed
+                instrumentation.persistCompleted() // note: this doesn't include saving snapshots
                 reportDatabaseOperationFinished()
-                r.snapshot.foreach(saveSnapshot)
+                r.snapshot.foreach { snapshot =>
+                  saveSnapshot(snapshot)
+                  // snapshot has not yet been successfully saved, but we need the size
+                  instrumentation.snapshotPersisted(snapshot.serializedSize)
+                }
                 // Make sure that the current request is still ours
                 if (currentCommand == null || currentCommand.commandId != commandId) {
                   crash("Internal error - currentRequest changed before all events were persisted")
@@ -287,6 +330,8 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
           crash(s"Incorrect command id in failure, expecting ${currentCommand.commandId} but got ${f.commandId}")
 
         case ESOMsg.Failure(f) =>
+          instrumentation.commandProcessed()
+          instrumentation.commandFailed()
           reportActionComplete()
           currentCommand.replyTo ! createFailure(f.description)
           commandHandled()
@@ -301,7 +346,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
       notifyOutstandingRequests("Unexpected entity termination")
       context.stop(self)
 
-    case Status.Failure(error) =>
+    case EventSourcedEntity.StreamFailed(error) =>
       notifyOutstandingRequests("Unexpected entity termination")
       throw error
 
@@ -341,13 +386,19 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
 
   override final def receiveRecover: PartialFunction[Any, Unit] = {
     case offer: SnapshotOffer =>
+      offer.snapshot match {
+        case snapshot: pbAny => instrumentation.snapshotLoaded(snapshot.serializedSize)
+        case _ =>
+      }
       maybeInit(Some(offer))
 
     case RecoveryCompleted =>
+      instrumentation.recoveryCompleted()
       reportDatabaseOperationFinished()
       maybeInit(None)
 
     case event: pbAny =>
+      instrumentation.eventLoaded(event.serializedSize)
       maybeInit(None)
       relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Event(EventSourcedEvent(lastSequenceNr, Some(event))))
   }

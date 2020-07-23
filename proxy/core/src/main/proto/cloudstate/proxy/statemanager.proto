@@ -29,16 +29,12 @@ option (scalapb.options) = {
     flat_package: true
 };
 
-message UserFunctionCommand {
-    string name = 1;
-    google.protobuf.Any payload = 2;
-}
-
 message EntityCommand {
     string entity_id = 1;
     string name = 2;
     google.protobuf.Any payload = 3;
     bool streamed = 4;
+    cloudstate.Metadata metadata = 5;
 }
 
 message UserFunctionReply {

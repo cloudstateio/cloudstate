@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Lightbend Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.cloudstate.proxy.eventing
 
 import java.net.ServerSocket
@@ -26,7 +42,7 @@ import io.cloudstate.javasupport.{CloudState, CloudStateRunner}
  `docker run --rm --expose=8085 --volume=/data --name=googlepubsub -d -p 8085:8085 google/cloud-sdk:latest /bin/sh -c "gcloud beta emulators pubsub start --project=test --host-port=0.0.0.0:8085 --data-dir=/data"`
  */
 class GooglePubsubSpec extends WordSpec with BeforeAndAfterAll with Eventually with Matchers with ScalaFutures {
-
+  /*
   lazy val projectId = System.getenv("PUBSUB_PROJECT_ID")
 
   final def runTheseTests: Boolean = projectId != null
@@ -119,4 +135,6 @@ class GooglePubsubSpec extends WordSpec with BeforeAndAfterAll with Eventually w
     try socket.getLocalPort
     finally socket.close()
   }
+
+ */
 }
