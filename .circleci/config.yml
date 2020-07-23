@@ -123,12 +123,12 @@ commands:
                 return 0
             }
             exitCode=0
-            for i in 2 2;
-            do
+            for i in 1 2 3; do
                 if ! add_delete_items "$CART_URI" "${SHOP_TEST_USER}" ; then
                     echo "Failed"
                     exitCode=1
                     echo "sleeping ${i}"
+                    sleep "${i}"
                     continue
                 else
                     echo "passed"
@@ -136,7 +136,7 @@ commands:
                     break
                 fi
             done
-            "${exitCode}"
+            exit "${exitCode}"
 
 jobs:
   native-image-it-test:
@@ -238,15 +238,15 @@ jobs:
   dev_sc_test:
     docker:
       - image: circleci/buildpack-deps:focal-curl
-    description: "Stage Authentication Test"
+    description: "Dev Shopping Cart Test"
     steps:
       - cs_sc_test:
           cart_uri: "https://lingering-art-1733.us-east1.apps.lbcs.dev"
       - slack/status:
           channel: cloudstate-alerts
           success_message: Shopping cart tests successful on Dev
-          failure_message: Shopping cart tests failed on Dev
-          mentions: "edc,srikanth"
+          failure_message: Shopping cart tests failed on Dev IGNORE TEST IN PROGRESS
+          mentions: ""
           fail_only: true
           only_for_branches: "master,cron-test"
 #      - pagerduty/notify-on-failure:
