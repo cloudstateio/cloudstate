@@ -70,53 +70,59 @@ commands:
             CART_URI=<< parameters.cart_uri >>
             echo "Testing Shopping Data Access: ${CART_URI}"
 
-            get_test_cart=$(curl -s -o /dev/null -w "%{http_code}" $CART_URI/com.example.shoppingcart.ShoppingCart/carts/test-user)
+            function add_delete_items() {
+              CART_URI="$1"
+              SHOP_TEST_USER="$2"
+              get_test_cart=$(curl -s -o /dev/null -w "%{http_code}" $CART_URI/com.example.shoppingcart.ShoppingCart/carts/test-user)
 
-            if [ "${get_test_cart}" -eq 200 ] ; then
-                cart_orig_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
+                if [ "${get_test_cart}" -eq 200 ] ; then
+                    cart_orig_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
 
-                # Add items
-                curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
-                    -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test1", name: "test1", "quantity":1}' \
-                    $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
-                echo " test1 added"
-                curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
-                    -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test2", name: "test2", "quantity":2}' \
-                    $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
-                echo " test2 added"
-                curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
-                    -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test3", name: "test3", "quantity":3}' \
-                    $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
-                echo " test3 added"
-                cart_new_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
-                echo -e "\n"Added "${cart_new_size}" items to cart
-                cart_size_diff=$(expr "${cart_new_size}" - "${cart_orig_size}" )
-                if [ "${cart_size_diff}" -ne 3 ]; then
-                      echo Problem adding items to "'${SHOP_TEST_USER}'" cart !!!
-                      false
-                fi
+                    # Add items
+                    curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
+                        -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test1", name: "test1", "quantity":1}' \
+                        $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
+                    echo " test1 added"
+                    curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
+                        -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test2", name: "test2", "quantity":2}' \
+                        $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
+                    echo " test2 added"
+                    curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
+                        -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test3", name: "test3", "quantity":3}' \
+                        $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
+                    echo " test3 added"
+                    cart_new_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
+                    echo -e "\n"Added "${cart_new_size}" items to cart
+                    cart_size_diff=$(expr "${cart_new_size}" - "${cart_orig_size}" )
+                    if [ "${cart_size_diff}" -ne 3 ]; then
+                          echo Problem adding items to "'${SHOP_TEST_USER}'" cart !!!
+                          return 1
+                    fi
 
-                # Remove items
-                curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test1/remove
-                curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test2/remove
-                curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test3/remove
+                    # Remove items
+                    curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test1/remove
+                    curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test2/remove
+                    curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test3/remove
 
-                echo "Removed items test1 test2 and test3 "
+                    echo "Removed items test1 test2 and test3 "
 
-                cart_final_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
+                    cart_final_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
 
-                if [ "${cart_final_size}" != "${cart_orig_size}" ] ; then
-                    echo Cart NOT restored to original size. Please check!!!
-                    false
+                    if [ "${cart_final_size}" != "${cart_orig_size}" ] ; then
+                        echo Cart NOT restored to original size. Please check!!!
+                        return 1
+                    else
+                        echo
+                        date
+                        echo Shopping Test Complete! User: "${SHOP_TEST_USER}"
+                    fi
                 else
-                    echo
-                    date
-                    echo Shopping Test Complete! User: "${SHOP_TEST_USER}"
+                    echo Unable to Shop "${SHOP_TEST_USER}" Cart not found!
+                    return 1
                 fi
-            else
-                echo Unable to Shop "${SHOP_TEST_USER}" Cart not found!
-                false
-            fi
+                return 0
+            }
+            add_delete_items "$CART_URI" "${SHOP_TEST_USER}"
 
 
 jobs:
