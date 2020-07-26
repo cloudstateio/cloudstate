@@ -109,6 +109,7 @@ lazy val root = (project in file("."))
     `java-support`,
     `scala-support`,
     `java-shopping-cart`,
+    `java-crud-shopping-cart`,
     `java-pingpong`,
     `akka-client`,
     operator,
@@ -727,6 +728,26 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
     assemblySettings("java-shopping-cart.jar")
   )
 
+lazy val `java-crud-shopping-cart` = (project in file("samples/java-crud-shopping-cart"))
+  .dependsOn(`java-support`)
+  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
+  .settings(
+    name := "java-crud-shopping-cart",
+    dockerSettings,
+    mainClass in Compile := Some("io.cloudstate.samples.shoppingcart.Main"),
+    PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
+    akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
+    PB.protoSources in Compile ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "frontend", baseDir / "example")
+    },
+    PB.targets in Compile := Seq(
+      PB.gens.java -> (sourceManaged in Compile).value
+    ),
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8"),
+    assemblySettings("java-crud-shopping-cart.jar")
+  )
+
 lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
   .dependsOn(`java-support`)
   .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
@@ -823,7 +844,7 @@ lazy val `tck` = (project in file("tck"))
     javaOptions in IntegrationTest := sys.props.get("config.resource").map(r => s"-Dconfig.resource=$r").toSeq,
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
-        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly, `scala-shopping-cart` / assembly)
+        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly, `java-crud-shopping-cart` / assembly, `scala-shopping-cart` / assembly)
         .value
   )
 
