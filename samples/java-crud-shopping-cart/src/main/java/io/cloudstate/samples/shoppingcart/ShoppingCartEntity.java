@@ -33,12 +33,12 @@ import java.util.stream.Collectors;
 
 /** A CRUD entity. */
 @CrudEntity
-public class ShoppingCartCrudEntity {
+public class ShoppingCartEntity {
 
   private final String entityId;
   private final Map<String, Shoppingcart.LineItem> cart = new LinkedHashMap<>();
 
-  public ShoppingCartCrudEntity(@EntityId String entityId) {
+  public ShoppingCartEntity(@EntityId String entityId) {
     this.entityId = entityId;
   }
 
