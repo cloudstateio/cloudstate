@@ -89,7 +89,7 @@ final class CrudEntitySupervisor(client: CrudClient,
             NotUsed
           }
       )
-      .runWith(Sink.actorRef(self, CrudEntity.StreamClosed))
+      .runWith(Sink.actorRef(self, CrudEntity.StreamClosed, CrudEntity.StreamFailed))
     context.become(waitingForRelay)
   }
 
@@ -209,8 +209,6 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
     if (reportedDatabaseOperationStarted) {
       reportDatabaseOperationFinished()
     }
-    // This will shutdown the stream (if not already shut down)
-    relay ! Status.Success(())
   }
 
   private[this] final def commandHandled(): Unit = {
