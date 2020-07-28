@@ -6,7 +6,7 @@ import sbt.url
 inThisBuild(
   Seq(
     organization := "io.cloudstate",
-    scalaVersion := "2.12.11",
+    scalaVersion := "2.13.3",
     organizationName := "Lightbend Inc.",
     organizationHomepage := Some(url("https://lightbend.com")),
     startYear := Some(2019),
@@ -43,8 +43,9 @@ val AkkaVersion = "2.6.6"
 val AkkaHttpVersion = "10.1.12"
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
+val AkkaPersistenceSpannerVersion = "1.0.0-RC3"
 val PrometheusClientVersion = "0.6.0"
-val ScalaTestVersion = "3.0.5"
+val ScalaTestVersion = "3.0.8"
 val ProtobufVersion = "3.11.4" // We use this version because it is the latest which works with native-image 20
 val GraalVersion = "20.1.0"
 val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debianslim-jre"
@@ -281,15 +282,17 @@ commands ++= Seq(
   buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), false),
   buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, true),
   buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, false),
+  buildProxyCommand("Spanner", `proxy-spanner`, "spanner", None, true),
+  buildProxyCommand("Spanner", `proxy-spanner`, "spanner", None, false),
   buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, true),
   buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, false),
   Command.single("dockerBuildAllNonNative", buildProxyHelp("dockerBuildAllNonNative", "all non native")) {
     (state, command) =>
-      List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres")
+      List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres", "Spanner")
         .map(c => s"dockerBuild$c $command") ::: state
   },
   Command.single("dockerBuildAllNative", buildProxyHelp("dockerBuildAllNative", "all native")) { (state, command) =>
-    List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres")
+    List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres", "Spanner")
       .map(c => s"dockerBuildNative$c $command") ::: state
   }
 )
@@ -327,6 +330,9 @@ def assemblySettings(jarName: String) =
       /*ADD CUSTOMIZATIONS HERE*/
       case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.last
       case PathList(ps @ _*) if ps.last endsWith ".proto" => MergeStrategy.last
+      case "module-info.class" => MergeStrategy.discard
+      case "META-INF/native-image/com.typesafe.akka/dynamic-from-reference-conf/reflect-config.json" =>
+        MergeStrategy.discard
       case x =>
         val oldStrategy = (assemblyMergeStrategy in assembly).value
         oldStrategy(x)
@@ -400,6 +406,7 @@ lazy val `proxy` = (project in file("proxy"))
     `proxy-cassandra`,
     `proxy-jdbc`,
     `proxy-postgres`,
+    `proxy-spanner`,
     `proxy-tests`
   )
 
@@ -451,6 +458,8 @@ lazy val `proxy-core` = (project in file("proxy/core"))
 
       old.map(_.copy(outputPath = ct / "akka-grpc" / "main"))
     },
+    // add protobuf targets to managed source directories for IDEs
+    Compile / managedSourceDirectories ++= (Compile / PB.targets).value.map(_.outputPath).distinct,
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "frontend", baseDir / "protocol")
@@ -469,6 +478,24 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     javaOptions in run ++= Seq("-Dconfig.resource=dev-mode.conf"),
     assemblySettings("akka-proxy.jar"),
     nativeImageDockerSettings
+  )
+
+lazy val `proxy-spanner` = (project in file("proxy/spanner"))
+  .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin)
+  .dependsOn(`proxy-core`)
+  .settings(
+    common,
+    name := "cloudstate-proxy-spanner",
+    libraryDependencies ++= Seq(
+        "com.lightbend.akka" %% "akka-persistence-spanner" % AkkaPersistenceSpannerVersion,
+        akkaDependency("akka-cluster-typed"), // Transitive dependency of akka-persistence-spanner
+        akkaDependency("akka-persistence-typed") // Transitive dependency of akka-persistence-spanner
+      ),
+    fork in run := true,
+    mainClass in Compile := Some("io.cloudstate.proxy.spanner.CloudstateSpannerProxyMain"),
+    assemblySettings("akka-proxy.jar"),
+    nativeImageDockerSettings,
+    graalVMNativeImageOptions ++= Seq()
   )
 
 lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
@@ -770,7 +797,7 @@ lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
 
 lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart"))
   .dependsOn(`scala-support`)
-  .enablePlugins(AkkaGrpcPlugin, DockerPlugin, JavaAppPackaging, NoPublish)
+  .enablePlugins(AkkaGrpcPlugin, DockerPlugin, JavaAppPackaging)
   .settings(
     name := "scala-shopping-cart",
     dockerSettings,

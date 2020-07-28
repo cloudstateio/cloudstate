@@ -34,6 +34,8 @@ import akka.http.scaladsl.model.{
   HttpHeader,
   HttpMethod,
   HttpMethods,
+  HttpProtocol,
+  HttpProtocols,
   HttpRequest,
   HttpResponse,
   IllegalRequestException,
@@ -456,7 +458,7 @@ object HttpApi {
             grpcWriter.encodeFrame(GrpcProtocol.DataFrame(ByteString.fromArrayUnsafe(message.toByteArray)))
           )
         ),
-        protocol = req.protocol
+        protocol = HttpProtocols.`HTTP/2.0`
       )
     }
 
@@ -530,55 +532,46 @@ object HttpApi {
             .header[Accept]
             .exists(_.mediaRanges.exists(_.value.startsWith(MediaTypes.`text/event-stream`.toString)))
 
-        (for {
-          (headers, data) <- futureResponse
-          firstMessage <- data.prefixAndTail(1).runWith(Sink.head)
-        } yield {
-          firstMessage match {
-            case (Seq(protobuf: ProtobufAny), rest) =>
-              if (isHttpBodyResponse) {
-                val entityMessage = parseResponseBody(protobuf) // We need to peek-ahead to check the content-type of the response we're sending out
-                Future.successful(
-                  HttpResponse(
-                    entity = HttpEntity.Chunked(
-                      extractContentTypeFromHttpBody(entityMessage),
-                      Source
-                        .single(entityMessage)
-                        .concat(rest.map(parseResponseBody))
-                        .map(em => HttpEntity.Chunk(extractDataFromHttpBody(em) ++ NEWLINE_BYTES))
-                    ),
-                    headers = headers
-                  )
+        futureResponse.flatMap {
+          case (headers, data) =>
+            if (sseAccepted) {
+              import EventStreamMarshalling._
+              Marshal(
+                data
+                  .map(parseResponseBody)
+                  .map { em =>
+                    ServerSentEvent(jsonPrinter.print(em))
+                  }
+              ).to[HttpResponse]
+                .map(response => response.withHeaders(headers))
+            } else if (isHttpBodyResponse) {
+              Future.successful(
+                HttpResponse(
+                  entity = HttpEntity.Chunked(
+                    headers
+                      .find(_.lowercaseName() == "content-type")
+                      .flatMap(ct => ContentType.parse(ct.value()).toOption)
+                      .getOrElse(ContentTypes.`application/octet-stream`),
+                    data.map(em => HttpEntity.Chunk(extractDataFromHttpBody(parseResponseBody(em))))
+                  ),
+                  headers = headers.filterNot(_.lowercaseName() == "content-type")
                 )
-              } else if (sseAccepted) {
-                import EventStreamMarshalling._
-                Marshal(
-                  Source
-                    .single(protobuf)
-                    .concat(rest)
-                    .map(parseResponseBody)
-                    .map(em => ServerSentEvent(jsonPrinter.print(em)))
-                ).to[HttpResponse]
-                  .map(response => response.withHeaders(headers))
-              } else {
-                Future.successful(
-                  HttpResponse(
-                    entity = HttpEntity.Chunked(
-                      ContentTypes.`application/json`,
-                      Source
-                        .single(protobuf)
-                        .concat(rest)
-                        .map(parseResponseBody)
-                        .map(em => HttpEntity.Chunk(ByteString(jsonPrinter.print(em)) ++ NEWLINE_BYTES))
-                    ),
-                    headers = headers
-                  )
+              )
+            } else {
+              Future.successful(
+                HttpResponse(
+                  entity = HttpEntity.Chunked(
+                    ContentTypes.`application/json`,
+                    data
+                      .map(parseResponseBody)
+                      .map(em => HttpEntity.Chunk(ByteString(jsonPrinter.print(em)) ++ NEWLINE_BYTES))
+                  ),
+                  headers = headers
                 )
-              }
-            case (Seq(), _) =>
-              throw new IllegalStateException("Empty response")
-          }
-        }).flatten
+              )
+            }
+        }
+
       } else {
         for {
           (headers, data) <- futureResponse

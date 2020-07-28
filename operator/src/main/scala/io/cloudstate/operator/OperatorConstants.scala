@@ -23,6 +23,7 @@ object OperatorConstants {
   final val CloudStateApiVersionNumber = "v1alpha1"
   final val CloudStateApiVersion = s"$CloudStateGroup/$CloudStateApiVersionNumber"
   final val StatefulServiceKind = "StatefulService"
+  final val StatefulStoreKind = "StatefulStore"
   final val StatefulStoreLabel = s"$CloudStateGroup/statefulStore"
 
   final val StatefulServiceLabel = s"$CloudStateGroup/statefulService"
