@@ -108,16 +108,18 @@ final class CrudImpl(_system: ActorSystem,
     val handler = service.factory.create(new CrudContextImpl(init.entityId))
     val thisEntityId = init.entityId
 
-    val (startingSequenceNumber, state) = init.state match {
+    val startingSequenceNumber = init.state match {
       case Some(CrudInitState(Some(payload), stateSequence, _)) =>
         val encoded = service.anySupport.encodeScala(payload)
-        (stateSequence, Some(ScalaPbAny.toJavaProto(encoded)).asJava)
+        handler.handleUpdate(ScalaPbAny.toJavaProto(encoded), new StateContextImpl(thisEntityId, stateSequence))
+        stateSequence
 
-      case Some(CrudInitState(None, stateSequence, _)) => (stateSequence, Option.empty[JavaPbAny].asJava)
+      case Some(CrudInitState(None, stateSequence, _)) =>
+        handler.handleDelete(new StateContextImpl(thisEntityId, stateSequence))
+        stateSequence
 
-      case None => (0L, Option.empty[JavaPbAny].asJava)
+      case None => 0L // first initialization
     }
-    handler.handleState(state, new StateContextImpl(thisEntityId, startingSequenceNumber))
 
     Flow[CrudStreamIn]
       .map(_.message)
@@ -233,8 +235,7 @@ final class CrudImpl(_system: ActorSystem,
 
       val encoded = anySupport.encodeScala(event)
       _nextSequenceNumber += 1
-      handler.handleState(Some(ScalaPbAny.toJavaProto(encoded)).asJava,
-                          new StateContextImpl(entityId, _nextSequenceNumber))
+      handler.handleUpdate(ScalaPbAny.toJavaProto(encoded), new StateContextImpl(entityId, _nextSequenceNumber))
       mayBeAction = Some(CrudAction(Update(CrudUpdate(Some(encoded)))))
       updatePerformSnapshot()
     }
@@ -243,7 +244,7 @@ final class CrudImpl(_system: ActorSystem,
       checkActive()
 
       _nextSequenceNumber += 1
-      handler.handleState(Option.empty[JavaPbAny].asJava, new StateContextImpl(entityId, _nextSequenceNumber))
+      handler.handleDelete(new StateContextImpl(entityId, _nextSequenceNumber))
       mayBeAction = Some(CrudAction(Delete(CrudDelete())))
       updatePerformSnapshot()
     }

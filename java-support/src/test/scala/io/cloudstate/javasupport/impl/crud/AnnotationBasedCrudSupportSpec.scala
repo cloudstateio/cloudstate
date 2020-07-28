@@ -16,8 +16,6 @@
 
 package io.cloudstate.javasupport.impl.crud
 
-import java.util.Optional
-
 import com.example.crud.shoppingcart.Shoppingcart
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.google.protobuf.{ByteString, Any => JavaPbAny}
@@ -27,14 +25,13 @@ import io.cloudstate.javasupport.crud.{
   CrudContext,
   CrudEntity,
   CrudEntityCreationContext,
+  DeleteStateHandler,
   StateContext,
-  StateHandler
+  UpdateStateHandler
 }
 import io.cloudstate.javasupport.impl.{AnySupport, ResolvedServiceMethod, ResolvedType}
 import io.cloudstate.javasupport.{Context, EntityId, ServiceCall, ServiceCallFactory, ServiceCallRef}
 import org.scalatest.{Matchers, WordSpec}
-
-import scala.compat.java8.OptionConverters._
 
 class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
   trait BaseContext extends Context {
@@ -225,61 +222,123 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
 
     }
 
-    "support state handlers" when {
+    "support update state handlers" when {
       val ctx = new StateContext with BaseContext {
         override def sequenceNumber(): Long = 10
+
         override def entityId(): String = "foo"
       }
 
       "single parameter" in {
         var invoked = false
         val handler = create(new {
-          @StateHandler
-          def handleState(state: Optional[String]): Unit = {
-            state should ===(Option("state!").asJava)
+          @UpdateStateHandler
+          def updateState(state: String): Unit = {
+            state should ===("state!")
             invoked = true
           }
         })
-        handler.handleState(Option(state("state!")).asJava, ctx)
+        handler.handleUpdate(state("state!"), ctx)
         invoked shouldBe true
       }
 
       "context parameter" in {
         var invoked = false
         val handler = create(new {
-          @StateHandler
-          def handleState(state: Optional[String], context: StateContext): Unit = {
-            state should ===(Option("state!").asJava)
+          @UpdateStateHandler
+          def updateState(state: String, context: StateContext): Unit = {
+            state should ===("state!")
             context.sequenceNumber() should ===(10)
             invoked = true
           }
         })
-        handler.handleState(Option(state("state!")).asJava, ctx)
+        handler.handleUpdate(state("state!"), ctx)
         invoked shouldBe true
       }
 
       "fail if there's a bad context" in {
         a[RuntimeException] should be thrownBy create(new {
-          @StateHandler
-          def handleState(state: Optional[String], context: CommandContext) = ()
+          @UpdateStateHandler
+          def updateState(state: String, context: CommandContext): Unit = Unit
         })
       }
 
-      "fail if there's no snapshot parameter" in {
+      "fail if there's no state parameter" in {
         a[RuntimeException] should be thrownBy create(new {
-          @StateHandler
-          def handleState(context: StateContext) = ()
+          @UpdateStateHandler
+          def updateState(context: StateContext): Unit = Unit
         })
       }
 
-      "fail if there's no state handler for the given type" in {
+      "fail if there's no update handler for the given type" in {
         val handler = create(new {
-          @StateHandler
-          def handleState(state: Int) = ()
+          @UpdateStateHandler
+          def updateState(state: Int): Unit = Unit
         })
-        a[RuntimeException] should be thrownBy handler.handleState(Option(state(10)).asJava, ctx)
+        a[RuntimeException] should be thrownBy handler.handleUpdate(state(10), ctx)
       }
 
+      "fail if there are two update handler methods" in {
+        a[RuntimeException] should be thrownBy create(new {
+          @UpdateStateHandler
+          def updateState1(context: StateContext): Unit = Unit
+          @UpdateStateHandler
+          def updateState2(context: StateContext): Unit = Unit
+        })
+      }
+    }
+
+    "support delete state handlers" when {
+      val ctx = new StateContext with BaseContext {
+        override def sequenceNumber(): Long = 10
+        override def entityId(): String = "foo"
+      }
+
+      "no arg parameter" in {
+        var invoked = false
+        val handler = create(new {
+          @DeleteStateHandler
+          def deleteState(): Unit =
+            invoked = true
+        })
+        handler.handleDelete(ctx)
+        invoked shouldBe true
+      }
+
+      "context parameter" in {
+        var invoked = false
+        val handler = create(new {
+          @DeleteStateHandler
+          def deleteState(context: StateContext): Unit =
+            invoked = true
+        })
+        handler.handleDelete(ctx)
+        invoked shouldBe true
+      }
+
+      "fail if there's a single argument is not the context" in {
+        a[RuntimeException] should be thrownBy create(new {
+          @DeleteStateHandler
+          def deleteState(state: String): Unit = Unit
+        })
+      }
+
+      "fail if there's two delete methods" in {
+        a[RuntimeException] should be thrownBy create(new {
+          @DeleteStateHandler
+          def deleteState1: Unit = Unit
+
+          @DeleteStateHandler
+          def deleteState2: Unit = Unit
+        })
+      }
+
+      "fail if there's a bad context" in {
+        a[RuntimeException] should be thrownBy create(new {
+          @DeleteStateHandler
+          def deleteState(context: CommandContext): Unit = Unit
+        })
+      }
     }
   }
 }

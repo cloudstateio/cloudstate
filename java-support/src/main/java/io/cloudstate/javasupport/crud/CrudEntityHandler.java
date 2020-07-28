@@ -44,5 +44,12 @@ public interface CrudEntityHandler {
    * @param state The state to handle.
    * @param context The state context.
    */
-  void handleState(Optional<Any> state, StateContext context);
+  void handleUpdate(Any state, StateContext context);
+
+  /**
+   * Handle the state deletion.
+   *
+   * @param context The state context.
+   */
+  void handleDelete(StateContext context);
 }

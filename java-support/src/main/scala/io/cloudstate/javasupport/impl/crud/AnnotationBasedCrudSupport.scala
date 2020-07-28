@@ -29,8 +29,9 @@ import io.cloudstate.javasupport.crud.{
   CrudEntityCreationContext,
   CrudEntityFactory,
   CrudEntityHandler,
+  DeleteStateHandler,
   StateContext,
-  StateHandler
+  UpdateStateHandler
 }
 import io.cloudstate.javasupport.impl.ReflectionHelper.{InvocationContext, MainArgumentParameterHandler}
 import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEntityFactory, ResolvedServiceMethod}
@@ -82,11 +83,10 @@ private[impl] class AnnotationBasedCrudSupport(
       }
     }
 
-    override def handleState(anyState: Optional[JavaPbAny], context: StateContext): Unit = unwrap {
-      import scala.compat.java8.OptionConverters._
-      val state = anyState.asScala.map(s => anySupport.decode(s)).asJava.asInstanceOf[AnyRef]
+    override def handleUpdate(anyState: JavaPbAny, context: StateContext): Unit = unwrap {
+      val state = anySupport.decode(anyState).asInstanceOf[AnyRef]
 
-      behavior.getCachedStateHandlerForClass(state.getClass) match {
+      behavior.getCachedUpdateHandlerForClass(state.getClass) match {
         case Some(handler) =>
           val ctx = new DelegatingCrudContext(context) with StateContext {
             override def sequenceNumber(): Long = context.sequenceNumber()
@@ -94,8 +94,16 @@ private[impl] class AnnotationBasedCrudSupport(
           handler.invoke(entity, state, ctx)
         case None =>
           throw new RuntimeException(
-            s"No state handler found for state ${state.getClass} on $behaviorsString"
+            s"No update state handler found for ${state.getClass} on $behaviorsString"
           )
+      }
+    }
+
+    override def handleDelete(context: StateContext): Unit = unwrap {
+      behavior.deleteHandler match {
+        case Some(handler) => handler.invoke(entity, context)
+        case None =>
+          throw new RuntimeException(s"No delete state handler found on $behaviorsString")
       }
     }
 
@@ -118,13 +126,14 @@ private[impl] class AnnotationBasedCrudSupport(
 
 private class CrudBehaviorReflection(
     val commandHandlers: Map[String, ReflectionHelper.CommandHandlerInvoker[CommandContext]],
-    val stateHandlers: Map[Class[_], StateHandlerInvoker]
+    val updateHandlers: Map[Class[_], UpdateInvoker],
+    val deleteHandler: Option[DeleteInvoker]
 ) {
 
-  private val stateHandlerCache = TrieMap.empty[Class[_], Option[StateHandlerInvoker]]
+  private val updateStateHandlerCache = TrieMap.empty[Class[_], Option[UpdateInvoker]]
 
-  def getCachedStateHandlerForClass(clazz: Class[_]): Option[StateHandlerInvoker] =
-    stateHandlerCache.getOrElseUpdate(clazz, getHandlerForClass(stateHandlers)(clazz))
+  def getCachedUpdateHandlerForClass(clazz: Class[_]): Option[UpdateInvoker] =
+    updateStateHandlerCache.getOrElseUpdate(clazz, getHandlerForClass(updateHandlers)(clazz))
 
   private def getHandlerForClass[T](handlers: Map[Class[_], T])(clazz: Class[_]): Option[T] =
     handlers.get(clazz) match {
@@ -169,28 +178,40 @@ private object CrudBehaviorReflection {
           )
       }
 
-    val stateHandlers = allMethods
-      .filter(_.getAnnotation(classOf[StateHandler]) != null)
+    val updateStateHandlers = allMethods
+      .filter(_.getAnnotation(classOf[UpdateStateHandler]) != null)
       .map { method =>
-        new StateHandlerInvoker(ReflectionHelper.ensureAccessible(method))
+        new UpdateInvoker(ReflectionHelper.ensureAccessible(method))
       }
-      .groupBy(_.snapshotClass)
+      .groupBy(_.stateClass)
       .map {
-        case (snapshotClass, Seq(invoker)) => (snapshotClass: Any) -> invoker
+        case (stateClass, Seq(invoker)) => (stateClass: Any) -> invoker
         case (clazz, many) =>
           throw new RuntimeException(
-            s"Multiple methods found for handling snapshot of type $clazz: ${many.map(_.method.getName)}"
+            s"Multiple CRUD update handlers found of type $clazz: ${many.map(_.method.getName)}"
           )
       }
-      .asInstanceOf[Map[Class[_], StateHandlerInvoker]]
+      .asInstanceOf[Map[Class[_], UpdateInvoker]]
+
+    val deleteStateHandler = allMethods
+      .filter(_.getAnnotation(classOf[DeleteStateHandler]) != null)
+      .map { method =>
+        new DeleteInvoker(ReflectionHelper.ensureAccessible(method))
+      } match {
+      case Seq() => None
+      case Seq(single) =>
+        Some(single)
+      case _ =>
+        throw new RuntimeException(s"Multiple CRUD delete methods found on behavior $behaviorClass")
+    }
 
     ReflectionHelper.validateNoBadMethods(
       allMethods,
       classOf[CrudEntity],
-      Set(classOf[CommandHandler], classOf[StateHandler])
+      Set(classOf[CommandHandler], classOf[UpdateStateHandler], classOf[DeleteStateHandler])
     )
 
-    new CrudBehaviorReflection(commandHandlers, stateHandlers)
+    new CrudBehaviorReflection(commandHandlers, updateStateHandlers, deleteStateHandler)
   }
 }
 
@@ -208,23 +229,41 @@ private class EntityConstructorInvoker(constructor: Constructor[_]) extends (Cru
   }
 }
 
-private class StateHandlerInvoker(val method: Method) {
+private class UpdateInvoker(val method: Method) {
   private val parameters = ReflectionHelper.getParameterHandlers[StateContext](method)()
 
-  // Verify that there is at most one state handler
-  val snapshotClass: Class[_] = parameters.collect {
+  // Verify that there is at most one update state handler
+  val stateClass: Class[_] = parameters.collect {
     case MainArgumentParameterHandler(clazz) => clazz
   } match {
     case Array(handlerClass) => handlerClass
     case other =>
       throw new RuntimeException(
-        s"StateHandler method $method must defined at most one non context parameter to handle state, the parameters defined were: ${other
+        s"UpdateStateHandler method $method must defined at most one non context parameter to handle state, the parameters defined were: ${other
           .mkString(",")}"
       )
   }
 
-  def invoke(obj: AnyRef, snapshot: AnyRef, context: StateContext): Unit = {
-    val ctx = InvocationContext(snapshot, context)
+  def invoke(obj: AnyRef, state: AnyRef, context: StateContext): Unit = {
+    val ctx = InvocationContext(state, context)
+    method.invoke(obj, parameters.map(_.apply(ctx)): _*)
+  }
+}
+
+private class DeleteInvoker(val method: Method) {
+
+  private val parameters = ReflectionHelper.getParameterHandlers[StateContext](method)()
+
+  parameters.foreach {
+    case MainArgumentParameterHandler(clazz) =>
+      throw new RuntimeException(
+        s"DeleteStateHandler method $method must defined only a context parameter to handle the state, the parameter defined is: ${clazz.getName}"
+      )
+    case _ =>
+  }
+
+  def invoke(obj: AnyRef, context: StateContext): Unit = {
+    val ctx = InvocationContext("", context)
     method.invoke(obj, parameters.map(_.apply(ctx)): _*)
   }
 }

@@ -23,7 +23,8 @@ import io.cloudstate.javasupport.EntityId;
 import io.cloudstate.javasupport.crud.CommandContext;
 import io.cloudstate.javasupport.crud.CommandHandler;
 import io.cloudstate.javasupport.crud.CrudEntity;
-import io.cloudstate.javasupport.crud.StateHandler;
+import io.cloudstate.javasupport.crud.DeleteStateHandler;
+import io.cloudstate.javasupport.crud.UpdateStateHandler;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,8 +43,16 @@ public class ShoppingCartEntity {
     this.entityId = entityId;
   }
 
-  @StateHandler
-  public void handleState(Optional<Domain.Cart> cart) {
+  @UpdateStateHandler
+  public void handleUpdateState(Domain.Cart cart) {
+    this.cart.clear();
+    for (Domain.LineItem item : cart.getItemsList()) {
+      this.cart.put(item.getProductId(), convert(item));
+    }
+  }
+
+  @DeleteStateHandler
+  public void handleDeleteState(Optional<Domain.Cart> cart) {
     this.cart.clear();
     cart.ifPresent(
         c -> {
