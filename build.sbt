@@ -742,8 +742,8 @@ lazy val `java-crud-shopping-cart` = (project in file("samples/java-crud-shoppin
       Seq(baseDir / "frontend", baseDir / "example")
     },
     PB.targets in Compile := Seq(
-      PB.gens.java -> (sourceManaged in Compile).value
-    ),
+        PB.gens.java -> (sourceManaged in Compile).value
+      ),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8"),
     assemblySettings("java-crud-shopping-cart.jar")
   )
@@ -844,7 +844,10 @@ lazy val `tck` = (project in file("tck"))
     javaOptions in IntegrationTest := sys.props.get("config.resource").map(r => s"-Dconfig.resource=$r").toSeq,
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
-        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly, `java-crud-shopping-cart` / assembly, `scala-shopping-cart` / assembly)
+        .dependsOn(`proxy-core` / assembly,
+                   `java-shopping-cart` / assembly,
+                   `java-crud-shopping-cart` / assembly,
+                   `scala-shopping-cart` / assembly)
         .value
   )
 
