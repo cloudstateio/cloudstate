@@ -259,21 +259,21 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
       "fail if there's a bad context" in {
         a[RuntimeException] should be thrownBy create(new {
           @UpdateStateHandler
-          def updateState(state: String, context: CommandContext): Unit = Unit
+          def updateState(state: String, context: CommandContext): Unit = ()
         })
       }
 
       "fail if there's no state parameter" in {
         a[RuntimeException] should be thrownBy create(new {
           @UpdateStateHandler
-          def updateState(context: StateContext): Unit = Unit
+          def updateState(context: StateContext): Unit = ()
         })
       }
 
       "fail if there's no update handler for the given type" in {
         val handler = create(new {
           @UpdateStateHandler
-          def updateState(state: Int): Unit = Unit
+          def updateState(state: Int): Unit = ()
         })
         a[RuntimeException] should be thrownBy handler.handleUpdate(state(10), ctx)
       }
@@ -281,9 +281,9 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
       "fail if there are two update handler methods" in {
         a[RuntimeException] should be thrownBy create(new {
           @UpdateStateHandler
-          def updateState1(context: StateContext): Unit = Unit
+          def updateState1(context: StateContext): Unit = ()
           @UpdateStateHandler
-          def updateState2(context: StateContext): Unit = Unit
+          def updateState2(context: StateContext): Unit = ()
         })
       }
     }
@@ -319,24 +319,24 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
       "fail if there's a single argument is not the context" in {
         a[RuntimeException] should be thrownBy create(new {
           @DeleteStateHandler
-          def deleteState(state: String): Unit = Unit
+          def deleteState(state: String): Unit = ()
         })
       }
 
       "fail if there's two delete methods" in {
         a[RuntimeException] should be thrownBy create(new {
           @DeleteStateHandler
-          def deleteState1: Unit = Unit
+          def deleteState1: Unit = ()
 
           @DeleteStateHandler
-          def deleteState2: Unit = Unit
+          def deleteState2: Unit = ()
         })
       }
 
       "fail if there's a bad context" in {
         a[RuntimeException] should be thrownBy create(new {
           @DeleteStateHandler
-          def deleteState(context: CommandContext): Unit = Unit
+          def deleteState(context: CommandContext): Unit = ()
         })
       }
     }
