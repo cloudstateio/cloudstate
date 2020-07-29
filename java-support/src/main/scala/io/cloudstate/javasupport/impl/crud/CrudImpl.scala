@@ -70,6 +70,17 @@ final class CrudImpl(_system: ActorSystem,
     })
     .toMap
 
+  /**
+   * One stream will be established per active entity.
+   * Once established, the first message sent will be Init, which contains the entity ID, and,
+   * a state if the entity has previously persisted one. The entity is expected to apply the
+   * received state to its state. Once the Init message is sent, one to many commands are sent,
+   * with new commands being sent as new requests for the entity come in. The entity is expected
+   * to reply to each command with exactly one reply message. The entity should reply in order
+   * and any state update that the entity requests to be persisted the entity should handle itself.
+   * The entity handles state update by replacing its own state with the update,
+   * as if they had arrived as state update when the stream was being replayed on load.
+   */
   override def handle(
       in: akka.stream.scaladsl.Source[CrudStreamIn, akka.NotUsed]
   ): akka.stream.scaladsl.Source[CrudStreamOut, akka.NotUsed] =
@@ -118,7 +129,7 @@ final class CrudImpl(_system: ActorSystem,
         handler.handleDelete(new StateContextImpl(thisEntityId, stateSequence))
         stateSequence
 
-      case None => 0L // first initialization
+      case ignoredCase => 0L // should not happen!
     }
 
     Flow[CrudStreamIn]
