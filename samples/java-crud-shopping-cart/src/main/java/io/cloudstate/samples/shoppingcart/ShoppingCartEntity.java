@@ -29,13 +29,12 @@ import io.cloudstate.javasupport.crud.UpdateStateHandler;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /** A CRUD entity. */
 @CrudEntity
 public class ShoppingCartEntity {
-
   private final String entityId;
   private final Map<String, Shoppingcart.LineItem> cart = new LinkedHashMap<>();
 
@@ -52,30 +51,13 @@ public class ShoppingCartEntity {
   }
 
   @DeleteStateHandler
-  public void handleDeleteState(Optional<Domain.Cart> cart) {
+  public void handleDeleteState() {
     this.cart.clear();
-    cart.ifPresent(
-        c -> {
-          for (Domain.LineItem item : c.getItemsList()) {
-            this.cart.put(item.getProductId(), convert(item));
-          }
-        });
   }
 
   @CommandHandler
   public Shoppingcart.Cart getCart() {
     return Shoppingcart.Cart.newBuilder().addAllItems(cart.values()).build();
-  }
-
-  @CommandHandler
-  public Empty removeCart(Shoppingcart.RemoveShoppingCart cartItem, CommandContext ctx) {
-    if (!entityId.equals(cartItem.getUserId())) {
-      ctx.fail("Cannot remove unknown cart " + cartItem.getUserId());
-    }
-    cart.clear();
-
-    ctx.delete();
-    return Empty.getDefaultInstance();
   }
 
   @CommandHandler
@@ -96,11 +78,8 @@ public class ShoppingCartEntity {
       lineItem =
           lineItem.toBuilder().setQuantity(lineItem.getQuantity() + item.getQuantity()).build();
     }
-    cart.put(item.getProductId(), lineItem);
 
-    List<Domain.LineItem> lineItems =
-        cart.values().stream().map(this::convert).collect(Collectors.toList());
-    ctx.update(Domain.Cart.newBuilder().addAllItems(lineItems).build());
+    ctx.update(Domain.Cart.newBuilder().addAllItems(addItem(item, lineItem)).build());
     return Empty.getDefaultInstance();
   }
 
@@ -109,12 +88,34 @@ public class ShoppingCartEntity {
     if (!cart.containsKey(item.getProductId())) {
       ctx.fail("Cannot remove item " + item.getProductId() + " because it is not in the cart.");
     }
-    cart.remove(item.getProductId());
 
     List<Domain.LineItem> lineItems =
-        cart.values().stream().map(this::convert).collect(Collectors.toList());
+        cart.values().stream()
+            .filter(lineItem -> !lineItem.getProductId().equals(item.getProductId()))
+            .map(this::convert)
+            .collect(Collectors.toList());
+
     ctx.update(Domain.Cart.newBuilder().addAllItems(lineItems).build());
     return Empty.getDefaultInstance();
+  }
+
+  @CommandHandler
+  public Empty removeCart(Shoppingcart.RemoveShoppingCart cartItem, CommandContext ctx) {
+    if (!entityId.equals(cartItem.getUserId())) {
+      ctx.fail("Cannot remove unknown cart " + cartItem.getUserId());
+    }
+
+    ctx.delete();
+    return Empty.getDefaultInstance();
+  }
+
+  private List<Domain.LineItem> addItem(
+      Shoppingcart.AddLineItem addItem, Shoppingcart.LineItem lineItem) {
+    Stream<Shoppingcart.LineItem> stream =
+        cart.values().stream().filter(li -> !li.getProductId().equals(addItem.getProductId()));
+    return Stream.concat(stream, Stream.of(lineItem))
+        .map(this::convert)
+        .collect(Collectors.toList());
   }
 
   private Shoppingcart.LineItem convert(Domain.LineItem item) {
