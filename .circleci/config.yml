@@ -351,7 +351,7 @@ jobs:
           success_message: Shopping cart tests passed on Dev
           failure_message: Shopping cart tests failed on Dev
 
-  # Prod-Var-Test
+  # Prod-VAR-Test
   prod_var_test:
     docker:
       - image: google/cloud-sdk
@@ -378,7 +378,7 @@ jobs:
           service: "P97VQEO"  # Cloudstate Production
           urgency: low
 
-  # Stage-Var-Test
+  # Stage-VAR-Test
   stage_var_test:
     docker:
       - image: google/cloud-sdk
@@ -406,7 +406,7 @@ jobs:
           service: "P06K63Z"  # Cloudstate Stage
           urgency: low
 
-  # Dev-Var-Test
+  # Dev-VAR-Test
   dev_var_test:
     docker:
       - image: google/cloud-sdk
