@@ -1,9 +1,11 @@
 version: 2.1
 # CircleCi Build Config for CloudState
 
+# use this orb to notify slack License:MIT
 orbs:
-  slack: circleci/slack@3.4.2            # MIT License
-  pagerduty: amanjain97/pagerduty@0.1.5  #  MIT License
+  slack: circleci/slack@3.4.2
+  pagerduty: amanjain97/pagerduty@0.1.5
+  jq: circleci/jq@2.2.0
 
 commands:
   setup_sbt:
@@ -29,8 +31,8 @@ commands:
             - "~/.ivy2/cache"
             - "~/.sbt"
             - "~/.coursier"
-  # CS-Auth-Test
-  auth_test:
+
+  cs_authenticate_test:
     parameters:
       target_env:
         type: string
@@ -45,34 +47,13 @@ commands:
             elif [[ "${target}" == "stage" ]]; then
               url=api.lbcs.io
             else
-              url=api.lbcs.dev
+              url=api.lbvs.dev
             fi
+            set -x
+            url_auth_path=cloudstateengine.lightbend.com/v1alpha/users%3Aauthenticate
+            curl --fail -s -H 'Content-Type: application/json' https://"${url}"/"${url_auth_path}" -d \
+              "{password: {\"email_or_friendly_name\":\"cloudstate-dev@lightbend.com\", \"password\":\"${CS_DEV_PASSWORD}\"}}"
 
-            function authenticate() {
-              set -x
-              url_auth_path=cloudstateengine.lightbend.com/v1alpha/users%3Aauthenticate
-              curl --fail -s -H 'Content-Type: application/json' https://"${url}"/"${url_auth_path}" -d \
-                "{password: {\"email_or_friendly_name\":\"cloudstate-dev@lightbend.com\", \"password\":\"${CS_DEV_PASSWORD}\"}}"
-              set +x
-              return $?
-            }
-            exitCode=0
-            # Try a three time after 5 and 10 seconds
-            for i in 5 10 0; do
-                if ! authenticate "${url}" ; then
-                    echo "Failed"
-                    exitCode=1
-                    echo "sleeping ${i}"
-                    sleep "${i}"
-                    continue
-                else
-                    echo "passed"
-                    exitCode=0
-                    break
-                fi
-            done
-            exit "${exitCode}"
-  # CS-SC-Test
   cs_sc_test:
     parameters:
       cart_uri:
@@ -89,121 +70,56 @@ commands:
             CART_URI=<< parameters.cart_uri >>
             echo "Testing Shopping Data Access: ${CART_URI}"
 
-            function add_delete_items() {
-              CART_URI="$1"
-              SHOP_TEST_USER="$2"
-              get_test_cart=$(curl -s -o /dev/null -w "%{http_code}" $CART_URI/com.example.shoppingcart.ShoppingCart/carts/test-user)
+            get_test_cart=$(curl -s -o /dev/null -w "%{http_code}" $CART_URI/com.example.shoppingcart.ShoppingCart/carts/test-user)
 
-                if [ "${get_test_cart}" -eq 200 ] ; then
-                    cart_orig_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
+            if [ "${get_test_cart}" -eq 200 ] ; then
+                cart_orig_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
 
-                    # Add items
-                    curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
-                        -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test1", name: "test1", "quantity":1}' \
-                        $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
-                    echo " test1 added"
-                    curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
-                        -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test2", name: "test2", "quantity":2}' \
-                        $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
-                    echo " test2 added"
-                    curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
-                        -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test3", name: "test3", "quantity":3}' \
-                        $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
-                    echo " test3 added"
-                    cart_new_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
-                    echo -e "\n"Added "${cart_new_size}" items to cart
-                    cart_size_diff=$(expr "${cart_new_size}" - "${cart_orig_size}" )
-                    if [ "${cart_size_diff}" -ne 3 ]; then
-                          echo Problem adding items to "'${SHOP_TEST_USER}'" cart !!!
-                    fi
-
-                    # Remove items
-                    curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test1/remove
-                    curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test2/remove
-                    curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test3/remove
-
-                    echo "Removed items test1 test2 and test3 "
-
-                    cart_final_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
-
-                    if [ "${cart_final_size}" != "${cart_orig_size}" ] ; then
-                        echo Cart NOT restored to original size. Please check!!!
-                        return 1
-                    else
-                        echo
-                        date
-                        echo Shopping Test Complete! User: "${SHOP_TEST_USER}"
-                    fi
-                else
-                    echo Unable to Shop "${SHOP_TEST_USER}" Cart not found!
-                    return 1
+                # Add items
+                curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
+                    -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test1", name: "test1", "quantity":1}' \
+                    $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
+                echo " test1 added"
+                curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
+                    -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test2", name: "test2", "quantity":2}' \
+                    $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
+                echo " test2 added"
+                curl -s -o /dev/null -w "%{http_code}" -H 'Content-Type: application/json' \
+                    -d '{"user_id": "'${SHOP_TEST_USER}'", "product_id": "test3", name: "test3", "quantity":3}' \
+                    $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/add
+                echo " test3 added"
+                cart_new_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
+                echo -e "\n"Added "${cart_new_size}" items to cart
+                cart_size_diff=$(expr "${cart_new_size}" - "${cart_orig_size}" )
+                if [ "${cart_size_diff}" -ne 3 ]; then
+                      echo Problem adding items to "'${SHOP_TEST_USER}'" cart !!!
+                      false
                 fi
-                return 0
-            }
-            exitCode=0
-            # Try a three time after 5 and 10 seconds
-            for i in 5 10 0; do
-                if ! add_delete_items "$CART_URI" "${SHOP_TEST_USER}" ; then
-                    echo "Failed"
-                    exitCode=1
-                    echo "sleeping ${i}"
-                    sleep "${i}"
-                    continue
-                else
-                    echo "passed"
-                    exitCode=0
-                    break
-                fi
-            done
-            exit "${exitCode}"
 
-  # Validate-API-Resources
-  validate_api_resources:
-    parameters:
-      gcp_cluster_name:
-        type: string
-        default: "stage-us-east-execution-1"
-      gcp_region:
-        type: string
-        default: "us-east1"
-      gcp_project:
-        type: string
-        default: "cloudstateengine"
-    steps:
-      - run:
-          name: kubectl list resources
-          command: |
-            echo "${GCLOUD_SERVICE_KEY}" | gcloud auth activate-service-account --key-file=-
-            function kubectl_api_resources() {
-              CLUSTER_NAME=$1
-              CLUSTER_REGION=$2
-              PROJECT=$3
-              gcloud container clusters get-credentials "${CLUSTER_NAME}" --region "${CLUSTER_REGION}"  \
-                               --project "${PROJECT}"
-              kubectl api-resources --verbs=list --namespaced -o name --api-group cloudstate.lightbend.com --v=6
-              return $?
-            }
-            CLUSTER_NAME=<< parameters.gcp_cluster_name >>
-            CLUSTER_REGION=<< parameters.gcp_region >>
-            PROJECT=<< parameters.gcp_project >>
-            exitCode=0
-            # Try a three time after 5 and 10 seconds
-            for i in 5 10 0; do
-                if ! kubectl_api_resources "${CLUSTER_NAME}" "${CLUSTER_REGION}" "${PROJECT}" ; then
-                    echo "Failed"
-                    exitCode=1
-                    echo "sleeping ${i}"
-                    sleep "${i}"
-                    continue
+                # Remove items
+                curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test1/remove
+                curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test2/remove
+                curl -s -X POST $CART_URI/com.example.shoppingcart.ShoppingCart/cart/${SHOP_TEST_USER}/items/test3/remove
+
+                echo "Removed items test1 test2 and test3 "
+
+                cart_final_size=$(curl -s $CART_URI/com.example.shoppingcart.ShoppingCart/carts/${SHOP_TEST_USER} | jq '.items | length')
+
+                if [ "${cart_final_size}" != "${cart_orig_size}" ] ; then
+                    echo Cart NOT restored to original size. Please check!!!
+                    false
                 else
-                    exitCode=0
-                    break
+                    echo
+                    date
+                    echo Shopping Test Complete! User: "${SHOP_TEST_USER}"
                 fi
-            done
-            exit "${exitCode}"
+            else
+                echo Unable to Shop "${SHOP_TEST_USER}" Cart not found!
+                false
+            fi
+
 
 jobs:
-  # Native-Image-It-Test
   native-image-it-test:
     machine: true
     resource_class: large
@@ -219,211 +135,165 @@ jobs:
               tck/it:test
       - save_sbt_cache
 
-  # Prod-Auth-Test
-  prod_auth_test:
-    docker:
-      - image: circleci/buildpack-deps:focal-curl
-    description: "Prod Authentication Test"
-    steps:
-      - auth_test:
-          target_env: "prod"
-      - slack/status:
-          channel: cloudstate-alerts
-          fail_only: true
-          failure_message: Unable to authenticate to prod
-          mentions: "here"
-          only_for_branches: "master"
-      - slack/status:
-          channel: cloudstate-alerts
-          success_message: Successful authentication on prod
-          failure_message: Unable to authenticate to prod
-      - pagerduty/notify-on-failure:
-          from_account: "srikanth.koneru@lightbend.com"
-          incident_description: Unable to authenticate to prod
-          incident_key:  "AUTHENTICATION_FAILED_ON_PROD"
-          incident_title: ${CIRCLE_JOB} Prod Authentication Failed
-          only_for_branches: "master"
-          priority: "PF2THIO"   # S1
-          service: "P97VQEO"    # Cloudstate Production
-          urgency: high
-
-  # Stage-Auth-Test
-  stage_auth_test:
+  stage_authenticate_test:
     docker:
       - image: circleci/buildpack-deps:focal-curl
     description: "Stage Authentication Test"
     steps:
-      - auth_test:
+      - cs_authenticate_test:
           target_env: "stage"
       - slack/status:
           channel: cloudstate-alerts
           success_message: Successful authentication on stage
-          failure_message: Unable to authenticate to stage
-          mentions: "here"
+          failure_message: Unable to authenticate on stage environment
+          mentions: "@edc,@srikanth"
           fail_only: true
-          only_for_branches: "master"
-      - slack/status:
-          channel: cloudstate-alerts
-          success_message: Successful authentication on stage
-          failure_message: Unable to authenticate to stage
+          only_for_branches: "master,cron-test"
       - pagerduty/notify-on-failure:
+          escalation_policy: ""
           from_account: "srikanth.koneru@lightbend.com"
-          incident_description: Unable to authentticate to stage
+          incident_description: Unable to authentticate on stage environment
           incident_key:  "AUTHENTICATION_FAILED_ON_STAGE"
-          incident_title: ${CIRCLE_JOB} Stage Authentication Failed
-          only_for_branches: "master"
-          priority: "PF2THIO"  # S1
-          service: "P06K63Z"   # Cloudstate Stage
-          urgency: high
+          incident_title: $CIRCLE_JOB authentication to stage failed
+          only_for_branches: "master,cron-test"
+          # S2 https://developer.pagerduty.com/api-reference/reference/REST/openapiv3.json/paths/~1priorities/get
+          priority: "PBT5H5L"
+          # cloudstate-test
+          service: "PR1M8QK"
+          urgency: low
 
-  # Prod-SC-Test
   prod_sc_test:
     docker:
       - image: circleci/buildpack-deps:focal-curl
-    description: "Prod Shopping Cart Test"
+    description: "Stage Authentication Test"
     steps:
       - cs_sc_test:
           cart_uri: "https://shrill-shadow-4688.us-east1.apps.cloudstate.com"
-      - slack/status: # Failed cases
+      - slack/status:
           channel: cloudstate-alerts
+          success_message: Shopping cart tests successful on prod
           failure_message: Shopping cart tests failed on prod
-          mentions: "here"
+          mentions: "@edc,@srikanth"
           fail_only: true
-          only_for_branches: "master"
-      - slack/status: # All cases
-          channel: cloudstate-alerts
-          success_message: Shopping cart tests passed on prod
-          failure_message: Shopping cart tests failed on prod
+          only_for_branches: "master,cron-test"
       - pagerduty/notify-on-failure:
+          escalation_policy: ""
           from_account: "srikanth.koneru@lightbend.com"
           incident_description: Shopping cart tests failed on prod.
           incident_key:  "SHOPPING_CART_TESTS_FAILED_ON_PROD"
-          incident_title: ${CIRCLE_JOB} Prod Shopping Cart Tests Failed
-          only_for_branches: "master"
-          priority: "PXGHGTY" # S3
-          service: "P97VQEO"  # Cloudstate Production
+          incident_title: $CIRCLE_JOB Shopping Cart tests failed on prod.
+          only_for_branches: "master,cron-test"
+          # S2 https://developer.pagerduty.com/api-reference/reference/REST/openapiv3.json/paths/~1priorities/get
+          priority: "PBT5H5L"
+          # cloudstate-test
+          service: "PR1M8QK"
           urgency: high
 
-  # Stage-SC-Test
   stage_sc_test:
     docker:
       - image: circleci/buildpack-deps:focal-curl
-    description: "Stage Shopping Cart Test"
+    description: "Stage Authentication Test"
     steps:
       - cs_sc_test:
           cart_uri: "https://dry-glade-0573.us-east1.apps.lbcs.io"
-      - slack/status: # Fail
+      - slack/status:
           channel: cloudstate-alerts
+          success_message: Shopping cart tests successful on Stage
           failure_message: Shopping cart tests failed on Stage
-          mentions: "here"
+          mentions: "@edc,@srikanth"
           fail_only: true
-          only_for_branches: "master"
-      - slack/status: # All
-          channel: cloudstate-alerts
-          success_message: Shopping cart tests passed on Stage
-          failure_message: Shopping cart tests failed on Stage
+          only_for_branches: "master,cron-test"
       - pagerduty/notify-on-failure:
+          escalation_policy: ""
           from_account: "srikanth.koneru@lightbend.com"
           incident_description: Shopping cart tests failed on Stage.
           incident_key:  "SHOPPING_CART_TESTS_FAILED_ON_STAGE"
-          incident_title: ${CIRCLE_JOB} Stage Shopping Cart Tests Failed
-          only_for_branches: "master"
-          priority: "PXGHGTY" # S3 Partial Outage
-          service: "P06K63Z"  # Cloudstate Stage
-          urgency: low
+          incident_title: $CIRCLE_JOB Shopping Cart tests failed on Stage.
+          only_for_branches: "master,cron-test"
+          # S2 https://developer.pagerduty.com/api-reference/reference/REST/openapiv3.json/paths/~1priorities/get
+          priority: "PBT5H5L"
+          # cloudstate-test
+          service: "PR1M8QK"
+          urgency: high
 
-  # Dev-SC-Test
   dev_sc_test:
     docker:
       - image: circleci/buildpack-deps:focal-curl
-    description: "Dev Shopping Cart Test"
+    description: "Stage Authentication Test"
     steps:
       - cs_sc_test:
           cart_uri: "https://lingering-art-1733.us-east1.apps.lbcs.dev"
       - slack/status:
           channel: cloudstate-alerts
+          success_message: Shopping cart tests successful on Dev
           failure_message: Shopping cart tests failed on Dev
-          # mentions: "here"
+          mentions: "@edc,@srikanth"
           fail_only: true
-          only_for_branches: "master"
-      - slack/status:
-          channel: cloudstate-alerts
-          success_message: Shopping cart tests passed on Dev
-          failure_message: Shopping cart tests failed on Dev
-
-  # Prod-Var-Test
-  prod_var_test:
-    docker:
-      - image: google/cloud-sdk
-    description: "Prod Validate API Resources"
-    steps:
-      - validate_api_resources:
-          gcp_cluster_name: "prod-us-east-execution-1"
-      - slack/status:
-          channel: cloudstate-alerts
-          failure_message: Validate API resources failed on prod
-          mentions: "here"
-          fail_only: true
-      - slack/status:
-          channel: cloudstate-alerts
-          success_message: Validate API resources passed on prod
-          failure_message: Validate API resources failed on prod
+          only_for_branches: "master,cron-test"
       - pagerduty/notify-on-failure:
+          escalation_policy: ""
           from_account: "srikanth.koneru@lightbend.com"
-          incident_description: Validate API resources failed on prod.
-          incident_key:  "VALIDATE_API_RESOURCES_FAILED_ON_PROD"
-          incident_title: ${CIRCLE_JOB} Validate API Resoruces Failed.
-          only_for_branches: "master"
-          priority: "PXGHGTY" # S3
-          service: "P97VQEO"  # Cloudstate Production
+          incident_description: Shopping cart tests failed on Dev.
+          incident_key:  "SHOPPING_CART_TESTS_FAILED_ON_DEV"
+          incident_title: $CIRCLE_JOB Shopping Cart tests failed on Dev.
+          only_for_branches: "master,cron-test"
+          # S2 https://developer.pagerduty.com/api-reference/reference/REST/openapiv3.json/paths/~1priorities/get
+          priority: "PBT5H5L"
+          # cloudstate-test
+          service: "PR1M8QK"
+          urgency: high
+
+
+  prod_authenticate_test:
+    docker:
+      - image: circleci/buildpack-deps:focal-curl
+    description: "Prod Authentication Test"
+    steps:
+      - cs_authenticate_test:
+          target_env: "prod"
+      - slack/status:
+          channel: cloudstate-alerts
+          success_message: Successful authentication on stage
+          failure_message: Unable to authenticate on stage environment
+          mentions: "@edc,@srikanth"
+          fail_only: true
+          only_for_branches: "master,cron-test"
+      - pagerduty/notify-on-failure:
+          escalation_policy: ""
+          from_account: "srikanth.koneru@lightbend.com"
+          incident_description: Unable to authentticate on stage environment
+          incident_key:  "AUTHENTICATION_FAILED_ON_PROD"
+          incident_title: $CIRCLE_JOB authentication to prod failed
+          only_for_branches: "master,cron-test"
+          # S1
+          priority: "PF2THIO"
+          # cloudstate-test
+          service: "PR1M8QK"
           urgency: low
 
-  # Stage-Var-Test
-  stage_var_test:
+  validate_api_resources:
+    parameters:
+      gcp_cluster_name:
+        type: string
+        default: "stage-us-east-execution-1"
+      gcp_region:
+        type: string
+        default: "us-east1"
+      gcp_project:
+        type: string
+        default: "cloudstateengine"
     docker:
       - image: google/cloud-sdk
-    description: "Stage Validate API Resources"
     steps:
-      - validate_api_resources:
-          gcp_cluster_name: "stage-us-east-execution-1"
-      - slack/status:
-          channel: cloudstate-alerts
-          failure_message: Validate API resources failed on stage
-          mentions: "here"
-          fail_only: true
-          only_for_branches: "master"
-      - slack/status:
-          channel: cloudstate-alerts
-          success_message: Validate API resources passed on stage
-          failure_message: Validate API resources failed on stage
-      - pagerduty/notify-on-failure:
-          from_account: "srikanth.koneru@lightbend.com"
-          incident_description: Validate API resources failed on prod.
-          incident_key:  "VALIDATE_API_RESOURCES_FAILED_ON_STAGE"
-          incident_title: ${CIRCLE_JOB} Validate API Resoruces Failed.
-          only_for_branches: "master"
-          priority: "PXGHGTY" # S3 Partial Outage
-          service: "P06K63Z"  # Cloudstate Stage
-          urgency: low
-
-  # Dev-Var-Test
-  dev_var_test:
-    docker:
-      - image: google/cloud-sdk
-    description: "Stage Validate API Resources"
-    steps:
-      - validate_api_resources:
-          gcp_cluster_name: "dev-us-east-execution-1"
-      - slack/status:
-          channel: cloudstate-alerts
-          failure_message: Validate API resources failed on dev
-          # mentions: "here"
-          fail_only: true
-          only_for_branches: "master"
-      - slack/status:
-          channel: cloudstate-alerts
-          success_message: Validate API resources success on dev
-          failure_message: Validate API resources failed on dev
+      - run:
+          name: kubectl list resources
+          command: |
+            echo "${GCLOUD_SERVICE_KEY}" | gcloud auth activate-service-account --key-file=-
+            # gcloud container clusters get-credentials prod-us-east-execution-1 --region us-east1 --project cloudstateengine
+            gcloud container clusters get-credentials << parameters.gcp_cluster_name >> \
+                  --region << parameters.gcp_region >> \
+                  --project << parameters.gcp_project >>
+            kubectl api-resources --verbs=list --namespaced -o name --api-group cloudstate.lightbend.com --v=6
 
 workflows:
   version: 2
@@ -437,49 +307,23 @@ workflows:
 
   test:
     jobs:
-      - prod_auth_test:
-        filters:
-          branches:
-            only:
-              - cron-test
-      - stage_auth_test:
-        filters:
-          branches:
-            only:
-              - cron-test
-      - prod_sc_test:
-        filters:
-          branches:
-            only:
-              - cron-test
-      - stage_sc_test:
-        filters:
-          branches:
-            only:
-              - cron-test
-      - dev_sc_test:
-        filters:
-          branches:
-            only:
-              - cron-test
-      - prod_var_test:
-        filters:
-          branches:
-            only:
-              - cron-test
-      - stage_var_test:
-        filters:
-          branches:
-            only:
-              - cron-test
-      - dev_var_test:
-        filters:
-          branches:
-            only:
-              - cron-test
+      - stage_authenticate_test
+      - prod_sc_test
+      - stage_sc_test
+      - dev_sc_test
+      - validate_api_resources:
+          name: "validate-prod-api-resources"
+          gcp_cluster_name: "prod-us-east-execution-1"
+      - validate_api_resources:
+          name: "validate-stage-api-resources"
+          gcp_cluster_name: "stage-us-east-execution-1"
+      - validate_api_resources:
+          name: "validate-dev-api-resources"
+          gcp_cluster_name: "dev-us-east-execution-1"
+
 
   # Scheduled at every hour 5 minutes
-  cloudstate-machine-tests:
+  once-every-hour-tests:
     triggers:
       - schedule:
           cron: "5 * * * *"
@@ -487,12 +331,20 @@ workflows:
             branches:
               only:
                 - master
+                - cron-test
     jobs:
-      - prod_auth_test
-      - stage_auth_test
+      - prod_authenticate_test
+      - stage_authenticate_test
       - prod_sc_test
       - stage_sc_test
       - dev_sc_test
-      - prod_var_test
-      - stage_var_test
-      - dev_var_test
+      - validate_api_resources:
+          name: "validate-prod-api-resources"
+          gcp_cluster_name: "prod-us-east-execution-1"
+      - validate_api_resources:
+          name: "validate-stage-api-resources"
+          gcp_cluster_name: "stage-us-east-execution-1"
+      - validate_api_resources:
+          name: "validate-dev-api-resources"
+          gcp_cluster_name: "dev-us-east-execution-1"
+
