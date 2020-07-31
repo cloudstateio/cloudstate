@@ -492,7 +492,7 @@ workflows:
       - stage_auth_test
       - prod_sc_test
       - stage_sc_test
-      - dev_sc_test
+      # - dev_sc_test
       - prod_var_test
       - stage_var_test
       - dev_var_test
