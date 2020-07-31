@@ -234,7 +234,7 @@ jobs:
           mentions: "here"
           only_for_branches: "master"
       - slack/status:
-          channel: cloudstate-alerts
+          channel: cloudstate-notifications
           success_message: Successful authentication on prod
           failure_message: Unable to authenticate to prod
       - pagerduty/notify-on-failure:
@@ -263,7 +263,7 @@ jobs:
           fail_only: true
           only_for_branches: "master"
       - slack/status:
-          channel: cloudstate-alerts
+          channel: cloudstate-notifications
           success_message: Successful authentication on stage
           failure_message: Unable to authenticate to stage
       - pagerduty/notify-on-failure:
@@ -291,7 +291,7 @@ jobs:
           fail_only: true
           only_for_branches: "master"
       - slack/status: # All cases
-          channel: cloudstate-alerts
+          channel: cloudstate-notifications
           success_message: Shopping cart tests passed on prod
           failure_message: Shopping cart tests failed on prod
       - pagerduty/notify-on-failure:
@@ -319,7 +319,7 @@ jobs:
           fail_only: true
           only_for_branches: "master"
       - slack/status: # All
-          channel: cloudstate-alerts
+          channel: cloudstate-notifications
           success_message: Shopping cart tests passed on Stage
           failure_message: Shopping cart tests failed on Stage
       - pagerduty/notify-on-failure:
@@ -347,7 +347,7 @@ jobs:
           fail_only: true
           only_for_branches: "master"
       - slack/status:
-          channel: cloudstate-alerts
+          channel: cloudstate-notifications
           success_message: Shopping cart tests passed on Dev
           failure_message: Shopping cart tests failed on Dev
 
@@ -365,7 +365,7 @@ jobs:
           mentions: "here"
           fail_only: true
       - slack/status:
-          channel: cloudstate-alerts
+          channel: cloudstate-notifications
           success_message: Validate API resources passed on prod
           failure_message: Validate API resources failed on prod
       - pagerduty/notify-on-failure:
@@ -393,7 +393,7 @@ jobs:
           fail_only: true
           only_for_branches: "master"
       - slack/status:
-          channel: cloudstate-alerts
+          channel: cloudstate-notifications
           success_message: Validate API resources passed on stage
           failure_message: Validate API resources failed on stage
       - pagerduty/notify-on-failure:
@@ -421,7 +421,7 @@ jobs:
           fail_only: true
           only_for_branches: "master"
       - slack/status:
-          channel: cloudstate-alerts
+          channel: cloudstate-notifications
           success_message: Validate API resources success on dev
           failure_message: Validate API resources failed on dev
 
