@@ -1,0 +1,14 @@
+{
+  "resources":[
+    {"pattern":"META-INF/MANIFEST.MF"}, 
+    {"pattern":"META-INF/services/io.grpc.LoadBalancerProvider"}, 
+    {"pattern":"META-INF/services/io.grpc.NameResolverProvider"}, 
+    {"pattern":"akka-http-version.conf"}, 
+    {"pattern":"application.conf"}, 
+    {"pattern":"cloudstate-common.conf"}, 
+    {"pattern":"org/slf4j/impl/StaticLoggerBinder.class"},
+    {"pattern":"reference.conf"}, 
+    {"pattern":"simplelogger.properties"}, 
+    {"pattern":"version.conf"}
+  ]
+}

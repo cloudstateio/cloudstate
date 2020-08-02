@@ -28,12 +28,12 @@ import akka.management.cluster.bootstrap.ClusterBootstrap
 import akka.management.scaladsl.AkkaManagement
 import akka.pattern.{BackoffOpts, BackoffSupervisor}
 import akka.stream.SystemMaterializer
+import io.cloudstate.proxy.telemetry.CloudstateTelemetry
 import org.slf4j.LoggerFactory
 import sun.misc.Signal
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
-import scala.util.{Failure, Success}
 
 final class HealthCheckReady(system: ActorSystem) extends (() => Future[Boolean]) {
   private[this] final val log = LoggerFactory.getLogger(getClass)
@@ -76,8 +76,7 @@ object CloudStateProxyMain {
       devMode: Boolean,
       backoffMin: FiniteDuration,
       backoffMax: FiniteDuration,
-      backoffRandomFactor: Double,
-      metricsPort: Int
+      backoffRandomFactor: Double
   ) {
     validate()
     def this(config: Config) = {
@@ -85,8 +84,7 @@ object CloudStateProxyMain {
         devMode = config.getBoolean("dev-mode-enabled"),
         backoffMin = config.getDuration("backoff.min").toMillis.millis,
         backoffMax = config.getDuration("backoff.max").toMillis.millis,
-        backoffRandomFactor = config.getDouble("backoff.random-factor"),
-        metricsPort = config.getInt("metrics-port")
+        backoffRandomFactor = config.getDouble("backoff.random-factor")
       )
     }
 
@@ -171,16 +169,9 @@ object CloudStateProxyMain {
       // Start cluster bootstrap
       AkkaManagement(system).start()
       ClusterBootstrap(system).start()
-
-      // Start Prometheus exporter in prod mode
-      new AkkaHttpPrometheusExporter(appConfig.metricsPort).start().onComplete {
-        case Success(binding) =>
-          system.log.info("Prometheus exporter started on {}", binding.localAddress)
-        case Failure(error) =>
-          system.log.error(error, "Error starting Prometheus exporter!")
-          system.terminate()
-      }
     }
+
+    CloudstateTelemetry(system).start()
 
     system.actorOf(
       BackoffSupervisor.props(
