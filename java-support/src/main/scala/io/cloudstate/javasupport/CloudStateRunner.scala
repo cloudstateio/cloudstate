@@ -62,7 +62,7 @@ object CloudStateRunner {
  * CloudStateRunner can be seen as a low-level API for cases where [[io.cloudstate.javasupport.CloudState.start()]] isn't enough.
  */
 final class CloudStateRunner private[this] (_system: ActorSystem, services: Map[String, StatefulService]) {
-  private[this] implicit final val system = _system
+  private[javasupport] implicit final val system = _system
   private[this] implicit final val materializer: Materializer = ActorMaterializer()
 
   private[this] final val configuration =
