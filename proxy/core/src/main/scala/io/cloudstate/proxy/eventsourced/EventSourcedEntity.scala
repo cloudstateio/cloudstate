@@ -232,9 +232,10 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
     }
   }
 
-  private[this] final def crash(msg: String): Unit = {
+  // only the msg is returned to the user, while the details are also part of the exception
+  private[this] final def crash(msg: String, details: String): Unit = {
     notifyOutstandingRequests(msg)
-    throw new Exception(msg)
+    throw new Exception(s"$msg - $details")
   }
 
   private[this] final def reportActionComplete() =
@@ -282,12 +283,13 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
       m match {
 
         case ESOMsg.Reply(r) if currentCommand == null =>
-          crash(s"Unexpected reply, had no current command: $r")
+          crash("Unexpected entity reply", s"(no current command) - $r")
 
         case ESOMsg.Reply(r) if currentCommand.commandId != r.commandId =>
-          crash(s"Incorrect command id in reply, expecting ${currentCommand.commandId} but got ${r.commandId}")
+          crash("Unexpected entity reply", s"(expected id ${currentCommand.commandId} but got ${r.commandId}) - $r")
 
         case ESOMsg.Reply(r) =>
+          if (r.clientAction.exists(_.action.isFailure)) instrumentation.commandFailed()
           instrumentation.commandProcessed()
           reportActionComplete()
           val commandId = currentCommand.commandId
@@ -312,7 +314,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
                 }
                 // Make sure that the current request is still ours
                 if (currentCommand == null || currentCommand.commandId != commandId) {
-                  crash("Internal error - currentRequest changed before all events were persisted")
+                  crash("Unexpected entity behavior", "currentRequest changed before all events were persisted")
                 }
                 currentCommand.replyTo ! esReplyToUfReply(r)
                 commandHandled()
@@ -321,25 +323,27 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
           }
 
         case ESOMsg.Failure(f) if f.commandId == 0 =>
-          crash(s"Non command specific error from entity: ${f.description}")
+          crash("Unexpected entity failure", s"(not command specific) - ${f.description}")
 
         case ESOMsg.Failure(f) if currentCommand == null =>
-          crash(s"Unexpected failure, had no current command: $f")
+          crash("Unexpected entity failure", s"(no current command) - ${f.description}")
 
         case ESOMsg.Failure(f) if currentCommand.commandId != f.commandId =>
-          crash(s"Incorrect command id in failure, expecting ${currentCommand.commandId} but got ${f.commandId}")
+          crash("Unexpected entity failure",
+                s"(expected id ${currentCommand.commandId} but got ${f.commandId}) - ${f.description}")
 
         case ESOMsg.Failure(f) =>
-          instrumentation.commandProcessed()
           instrumentation.commandFailed()
+          instrumentation.commandProcessed()
+          instrumentation.commandCompleted()
           reportActionComplete()
-          currentCommand.replyTo ! createFailure(f.description)
-          commandHandled()
+          try crash("Unexpected entity failure", f.description)
+          finally currentCommand = null // clear command after notifications
 
         case ESOMsg.Empty =>
           // Either the reply/failure wasn't set, or its set to something unknown.
           // todo see if scalapb can give us unknown fields so we can possibly log more intelligently
-          crash("Empty or unknown message from entity output stream")
+          crash("Unexpected entity message", "empty or unknown message from entity output stream")
       }
 
     case EventSourcedEntity.StreamClosed =>

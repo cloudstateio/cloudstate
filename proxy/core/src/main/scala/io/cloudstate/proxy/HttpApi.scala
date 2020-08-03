@@ -101,6 +101,7 @@ import io.grpc.Status
 import io.cloudstate.proxy.protobuf.Options
 import com.google.api.httpbody.HttpBody
 import scalapb.UnknownFieldSet
+import scala.util.control.NonFatal
 
 // References:
 // https://cloud.google.com/endpoints/docs/grpc-service-config/reference/rpc/google.api#httprule
@@ -430,6 +431,7 @@ object HttpApi {
         }
         .recover {
           case ire: IllegalRequestException => HttpResponse(ire.status.intValue, entity = ire.status.reason)
+          case NonFatal(error) => HttpResponse(StatusCodes.InternalServerError, entity = error.getMessage)
         }
 
     override final def applyOrElse[A1 <: HttpRequest, B1 >: Future[HttpResponse]](req: A1, default: A1 => B1): B1 =

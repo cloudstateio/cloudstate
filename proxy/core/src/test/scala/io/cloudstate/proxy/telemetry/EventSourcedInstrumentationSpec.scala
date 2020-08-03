@@ -17,14 +17,17 @@
 package io.cloudstate.proxy.telemetry
 
 import akka.actor.ActorRef
-import akka.testkit.TestProbe
+import akka.grpc.GrpcClientSettings
+import akka.testkit.TestEvent.Mute
+import akka.testkit.{EventFilter, TestProbe}
 import com.google.protobuf.ByteString
 import com.google.protobuf.any.{Any => ProtoAny}
-import io.cloudstate.protocol.entity.{ClientAction, Command, Failure, Reply}
+import io.cloudstate.protocol.entity.{ClientAction, Failure, Reply}
 import io.cloudstate.protocol.event_sourced._
 import io.cloudstate.proxy.ConcurrencyEnforcer
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
-import io.cloudstate.proxy.eventsourced.EventSourcedEntity
+import io.cloudstate.proxy.eventsourced.{EventSourcedEntity, EventSourcedEntitySupervisor}
+import io.cloudstate.testkit.eventsourced.{EventSourcedMessages, TestEventSourcedService}
 import io.prometheus.client.CollectorRegistry
 import scala.concurrent.duration._
 
@@ -34,18 +37,23 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
 
     "record event-sourced entity metrics" in withTestRegistry(
       """
-      | # use in-memory journal for testing
-      | cloudstate.proxy.journal-enabled = true
-      | akka.persistence {
-      |   journal.plugin = "akka.persistence.journal.inmem"
-      |   snapshot-store.plugin = inmem-snapshot-store
+      | include "test-in-memory"
+      | akka {
+      |   loglevel = ERROR
+      |   loggers = ["akka.testkit.TestEventListener"]
+      |   remote.artery.canonical.port = 0
+      |   remote.artery.bind.port = ""
       | }
-      | inmem-snapshot-store.class = "io.cloudstate.proxy.eventsourced.InMemSnapshotStore"
       """
     ) { testKit =>
       import testKit._
+      import EventSourcedMessages._
       import PrometheusEventSourcedInstrumentation.MetricName._
       import PrometheusEventSourcedInstrumentation.MetricLabel._
+
+      // silence any dead letters or unhandled messages during shutdown (when using test event listener)
+      system.eventStream.publish(Mute(EventFilter.warning(pattern = ".*received dead letter.*")))
+      system.eventStream.publish(Mute(EventFilter.warning(pattern = ".*unhandled message.*")))
 
       // simulate user function interaction with event-sourced entity to validate instrumentation
 
@@ -53,7 +61,8 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
 
       implicit val replyTo: ActorRef = testActor
 
-      val userFunction = TestProbe()
+      val service = TestEventSourcedService()
+      val client = EventSourcedClient(GrpcClientSettings.connectToServiceAt("localhost", service.port).withTls(false))
 
       val statsCollector = TestProbe() // ignored
 
@@ -69,37 +78,25 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
         "concurrency-enforcer"
       )
 
+      val entityConfiguration = EventSourcedEntity.Configuration(
+        serviceName = "service",
+        userFunctionName = "test",
+        passivationTimeout = 30.seconds,
+        sendQueueSize = 100
+      )
+
       val entity = system.actorOf(
-        EventSourcedEntity.props(
-          EventSourcedEntity.Configuration(
-            serviceName = "service",
-            userFunctionName = "test",
-            passivationTimeout = 30.seconds,
-            sendQueueSize = 100
-          ),
-          entityId = "entity",
-          userFunction.ref,
-          concurrencyEnforcer,
-          statsCollector.ref
-        ),
-        "test-entity"
+        EventSourcedEntitySupervisor.props(client, entityConfiguration, concurrencyEnforcer, statsCollector.ref),
+        "entity"
       )
 
       watch(entity)
 
       // init with empty snapshot
 
-      userFunction.expectMsg(
-        EventSourcedStreamIn(
-          EventSourcedStreamIn.Message.Init(
-            EventSourcedInit(
-              serviceName = "service",
-              entityId = "entity",
-              snapshot = None
-            )
-          )
-        )
-      )
+      val connection = service.expectConnection()
+
+      connection.expect(init("service", "entity"))
 
       metricValue(ActivatedEntitiesTotal, EntityName -> "test") shouldBe 1
       metricValue(RecoveryTimeSeconds + "_count", EntityName -> "test") shouldBe 1
@@ -107,26 +104,15 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
 
       // first command
 
-      entity ! EntityCommand(entityId = "test", name = "command")
+      entity ! EntityCommand(entityId = "test", name = "command1", Some(EmptyAny))
 
-      userFunction.expectMsg(
-        EventSourcedStreamIn(
-          EventSourcedStreamIn.Message.Command(
-            Command(
-              entityId = "entity",
-              id = 1,
-              name = "command",
-              payload = None
-            )
-          )
-        )
-      )
+      connection.expect(command(1, "entity", "command1"))
 
       metricValue(ReceivedCommandsTotal, EntityName -> "test") shouldBe 1
 
       // second command (will be stashed)
 
-      entity ! EntityCommand(entityId = "test", name = "command")
+      entity ! EntityCommand(entityId = "test", name = "command2", Some(EmptyAny))
 
       eventually(timeout(5.seconds), interval(100.millis)) {
         metricValue(ReceivedCommandsTotal, EntityName -> "test") shouldBe 2
@@ -135,31 +121,20 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
 
       // send first reply
 
-      val replyPayload1 = ProtoAny("reply", ByteString.copyFromUtf8("reply1"))
-      val reply1 = ClientAction(ClientAction.Action.Reply(Reply(payload = Some(replyPayload1))))
-
+      val reply1 = ProtoAny("reply", ByteString.copyFromUtf8("reply1"))
       val event1 = ProtoAny("event", ByteString.copyFromUtf8("event1"))
       val event2 = ProtoAny("event", ByteString.copyFromUtf8("event2"))
       val event3 = ProtoAny("event", ByteString.copyFromUtf8("event3"))
       val snapshot1 = ProtoAny("snapshot", ByteString.copyFromUtf8("snapshot1"))
 
-      entity ! EventSourcedStreamOut(
-        EventSourcedStreamOut.Message.Reply(
-          EventSourcedReply(
-            commandId = 1,
-            clientAction = Some(reply1),
-            events = Seq(event1, event2, event3),
-            snapshot = Some(snapshot1)
-          )
-        )
-      )
+      connection.send(reply(1, reply1, Seq(event1, event2, event3), snapshot1))
 
-      expectMsg(UserFunctionReply(Some(reply1)))
+      expectMsg(UserFunctionReply(clientActionReply(messagePayload(reply1))))
 
       metricValue(CommandProcessingTimeSeconds + "_count", EntityName -> "test") shouldBe 1
       metricValue(CommandProcessingTimeSeconds + "_sum", EntityName -> "test") should be > 0.0
 
-      val expectedPersistedBytes1 = Seq(event1, event2, event3).map(_.serializedSize).sum
+      val expectedPersistedBytes1 = Seq(event1, event2, event3).map(protobufAny).map(_.serializedSize).sum
 
       metricValue(PersistedEventsTotal, EntityName -> "test") shouldBe 3
       metricValue(PersistedEventBytesTotal, EntityName -> "test") shouldBe expectedPersistedBytes1
@@ -167,7 +142,7 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
       metricValue(PersistTimeSeconds + "_sum", EntityName -> "test") should be > 0.0
 
       metricValue(PersistedSnapshotsTotal, EntityName -> "test") shouldBe 1
-      metricValue(PersistedSnapshotBytesTotal, EntityName -> "test") shouldBe snapshot1.serializedSize
+      metricValue(PersistedSnapshotBytesTotal, EntityName -> "test") shouldBe protobufAny(snapshot1).serializedSize
 
       eventually(timeout(5.seconds), interval(100.millis)) {
         metricValue(CompletedCommandsTotal, EntityName -> "test") shouldBe 1
@@ -183,52 +158,31 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
         metricValue(CommandStashTimeSeconds + "_sum", EntityName -> "test") should be > 0.0
       }
 
-      userFunction.expectMsg(
-        EventSourcedStreamIn(
-          EventSourcedStreamIn.Message.Command(
-            Command(
-              entityId = "entity",
-              id = 2,
-              name = "command",
-              payload = None
-            )
-          )
-        )
-      )
+      connection.expect(command(2, "entity", "command2"))
 
       // send second reply
 
-      val replyPayload2 = ProtoAny("reply", ByteString.copyFromUtf8("reply2"))
-      val reply2 = ClientAction(ClientAction.Action.Reply(Reply(payload = Some(replyPayload2))))
-
+      val reply2 = ProtoAny("reply", ByteString.copyFromUtf8("reply2"))
       val event4 = ProtoAny("event", ByteString.copyFromUtf8("event4"))
       val event5 = ProtoAny("event", ByteString.copyFromUtf8("event5"))
 
-      entity ! EventSourcedStreamOut(
-        EventSourcedStreamOut.Message.Reply(
-          EventSourcedReply(
-            commandId = 2,
-            clientAction = Some(reply2),
-            events = Seq(event4, event5),
-            snapshot = None
-          )
-        )
-      )
+      connection.send(reply(2, reply2, event4, event5))
 
-      expectMsg(UserFunctionReply(Some(reply2)))
+      expectMsg(UserFunctionReply(clientActionReply(messagePayload(reply2))))
 
       metricValue(CommandProcessingTimeSeconds + "_count", EntityName -> "test") shouldBe 2
       metricValue(CommandProcessingTimeSeconds + "_sum", EntityName -> "test") should be > 0.0
 
-      val expectedPersistedBytes2 = expectedPersistedBytes1 + Seq(event4, event5).map(_.serializedSize).sum
+      val expectedPersistedBytes2 = Seq(event4, event5).map(protobufAny).map(_.serializedSize).sum
+      val totalExpectedPersistedBytes = (expectedPersistedBytes1 + expectedPersistedBytes2)
 
       metricValue(PersistedEventsTotal, EntityName -> "test") shouldBe 5
-      metricValue(PersistedEventBytesTotal, EntityName -> "test") shouldBe expectedPersistedBytes2
+      metricValue(PersistedEventBytesTotal, EntityName -> "test") shouldBe totalExpectedPersistedBytes
       metricValue(PersistTimeSeconds + "_count", EntityName -> "test") shouldBe 2
       metricValue(PersistTimeSeconds + "_sum", EntityName -> "test") should be > 0.0
 
       metricValue(PersistedSnapshotsTotal, EntityName -> "test") shouldBe 1
-      metricValue(PersistedSnapshotBytesTotal, EntityName -> "test") shouldBe snapshot1.serializedSize
+      metricValue(PersistedSnapshotBytesTotal, EntityName -> "test") shouldBe protobufAny(snapshot1).serializedSize
 
       eventually(timeout(5.seconds), interval(100.millis)) {
         metricValue(CompletedCommandsTotal, EntityName -> "test") shouldBe 2
@@ -240,6 +194,8 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
 
       entity ! EventSourcedEntity.Stop
 
+      connection.expectClosed()
+
       expectTerminated(entity)
 
       metricValue(PassivatedEntitiesTotal, EntityName -> "test") shouldBe 1
@@ -249,63 +205,25 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
       // reactivate the entity
 
       val reactivatedEntity = system.actorOf(
-        EventSourcedEntity.props(
-          EventSourcedEntity.Configuration(
-            serviceName = "service",
-            userFunctionName = "test",
-            passivationTimeout = 30.seconds,
-            sendQueueSize = 100
-          ),
-          entityId = "entity",
-          userFunction.ref,
-          concurrencyEnforcer,
-          statsCollector.ref
-        ),
-        "test-entity-reactivated"
+        EventSourcedEntitySupervisor.props(client, entityConfiguration, concurrencyEnforcer, statsCollector.ref),
+        "entity"
       )
 
       watch(reactivatedEntity)
 
       // init with snapshot and events
 
-      userFunction.expectMsg(
-        EventSourcedStreamIn(
-          EventSourcedStreamIn.Message.Init(
-            EventSourcedInit(
-              serviceName = "service",
-              entityId = "entity",
-              snapshot = Some(EventSourcedSnapshot(snapshotSequence = 3, snapshot = Some(snapshot1)))
-            )
-          )
-        )
-      )
+      val connection2 = service.expectConnection()
+
+      connection2.expect(init("service", "entity", snapshot(sequence = 3, snapshot1)))
 
       metricValue(LoadedSnapshotsTotal, EntityName -> "test") shouldBe 1
-      metricValue(LoadedSnapshotBytesTotal, EntityName -> "test") shouldBe snapshot1.serializedSize
+      metricValue(LoadedSnapshotBytesTotal, EntityName -> "test") shouldBe protobufAny(snapshot1).serializedSize
 
-      userFunction.expectMsg(
-        EventSourcedStreamIn(
-          EventSourcedStreamIn.Message.Event(
-            EventSourcedEvent(
-              sequence = 4,
-              payload = Some(event4)
-            )
-          )
-        )
-      )
+      connection2.expect(event(4, event4))
+      connection2.expect(event(5, event5))
 
-      userFunction.expectMsg(
-        EventSourcedStreamIn(
-          EventSourcedStreamIn.Message.Event(
-            EventSourcedEvent(
-              sequence = 5,
-              payload = Some(event5)
-            )
-          )
-        )
-      )
-
-      val expectedLoadedBytes = Seq(event4, event5).map(_.serializedSize).sum
+      val expectedLoadedBytes = Seq(event4, event5).map(protobufAny).map(_.serializedSize).sum
 
       metricValue(LoadedEventsTotal, EntityName -> "test") shouldBe 2
       metricValue(LoadedEventBytesTotal, EntityName -> "test") shouldBe expectedLoadedBytes
@@ -318,28 +236,15 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
 
       // send a command that fails
 
-      reactivatedEntity ! EntityCommand(entityId = "test", name = "command")
+      reactivatedEntity ! EntityCommand(entityId = "test", name = "command3", Some(EmptyAny))
 
-      userFunction.expectMsg(
-        EventSourcedStreamIn(
-          EventSourcedStreamIn.Message.Command(
-            Command(
-              entityId = "entity",
-              id = 1,
-              name = "command",
-              payload = None
-            )
-          )
-        )
-      )
+      connection2.expect(command(1, "entity", "command3"))
 
       metricValue(ReceivedCommandsTotal, EntityName -> "test") shouldBe 3
 
-      reactivatedEntity ! EventSourcedStreamOut(
-        EventSourcedStreamOut.Message.Failure(Failure(commandId = 1, description = "failure"))
-      )
+      connection2.send(actionFailure(1, "failure"))
 
-      expectMsg(UserFunctionReply(Some(ClientAction(ClientAction.Action.Failure(Failure(description = "failure"))))))
+      expectMsg(UserFunctionReply(Some(ClientAction(ClientAction.Action.Failure(Failure(1, "failure"))))))
 
       metricValue(FailedCommandsTotal, EntityName -> "test") shouldBe 1
 
@@ -352,13 +257,38 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
         metricValue(CommandTotalTimeSeconds + "_sum", EntityName -> "test") should be > 0.0
       }
 
-      // create unexpected termination for entity failure
+      // create unexpected entity failure
 
-      reactivatedEntity ! EventSourcedEntity.StreamClosed
+      reactivatedEntity ! EntityCommand(entityId = "test", name = "command4", Some(EmptyAny))
+
+      connection2.expect(command(2, "entity", "command4"))
+
+      metricValue(ReceivedCommandsTotal, EntityName -> "test") shouldBe 4
+
+      EventFilter.error("Unexpected entity failure - boom", occurrences = 1).intercept {
+        connection2.send(failure(2, "boom"))
+      }
+
+      expectMsg(UserFunctionReply(clientActionFailure("Unexpected entity failure")))
+
+      connection2.expectClosed()
 
       expectTerminated(reactivatedEntity)
 
+      metricValue(FailedCommandsTotal, EntityName -> "test") shouldBe 2
+
+      metricValue(CommandProcessingTimeSeconds + "_count", EntityName -> "test") shouldBe 4
+      metricValue(CommandProcessingTimeSeconds + "_sum", EntityName -> "test") should be > 0.0
+
+      metricValue(CompletedCommandsTotal, EntityName -> "test") shouldBe 4
+      metricValue(CommandTotalTimeSeconds + "_count", EntityName -> "test") shouldBe 4
+      metricValue(CommandTotalTimeSeconds + "_sum", EntityName -> "test") should be > 0.0
+
       metricValue(FailedEntitiesTotal, EntityName -> "test") shouldBe 1
+
+      metricValue(PassivatedEntitiesTotal, EntityName -> "test") shouldBe 2
+      metricValue(EntityActiveTimeSeconds + "_count", EntityName -> "test") shouldBe 2
+      metricValue(EntityActiveTimeSeconds + "_sum", EntityName -> "test") should be > 0.0
     }
 
   }
