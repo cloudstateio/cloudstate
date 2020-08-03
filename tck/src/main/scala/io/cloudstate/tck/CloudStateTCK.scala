@@ -229,9 +229,9 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
       r
     }
 
-  final def fromFrontend_expectFailure(within: FiniteDuration): Failure =
+  final def fromFrontend_expectActionFailure(within: FiniteDuration): Failure =
     withClue("Failure was not received, or not well-formed: ") {
-      val failure = eventSourcedFromFrontend.expectMsgType[EventSourcedStreamOut](noWait) // FIXME Expects entity.Failure, but gets lientAction.Action.Failure(Failure(commandId, msg)))
+      val failure = eventSourcedFromFrontend.expectMsgType[EventSourcedStreamOut](noWait)
       failure must not be (null)
       failure.message must be('reply)
       failure.message.reply must be(defined)
@@ -331,7 +331,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
             correlate(
               cmd,
               if (isReply) fromFrontend_expectReply(events = eventCount, noWait).commandId
-              else fromFrontend_expectFailure(noWait).commandId
+              else fromFrontend_expectActionFailure(noWait).commandId
             )
             init.entityId must be(cmd.entityId)
             set must not contain (cmd.id)
