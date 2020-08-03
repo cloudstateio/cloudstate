@@ -61,13 +61,13 @@ RUN export DEBIAN_FRONTEND=noninteractive \
 # Allow for a consistant java home location for settings - image is changing over time
 RUN if [ ! -d "/docker-java-home" ]; then ln -s "${JAVA_HOME}" /docker-java-home; fi
 
-# [Optional] Uncomment this section to install additional OS packages.
-#RUN apt-get update \
-#    && export DEBIAN_FRONTEND=noninteractive \
-#    && apt-get -y install --no-install-recommends <your-package-list-here>
-
+# sbt
 RUN echo "deb https://dl.bintray.com/sbt/debian /" | sudo tee -a /etc/apt/sources.list.d/sbt.list
 RUN curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | sudo apt-key add
+# node/npm
+RUN curl -sL https://deb.nodesource.com/setup_12.x | sudo bash -
+
+# install needed packages
 RUN apt-get update \
     && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends sbt nodejs docker.io
+    && apt-get -y install --no-install-recommends sbt nodejs docker.io build-essential
