@@ -20,6 +20,7 @@ import java.util.Optional
 
 import akka.NotUsed
 import akka.actor.ActorSystem
+import akka.event.{Logging, LoggingAdapter}
 import akka.stream.scaladsl.Flow
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 import com.google.protobuf.any.{Any => ScalaPbAny}
@@ -35,14 +36,16 @@ import io.cloudstate.javasupport.impl.{
   ResolvedEntityFactory,
   ResolvedServiceMethod
 }
+import io.cloudstate.protocol.entity.{Command, Failure}
 import io.cloudstate.protocol.event_sourced.EventSourcedStreamIn.Message.{
   Command => InCommand,
   Empty => InEmpty,
   Event => InEvent,
   Init => InInit
 }
-import io.cloudstate.protocol.event_sourced.EventSourcedStreamOut.Message.{Reply => OutReply}
+import io.cloudstate.protocol.event_sourced.EventSourcedStreamOut.Message.{Failure => OutFailure, Reply => OutReply}
 import io.cloudstate.protocol.event_sourced._
+import scala.util.control.NonFatal
 
 final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
                                         override val descriptor: Descriptors.ServiceDescriptor,
@@ -65,11 +68,53 @@ final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
       this
 }
 
+object EventSourcedImpl {
+  final case class EntityException(entityId: String, commandId: Long, commandName: String, message: String)
+      extends RuntimeException(message)
+
+  object EntityException {
+    def apply(message: String): EntityException =
+      EntityException(entityId = "", commandId = 0, commandName = "", message)
+
+    def apply(command: Command, message: String): EntityException =
+      EntityException(command.entityId, command.id, command.name, message)
+
+    def apply(context: CommandContext, message: String): EntityException =
+      EntityException(context.entityId, context.commandId, context.commandName, message)
+  }
+
+  object ProtocolException {
+    def apply(message: String): EntityException =
+      EntityException(entityId = "", commandId = 0, commandName = "", "Protocol error: " + message)
+
+    def apply(init: EventSourcedInit, message: String): EntityException =
+      EntityException(init.entityId, commandId = 0, commandName = "", "Protocol error: " + message)
+
+    def apply(command: Command, message: String): EntityException =
+      EntityException(command.entityId, command.id, command.name, "Protocol error: " + message)
+  }
+
+  def failure(cause: Throwable): Failure = cause match {
+    case e: EntityException => Failure(e.commandId, e.message)
+    case e => Failure(description = "Unexpected failure: " + e.getMessage)
+  }
+
+  def failureMessage(cause: Throwable): String = cause match {
+    case EntityException(entityId, commandId, commandName, _) =>
+      val commandDescription = if (commandId != 0) s" for command [$commandName]" else ""
+      val entityDescription = if (entityId.nonEmpty) s"entity [$entityId]" else "entity"
+      s"Terminating $entityDescription due to unexpected failure$commandDescription"
+    case _ => "Terminating entity due to unexpected failure"
+  }
+}
+
 final class EventSourcedImpl(_system: ActorSystem,
                              _services: Map[String, EventSourcedStatefulService],
                              rootContext: Context,
                              configuration: Configuration)
     extends EventSourced {
+  import EventSourcedImpl._
+
   private final val system = _system
   private final val services = _services.iterator
     .map({
@@ -78,6 +123,8 @@ final class EventSourcedImpl(_system: ActorSystem,
         (name, if (esss.snapshotEvery == 0) esss.withSnapshotEvery(configuration.snapshotEvery) else esss)
     })
     .toMap
+
+  private val log = Logging(system.eventStream, this.getClass)
 
   /**
    * The stream. One stream will be established per active entity.
@@ -99,18 +146,17 @@ final class EventSourcedImpl(_system: ActorSystem,
         case (Seq(EventSourcedStreamIn(InInit(init), _)), source) =>
           source.via(runEntity(init))
         case _ =>
-          // todo better error
-          throw new RuntimeException("Expected Init message")
+          throw ProtocolException("Expected Init message")
       }
       .recover {
-        case e =>
-          // FIXME translate to failure message
-          throw e
+        case error =>
+          log.error(error, failureMessage(error))
+          EventSourcedStreamOut(OutFailure(failure(error)))
       }
 
   private def runEntity(init: EventSourcedInit): Flow[EventSourcedStreamIn, EventSourcedStreamOut, NotUsed] = {
     val service =
-      services.getOrElse(init.serviceName, throw new RuntimeException(s"Service not found: ${init.serviceName}"))
+      services.getOrElse(init.serviceName, throw ProtocolException(init, s"Service not found: ${init.serviceName}"))
     val handler = service.factory.create(new EventSourcedContextImpl(init.entityId))
     val thisEntityId = init.entityId
 
@@ -137,22 +183,18 @@ final class EventSourcedImpl(_system: ActorSystem,
           (event.sequence, None)
         case ((sequence, _), InCommand(command)) =>
           if (thisEntityId != command.entityId)
-            throw new IllegalStateException("Receiving entity is not the intended recipient of command")
-          val cmd = ScalaPbAny.toJavaProto(command.payload.get)
-          val context = new CommandContextImpl(thisEntityId,
-                                               sequence,
-                                               command.name,
-                                               command.id,
-                                               service.anySupport,
-                                               handler,
-                                               service.snapshotEvery)
+            throw ProtocolException(command, "Receiving entity is not the intended recipient of command")
+          val cmd =
+            ScalaPbAny.toJavaProto(command.payload.getOrElse(throw ProtocolException(command, "No command payload")))
+          val context =
+            new CommandContextImpl(thisEntityId, sequence, command.name, command.id, service.anySupport, log)
 
           val reply = try {
-            handler.handleCommand(cmd, context) // FIXME is this allowed to throw
+            handler.handleCommand(cmd, context)
           } catch {
-            case FailInvoked =>
-              Optional.empty[JavaPbAny]()
-            // Ignore, error already captured
+            case FailInvoked => Optional.empty[JavaPbAny]() // Ignore, error already captured
+            case e: EntityException => throw e
+            case NonFatal(error) => throw EntityException(command, "Unexpected failure: " + error.getMessage)
           } finally {
             context.deactivate() // Very important!
           }
@@ -160,10 +202,16 @@ final class EventSourcedImpl(_system: ActorSystem,
           val clientAction = context.createClientAction(reply, false)
 
           if (!context.hasError) {
-            val endSequenceNumber = sequence + context.events.size
+            // apply events from successful command to local entity state
+            context.events.zipWithIndex.foreach {
+              case (event, i) =>
+                handler.handleEvent(ScalaPbAny.toJavaProto(event), new EventContextImpl(thisEntityId, sequence + i + 1))
+            }
 
+            val endSequenceNumber = sequence + context.events.size
+            val performSnapshot = (endSequenceNumber / service.snapshotEvery) > (sequence / service.snapshotEvery)
             val snapshot =
-              if (context.performSnapshot) {
+              if (performSnapshot) {
                 val s = handler.snapshot(new SnapshotContext with AbstractContext {
                   override def entityId: String = entityId
                   override def sequenceNumber: Long = endSequenceNumber
@@ -195,9 +243,9 @@ final class EventSourcedImpl(_system: ActorSystem,
              ))
           }
         case (_, InInit(i)) =>
-          throw new IllegalStateException("Entity already inited")
+          throw ProtocolException(init, "Entity already inited")
         case (_, InEmpty) =>
-          throw new IllegalStateException("Received empty/unknown message")
+          throw ProtocolException(init, "Received empty/unknown message")
       }
       .collect {
         case (_, Some(message)) => EventSourcedStreamOut(message)
@@ -213,8 +261,7 @@ final class EventSourcedImpl(_system: ActorSystem,
                            override val commandName: String,
                            override val commandId: Long,
                            val anySupport: AnySupport,
-                           val handler: EventSourcedEntityHandler,
-                           val snapshotEvery: Int)
+                           val log: LoggingAdapter)
       extends CommandContext
       with AbstractContext
       with AbstractClientActionContext
@@ -222,16 +269,14 @@ final class EventSourcedImpl(_system: ActorSystem,
       with ActivatableContext {
 
     final var events: Vector[ScalaPbAny] = Vector.empty
-    final var performSnapshot: Boolean = false
 
     override def emit(event: AnyRef): Unit = {
       checkActive()
-      val encoded = anySupport.encodeScala(event)
-      val nextSequenceNumber = sequenceNumber + events.size + 1
-      handler.handleEvent(ScalaPbAny.toJavaProto(encoded), new EventContextImpl(entityId, nextSequenceNumber))
-      events :+= encoded
-      performSnapshot = (snapshotEvery > 0) && (performSnapshot || (nextSequenceNumber % snapshotEvery == 0))
+      events :+= anySupport.encodeScala(event)
     }
+
+    override protected def logError(message: String): Unit =
+      log.error("Fail invoked for command [{}] for entity [{}]: {}", commandName, entityId, message)
   }
 
   class EventSourcedContextImpl(override final val entityId: String) extends EventSourcedContext with AbstractContext
