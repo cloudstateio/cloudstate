@@ -61,6 +61,7 @@ private[impl] trait AbstractClientActionContext extends ClientActionContext {
     checkActive()
     if (error.isEmpty) {
       error = Some(errorMessage)
+      logError(errorMessage)
       throw FailInvoked
     } else throw new IllegalStateException("fail(…) already previously invoked!")
   }
@@ -80,6 +81,8 @@ private[impl] trait AbstractClientActionContext extends ClientActionContext {
   }
 
   final def hasError: Boolean = error.isDefined
+
+  protected def logError(message: String): Unit = ()
 
   final def createClientAction(reply: Optional[JavaPbAny], allowNoReply: Boolean): Option[ClientAction] =
     error match {
