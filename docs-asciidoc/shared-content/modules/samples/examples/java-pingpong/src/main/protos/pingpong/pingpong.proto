@@ -1,0 +1,78 @@
+// This is the public API offered by the shopping cart entity.
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "cloudstate/entity_key.proto";
+import "cloudstate/eventing.proto";
+import "google/api/annotations.proto";
+import "google/api/http.proto";
+import "google/api/httpbody.proto";
+
+package cloudstate.pingpong;
+
+option java_package = "io.cloudstate.pingpong";
+
+message PongSent {
+    string id = 1 [(.cloudstate.entity_key) = true];
+    int32 sequence_number = 2;
+}
+
+message PingSent {
+    string id = 1 [(.cloudstate.entity_key) = true];
+    int32 sequence_number = 2;
+}
+
+message PingSeen {
+    string id = 1 [(.cloudstate.entity_key) = true];
+    int32 sequence_number = 2;
+}
+
+message PongSeen {
+    string id = 1 [(.cloudstate.entity_key) = true];
+    int32 sequence_number = 2;
+}
+
+message PingPongStats {
+    int32 sentPings = 1;
+    int32 seenPings = 2;
+    int32 sentPongs = 3;
+    int32 seenPongs = 4;
+}
+
+message GetReport {
+  string id = 1 [(.cloudstate.entity_key) = true];
+}
+
+service PingPongService {
+
+  rpc Ping(PongSent) returns (PingSent) {
+    option (.cloudstate.eventing) = {
+      out: "pings",
+    };
+  }
+
+  rpc Pong(PingSent) returns (PongSent) {
+    option (.cloudstate.eventing) = {
+      out: "pongs",
+    };
+  }
+
+  rpc SeenPong(PongSent) returns (google.protobuf.Empty) {
+    option (.cloudstate.eventing) = {
+      in: "pongs",
+    };
+  }
+
+  rpc SeenPing(PingSent) returns (google.protobuf.Empty) {
+    option (.cloudstate.eventing) = {
+      in: "pings",
+    };
+  }
+
+  rpc Report(GetReport) returns (PingPongStats) {
+    option (google.api.http) = {
+          get: "/pingpong/{id}"
+    };
+  }
+
+}

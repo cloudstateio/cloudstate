@@ -20,7 +20,7 @@ An event sourced entity can be created using the @extref:[EventSourced](jsdoc:Ev
 
 [source,js]
 ----
-include::example$eventsourced/shoppingcart.js[tag=entity-class]
+include::samples:example$js-shopping-cart/shoppingcart.js[tag=entity-class]
 ----
 
 Here we pass in the protobuf files that contain our service and our domain protocol, `shoppingcart.proto` and `domain.proto`. Cloudstate needs the protobuf file that your service lives in so that it can load it and read it. It also needs the protobuf file that your domain events and snapshots are in so that when it receives these events and snapshots from the proxy, and can know how to deserialize them.

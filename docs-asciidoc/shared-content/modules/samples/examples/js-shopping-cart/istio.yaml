@@ -1,0 +1,32 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
+metadata:
+  name: gateway
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 8000
+      name: tcp
+      protocol: tcp
+    hosts:
+    - "*"
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: shopping-cart-route
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - gateway
+  tcp:
+  - match:
+    - port: 8000
+    route:
+    - destination:
+        port:
+            number: 80
+        host: shopping-cart

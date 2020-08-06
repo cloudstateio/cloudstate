@@ -1,0 +1,51 @@
+{
+  "name": "js-crdts",
+  "version": "0.1.0",
+  "description": "Sample CloudState CRDT application",
+  "keywords": [
+    "serverless",
+    "cloudstate",
+    "crdt"
+  ],
+  "homepage": "https://github.com/cloudstateio/cloudstate",
+  "bugs": {
+    "url": "https://github.com/cloudstateio/cloudstate/issues"
+  },
+  "license": "Apache-2.0",
+  "author": {
+    "name": "James Roper",
+    "email": "jroper2@gmail.com",
+    "url": "https://jazzy.id.au"
+  },
+  "engineStrict": true,
+  "engines": {
+    "node": "~12"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cloudstateio/cloudstate",
+    "directory": "src/samples/js-crdts"
+  },
+  "//": "https://npm.community/t/npm-install-does-not-install-transitive-dependencies-of-local-dependency/2264",
+  "dependencies": {
+    "@grpc/proto-loader": "^0.1.0",
+    "google-protobuf": "^3.0.0",
+    "grpc": "1.23.3",
+    "cloudstate": "file:../../node-support"
+  },
+  "devDependencies": {
+    "chai": "4.2.0",
+    "mocha": "^6.1.4"
+  },
+  "scripts": {
+    "test": "mocha",
+    "prestart": "compile-descriptor ../../protocols/example/crdts/crdt-example.proto",
+    "pretest": "compile-descriptor ../../protocols/example/crdts/crdt-example.proto",
+    "postinstall": "compile-descriptor ../../protocols/example/crdts/crdt-example.proto",
+    "start": "node index.js",
+    "start-no-prestart": "node index.js",
+    "dockerbuild": "docker build -f ../../Dockerfile.js-crdts -t cloudstateio/js-crdts:latest ../..",
+    "dockerpush": "docker push cloudstateio/js-crdts:latest",
+    "dockerbuildpush": "npm run dockerbuild && npm run dockerpush"
+  }
+}
