@@ -14,44 +14,68 @@
  * limitations under the License.
  */
 
-package docs.user.eventsourced;
+package io.cloudstate.samples.shoppingcart;
 
-import com.example.Domain;
-import com.example.Shoppingcart;
+import com.example.shoppingcart.Shoppingcart;
+import com.example.shoppingcart.persistence.Domain;
 import com.google.protobuf.Empty;
-import io.cloudstate.javasupport.CloudState;
 import io.cloudstate.javasupport.EntityId;
 import io.cloudstate.javasupport.eventsourced.*;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
-// #entity-class tag::entity-class[]
-@EventSourcedEntity(persistenceId = "shopping-cart", snapshotEvery = 20)
+//tag::entity-class[]
+/** An event sourced entity. */
+@EventSourcedEntity
 public class ShoppingCartEntity {
-  // #entity-class end::entity-class[]
-
-  // #entity-state
-  private final Map<String, Shoppingcart.LineItem> cart = new LinkedHashMap<>();
-  // #entity-state
-
-  // #constructing
   private final String entityId;
+//end::entity-class[]
+  private final Map<String, Shoppingcart.LineItem> cart = new LinkedHashMap<>();
 
   public ShoppingCartEntity(@EntityId String entityId) {
     this.entityId = entityId;
   }
-  // #constructing
 
-  // #get-cart
+  @Snapshot
+  public Domain.Cart snapshot() {
+    return Domain.Cart.newBuilder()
+        .addAllItems(cart.values().stream().map(this::convert).collect(Collectors.toList()))
+        .build();
+  }
+
+  @SnapshotHandler
+  public void handleSnapshot(Domain.Cart cart) {
+    this.cart.clear();
+    for (Domain.LineItem item : cart.getItemsList()) {
+      this.cart.put(item.getProductId(), convert(item));
+    }
+  }
+
+  @EventHandler
+  public void itemAdded(Domain.ItemAdded itemAdded) {
+    Shoppingcart.LineItem item = cart.get(itemAdded.getItem().getProductId());
+    if (item == null) {
+      item = convert(itemAdded.getItem());
+    } else {
+      item =
+          item.toBuilder()
+              .setQuantity(item.getQuantity() + itemAdded.getItem().getQuantity())
+              .build();
+    }
+    cart.put(item.getProductId(), item);
+  }
+
+  @EventHandler
+  public void itemRemoved(Domain.ItemRemoved itemRemoved) {
+    cart.remove(itemRemoved.getProductId());
+  }
+
   @CommandHandler
   public Shoppingcart.Cart getCart() {
     return Shoppingcart.Cart.newBuilder().addAllItems(cart.values()).build();
   }
-  // #get-cart
 
-  // #add-item
   @CommandHandler
   public Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
     if (item.getQuantity() <= 0) {
@@ -68,21 +92,14 @@ public class ShoppingCartEntity {
             .build());
     return Empty.getDefaultInstance();
   }
-  // #add-item
 
-  // #item-added
-  @EventHandler
-  public void itemAdded(Domain.ItemAdded itemAdded) {
-    Shoppingcart.LineItem item = cart.get(itemAdded.getItem().getProductId());
-    if (item == null) {
-      item = convert(itemAdded.getItem());
-    } else {
-      item =
-          item.toBuilder()
-              .setQuantity(item.getQuantity() + itemAdded.getItem().getQuantity())
-              .build();
+  @CommandHandler
+  public Empty removeItem(Shoppingcart.RemoveLineItem item, CommandContext ctx) {
+    if (!cart.containsKey(item.getProductId())) {
+      ctx.fail("Cannot remove item " + item.getProductId() + " because it is not in the cart.");
     }
-    cart.put(item.getProductId(), item);
+    ctx.emit(Domain.ItemRemoved.newBuilder().setProductId(item.getProductId()).build());
+    return Empty.getDefaultInstance();
   }
 
   private Shoppingcart.LineItem convert(Domain.LineItem item) {
@@ -90,15 +107,6 @@ public class ShoppingCartEntity {
         .setProductId(item.getProductId())
         .setName(item.getName())
         .setQuantity(item.getQuantity())
-        .build();
-  }
-  // #item-added
-
-  // #snapshot
-  @Snapshot
-  public Domain.Cart snapshot() {
-    return Domain.Cart.newBuilder()
-        .addAllItems(cart.values().stream().map(this::convert).collect(Collectors.toList()))
         .build();
   }
 
@@ -109,27 +117,4 @@ public class ShoppingCartEntity {
         .setQuantity(item.getQuantity())
         .build();
   }
-  // #snapshot
-
-  // #handle-snapshot
-  @SnapshotHandler
-  public void handleSnapshot(Domain.Cart cart) {
-    this.cart.clear();
-    for (Domain.LineItem item : cart.getItemsList()) {
-      this.cart.put(item.getProductId(), convert(item));
-    }
-  }
-  // #handle-snapshot
-
-  // #register
-  public static void main(String... args) {
-    new CloudState()
-        .registerEventSourcedEntity(
-            ShoppingCartEntity.class,
-            Shoppingcart.getDescriptor().findServiceByName("ShoppingCartService"),
-            Domain.getDescriptor())
-        .start();
-  }
-  // #register
-
 }

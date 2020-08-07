@@ -1,0 +1,12 @@
+name: "cloudstateio-shared"
+version: dev
+title: ""
+nav:
+- modules/ROOT/nav.adoc
+source-map:
+  - source-paths: docs/src/test/java/docs/user
+    target:
+      path: modules/java/examples
+  - source-paths: docs/src/test/js/test
+    target:
+      path: modules/javascript/examples

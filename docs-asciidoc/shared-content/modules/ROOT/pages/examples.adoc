@@ -1,0 +1,3 @@
+Lightbend maintains two example applications, a trivial chat service and a shopping cart, in each of the supported languages.
+
+ifdef::todo[TODO: add links to the sample app repos.]

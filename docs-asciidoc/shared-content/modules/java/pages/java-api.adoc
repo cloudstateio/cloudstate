@@ -1,0 +1,4 @@
+
+ifdef::todo[This isn't resolving in the current docs, so we need the correct URL here.]
+
+The Java API docs can be found [here](api/index.html).

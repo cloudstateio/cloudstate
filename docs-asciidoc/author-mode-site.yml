@@ -1,0 +1,31 @@
+site:
+  title: "Cloudstate Documentation"
+  url: https://cloudstate.io/
+
+content:
+  sources:
+  - url: ..
+    branches: [HEAD]
+    start-path: docs-asciidoc/src
+  - url: ..
+    branches: [HEAD]
+    start-path: docs-asciidoc/shared-content
+
+ui:
+  bundle:
+    url: https://github.com/lightbend/antora-ui-lightbend-cloud-theme-cloudstate/raw/master/build/ui-bundle.zip
+    snapshot: true
+
+extensions:
+  - path: "@djencks/antora-aggregate-collector"
+
+runtime:
+  fetch: true
+
+output:
+  clean: true
+
+asciidoc:
+  attributes:
+    review: ''
+    todo: ''
