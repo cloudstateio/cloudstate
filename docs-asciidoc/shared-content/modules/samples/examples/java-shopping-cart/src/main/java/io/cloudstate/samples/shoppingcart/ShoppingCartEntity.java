@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *     http:shwww.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -31,19 +31,26 @@ import java.util.stream.Collectors;
 public class ShoppingCartEntity {
   private final String entityId;
 //end::entity-class[]
-  private final Map<String, Shoppingcart.LineItem> cart = new LinkedHashMap<>();
 
+//tag::entity-state[]
+  private final Map<String, Shoppingcart.LineItem> cart = new LinkedHashMap<>();
+//end::entity-state[]
+  
+  //tag::constructing[]
   public ShoppingCartEntity(@EntityId String entityId) {
     this.entityId = entityId;
   }
-
+  //end::constructing[]
+  //tag::snapshot[]
   @Snapshot
   public Domain.Cart snapshot() {
     return Domain.Cart.newBuilder()
         .addAllItems(cart.values().stream().map(this::convert).collect(Collectors.toList()))
         .build();
   }
-
+  //end::snapshot[]
+  
+  //tag::snapshot-handler[]
   @SnapshotHandler
   public void handleSnapshot(Domain.Cart cart) {
     this.cart.clear();
@@ -51,7 +58,9 @@ public class ShoppingCartEntity {
       this.cart.put(item.getProductId(), convert(item));
     }
   }
-
+  //end::snapshot-handler[]
+  
+  //tag::item-added[]
   @EventHandler
   public void itemAdded(Domain.ItemAdded itemAdded) {
     Shoppingcart.LineItem item = cart.get(itemAdded.getItem().getProductId());
@@ -65,17 +74,18 @@ public class ShoppingCartEntity {
     }
     cart.put(item.getProductId(), item);
   }
-
+  //end::item-added[]
   @EventHandler
   public void itemRemoved(Domain.ItemRemoved itemRemoved) {
     cart.remove(itemRemoved.getProductId());
   }
-
+  //tag::get-cart[]
   @CommandHandler
   public Shoppingcart.Cart getCart() {
     return Shoppingcart.Cart.newBuilder().addAllItems(cart.values()).build();
   }
-
+  //end::get-cart[]
+  //tag::add-item[]
   @CommandHandler
   public Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
     if (item.getQuantity() <= 0) {
@@ -92,7 +102,7 @@ public class ShoppingCartEntity {
             .build());
     return Empty.getDefaultInstance();
   }
-
+  //end::add-item[]
   @CommandHandler
   public Empty removeItem(Shoppingcart.RemoveLineItem item, CommandContext ctx) {
     if (!cart.containsKey(item.getProductId())) {

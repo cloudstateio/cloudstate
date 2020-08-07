@@ -15,25 +15,62 @@ The `snapshotEvery` parameter controls how often snapshots are taken, so that th
 
 ## Persistence types and serialization
 
-Event sourced entities persist events and snapshots, and these need to be serialized when persisted. The most straight forward way to persist events and snapshots is to use protobufs. Cloudstate will automatically detect if an emitted event is a protobuf, and serialize it as such. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
+Event sourced entities persist events and snapshots, and these need to be serialized when persisted. The most straight forward way to persist events and snapshots is to use protobufs. Cloudstate will automatically detect if an emitted event is a protobuf, and serialize it as such. For other serialization options, including JSON, see xref:serialization.adoc[Serialization].
 
 While protobuf is the recommended format for persisting events, it is recommended that you do not persist the protobuf messages from your service interface. Rather, you should create new messages, even if they are identical to those of the service messages. While this may introduce some overhead in needing to convert from one type to the other, the reason for doing this is that it will allow the public interface of the service to evolve independently from its data storage format, which should be private.
 
 For our shopping cart example, we'll create a new file called `domain.proto`, the name domain is selected to indicate that these are my applications domain objects:
 
-@@snip [domain.proto](/docs/src/test/proto/domain.proto)
+
+ifdef::review[REVIEWERS, I couldn't find this file, so I copied it in from the other docs: /docs/src/test/proto/domain.proto]
+
+[source, proto]
+----
+syntax = "proto3";
+
+package example.shoppingcart.domain;
+
+option java_package = "com.example";
+
+message LineItem {
+    string productId = 1;
+    string name = 2;
+    int32 quantity = 3;
+}
+
+message ItemAdded {
+    LineItem item = 1;
+}
+
+message ItemRemoved {
+    string productId = 1;
+}
+
+message CheckedOut {}
+
+message Cart {
+    repeated LineItem items = 1;
+    bool checkedout = 2;
+}
+----
 
 ## State
 
 Each entity should store its state locally in a mutable variable, either a mutable field or a multiple structure such as a collection. For our shopping cart, the state is a map of product ids to products, so we'll create a map to contain that:
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #entity-state }
+[source, java]
+----
+include::samples:example$java-shopping-cart/src/main/java/io/cloudstate/samples/shoppingcart/ShoppingCartEntity.java[tag=entity-state]
+----
 
 ## Constructing
 
 The context available for injection into the constructor is a @javadoc[`EventSourcedEntityCreationContext`](io.cloudstate.javasupport.eventsourced.EventSourcedEntityCreationContext). While you don't necessarily need to define a constructor, you can define one and have that context injected in. The constructor below shows how the `entityId` is injected:
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #constructing }
+[source, java]
+----
+include::samples:example$java-shopping-cart/src/main/java/io/cloudstate/samples/shoppingcart/ShoppingCartEntity.java[tag=constructing]
+----
 
 ## Handling commands
 
@@ -47,7 +84,10 @@ The return type of the command handler must be the output type for the gRPC serv
 
 The following shows the implementation of the `GetCart` command handler. This command handler is a read-only command handler, it doesn't emit any events, it just returns some state:
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #get-cart }
+[source, java]
+----
+include::samples:example$java-shopping-cart/src/main/java/io/cloudstate/samples/shoppingcart/ShoppingCartEntity.java[tag=get-cart]
+----
 
 === Emitting events
 
@@ -61,7 +101,11 @@ A command handler may emit an event by taking in a @javadoc[`CommandContext`](io
 
 Here's an example of a command handler that emits an event:
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #add-item }
+[source, java]
+----
+include::samples:example$java-shopping-cart/src/main/java/io/cloudstate/samples/shoppingcart/ShoppingCartEntity.java[tag=add-item]
+----
+
 
 This command handler also validates the command, ensuring the quantity items added is greater than zero. Invoking `ctx.fail` fails the command - this method throws so there's no need to explicitly throw an exception.
 
@@ -77,22 +121,39 @@ Event handlers may be declared for a superclass or interface of the types they h
 
 Here's an example event handler for the `ItemAdded` event. A utility method, `convert` is also defined to assist it.
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #item-added }
+[source, java]
+----
+include::samples:example$java-shopping-cart/src/main/java/io/cloudstate/samples/shoppingcart/ShoppingCartEntity.java[tag=item-added]
+----
 
 == Producing and handling snapshots
 
 Snapshots are an important optimisation for event sourced entities that may contain many events, to ensure that they can be loaded quickly even when they have very long journals. To produce a snapshot, a method annotated with @javadoc[`@Snapshot`](io.cloudstate.javasupport.eventsourced.Snapshot) must be declared. It takes a context class of type @javadoc[`SnapshotContext`](io.cloudstate.javasupport.eventsourced.SnapshotContext), and must return a snapshot of the current state in serializable form.
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #snapshot }
+[source, java]
+----
+include::samples:example$java-shopping-cart/src/main/java/io/cloudstate/samples/shoppingcart/ShoppingCartEntity.java[tag=snapshot]
+----
+
 
 When the entity is loaded again, the snapshot will first be loaded before any other events are received, and passed to a snapshot handler. Snapshot handlers are declare by annotating a method with @javadoc[`@SnapshotHandler`](io.cloudstate.javasupport.eventsourced.SnapshotHandler), and it can take a context class of type @javadoc[`SnapshotContext`](io.cloudstate.javasupport.eventsourced.SnapshotContext).
 
 Multiple snapshot handlers may be defined to handle multiple different types of snapshots, the type matching is done in the same way as for events.
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #handle-snapshot }
+[source, java]
+----
+include::samples:example$java-shopping-cart/src/main/java/io/cloudstate/samples/shoppingcart/ShoppingCartEntity.java[tag=snapshot-handler]
+----
+
 
 == Registering the entity
 
 Once you've created your entity, you can register it with the @javadoc[`CloudState`](io.cloudstate.javasupport.CloudState) server, by invoking the `registerEventSourcedEntity` method. In addition to passing your entity class and service descriptor, you also need to pass any descriptors that you use for persisting events, for example, the `domain.proto` descriptor.
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/eventsourced/ShoppingCartEntity.java) { #register }
+[source, java]
+----
+include::samples:example$java-shopping-cart/src/main/java/io/cloudstate/samples/shoppingcart/Main.java[tag=body]
+----
+
+
+

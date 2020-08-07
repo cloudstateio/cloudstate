@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+//tag::body[]
 package io.cloudstate.samples.shoppingcart;
 
 import io.cloudstate.javasupport.*;
@@ -31,3 +31,4 @@ public final class Main {
         .get();
   }
 }
+//end::body[]
