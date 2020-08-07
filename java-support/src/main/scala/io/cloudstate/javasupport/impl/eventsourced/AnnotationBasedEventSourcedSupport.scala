@@ -25,6 +25,7 @@ import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEnt
 
 import scala.collection.concurrent.TrieMap
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
+import io.cloudstate.javasupport.impl.eventsourced.EventSourcedImpl.EntityException
 import io.cloudstate.javasupport.{EntityFactory, ServiceCallFactory}
 
 /**
@@ -78,7 +79,7 @@ private[impl] class AnnotationBasedEventSourcedSupport(
           }
           handler.invoke(entity, event, ctx)
         case None =>
-          throw new RuntimeException(
+          throw EntityException(
             s"No event handler found for event ${event.getClass} on $behaviorsString"
           )
       }
@@ -88,7 +89,8 @@ private[impl] class AnnotationBasedEventSourcedSupport(
       behavior.commandHandlers.get(context.commandName()).map { handler =>
         handler.invoke(entity, command, context)
       } getOrElse {
-        throw new RuntimeException(
+        throw EntityException(
+          context,
           s"No command handler found for command [${context.commandName()}] on $behaviorsString"
         )
       }
@@ -104,7 +106,7 @@ private[impl] class AnnotationBasedEventSourcedSupport(
           }
           handler.invoke(entity, snapshot, ctx)
         case None =>
-          throw new RuntimeException(
+          throw EntityException(
             s"No snapshot handler found for snapshot ${snapshot.getClass} on $behaviorsString"
           )
       }

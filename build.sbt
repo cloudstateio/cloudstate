@@ -84,6 +84,7 @@ def common: Seq[Setting[_]] = automateHeaderSettings(Compile, Test) ++ Seq(
       val googleProtos = ((baseDirectory in ThisBuild).value / "protocols" / "frontend" / "google").getCanonicalPath
       new SimpleFileFilter(_.getCanonicalPath startsWith googleProtos)
     },
+  fork in Test := true,
   javaOptions in Test ++= Seq("-Xms1G", "-XX:+CMSClassUnloadingEnabled", "-XX:+UseConcMarkSweepGC")
 )
 
@@ -113,6 +114,7 @@ lazy val root = (project in file("."))
     `java-pingpong`,
     `akka-client`,
     operator,
+    testkit,
     `tck`,
     `graal-tools`,
     docs
@@ -411,7 +413,10 @@ lazy val `proxy` = (project in file("proxy"))
 
 lazy val `proxy-core` = (project in file("proxy/core"))
   .enablePlugins(DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin, GraalVMPlugin, BuildInfoPlugin)
-  .dependsOn(`graal-tools` % Provided) // Only needed for compilation
+  .dependsOn(
+    `graal-tools` % Provided, // Only needed for compilation
+    testkit % Test
+  )
   .settings(
     common,
     name := "cloudstate-proxy-core",
@@ -450,22 +455,9 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "org.slf4j" % "slf4j-simple" % "1.7.26"
         //"ch.qos.logback"                 % "logback-classic"                   % "1.2.3", // Doesn't work well with SubstrateVM: https://github.com/vmencik/akka-graal-native/blob/master/README.md#logging
       ),
-    // Work around for https://github.com/akka/akka-grpc/pull/673
-    (PB.targets in Compile) := {
-      val old = (PB.targets in Compile).value
-      val ct = crossTarget.value
-
-      old.map(_.copy(outputPath = ct / "akka-grpc" / "main"))
-    },
-    // add protobuf targets to managed source directories for IDEs
-    Compile / managedSourceDirectories ++= (Compile / PB.targets).value.map(_.outputPath).distinct,
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "frontend", baseDir / "protocol")
-    },
-    PB.protoSources in Test ++= {
-      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "frontend")
     },
     // For Google Cloud Pubsub API
     PB.protoSources in Compile += target.value / "protobuf_external" / "google" / "pubsub" / "v1",
@@ -597,6 +589,7 @@ lazy val operator = (project in file("operator"))
 
 lazy val `java-support` = (project in file("java-support"))
   .enablePlugins(AkkaGrpcPlugin, BuildInfoPlugin)
+  .dependsOn(testkit % Test)
   .settings(
     name := "cloudstate-java-support",
     dynverTagPrefix := "java-support-",
@@ -644,14 +637,6 @@ lazy val `java-support` = (project in file("java-support"))
     javacOptions in (Compile, compile) ++= Seq("-source", "1.8", "-target", "1.8"),
     akkaGrpcGeneratedSources in Compile := Seq(AkkaGrpc.Server),
     akkaGrpcGeneratedLanguages in Compile := Seq(AkkaGrpc.Scala), // FIXME should be Java, but here be dragons
-
-    // Work around for https://github.com/akka/akka-grpc/pull/673
-    (PB.targets in Compile) := {
-      val old = (PB.targets in Compile).value
-      val ct = crossTarget.value
-
-      old.map(_.copy(outputPath = ct / "akka-grpc" / "main"))
-    },
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "protocol", baseDir / "frontend")
@@ -660,14 +645,10 @@ lazy val `java-support` = (project in file("java-support"))
     // without needing to generate them themselves
     PB.targets in Compile += PB.gens.java -> crossTarget.value / "akka-grpc" / "main",
     inConfig(Test)(
-      sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
-        PB.protoSources ++= {
-          val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-          Seq(baseDir / "example")
-        },
-        PB.targets := Seq(
-            PB.gens.java -> crossTarget.value / "akka-grpc" / "test"
-          )
+      Seq(
+        akkaGrpcGeneratedSources := Seq(AkkaGrpc.Client),
+        PB.protoSources += (baseDirectory in ThisBuild).value / "protocols" / "example",
+        PB.targets += PB.gens.java -> crossTarget.value / "akka-grpc" / "test"
       )
     )
   )
@@ -720,14 +701,6 @@ lazy val `scala-support` = (project in file("scala-support"))
     javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
     akkaGrpcGeneratedSources in Compile := Seq(AkkaGrpc.Server),
     akkaGrpcGeneratedLanguages in Compile := Seq(AkkaGrpc.Scala), // FIXME should be Java, but here be dragons
-
-    // Work around for https://github.com/akka/akka-grpc/pull/673
-    (PB.targets in Compile) := {
-      val old = (PB.targets in Compile).value
-      val ct = crossTarget.value
-
-      old.map(_.copy(outputPath = ct / "akka-grpc" / "main"))
-    },
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
       Seq(baseDir / "protocol", baseDir / "frontend")
@@ -819,6 +792,19 @@ lazy val `load-generator` = (project in file("samples/js-shopping-cart-load-gene
     name := "js-shopping-cart-load-generator",
     dockerSettings,
     dockerExposedPorts := Nil
+  )
+
+lazy val `testkit` = (project in file("testkit"))
+  .enablePlugins(AkkaGrpcPlugin)
+  .settings(
+    common,
+    name := "cloudstate-testkit",
+    libraryDependencies ++= Seq(
+        akkaDependency("akka-stream-testkit"),
+        "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
+        "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
+      ),
+    PB.protoSources in Compile += (baseDirectory in ThisBuild).value / "protocols" / "protocol"
   )
 
 lazy val `tck` = (project in file("tck"))
