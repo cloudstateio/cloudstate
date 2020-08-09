@@ -1,0 +1,21 @@
+{
+  "name": "Scala",
+  "dockerFile": "Dockerfile",
+  "image": "cloudstateio/cloudstate-devcontainer:latest",
+  "settings": {
+    "terminal.integrated.shell.linux": "/bin/bash",
+    "[scala]": {
+      "editor.tabSize": 2,
+      "editor.insertSpaces": true
+    }
+  },
+  "extensions": [
+    "scala-lang.scala",
+    "zxh404.vscode-proto3"
+  ],
+  "runArgs": [
+    "-v",
+    "/var/run/docker.sock:/var/run/docker.sock"
+  ],
+  "remoteUser": "vscode"
+}

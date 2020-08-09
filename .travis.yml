@@ -99,6 +99,7 @@ jobs:
     script:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
     - sbt -Duse.native.builds=false -Ddocker.tag=latest "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish tck/docker:publish
+    - cd .devcontainer && ./build.sh push && cd -
 
   - stage: Deploy
     name: Publish Java Support release
