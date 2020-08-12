@@ -32,21 +32,20 @@ inThisBuild(
 
 name := "cloudstate"
 
-// Should be in sync with the version used in Akka gRPC
-val GrpcJavaVersion = "1.29.0"
+val GrpcJavaVersion = "1.30.2" // Note: sync with gRPC version in Akka gRPC
 // Unfortunately we need to downgrade grpc-netty-shaded
 // in the proxy until we have a fix to make it work with
 // native-image
 val GrpcNettyShadedVersion = "1.28.1"
 val GraalAkkaVersion = "0.5.0"
 val AkkaVersion = "2.6.6"
-val AkkaHttpVersion = "10.1.12"
+val AkkaHttpVersion = "10.1.12" // Note: sync with Akka HTTP version in Akka gRPC
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
 val AkkaPersistenceSpannerVersion = "1.0.0-RC3"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.8"
-val ProtobufVersion = "3.11.4" // We use this version because it is the latest which works with native-image 20
+val ProtobufVersion = "3.11.4" // Note: sync with Protobuf version in Akka gRPC and ScalaPB
 val GraalVersion = "20.1.0"
 val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debianslim-jre"
 val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
