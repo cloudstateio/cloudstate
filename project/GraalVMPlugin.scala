@@ -109,6 +109,10 @@ object GraalVMPlugin extends AutoPlugin {
           )
         } else oldEntryPoint
       },
+      Docker / dockerGroupLayers := { // disable layers for native-image builds
+        val oldDockerGroupLayers = (Docker / dockerGroupLayers).value
+        if (graalVMDockerPublishLocalBuild.value) PartialFunction.empty else oldDockerGroupLayers
+      },
       dockerCommands := {
         val oldCommands = dockerCommands.value
         val maybeVersion = graalVMVersion.value
