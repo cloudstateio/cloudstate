@@ -1,0 +1,17 @@
+# If overriding things in .../deploy/k8s/execution/overlays/... one has to include the entire
+# desired config.yaml spec in the patch file.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config
+data:
+  config.yaml: |
+    noStore:
+      image: cloudstateio/cloudstate-proxy-no-store:latest
+    inMemory:
+      image: cloudstateio/cloudstate-proxy-in-memory:latest
+    postgres:
+      image: cloudstateio/cloudstate-proxy-postgres:latest
+    cassandra:
+      image: cloudstateio/cloudstate-proxy-cassandra:latest

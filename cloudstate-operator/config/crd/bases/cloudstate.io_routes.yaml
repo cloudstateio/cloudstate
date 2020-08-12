@@ -1,0 +1,124 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.2.4
+  creationTimestamp: null
+  name: routes.cloudstate.io
+spec:
+  group: cloudstate.io
+  names:
+    kind: Route
+    listKind: RouteList
+    plural: routes
+    singular: route
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      description: Route is the Schema for the routes API
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          description: RouteSpec defines the desired state of Route
+          properties:
+            hosts:
+              description: Hosts names that map down to the istio virtual service.
+              items:
+                type: string
+              type: array
+            http:
+              description: HTTP routes. The first to match wins.
+              items:
+                description: Describes match conditions and actions for routing HTTP/1.1,
+                  HTTP2, and gRPC traffic.
+                properties:
+                  match:
+                    description: Match conditions to be satisfied for the rule to
+                      be activated. All conditions inside a single match block have
+                      AND semantics, while the list of match blocks have OR semantics.
+                      The rule is matched if any one of the match blocks succeed.
+                    items:
+                      description: "HttpMatchRequest specifies a set of criterion
+                        to be met in order for the rule to be applied to the HTTP
+                        request. For example, the following restricts the rule to
+                        match only requests where the URL path starts with /ratings/v2/.
+                        \n ```yaml apiVersion: cloudstateio/v1alpha1 kind: Route metadata:
+                        \  name: ratings-route spec:   http:   - match:     - uri:
+                        \        prefix: \"/ratings/v2/\"     route:       service:
+                        ratings ``` \n HTTPMatchRequest CANNOT be empty."
+                      properties:
+                        method:
+                          description: "HTTP Method values are case-sensitive and
+                            formatted as follows: \n - `exact: \"value\"` for exact
+                            string match \n - `prefix: \"value\"` for prefix-based
+                            match \n - `regex: \"value\"` for ECMAscript style regex-based
+                            match"
+                          properties:
+                            exact:
+                              type: string
+                            prefix:
+                              type: string
+                            regex:
+                              type: string
+                          type: object
+                        name:
+                          description: The name assigned to a match. For debugging
+                            purposes.
+                          type: string
+                        uri:
+                          description: "URI to match values are case-sensitive and
+                            formatted as follows: \n - `exact: \"value\"` for exact
+                            string match \n - `prefix: \"value\"` for prefix-based
+                            match \n - `regex: \"value\"` for ECMAscript style regex-based
+                            match \n **Note:** Case-insensitive matching could be
+                            enabled via the `ignore_uri_case` flag."
+                          properties:
+                            exact:
+                              type: string
+                            prefix:
+                              type: string
+                            regex:
+                              type: string
+                          type: object
+                      type: object
+                    minItems: 1
+                    type: array
+                  name:
+                    description: The name assigned to the route for debugging purposes.
+                    type: string
+                  route:
+                    description: The destination to route matched requests to.
+                    properties:
+                      service:
+                        description: The name of a stateful service.
+                        type: string
+                    type: object
+                type: object
+              minItems: 1
+              type: array
+          type: object
+      type: object
+  version: v1alpha1
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
