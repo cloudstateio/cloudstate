@@ -1,0 +1,7 @@
+apiVersion: cloudstate.io/v1alpha1
+kind: Route
+metadata:
+  name: route-sample
+spec:
+  # Add fields here
+  foo: bar

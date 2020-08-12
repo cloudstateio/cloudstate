@@ -1,0 +1,10 @@
+version: "2"
+domain: io
+repo: github.com/cloudstateio/cloudstate/cloudstate-operator
+resources:
+- group: cloudstate
+  version: v1alpha1
+  kind: StatefulStore
+- group: cloudstate
+  version: v1alpha1
+  kind: StatefulService

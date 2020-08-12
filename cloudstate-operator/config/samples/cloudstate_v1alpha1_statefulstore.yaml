@@ -1,0 +1,7 @@
+apiVersion: cloudstate.io/v1alpha1
+kind: StatefulStore
+metadata:
+  name: statefulstore-sample
+spec:
+  # Add fields here
+  foo: bar
