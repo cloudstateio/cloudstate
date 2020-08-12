@@ -46,6 +46,7 @@ val AkkaPersistenceSpannerVersion = "1.0.0-RC3"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.8"
 val ProtobufVersion = "3.11.4" // Note: sync with Protobuf version in Akka gRPC and ScalaPB
+val JacksonDatabindVersion = "2.9.10.5"
 val Slf4jSimpleVersion = "1.7.30"
 val GraalVersion = "20.1.0"
 val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debianslim-jre"
@@ -647,7 +648,7 @@ lazy val `java-support` = (project in file("java-support"))
         akkaHttpDependency("akka-http-testkit") % Test,
         "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
         "org.slf4j" % "slf4j-simple" % Slf4jSimpleVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9.3"
+        "com.fasterxml.jackson.core" % "jackson-databind" % JacksonDatabindVersion
       ),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
     javacOptions in (Compile, compile) ++= Seq("-source", "1.8", "-target", "1.8"),
@@ -712,7 +713,7 @@ lazy val `scala-support` = (project in file("scala-support"))
         akkaHttpDependency("akka-http-testkit") % Test,
         "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
         "org.slf4j" % "slf4j-simple" % Slf4jSimpleVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9.3"
+        "com.fasterxml.jackson.core" % "jackson-databind" % JacksonDatabindVersion
       ),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
     akkaGrpcGeneratedSources in Compile := Seq(AkkaGrpc.Server),
