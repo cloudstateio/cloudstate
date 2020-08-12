@@ -46,6 +46,7 @@ val AkkaPersistenceSpannerVersion = "1.0.0-RC3"
 val PrometheusClientVersion = "0.6.0"
 val ScalaTestVersion = "3.0.8"
 val ProtobufVersion = "3.11.4" // Note: sync with Protobuf version in Akka gRPC and ScalaPB
+val Slf4jSimpleVersion = "1.7.30"
 val GraalVersion = "20.1.0"
 val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debianslim-jre"
 val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
@@ -451,7 +452,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
         "io.prometheus" % "simpleclient" % PrometheusClientVersion,
         "io.prometheus" % "simpleclient_common" % PrometheusClientVersion,
-        "org.slf4j" % "slf4j-simple" % "1.7.26"
+        "org.slf4j" % "slf4j-simple" % Slf4jSimpleVersion
         //"ch.qos.logback"                 % "logback-classic"                   % "1.2.3", // Doesn't work well with SubstrateVM: https://github.com/vmencik/akka-graal-native/blob/master/README.md#logging
       ),
     PB.protoSources in Compile ++= {
@@ -585,7 +586,7 @@ lazy val operator = (project in file("operator"))
         akkaDependency("akka-slf4j"),
         akkaHttpDependency("akka-http"),
         "io.skuber" %% "skuber" % "2.4.0",
-        "ch.qos.logback" % "logback-classic" % "1.2.3" // Doesn't work well with SubstrateVM, use "org.slf4j"           % "slf4j-simple"     % "1.7.26" instead
+        "ch.qos.logback" % "logback-classic" % "1.2.3" // Doesn't work well with SubstrateVM, use slf4j-simple instead
       ),
     dockerSettings,
     dockerExposedPorts := Nil,
@@ -645,7 +646,7 @@ lazy val `java-support` = (project in file("java-support"))
         akkaDependency("akka-stream-testkit") % Test,
         akkaHttpDependency("akka-http-testkit") % Test,
         "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
-        "org.slf4j" % "slf4j-simple" % "1.7.26",
+        "org.slf4j" % "slf4j-simple" % Slf4jSimpleVersion,
         "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9.3"
       ),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
@@ -710,7 +711,7 @@ lazy val `scala-support` = (project in file("scala-support"))
         akkaDependency("akka-stream-testkit") % Test,
         akkaHttpDependency("akka-http-testkit") % Test,
         "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
-        "org.slf4j" % "slf4j-simple" % "1.7.26",
+        "org.slf4j" % "slf4j-simple" % Slf4jSimpleVersion,
         "com.fasterxml.jackson.core" % "jackson-databind" % "2.9.9.3"
       ),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
