@@ -413,7 +413,7 @@ lazy val `proxy` = (project in file("proxy"))
   )
 
 lazy val `proxy-core` = (project in file("proxy/core"))
-  .enablePlugins(DockerPlugin, AkkaGrpcPlugin, JavaAgent, AssemblyPlugin, GraalVMPlugin, BuildInfoPlugin)
+  .enablePlugins(DockerPlugin, AkkaGrpcPlugin, AssemblyPlugin, GraalVMPlugin, BuildInfoPlugin)
   .dependsOn(
     `graal-tools` % Provided, // Only needed for compilation
     testkit % Test
@@ -462,7 +462,6 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     },
     // For Google Cloud Pubsub API
     PB.protoSources in Compile += target.value / "protobuf_external" / "google" / "pubsub" / "v1",
-    javaAgents += "org.mortbay.jetty.alpn" % "jetty-alpn-agent" % "2.0.10" % "runtime;test",
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
     dockerSettings,
     fork in run := true,
@@ -473,7 +472,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
   )
 
 lazy val `proxy-spanner` = (project in file("proxy/spanner"))
-  .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin)
+  .enablePlugins(DockerPlugin, GraalVMPlugin)
   .dependsOn(
     `proxy-core`,
     `graal-tools` % Provided // only needed for compilation
@@ -495,7 +494,7 @@ lazy val `proxy-spanner` = (project in file("proxy/spanner"))
   )
 
 lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
-  .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin)
+  .enablePlugins(DockerPlugin, GraalVMPlugin)
   .dependsOn(
     `proxy-core`,
     `graal-tools` % Provided // only needed for compilation
@@ -533,7 +532,7 @@ lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
   )
 
 lazy val `proxy-postgres` = (project in file("proxy/postgres"))
-  .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin, AssemblyPlugin)
+  .enablePlugins(DockerPlugin, GraalVMPlugin, AssemblyPlugin)
   .dependsOn(
     `proxy-jdbc`,
     `graal-tools` % Provided // only needed for compilation
