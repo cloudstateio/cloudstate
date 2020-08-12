@@ -38,7 +38,7 @@ val GrpcJavaVersion = "1.30.2" // Note: sync with gRPC version in Akka gRPC
 // native-image
 val GrpcNettyShadedVersion = "1.28.1"
 val GraalAkkaVersion = "0.5.0"
-val AkkaVersion = "2.6.6"
+val AkkaVersion = "2.6.8"
 val AkkaHttpVersion = "10.1.12" // Note: sync with Akka HTTP version in Akka gRPC
 val AkkaManagementVersion = "1.0.5"
 val AkkaPersistenceCassandraVersion = "0.102"
