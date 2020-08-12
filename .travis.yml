@@ -130,12 +130,12 @@ cache:
   - "$HOME/.ivy2/cache"
   - "$HOME/.sbt"
   - "$HOME/.npm"
-  - "$HOME/.coursier"
+  - "$HOME/.cache/coursier"
 before_cache:
   - du -h -d 1 $HOME/.ivy2/
   - du -h -d 2 $HOME/.sbt/
-  - du -h -d 4 $HOME/.coursier/
+  - du -h -d 4 $HOME/.cache/coursier/
   - rm -fv $HOME/.ivy2/.sbt.ivy.lock
-  - find $HOME/.ivy2/cache -name "ivydata-*.properties" -print -delete
-  - find $HOME/.sbt        -name "*.lock"               -print -delete
-  - find $HOME/.coursier   -name "*.lock"               -print -delete
+  - find $HOME/.ivy2/cache     -name "ivydata-*.properties" -print -delete
+  - find $HOME/.sbt            -name "*.lock"               -print -delete
+  - find $HOME/.cache/coursier -name "*.lock"               -print -delete
