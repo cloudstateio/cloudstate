@@ -473,10 +473,14 @@ lazy val `proxy-core` = (project in file("proxy/core"))
 
 lazy val `proxy-spanner` = (project in file("proxy/spanner"))
   .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin)
-  .dependsOn(`proxy-core`)
+  .dependsOn(
+    `proxy-core`,
+    `graal-tools` % Provided // only needed for compilation
+  )
   .settings(
     common,
     name := "cloudstate-proxy-spanner",
+    dependencyOverrides += "io.grpc" % "grpc-netty-shaded" % GrpcNettyShadedVersion,
     libraryDependencies ++= Seq(
         "com.lightbend.akka" %% "akka-persistence-spanner" % AkkaPersistenceSpannerVersion,
         akkaDependency("akka-cluster-typed"), // Transitive dependency of akka-persistence-spanner
@@ -491,10 +495,14 @@ lazy val `proxy-spanner` = (project in file("proxy/spanner"))
 
 lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
   .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin)
-  .dependsOn(`proxy-core`)
+  .dependsOn(
+    `proxy-core`,
+    `graal-tools` % Provided // only needed for compilation
+  )
   .settings(
     common,
     name := "cloudstate-proxy-cassandra",
+    dependencyOverrides += "io.grpc" % "grpc-netty-shaded" % GrpcNettyShadedVersion,
     libraryDependencies ++= Seq(
         akkaPersistenceCassandraDependency("akka-persistence-cassandra", ExclusionRule("com.github.jnr")),
         akkaPersistenceCassandraDependency("akka-persistence-cassandra-launcher") % Test
@@ -508,10 +516,14 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
   )
 
 lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
-  .dependsOn(`proxy-core`)
+  .dependsOn(
+    `proxy-core`,
+    `graal-tools` % Provided // only needed for compilation
+  )
   .settings(
     common,
     name := "cloudstate-proxy-jdbc",
+    dependencyOverrides += "io.grpc" % "grpc-netty-shaded" % GrpcNettyShadedVersion,
     libraryDependencies ++= Seq(
         "com.github.dnvriend" %% "akka-persistence-jdbc" % "3.5.2"
       ),
@@ -521,10 +533,14 @@ lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
 
 lazy val `proxy-postgres` = (project in file("proxy/postgres"))
   .enablePlugins(DockerPlugin, JavaAgent, GraalVMPlugin, AssemblyPlugin)
-  .dependsOn(`proxy-jdbc`)
+  .dependsOn(
+    `proxy-jdbc`,
+    `graal-tools` % Provided // only needed for compilation
+  )
   .settings(
     common,
     name := "cloudstate-proxy-postgres",
+    dependencyOverrides += "io.grpc" % "grpc-netty-shaded" % GrpcNettyShadedVersion,
     libraryDependencies ++= Seq(
         "org.postgresql" % "postgresql" % "42.2.6"
       ),
