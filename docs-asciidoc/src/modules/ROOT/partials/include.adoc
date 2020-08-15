@@ -17,3 +17,13 @@
 :minimum_kubectl_version: 1.17.0
 :minimum_node_version: 6.14.3
 :minimum_protoc_version: 3.0.0
+
+//urls NOTE these will need to be changed once build process is figured out
+
+:javadoc_overview_url: https://cloudstate.io/docs/core/current/user/lang/java/api/overview-summary.html
+:javadoc_url_prefix: cloudstate.io/docs/core/current/user/lang/java/api/io/cloudstate/javasupport/
+:javadoc_eventsourced_url_prefix: cloudstate.io/docs/core/current/user/lang/java/api/io/cloudstate/javasupport/eventsourced/
+:javadoc_crdt_url_prefix: cloudstate.io/docs/core/current/user/lang/java/api/io/cloudstate/javasupport/crdt/
+
+:jsdoc_url_prefix: https://cloudstate.io/docs/core/current/user/lang/javascript/api/module-cloudstate.
+

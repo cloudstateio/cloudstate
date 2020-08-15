@@ -2,7 +2,7 @@
 
 This page documents how to implement Cloudstate event sourced entities in Java. For information on what Cloudstate event sourced entities are, please read the general xref:concepts:eventsource.adoc[Event sourcing] documentation first.
 
-An event sourced entity can be created by annotating it with the @javadoc[`@EventSourcedEntity`](io.cloudstate.javasupport.eventsourced.EventSourcedEntity) annotation.
+An event sourced entity can be created by annotating it with the annotation https://{javadoc_eventsourced_url_prefix}EventSourcedEntity.html[@EventSourcedEntity]. https://{javadoc_eventsourced_url_prefix}EventSourcedEntity.html[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="JavaDoc"]
 
 [source,java]
 ----
@@ -65,7 +65,7 @@ include::samples:example$java-shopping-cart/src/main/java/io/cloudstate/samples/
 
 ## Constructing
 
-The context available for injection into the constructor is a @javadoc[`EventSourcedEntityCreationContext`](io.cloudstate.javasupport.eventsourced.EventSourcedEntityCreationContext). While you don't necessarily need to define a constructor, you can define one and have that context injected in. The constructor below shows how the `entityId` is injected:
+The context available for injection into the constructor is a https://{javadoc_eventsourced_url_prefix}EventSourcedEntityCreationContext.html[EventSourcedEntityCreationContext] https://{javadoc_eventsourced_url_prefix}EventSourcedEntityCreationContext.html[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="JavaDoc"].  While you don't necessarily need to define a constructor, you can define one and have that context injected in. The constructor below shows how the `entityId` is injected:
 
 [source, java]
 ----
@@ -74,7 +74,7 @@ include::samples:example$java-shopping-cart/src/main/java/io/cloudstate/samples/
 
 ## Handling commands
 
-Command handlers can be declared by annotating a method with @javadoc[`@CommandHandler`](io.cloudstate.javasupport.eventsourced.CommandHandler). They take a context class of type @javadoc[`CommandContext`](io.cloudstate.javasupport.eventsourced.CommandContext).
+Command handlers can be declared by annotating a method with https://{javadoc_eventsourced_url_prefix}CommandHandler.html[@CommandHandler]. https://{javadoc_eventsourced_url_prefix}CommandHandler.html[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="JavaDoc"] They take a context class of type https://{javadoc_eventsourced_url_prefix}CommandContext.html[CommandContext, window="Javadoc"]. https://{javadoc_eventsourced_url_prefix}CommandContext.html[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="JavaDoc"]
 
 By default, the name of the command that the method handles will be the name of the method with the first letter capitalized. So, a method called `getCart` will handle gRPC service call command named `GetCart`. This can be overridden by setting the `name` parameter on the `@CommandHandler` annotation.
 
@@ -97,7 +97,7 @@ Commands that modify the state may do so by emitting events.
 WARNING: The **only** way a command handler may modify its state is by emitting an event. Any modifications made directly to the state from the command handler will not be persisted, and when the entity is passivated and next reloaded, those modifications will not be present.
 
 
-A command handler may emit an event by taking in a @javadoc[`CommandContext`](io.cloudstate.javasupport.eventsourced.CommandContext) parameter, and invoking the `emit` method on it. Invoking `emit` will immediately invoke the associated event handler for that event - this both validates that the event can be applied to the current state, as well as updates the state so that subsequent processing in the command handler can use it.
+A command handler may emit an event by taking in a https://{javadoc_eventsourced_url_prefix}CommandContext.html[CommandContext] https://{javadoc_eventsourced_url_prefix}CommandContext.html[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="JavaDoc"] parameter, and invoking the `emit` method on it. Invoking `emit` will immediately invoke the associated event handler for that event - this both validates that the event can be applied to the current state, as well as updates the state so that subsequent processing in the command handler can use it.
 
 Here's an example of a command handler that emits an event:
 
@@ -113,7 +113,7 @@ This command handler also validates the command, ensuring the quantity items add
 
 Event handlers are invoked at two points, when restoring entities from the journal, before any commands are handled, and each time a new event is emitted. An event handlers responsibility is to update the state of the entity according to the event. Event handlers are the only place where its safe to mutate the state of the entity at all.
 
-Event handlers are declared by annotating a method with @javadoc[`@EventHandler`](io.cloudstate.javasupport.eventsourced.EventHandler). They take a context class of type @javadoc[`EventContext`](io.cloudstate.javasupport.eventsourced.EventContext).
+Event handlers are declared by annotating a method with https://{javadoc_eventsourced_url_prefix}EventHandler.html[@EventHandler]. https://{javadoc_eventsourced_url_prefix}EventHandler.html[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="JavaDoc"] They take a context class of type https://{javadoc_eventsourced_url_prefix}EventContext.html[EventContext]. https://{javadoc_eventsourced_url_prefix}EventContext.html[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="JavaDoc"]
 
 Event handlers are differentiated by the type of event they handle. By default, the type of event an event handler handles will be determined by looking for a single non context parameter that the event handler takes. If for any reason this needs to be overridden, or if the event handler method doesn't take any non context parameter (because the event type may be all that needs to be known to handle the event), the type of event the handler handles can be specified using the `eventClass` parameter on the `@EventHandler` annotation.
 
@@ -128,7 +128,7 @@ include::samples:example$java-shopping-cart/src/main/java/io/cloudstate/samples/
 
 == Producing and handling snapshots
 
-Snapshots are an important optimisation for event sourced entities that may contain many events, to ensure that they can be loaded quickly even when they have very long journals. To produce a snapshot, a method annotated with @javadoc[`@Snapshot`](io.cloudstate.javasupport.eventsourced.Snapshot) must be declared. It takes a context class of type @javadoc[`SnapshotContext`](io.cloudstate.javasupport.eventsourced.SnapshotContext), and must return a snapshot of the current state in serializable form.
+Snapshots are an important optimisation for event sourced entities that may contain many events, to ensure that they can be loaded quickly even when they have very long journals. To produce a snapshot, a method annotated with https://{javadoc_eventsourced_url_prefix}Snapshot.html[@Snapshot] https://{javadoc_eventsourced_url_prefix}Snapshot.html[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="JavaDoc"] must be declared. It takes a context class of type https://{javadoc_eventsourced_url_prefix}SnapshotContext.html[SnapshotContext], https://{javadoc_eventsourced_url_prefix}SnapshotContext.html[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="JavaDoc"] and must return a snapshot of the current state in serializable form.
 
 [source, java]
 ----
@@ -136,7 +136,7 @@ include::samples:example$java-shopping-cart/src/main/java/io/cloudstate/samples/
 ----
 
 
-When the entity is loaded again, the snapshot will first be loaded before any other events are received, and passed to a snapshot handler. Snapshot handlers are declare by annotating a method with @javadoc[`@SnapshotHandler`](io.cloudstate.javasupport.eventsourced.SnapshotHandler), and it can take a context class of type @javadoc[`SnapshotContext`](io.cloudstate.javasupport.eventsourced.SnapshotContext).
+When the entity is loaded again, the snapshot will first be loaded before any other events are received, and passed to a snapshot handler. Snapshot handlers are declare by annotating a method with https://{javadoc_eventsourced_url_prefix}SnapshotHandler.html[@SnapshotHandler], https://{javadoc_eventsourced_url_prefix}SnapshotHandler.html[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="JavaDoc"] and they can take a context class of type https://{javadoc_eventsourced_url_prefix}SnapshotContext.html[SnapshotContext]. https://{javadoc_eventsourced_url_prefix}SnapshotContext.html[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="JavaDoc"]
 
 Multiple snapshot handlers may be defined to handle multiple different types of snapshots, the type matching is done in the same way as for events.
 
@@ -148,7 +148,7 @@ include::samples:example$java-shopping-cart/src/main/java/io/cloudstate/samples/
 
 == Registering the entity
 
-Once you've created your entity, you can register it with the @javadoc[`CloudState`](io.cloudstate.javasupport.CloudState) server, by invoking the `registerEventSourcedEntity` method. In addition to passing your entity class and service descriptor, you also need to pass any descriptors that you use for persisting events, for example, the `domain.proto` descriptor.
+Once you've created your entity, you can register it with the https://{javadoc_url_prefix}CloudState.html[CloudState] https://{javadoc_url_prefix}CloudState.html[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="JavaDoc"] server, (`io.cloudstate.javasupport.CloudState`), by invoking the `registerEventSourcedEntity` method. In addition to passing your entity class and service descriptor, you also need to pass any descriptors that you use for persisting events, for example, the `domain.proto` descriptor.
 
 [source, java]
 ----

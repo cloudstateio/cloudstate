@@ -1,7 +1,7 @@
 
 
 Node version
-: Cloudstate uses the https://github.com/grpc/grpc-node[grpc node package], which compiles a native gRPC implementation using node-gyp. It requires a minimum of node 4.0.
+: Cloudstate uses the https://github.com/grpc/grpc-node[grpc node package], which compiles a native gRPC implementation using node-gyp. It requires a minimum of node {minimum_node_version}.
 
 Build tool
 : Cloudstate doesn't require any particular build tool, though npm install scripts do need to be run.
@@ -18,9 +18,9 @@ Once you have the above, you need to add the `cloudstate` package to your projec
 npm install cloudstate --save
 ```
 
-## Generating the protobuf descriptor set
+== Generating the protobuf descriptor set
 
-A Cloudstate user function needs to report to the Cloudstate proxy the gRPC descriptor that its serving, serialized to binary using the Protobuf [`FileDescriptorSet` message type](https://developers.google.com/protocol-buffers/docs/techniques#self-description). While there is some support for this in the [protobufjs](https://www.npmjs.com/package/protobufjs) library that is used by Cloudstate to load descriptors, it is somewhat incomplete and buggy. Hence, Cloudstate requires that you precompile this descriptor using `protoc` instead.
+A Cloudstate user function needs to report to the Cloudstate proxy the gRPC descriptor that its serving, serialized to binary using the Protobuf https://developers.google.com/protocol-buffers/docs/techniques#self-description[`FileDescriptorSet` message type]. While there is some support for this in the https://www.npmjs.com/package/protobufjs[protobufjs] library that is used by Cloudstate to load descriptors, it is somewhat incomplete and buggy. Hence, Cloudstate requires that you precompile this descriptor using `protoc` instead.
 
 Cloudstate provides a utility that does this for you, downloading the `protoc` binary for your platform, and running it with the necessary arguments and include paths. This can be run manually by running `node_modules/cloudstate/bin/compile-descriptor.js`, or we recommend adding it as a `prestart` script to your npm build:
 
@@ -37,7 +37,7 @@ Multiple protobuf files can be passed, in addition, any arguments accepted by `p
 
 By default, the descriptor is written to `user-function.desc`, if you wish to change this, you can set `--descriptor_set_out=my-descriptor.desc`. Note that if you output the descriptor to a different path, you will also need to pass that custom path to the constructor of the `CloudState` class when you got to instantiate it.
 
-## package.json example
+== package.json example
 
 A minimal `package.json` for a shopping cart example is shown below:
 
@@ -56,20 +56,21 @@ A minimal `package.json` for a shopping cart example is shown below:
 }
 ----
 
-## Protobuf files
+== Protobuf files
 
-You can place protobuf files in your project wherever you like, for example, in the root directory, or in a directory named `protos`. In the `package.json` above we've placed the shopping cart application example shown earlier in @ref:[gRPC descriptors](../../features/grpc.md) in a file in the root folder called `shoppingcart.proto`.
+You can place protobuf files in your project wherever you like, for example, in the root directory, or in a directory named `protos`. In the `package.json` above we've placed the shopping cart application example shown earlier in xref:concepts:grpc.adoc[gRPC descriptors] in a file in the root folder called `shoppingcart.proto`.
 
-## Creating and starting a server
+== Creating and starting a server
 
-There are two ways to create and start a Cloudstate gRPC server. The first is to create an @extref:[`Entity`](jsdoc:Entity.html), and invoke @extref:[`start`](jsdoc:Entity.html#start) on it. This allows creating a server that serves a single entity, with the default options. We'll look at this more in the subsequent pages. Alternatively, you can use the @extref:[`CloudState`](jsdoc:CloudState.html) class, add one or more entities to it, and then invoke @extref:[`start`](jsdoc:CloudState.html#start), like so:
+There are two ways to create and start a Cloudstate gRPC server. The first is to create an {jsdoc_url_prefix}Entity.html[Entity] {jsdoc_url_prefix}Entity.html[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="jsdoc"] and invoke {jsdoc_url_prefix}Entity.html#[start] {jsdoc_url_prefix}Entity.html#start[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="jsdoc"] on it. This allows creating a server that serves a single entity, with the default options. We'll look at this more in the subsequent pages. Alternatively, you can use the {jsdoc_url_prefix}CloudState.html[Cloudstate] {jsdoc_url_prefix}CloudState.html[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="jsdoc"]  class, add one or more entities to it, and invoke {jsdoc_url_prefix}CloudState.html#start[start]. {jsdoc_url_prefix}CloudState.html#start[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="jsdoc"] 
 
+ifdef::review[REVIEWERS, gettingstarted/index.js not in samples dir so commented out for now.]
+////
 @@snip [index.js](/docs/src/test/js/test/gettingstarted/index.js) { #start }
 
 If you created your protobuf file descriptor set at a different location to the default of `user-function.desc`, you can configure that here:
 
 @@snip [index.js](/docs/src/test/js/test/gettingstarted/index.js) { #custom-desc }
+////
 
-
-For the full range of options available on the `CloudState` class, see @extref:[`CloudState~options`](jsdoc:CloudState.html#~options).
-
+For the full range of options available on the `CloudState` class, see {jsdoc_url_prefix}CloudState.html#~options[options]. {jsdoc_url_prefix}CloudState.html#~options[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="jsdoc"] 

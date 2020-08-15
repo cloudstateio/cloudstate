@@ -1,4 +1,3 @@
 
-ifdef::todo[This isn't resolving in the current docs, so we need the correct URL here.]
 
-The Java API docs can be found [here](api/index.html).
+The Java API docs can be found {javadoc_overview_url}[here]. {javadoc_overview_url}[image:ROOT:new-tab.svg[title="Open in separate tab", width=16], window="JavaDoc"]
