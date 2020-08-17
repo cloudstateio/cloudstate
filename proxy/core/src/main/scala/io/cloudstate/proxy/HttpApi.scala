@@ -189,7 +189,7 @@ object HttpApi {
       final val handler: PartialFunction[HttpRequest, Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]]
   )(implicit sys: ActorSystem, mat: Materializer, ec: ExecutionContext)
       extends PartialFunction[HttpRequest, Future[HttpResponse]] {
-    private[this] final val log = Logging(sys, rule.pattern.toString) // TODO use other name?
+    private[this] final val log = Logging(sys.eventStream, this.getClass)
 
     private[this] final val timeout = 10.seconds // TODO make configurable
 
@@ -445,11 +445,13 @@ object HttpApi {
     private[this] final def debugMsg(msg: DynamicMessage, preamble: String): Unit =
       if (log.isDebugEnabled)
         log.debug(
-          s"$preamble: ${msg}${msg.getAllFields().asScala.map(f => s"\n\r   * Request Field: [${f._1.getFullName}] = [${f._2}]").mkString}"
+          preamble + msg.getAllFields.asScala
+            .map { case (key, value) => s"  * Request Field: [${key.getFullName}] = [$value]" }
+            .mkString("\n", "\n", "")
         )
 
     private[this] final def updateRequest(req: HttpRequest, message: DynamicMessage): HttpRequest = {
-      debugMsg(message, "Got request")
+      debugMsg(message, s"Received HTTP request [${req.uri.path}] for [${methDesc.getFullName}]")
       HttpRequest(
         method = HttpMethods.POST,
         uri = Uri(path = Path / methDesc.getService.getFullName / methDesc.getName),
