@@ -19,24 +19,34 @@ import io.cloudstate.operator.{Condition, ImageConfig, OperatorConstants, Statef
 import skuber.api.client.KubernetesClient
 import io.cloudstate.operator.OperatorConstants._
 import io.cloudstate.operator.StatefulStore.Resource
-import play.api.libs.json.JsValue
+import play.api.libs.json._
+import play.api.libs.functional.syntax._
 import skuber.EnvVar
 
 object CassandraStoreSupport extends StatefulStoreSupport {
+  import CredentialsHelper._
 
   override def name: String = OperatorConstants.CassandraStatefulStoreType
 
   override def validate(store: StatefulStore.Resource, client: KubernetesClient): Validated[ConfiguredStatefulStore] =
     store.spec.deployment match {
       case Some(`UnmanagedStatefulStoreDeployment`) =>
-        store.spec.config.flatMap(c => (c \ "service").asOpt[String]) match {
-          case Some(serviceName) =>
-            Validated(new UnmanagedCassandra(serviceName))
-
+        store.spec.config.map(_.validate[CassandraConfig]) match {
           case None =>
             Validated.error(StatefulStoreConditionType,
-                            "MissingServiceName",
-                            "No service name declared in unmanaged Cassandra journal")
+                            "BadConfiguration",
+                            s"Missing configuration for unmanaged Cassandra store")
+
+          case Some(JsError(errors)) =>
+            Validated.error(
+              StatefulStoreConditionType,
+              "BadConfiguration",
+              s"Configuration error for Cassandra store at ${errors.head._1}: ${errors.head._2.head.message}"
+            )
+
+          case Some(JsSuccess(config, _)) =>
+            // todo validate that any referenced secrets exist
+            Validated(new UnmanagedCassandra(config))
         }
 
       case Some(unknown) =>
@@ -58,14 +68,14 @@ object CassandraStoreSupport extends StatefulStoreSupport {
   override def reconcile(store: Resource, client: KubernetesClient): Validated[ConfiguredStatefulStore] =
     validate(store, client)
 
-  private class UnmanagedCassandra(service: String) extends ConfiguredStatefulStore {
+  private class UnmanagedCassandra(cassandraConfig: CassandraConfig) extends ConfiguredStatefulStore {
     override def successfulConditions: List[Condition] = Nil
 
     override def validateInstance(config: Option[JsValue],
                                   client: KubernetesClient): Validated[StatefulStoreUsageConfiguration] =
       config.flatMap(config => (config \ "keyspace").asOpt[String]) match {
         case Some(keyspace) =>
-          Validated(new CassandraUsage(service, keyspace))
+          Validated(new CassandraUsage(cassandraConfig, keyspace))
         case None =>
           Validated.error(StatefulStoreConditionType,
                           "MissingKeyspace",
@@ -73,12 +83,21 @@ object CassandraStoreSupport extends StatefulStoreSupport {
       }
   }
 
-  private class CassandraUsage(service: String, keyspace: String) extends StatefulStoreUsageConfiguration {
+  private class CassandraUsage(config: CassandraConfig, keyspace: String) extends StatefulStoreUsageConfiguration {
     override def successfulConditions: List[Condition] = Nil
     override def proxyImage(config: ImageConfig): String = config.cassandra
-    override def proxyContainerEnvVars: List[EnvVar] = List(
-      EnvVar("CASSANDRA_CONTACT_POINTS", service),
-      EnvVar("CASSANDRA_KEYSPACE", keyspace)
-    )
+    override def proxyContainerEnvVars: List[EnvVar] =
+      List(
+        EnvVar("CASSANDRA_CONTACT_POINTS", config.service),
+        EnvVar("CASSANDRA_KEYSPACE", keyspace)
+      ) ++ config.username.map(username => EnvVar("CASSANDRA_USERNAME", username.toEnvVar)) ++
+      config.password.map(password => EnvVar("CASSANDRA_PASSWORD", password.toEnvVar))
   }
+
+  case class CassandraConfig(service: String, username: Option[CredentialParam], password: Option[CredentialParam])
+
+  implicit def cassandraCredentialsReads: Reads[CassandraConfig] =
+    ((__ \ "service").read[String] and
+    readOptionalCredentialParam("username") and
+    readOptionalCredentialParam("password"))(CassandraConfig)
 }
