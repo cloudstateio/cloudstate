@@ -221,6 +221,8 @@ object Serve {
 
     val routes: PartialFunction[HttpRequest, Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]] = {
       case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
+        log.debug("Received gRPC request [{}]", req.uri.path)
+
         val handler = rpcMethodSerializers(req.uri.path)
 
         val metadata = Metadata(req.headers.map { header =>

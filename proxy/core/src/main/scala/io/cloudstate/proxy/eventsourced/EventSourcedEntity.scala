@@ -275,6 +275,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
       stashedCommands = stashedCommands.enqueue((command, sender(), instrumentation.commandStashed()))
 
     case command: EntityCommand =>
+      log.debug("Entity [{}] [{}] received command [{}]", configuration.serviceName, entityId, command.name)
       instrumentation.commandReceived()
       handleCommand(command, sender())
 
