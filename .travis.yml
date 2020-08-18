@@ -64,32 +64,6 @@ jobs:
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
 
-  - name: Minikube smoke test (in-memory store)
-    before_script:
-    - bin/prepare-minikube-linux.sh
-    script:
-    - set -e
-    - bin/deploy-cloudstate.sh
-    - bin/run-java-shopping-cart-test.sh
-
-  - name: Minikube smoke test (postgres store)
-    before_script:
-    - bin/prepare-minikube-linux.sh
-    script:
-    - set -e
-    - bin/install-postgres.sh
-    - bin/deploy-cloudstate.sh postgres
-    - bin/run-java-shopping-cart-test.sh postgres
-
-  - name: Minikube smoke test (cassandra store)
-    before_script:
-    - bin/prepare-minikube-linux.sh
-    script:
-    - set -e
-    - bin/install-cassandra.sh
-    - bin/deploy-cloudstate.sh cassandra
-    - bin/run-java-shopping-cart-test.sh cassandra
-
   - stage: Deploy
     name: Deploy documentation to cloudstate.io
     if: tag =~ ^v
