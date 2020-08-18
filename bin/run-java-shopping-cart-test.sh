@@ -179,10 +179,9 @@ kubectl wait --for=condition=available --timeout=1m deployment/$deployment || fa
 kubectl get deployment $deployment
 
 # Scale up the deployment, to test with akka clustering
-# Travis can fail with 3 nodes, only scale to 2
 echo
 echo "Scaling deployment..."
-kubectl scale --replicas=2 deployment/$deployment
+kubectl scale --replicas=3 deployment/$deployment
 kubectl get deployment $deployment
 
 # Wait for the scaled deployment to be available

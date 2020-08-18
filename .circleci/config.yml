@@ -60,6 +60,33 @@ jobs:
               tck/it:test
       - save_sbt_cache
 
+  minikube-smoke-test:
+    machine: true
+    resource_class: large
+    steps:
+      - checkout
+      - setup_sbt
+      - restore_sbt_cache
+      - setup_minikube
+      - run:
+          name: Deploy Cloudstate
+          command: bin/deploy-cloudstate.sh
+      - run:
+          name: Install Postgres
+          command: bin/install-postgres.sh
+      - run:
+          name: Install Cassandra
+          command: bin/install-cassandra.sh
+      - run:
+          name: Run shopping cart test (InMemory)
+          command: bin/run-java-shopping-cart-test.sh InMemory
+      - run:
+          name: Run shopping cart test (Postgres)
+          command: bin/run-java-shopping-cart-test.sh Postgres --no-build
+      - run:
+          name: Run shopping cart test (Cassandra)
+          command: bin/run-java-shopping-cart-test.sh Cassandra --no-build
+
   native-image-smoke-test:
     parameters:
       proxy-store:
@@ -98,10 +125,12 @@ jobs:
           command: bin/run-java-shopping-cart-test.sh << parameters.proxy-store >>
 
 workflows:
-  native-image-tests:
+  Integration tests:
     jobs:
       - native-image-it-test:
           name: Native-image TCK integration tests
+      - minikube-smoke-test:
+          name: Minikube smoke test
       - native-image-smoke-test:
           name: Native-image InMemory smoke test
           proxy-store: InMemory
