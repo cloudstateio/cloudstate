@@ -3,7 +3,7 @@ dist: xenial
 jdk:
   - openjdk11
 before_install:
-  - sudo apt-get -y install jq
+  - sudo apt-get -qq -y install conntrack jq
 env:
   global:
   # Docs deploy token; encrypted with: travis encrypt --pro -r cloudstateio/cloudstate DEPLOY_DOCS_TOKEN=<cloudstate-bot.github.token>
@@ -64,12 +64,31 @@ jobs:
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
 
-  - name: Minikube smoke test
+  - name: Minikube smoke test (in-memory store)
     before_script:
-    - bin/prepare-minikube-travis.sh
+    - bin/prepare-minikube-linux.sh
     script:
-    - bin/deploy-to-minikube.sh
-    - bin/run-test-java-shopping-cart-minikube.sh
+    - set -e
+    - bin/deploy-cloudstate.sh
+    - bin/run-java-shopping-cart-test.sh
+
+  - name: Minikube smoke test (postgres store)
+    before_script:
+    - bin/prepare-minikube-linux.sh
+    script:
+    - set -e
+    - bin/install-postgres.sh
+    - bin/deploy-cloudstate.sh postgres
+    - bin/run-java-shopping-cart-test.sh postgres
+
+  - name: Minikube smoke test (cassandra store)
+    before_script:
+    - bin/prepare-minikube-linux.sh
+    script:
+    - set -e
+    - bin/install-cassandra.sh
+    - bin/deploy-cloudstate.sh cassandra
+    - bin/run-java-shopping-cart-test.sh cassandra
 
   - stage: Deploy
     name: Deploy documentation to cloudstate.io
