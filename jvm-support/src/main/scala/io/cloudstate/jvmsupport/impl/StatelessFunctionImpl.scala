@@ -18,7 +18,6 @@ package io.cloudstate.jvmsupport.impl
 
 import io.cloudstate.protocol.function._
 import akka.actor.ActorSystem
-import io.cloudstate.jvmsupport.CloudState
 
 // FIXME Implement support for this
 class StatelessFunctionImpl(system: ActorSystem) extends StatelessFunction {
