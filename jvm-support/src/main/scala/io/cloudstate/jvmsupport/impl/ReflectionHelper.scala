@@ -189,6 +189,8 @@ private[impl] object ReflectionHelper {
    * Verifies that none of the given methods have CloudState annotations that are not allowed.
    *
    * This is designed to eagerly catch mistakes such as importing the wrong CommandHandler annotation.
+   *
+   * TODO: Revalidate this
    */
   def validateNoBadMethods(methods: Seq[Method],
                            entity: Class[_ <: Annotation],
