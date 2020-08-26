@@ -6,7 +6,7 @@ An event sourced entity can be created by annotating it with the @javadoc[`@Even
 
 [source,java]
 ----
-include::example$eventsourced/ShoppingCartEntity.java[tag=entity-class]
+include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=entity-class]
 ----
 
 The `persistenceId` is used to namespace events in the journal. This is useful when you share the same database between multiple entities. It defaults to the simple name for the entity class (in this case, `ShoppingCartEntity`). It is good practice to explicitly define a `persistenceId`. This helps to decouple the journal data from the classnames in your code—the event naming in the journal remains coherent, even if the underlying entity classname may have changed.
