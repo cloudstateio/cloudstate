@@ -10,7 +10,10 @@ While protobufs are the recommended format for persisting events, it is recommen
 
 For our shopping cart example, we'll create a new file called `domain.proto`, the name domain is selected to indicate that these are my applications domain objects:
 
-@@snip [domain.proto](/docs/src/test/js/domain.proto)
+[source,proto]
+----
+include::proto:example$domain.proto[]
+----
 
 In this file, the `Cart` message is the state, while `ItemAdded` and `ItemRemoved` are events. Note that the events are in past tense - events are facts, indisputable things that happened in the past. A fact never becomes false, once you've added an item to a shopping cart, it never becomes untrue that that item was added to the cart. It may be removed later, but that doesn't change the fact that it was added, it only changes the current state of the cart, not what happened in the past. The names of your events should always be in past tense, communicating the indisputable fact that they represent.
 
@@ -37,7 +40,10 @@ When you pass an event or snapshot to Cloudstate to persist, it needs to know ho
 
 The `EventSourced` class provides a helper method called @extref:[`lookupType`](jsdoc:EventSourced.html#lookupType) to facilitate this. So before implementing anything, we'll look up these types so we can use them later.
 
-@@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #lookup-type }
+[source,js]
+----
+include::example$test/eventsourced/shoppingcart.js[tag=lookup-type]
+----
 
 ## Initial state
 
@@ -45,7 +51,10 @@ When there are no snapshots persisted for an entity (such as when the entity is 
 
 To create the initial state, we set the @extref:[`initial`](jsdoc:EventSourced.html#initial) callback. This takes the id of the entity being created, and returns a new empty state, in this case, an empty shopping cart:
 
-@@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #initial }
+[source,js]
+----
+include::example$test/eventsourced/shoppingcart.js[tag=initial]
+----
 
 Note the use of `Cart.create()`, this creates a protobuf message using the `Cart` protobuf message type that we looked up earlier.
 
@@ -63,7 +72,10 @@ The command handler must return a message of the same type as the output type of
 
 The following shows the implementation of the `GetCart` command handler. This command handler is a read-only command handler, it doesn't emit any events, it just returns some state:
 
-@@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #get-cart }
+[source,js]
+----
+include::example$test/eventsourced/shoppingcart.js[tag=get-cart]
+----
 
 #### Emitting events
 
@@ -77,7 +89,10 @@ A command handler may emit an event by using the @extref:[`emit`](jsdoc:EventSou
 
 Here's an example of a command handler that emits an event:
 
-@@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #add-item }
+[source,js]
+----
+include::example$test/eventsourced/shoppingcart.js[tag=add-item]
+----
 
 This command handler also validates the command, ensuring the quantity items added is greater than zero. Invoking @extref:[`fail`](jsdoc:EventSourced.EventSourcedCommandContext.html#fail) fails the command - this method throws so there's no need to explicitly throw an exception.
 
@@ -91,7 +106,10 @@ Event handlers take the event they are handling, and the state, and must return 
 
 Here's an example event handler for the `ItemAdded` event:
 
-@@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #item-added }
+[source,js]
+----
+include::example$test/eventsourced/shoppingcart.js[tag=item-added]
+----
 
 === Setting the behavior
 
@@ -99,7 +117,10 @@ Once you have your command handler and event handler functions implemented, you 
 
 The behavior callback can be set by setting the @extref:[`behavior`](jsdoc:EventSourced.html#behavior) property on the entity:
 
-@@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #behavior }
+[source,js]
+----
+include::example$test/eventsourced/shoppingcart.js[tag=behavior]
+----
 
 The command handlers are a mapping of the gRPC service call names to the command handler functions we implemented. Note the names, as in the gRPC convention for service call names, are upper cased.
 
@@ -113,14 +134,23 @@ The entities behavior can be changed by returning different sets of handlers fro
 
 In the example below, we show a shopping cart that also has a checkout command. Once checked out, the shopping cart no longer accepts any commands to add or remove items, its state and therefore behavior changes:
 
-@@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #multiple-behaviors }
+[source,js]
+----
+include::example$test/eventsourced/shoppingcart.js[tag=multiple-behaviors]
+----
 
 == Starting the entity
 
 If you only have a single entity, as a convenience, you can start it directly, by invoking the @extref:[`start`](jsdoc:EventSourced.html#start) method, like so:
 
-@@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #start }
+[source,js]
+----
+include::example$test/eventsourced/shoppingcart.js[tag=start]
+----
 
 Alternatively, you can add it to the `Cloudstate` server explicitly:
 
-@@snip [shoppingcart.js](/docs/src/test/js/test/eventsourced/shoppingcart.js) { #add-entity }
+[source,js]
+----
+include::example$test/eventsourced/shoppingcart.js[tag=add-entity]
+----

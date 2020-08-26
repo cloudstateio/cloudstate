@@ -26,7 +26,7 @@ import io.cloudstate.javasupport.eventsourced.CommandHandler;
 
 public class ShoppingCartEntity {
 
-  // #lookup
+  // #lookup tag::lookup[]
   private final ServiceCallRef<Hotitems.Item> itemAddedToCartRef;
 
   public ShoppingCartEntity(Context ctx) {
@@ -35,10 +35,10 @@ public class ShoppingCartEntity {
             .lookup(
                 "example.shoppingcart.ShoppingCartService", "ItemAddedToCart", Hotitems.Item.class);
   }
-  // #lookup
+  // #lookup end::lookup[]
 
   class CommandHandlerWithForward {
-    // #forward
+    // #forward tag::forward[]
     @CommandHandler
     public void addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
       // ... Validate and emit event
@@ -51,11 +51,11 @@ public class ShoppingCartEntity {
                   .setQuantity(item.getQuantity())
                   .build()));
     }
-    // #forward
+    // #forward end::forward[]
   }
 
   class CommandHandlerWithEffect {
-    // #effect
+    // #effect tag::effect[]
     @CommandHandler
     public Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
       // ... Validate and emit event
@@ -70,6 +70,6 @@ public class ShoppingCartEntity {
 
       return Empty.getDefaultInstance();
     }
-    // #effect
+    // #effect end::effect[]
   }
 }
