@@ -25,6 +25,9 @@ import io.cloudstate.protocol.entity.ProxyInfo
 import io.cloudstate.protocol.event_sourced.EventSourced
 import io.cloudstate.protocol.function.StatelessFunction
 import java.net.{ConnectException, Socket}
+
+import io.cloudstate.protocol.crud.Crud
+
 import scala.concurrent.duration._
 
 object TestProxy {
@@ -49,7 +52,8 @@ class TestProxy(servicePort: Int) {
     }
   """))
 
-  val info: ProxyInfo = EntityDiscoveryManager.proxyInfo(Seq(Crdt.name, StatelessFunction.name, EventSourced.name))
+  val info: ProxyInfo =
+    EntityDiscoveryManager.proxyInfo(Seq(Crdt.name, StatelessFunction.name, EventSourced.name, Crud.name))
 
   val system: ActorSystem = CloudStateProxyMain.start(config)
 
