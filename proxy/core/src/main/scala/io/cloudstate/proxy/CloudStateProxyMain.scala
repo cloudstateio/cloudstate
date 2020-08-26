@@ -141,6 +141,10 @@ object CloudStateProxyMain {
     implicit val materializer = SystemMaterializer(system)
     import system.dispatcher
 
+    val jvmName = sys.props.get("java.runtime.name").orElse(sys.props.get("java.vm.name")).getOrElse("")
+    val jvmVersion = sys.props.get("java.runtime.version").orElse(sys.props.get("java.vm.version")).getOrElse("")
+    system.log.info(s"Starting Cloudstate Proxy version [${BuildInfo.version}] running on [$jvmName $jvmVersion]")
+
     val c = system.settings.config.getConfig("cloudstate.proxy")
     val serverConfig = new EntityDiscoveryManager.Configuration(c)
     val appConfig = new CloudStateProxyMain.Configuration(c)

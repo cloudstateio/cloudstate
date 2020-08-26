@@ -31,6 +31,7 @@ import akka.grpc.{ProtobufSerializer, Trailers}
 import akka.http.scaladsl.model.{HttpEntity, HttpHeader, HttpRequest, HttpResponse, StatusCodes}
 import akka.http.scaladsl.model.Uri.Path
 import akka.actor.{ActorRef, ActorSystem}
+import akka.event.{Logging, LoggingAdapter}
 import akka.http.scaladsl.model.headers.RawHeader
 import akka.util.ByteString
 import akka.stream.Materializer
@@ -48,8 +49,6 @@ import io.grpc.{Status, StatusRuntimeException}
 import org.slf4j.{Logger, LoggerFactory}
 
 object Serve {
-  private final val log = LoggerFactory.getLogger(getClass)
-
   private[this] final val fallback: Any => Any = _ => fallback
 
   private final def checkFallback[B] = fallback.asInstanceOf[Any => B]
@@ -78,7 +77,7 @@ object Serve {
                              final val router: UserFunctionRouter,
                              final val emitter: Option[Emitter],
                              final val entityDiscoveryClient: EntityDiscoveryClient,
-                             final val log: Logger)(implicit ec: ExecutionContext) {
+                             final val log: LoggingAdapter)(implicit ec: ExecutionContext) {
 
     final val fullCommandName: String = entity.serviceName + "." + method.getName
     final val unary: Boolean = !method.toProto.getClientStreaming && !method.toProto.getServerStreaming
@@ -102,7 +101,7 @@ object Serve {
             if (payload.typeUrl != expectedReplyTypeUrl) {
               val msg =
                 s"$fullCommandName: Expected reply type_url to be [$expectedReplyTypeUrl] but was [${payload.typeUrl}]."
-              log.warn(msg)
+              log.warning(msg)
               entityDiscoveryClient.reportError(UserFunctionError(s"Warning: $msg"))
             }
             Some(reply)
@@ -111,7 +110,7 @@ object Serve {
             None
           case UserFunctionReply(Some(ClientAction(ClientAction.Action.Failure(Failure(_, message, _)), _)), _, _) =>
             log.error("User Function responded with a failure: {}", message)
-            None
+            throw CommandException(message)
           case _ =>
             None
         })
@@ -150,6 +149,7 @@ object Serve {
       mat: Materializer,
       ec: ExecutionContext
   ): PartialFunction[HttpRequest, Future[HttpResponse]] = {
+    val log = Logging(sys.eventStream, Serve.getClass)
     val grpcProxy = createGrpcApi(entities, router, statsCollector, entityDiscoveryClient, emitters)
     val grpcHandler = Function.unlift { request: HttpRequest =>
       val asResponse = grpcProxy.andThen { futureResult =>
@@ -209,7 +209,7 @@ object Serve {
       mat: Materializer,
       ec: ExecutionContext
   ): PartialFunction[HttpRequest, Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]] = {
-
+    val log = Logging(sys.eventStream, Serve.getClass)
     val rpcMethodSerializers = (for {
       entity <- entities.iterator
       method <- entity.serviceDescriptor.getMethods.iterator.asScala
@@ -221,6 +221,8 @@ object Serve {
 
     val routes: PartialFunction[HttpRequest, Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]] = {
       case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
+        log.debug("Received gRPC request [{}]", req.uri.path)
+
         val handler = rpcMethodSerializers(req.uri.path)
 
         val metadata = Metadata(req.headers.map { header =>
