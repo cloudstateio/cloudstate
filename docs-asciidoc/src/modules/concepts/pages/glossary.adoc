@@ -12,7 +12,7 @@ ifdef::todo[The following need to be arranged so they can be digested more easil
 
 == Stateful service
 
-A stateful service is a deployable unit. It is represented in Kubernetes as a `StatefulService` resource. It contains a <<User function>>, and may reference a <<Stateful store>>. The Cloudstate operator transforms a stateful service into a Kubernetes Deployment resource. The Cloudstate operator then defines a Kubernetes Service to expose the stateful service to the outside world. The deployment will be augmented by the injection of a Cloudstate <<Proxy>>. 
+A stateful service is a deployable unit. It is represented in Kubernetes as a `StatefulService` resource. It contains a <<User function>>, and may reference a <<Stateful store>>. The Cloudstate operator transforms a stateful service into a Kubernetes Deployment resource. The Cloudstate operator then defines a Kubernetes Service to expose the stateful service to the outside world. The deployment will be augmented by the injection of a Cloudstate <<Proxy>>.
 
 == Stateful store
 
@@ -48,7 +48,7 @@ A <<User function>> implements one or more entities. An entity is conceptually e
 
 === Entity instance
 
-An instance of an <<Entity>>. Entity instances are identified by an <<Entity key>>, which is unique to a given entity. An entity holds state in the <<User function>>, and depending on the <<Entity type>> this state is held within the context of a gRPC stream. When a command for a particular entity instance is received, the <<Proxy>> will make a new streamed gRPC call for that entity instance to the @ref:[User function](#user-function). All subsequent commands received for that entity instance will be sent through that streamed call.
+An instance of an <<Entity>>. Entity instances are identified by an <<Entity key>>, which is unique to a given entity. An entity holds state in the <<User function>>, and depending on the <<Entity type>> this state is held within the context of a gRPC stream. When a command for a particular entity instance is received, the <<Proxy>> will make a new streamed gRPC call for that entity instance to the <<User function>>. All subsequent commands received for that entity instance will be sent through that streamed call.
 
 === Entity service
 
@@ -64,11 +64,8 @@ A key used to identify instances of an <<Entity>>. All <<Command>>s must contain
 
 == Event sourced
 
-A type of <<Entity>> that stores its state using a journal of events, and restores its state by replaying that journal. These are discussed in more detail in xref:eventsource.adoc[Event sourcing].
+A type of <<Entity>> that stores its state using a journal of events, and restores its state by replaying that journal. These are discussed in more detail in xref:eventsourced.adoc[Event sourcing].
 
 === Conflict-free replicated data type
 
 A type of <<Entity>> that stores its state using a Conflict-free Replicated Data Type (CRDT), which is replicated across different nodes of the service. These are discussed in more detail in xref:crdts.adoc[Conflict-free Replicated Data Types].
-
-
-

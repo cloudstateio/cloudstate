@@ -1,6 +1,6 @@
 
 
-This page documents how to implement Cloudstate event sourced entities in Java. For information on what Cloudstate event sourced entities are, please read the general xref:concepts:eventsource.adoc[Event sourcing] documentation first.
+This page documents how to implement Cloudstate event sourced entities in Java. For information on what Cloudstate event sourced entities are, please read the general xref:concepts:eventsourced.adoc[Event sourcing] documentation first.
 
 An event sourced entity can be created by annotating it with the @javadoc[`@EventSourcedEntity`](io.cloudstate.javasupport.eventsourced.EventSourcedEntity) annotation.
 
@@ -15,7 +15,7 @@ The `snapshotEvery` parameter controls how often snapshots are taken, so that th
 
 ## Persistence types and serialization
 
-Event sourced entities persist events and snapshots, and these need to be serialized when persisted. The most straight forward way to persist events and snapshots is to use protobufs. Cloudstate will automatically detect if an emitted event is a protobuf, and serialize it as such. For other serialization options, including JSON, see @ref:[Serialization](serialization.md).
+Event sourced entities persist events and snapshots, and these need to be serialized when persisted. The most straight forward way to persist events and snapshots is to use protobufs. Cloudstate will automatically detect if an emitted event is a protobuf, and serialize it as such. For other serialization options, including JSON, see xref:serialization.adoc[Serialization].
 
 While protobuf is the recommended format for persisting events, it is recommended that you do not persist the protobuf messages from your service interface. Rather, you should create new messages, even if they are identical to those of the service messages. While this may introduce some overhead in needing to convert from one type to the other, the reason for doing this is that it will allow the public interface of the service to evolve independently from its data storage format, which should be private.
 

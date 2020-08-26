@@ -58,7 +58,7 @@ A minimal `package.json` for a shopping cart example is shown below:
 
 ## Protobuf files
 
-You can place protobuf files in your project wherever you like, for example, in the root directory, or in a directory named `protos`. In the `package.json` above we've placed the shopping cart application example shown earlier in @ref:[gRPC descriptors](../../features/grpc.md) in a file in the root folder called `shoppingcart.proto`.
+You can place protobuf files in your project wherever you like, for example, in the root directory, or in a directory named `protos`. In the `package.json` above we've placed the shopping cart application example shown earlier in xref:concepts:grpc.adoc[gRPC descriptors] in a file in the root folder called `shoppingcart.proto`.
 
 ## Creating and starting a server
 

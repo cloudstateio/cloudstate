@@ -36,7 +36,7 @@ The following shows the implementation of the `GetCart` command handler. This co
 
 == Updating a CRDT
 
-Due to CloudState's @ref[take in turns approach](../../features/crdts.md#approach-to-crdts-in-cloudstate), CRDTs may only be updated in command handlers and @ref[stream cancellation callbacks](#responding-to-stream-cancellation).
+Due to CloudState's xref:concepts:crdts.adoc#_approach_to_crdts_in_cloudstate[take in turns approach], CRDTs may only be updated in command handlers and <<Responding to stream cancellation,stream cancellation callbacks>>.
 
 Here's a command handler for the `AddItem` command that adds the item to the shopping cart:
 
@@ -78,7 +78,7 @@ A streamed command handler may also register an @javadoc[`onCancel`](io.cloudsta
 
 == Types of CRDTs
 
-The Cloudstate Java support library offers Java classes for each of the @ref[CRDTs available in Cloudstate](../../features/crdts.md#crdts-available-in-cloudstate).
+The Cloudstate Java support library offers Java classes for each of the xref:concepts:crdts.adoc#_crdts_available_in_cloudstate[CRDTs available in Cloudstate].
 
 === Counters and flags
 
@@ -87,7 +87,7 @@ The Cloudstate Java support library offers Java classes for each of the @ref[CRD
 === Vote
 
 @javadoc[`Vote`](io.cloudstate.javasupport.crdt.Vote) is available for the Vote CRDT. The Vote CRDT allows updating the current node's vote using the @javadoc[`vote`](io.cloudstate.javasupport.crdt.Vote#vote-boolean-) method, the current nodes vote can be queried using the @javadoc[`getSelfVote`](io.cloudstate.javasupport.crdt.Vote#getSelfVote--) method.
- 
+
 For determining the result of a vote, @javadoc[`getVoters`](io.cloudstate.javasupport.crdt.Vote#getVoters--) and @javadoc[`getVotesFor`](io.cloudstate.javasupport.crdt.Vote#getVotesFor--) can be used to check the total number of nodes, and the number of nodes that have voted for the condition, respectively. In addition, convenience methods are provided for common vote decision approaches, @javadoc[`isAtLeastOne`](io.cloudstate.javasupport.crdt.Vote#isAtLeastOne--) returns true if there is at least one voter for the condition, @javadoc[`isMajority`](io.cloudstate.javasupport.crdt.Vote#isMajority--) returns true if the number of votes for is more than half the number of voters, and @javadoc[`isAll`](io.cloudstate.javasupport.crdt.Vote#isUnanimous--) returns true if the number of votes for equals the number of voters.
 
 === Registers
