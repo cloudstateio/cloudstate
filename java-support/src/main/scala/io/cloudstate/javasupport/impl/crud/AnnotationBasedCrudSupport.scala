@@ -73,7 +73,7 @@ private[impl] class AnnotationBasedCrudSupport(
       })
     }
 
-    override def handleCommand(command: JavaPbAny, context: CommandContext): Optional[JavaPbAny] = unwrap {
+    override def handleCommand(command: JavaPbAny, context: CommandContext[JavaPbAny]): Optional[JavaPbAny] = unwrap {
       behavior.commandHandlers.get(context.commandName()).map { handler =>
         handler.invoke(entity, command, context)
       } getOrElse {
@@ -125,7 +125,7 @@ private[impl] class AnnotationBasedCrudSupport(
 }
 
 private class CrudBehaviorReflection(
-    val commandHandlers: Map[String, ReflectionHelper.CommandHandlerInvoker[CommandContext]],
+    val commandHandlers: Map[String, ReflectionHelper.CommandHandlerInvoker[CommandContext[JavaPbAny]]],
     val updateHandlers: Map[Class[_], UpdateInvoker],
     val deleteHandler: Option[DeleteInvoker]
 ) {
@@ -166,8 +166,8 @@ private object CrudBehaviorReflection {
           )
         })
 
-        new ReflectionHelper.CommandHandlerInvoker[CommandContext](ReflectionHelper.ensureAccessible(method),
-                                                                   serviceMethod)
+        new ReflectionHelper.CommandHandlerInvoker[CommandContext[JavaPbAny]](ReflectionHelper.ensureAccessible(method),
+                                                                              serviceMethod)
       }
       .groupBy(_.serviceMethod.name)
       .map {

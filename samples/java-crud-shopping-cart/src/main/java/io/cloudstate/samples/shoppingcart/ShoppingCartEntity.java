@@ -61,7 +61,7 @@ public class ShoppingCartEntity {
   }
 
   @CommandHandler
-  public Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
+  public Empty addItem(Shoppingcart.AddLineItem item, CommandContext<Domain.Cart> ctx) {
     if (item.getQuantity() <= 0) {
       ctx.fail("Cannot add negative quantity of to item " + item.getProductId());
     }
@@ -79,12 +79,12 @@ public class ShoppingCartEntity {
           lineItem.toBuilder().setQuantity(lineItem.getQuantity() + item.getQuantity()).build();
     }
 
-    ctx.update(Domain.Cart.newBuilder().addAllItems(addItem(item, lineItem)).build());
+    ctx.updateEntity(Domain.Cart.newBuilder().addAllItems(addItem(item, lineItem)).build());
     return Empty.getDefaultInstance();
   }
 
   @CommandHandler
-  public Empty removeItem(Shoppingcart.RemoveLineItem item, CommandContext ctx) {
+  public Empty removeItem(Shoppingcart.RemoveLineItem item, CommandContext<Domain.Cart> ctx) {
     if (!cart.containsKey(item.getProductId())) {
       ctx.fail("Cannot remove item " + item.getProductId() + " because it is not in the cart.");
     }
@@ -95,17 +95,18 @@ public class ShoppingCartEntity {
             .map(this::convert)
             .collect(Collectors.toList());
 
-    ctx.update(Domain.Cart.newBuilder().addAllItems(lineItems).build());
+    ctx.updateEntity(Domain.Cart.newBuilder().addAllItems(lineItems).build());
     return Empty.getDefaultInstance();
   }
 
   @CommandHandler
-  public Empty removeCart(Shoppingcart.RemoveShoppingCart cartItem, CommandContext ctx) {
+  public Empty removeCart(
+      Shoppingcart.RemoveShoppingCart cartItem, CommandContext<Domain.Cart> ctx) {
     if (!entityId.equals(cartItem.getUserId())) {
       ctx.fail("Cannot remove unknown cart " + cartItem.getUserId());
     }
 
-    ctx.delete();
+    ctx.deleteEntity();
     return Empty.getDefaultInstance();
   }
 

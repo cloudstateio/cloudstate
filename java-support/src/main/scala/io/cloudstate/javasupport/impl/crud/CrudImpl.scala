@@ -181,6 +181,7 @@ final class CrudImpl(_system: ActorSystem,
 
           val clientAction = context.createClientAction(reply, false)
           if (!context.hasError) {
+            context.applyCrudAction()
             val endSequenceNumber = context.nextSequenceNumber
             val snapshot = if (context.performSnapshot) context.snapshot() else None
 
@@ -231,33 +232,28 @@ final class CrudImpl(_system: ActorSystem,
                                          val anySupport: AnySupport,
                                          val handler: CrudEntityHandler,
                                          val snapshotEvery: Int)
-      extends CommandContext
+      extends CommandContext[JavaPbAny]
       with AbstractContext
       with AbstractClientActionContext
       with AbstractEffectContext
       with ActivatableContext {
 
-    private var _performSnapshot: Boolean = false
+    // TODO snapshot should removed
+    // TODO null check for state in updateEntity
+
+    private var _performSnapshot: Boolean = false // NOT needed native CRUD will be used
     private var _nextSequenceNumber: Long = sequenceNumber
     private var mayBeAction: Option[CrudAction] = None
 
-    override def update(event: AnyRef): Unit = {
+    override def updateEntity(state: JavaPbAny): Unit = {
       checkActive()
-
-      val encoded = anySupport.encodeScala(event)
-      _nextSequenceNumber += 1
-      handler.handleUpdate(ScalaPbAny.toJavaProto(encoded), new StateContextImpl(entityId, _nextSequenceNumber))
+      val encoded = anySupport.encodeScala(state)
       mayBeAction = Some(CrudAction(Update(CrudUpdate(Some(encoded)))))
-      updatePerformSnapshot()
     }
 
-    override def delete(): Unit = {
+    override def deleteEntity(): Unit = {
       checkActive()
-
-      _nextSequenceNumber += 1
-      handler.handleDelete(new StateContextImpl(entityId, _nextSequenceNumber))
       mayBeAction = Some(CrudAction(Delete(CrudDelete())))
-      updatePerformSnapshot()
     }
 
     def performSnapshot: Boolean = _performSnapshot
@@ -265,6 +261,27 @@ final class CrudImpl(_system: ActorSystem,
     def nextSequenceNumber: Long = _nextSequenceNumber
 
     def crudAction(): Option[CrudAction] = mayBeAction
+
+    def applyCrudAction(): Unit =
+      mayBeAction match {
+        case Some(CrudAction(action, _)) =>
+          action match {
+            case Update(CrudUpdate(Some(value), _)) =>
+              _nextSequenceNumber += 1
+              handler.handleUpdate(ScalaPbAny.toJavaProto(value), new StateContextImpl(entityId, _nextSequenceNumber))
+              updatePerformSnapshot()
+
+            case Delete(CrudDelete(_)) =>
+              _nextSequenceNumber += 1
+              handler.handleDelete(new StateContextImpl(entityId, _nextSequenceNumber))
+              updatePerformSnapshot()
+          }
+        case None =>
+          system.log.error(
+            s"Cloudstate protocol failure for CRUD entity: applying crud action for commandId: $commandId and commandName: $commandName"
+          )
+          throw new IllegalStateException("CRUD Entity applied crud action in wrong state")
+      }
 
     def snapshot(): Option[CrudSnapshot] =
       mayBeAction match {

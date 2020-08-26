@@ -45,13 +45,13 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
     override def entityId(): String = "foo"
   }
 
-  class MockCommandContext extends CommandContext with BaseContext {
+  class MockCommandContext extends CommandContext[JavaPbAny] with BaseContext {
     var action: Option[AnyRef] = None
     override def sequenceNumber(): Long = 10
     override def commandName(): String = "AddItem"
     override def commandId(): Long = 20
-    override def update(state: AnyRef): Unit = action = Some(state)
-    override def delete(): Unit = action = None
+    override def updateEntity(state: JavaPbAny): Unit = action = Some(state)
+    override def deleteEntity(): Unit = action = None
     override def entityId(): String = "foo"
     override def fail(errorMessage: String): RuntimeException = ???
     override def forward(to: ServiceCall): Unit = ???
@@ -146,7 +146,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         val handler = create(
           new {
             @CommandHandler
-            def addItem(msg: String, @EntityId eid: String, ctx: CommandContext): Wrapped = {
+            def addItem(msg: String, @EntityId eid: String, ctx: CommandContext[JavaPbAny]): Wrapped = {
               eid should ===("foo")
               ctx.commandName() should ===("AddItem")
               Wrapped(msg)
@@ -161,8 +161,8 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         val handler = create(
           new {
             @CommandHandler
-            def addItem(msg: String, ctx: CommandContext): Wrapped = {
-              ctx.update(msg + " event")
+            def addItem(msg: String, ctx: CommandContext[JavaPbAny]): Wrapped = {
+              ctx.updateEntity(state(msg + " state"))
               ctx.commandName() should ===("AddItem")
               Wrapped(msg)
             }
@@ -171,7 +171,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         )
         val ctx = new MockCommandContext
         decodeWrapped(handler.handleCommand(command("blah"), ctx).get) should ===(Wrapped("blah"))
-        ctx.action should ===(Some("blah event"))
+        ctx.action.get should ===(state("blah state"))
       }
 
       "fail if there's a bad context type" in {
@@ -185,7 +185,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
       "fail if there's two command handlers for the same command" in {
         a[RuntimeException] should be thrownBy create(new {
           @CommandHandler
-          def addItem(msg: String, ctx: CommandContext) =
+          def addItem(msg: String, ctx: CommandContext[JavaPbAny]) =
             Wrapped(msg)
           @CommandHandler
           def addItem(msg: String) =
@@ -259,7 +259,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
       "fail if there's a bad context" in {
         a[RuntimeException] should be thrownBy create(new {
           @UpdateStateHandler
-          def updateState(state: String, context: CommandContext): Unit = ()
+          def updateState(state: String, context: CommandContext[JavaPbAny]): Unit = ()
         })
       }
 
@@ -336,7 +336,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
       "fail if there's a bad context" in {
         a[RuntimeException] should be thrownBy create(new {
           @DeleteStateHandler
-          def deleteState(context: CommandContext): Unit = ()
+          def deleteState(context: CommandContext[JavaPbAny]): Unit = ()
         })
       }
     }
