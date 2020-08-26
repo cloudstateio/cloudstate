@@ -1,4 +1,4 @@
-= CRDT effects and forwarding
+= Forwarding and effects
 :toc:
 :toc-title: ON THIS PAGE
 :toclevels: 2
