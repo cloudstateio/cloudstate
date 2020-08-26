@@ -110,7 +110,6 @@ lazy val root = (project in file("."))
     `protocols`,
     `proxy`,
     `java-support`,
-    `scala-support`,
     `java-shopping-cart`,
     `java-pingpong`,
     `akka-client`,
@@ -669,60 +668,6 @@ lazy val `java-support` = (project in file("java-support"))
     )
   )
 
-lazy val `scala-support` = (project in file("scala-support"))
-  .enablePlugins(AkkaGrpcPlugin, BuildInfoPlugin)
-  .settings(
-    name := "cloudstate-scala-support",
-    dynverTagPrefix := "scala-support-",
-    common,
-    crossPaths := false,
-    publishMavenStyle := true,
-    bintrayPackage := name.value,
-    buildInfoKeys := Seq[BuildInfoKey](name, version),
-    buildInfoPackage := "io.cloudstate.scalasupport",
-    // Generate javadocs by just including non generated Java sources
-    sourceDirectories in (Compile, doc) := Seq((javaSource in Compile).value),
-    sources in (Compile, doc) := {
-      val javaSourceDir = (javaSource in Compile).value.getAbsolutePath
-      (sources in (Compile, doc)).value.filter(_.getAbsolutePath.startsWith(javaSourceDir))
-    },
-    // javadoc (I think java 9 onwards) refuses to compile javadocs if it can't compile the entire source path.
-    // but since we have java files depending on Scala files, we need to include ourselves on the classpath.
-    dependencyClasspath in (Compile, doc) := (fullClasspath in Compile).value,
-    javacOptions in (Compile, doc) ++= Seq(
-        "-overview",
-        ((javaSource in Compile).value / "overview.html").getAbsolutePath,
-        "-notimestamp",
-        "-doctitle",
-        "CloudState Scala Support"
-      ),
-    libraryDependencies ++= Seq(
-        akkaDependency("akka-stream"),
-        akkaDependency("akka-slf4j"),
-        akkaDependency("akka-discovery"),
-        akkaHttpDependency("akka-http"),
-        akkaHttpDependency("akka-http-spray-json"),
-        akkaHttpDependency("akka-http-core"),
-        akkaHttpDependency("akka-http2-support"),
-        "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
-        "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
-        "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
-        akkaDependency("akka-testkit") % Test,
-        akkaDependency("akka-stream-testkit") % Test,
-        akkaHttpDependency("akka-http-testkit") % Test,
-        "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
-        "org.slf4j" % "slf4j-simple" % Slf4jSimpleVersion,
-        "com.fasterxml.jackson.core" % "jackson-databind" % JacksonDatabindVersion
-      ),
-    javacOptions in Compile ++= Seq("-encoding", "UTF-8"),
-    akkaGrpcGeneratedSources in Compile := Seq(AkkaGrpc.Server),
-    akkaGrpcGeneratedLanguages in Compile := Seq(AkkaGrpc.Scala), // FIXME should be Java, but here be dragons
-    PB.protoSources in Compile ++= {
-      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "protocol", baseDir / "frontend")
-    }
-  )
-
 lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
   .dependsOn(`java-support`)
   .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
@@ -761,20 +706,6 @@ lazy val `java-pingpong` = (project in file("samples/java-pingpong"))
       ),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8"),
     assemblySettings("java-pingpong.jar")
-  )
-
-lazy val `scala-shopping-cart` = (project in file("samples/scala-shopping-cart"))
-  .dependsOn(`scala-support`)
-  .enablePlugins(AkkaGrpcPlugin, DockerPlugin, JavaAppPackaging)
-  .settings(
-    name := "scala-shopping-cart",
-    dockerSettings,
-    PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`scala-support`, Compile)).value,
-    PB.protoSources in Compile ++= {
-      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "frontend", baseDir / "example")
-    },
-    assemblySettings("scala-shopping-cart.jar")
   )
 
 lazy val `akka-client` = (project in file("samples/akka-client"))
@@ -852,7 +783,7 @@ lazy val `tck` = (project in file("tck"))
     javaOptions in IntegrationTest := sys.props.get("config.resource").map(r => s"-Dconfig.resource=$r").toSeq,
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
-        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly, `scala-shopping-cart` / assembly)
+        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly)
         .value
   )
 

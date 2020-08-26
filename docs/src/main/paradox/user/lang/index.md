@@ -24,7 +24,7 @@ Here is a list of other, **non-official** libraries in various other languages:
 
 | Library Name                                                                                          | Language  | Event-sourcing support?   | CRDT support?         | Stateless support?    |
 |-------------------------------------------------------------------------------------------------------|-----------|---------------------------|-----------------------|-----------------------|
-| [scala-support](https://github.com/cloudstateio/cloudstate/tree/master/scala-support/src/main)        | Scala     | **❗️**                    | **❗️**               | **❌**                 |
+| [scala-support](https://github.com/cloudstateio/scala-support)                                        | Scala     | **❗️**                    | **❗️**               | **❌**                 |
 | [cloudstate-rust](https://github.com/sleipnir/cloudstate-rust)                                        | Rust      | **❓**                    | **❓**               | **❌**                 |
 
 ### Legend:
