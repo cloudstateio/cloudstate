@@ -31,7 +31,7 @@ It is also possible to take a look at the various protobuf messages available in
 
 * `example` is for implementing the example application, which is also used by the TCK for third-party language (and proxy implementation) validation.
 * `frontend` is what is used by developers of services when they define their proto interfaces. The `cloudstate` subfolder in particular contains the definition of two protobuf options:
-    
+
 **  `.cloudstate.entity_key`: used to indicate the String to be used as an entity key in a given protobuf object.
 +
 .Example of an Event where the entity id is defined
@@ -52,7 +52,7 @@ message PongSent {
 [source,proto]
 ....
 rpc Ping(PongSent) returns (PingSent) {
-    option (.cloudstate.eventing) = 
+    option (.cloudstate.eventing) =
               out: "pings",
   };
 }
@@ -60,7 +60,7 @@ rpc Ping(PongSent) returns (PingSent) {
 ****
 +
 .Example of topic/queue definition for the function input
-****    
+****
 [source,proto]
 ....
 rpc SeenPing(PingSent) returns (google.protobuf.Empty) {
@@ -70,7 +70,7 @@ rpc SeenPing(PingSent) returns (google.protobuf.Empty) {
 }
 ....
 ****
-    
+
 * `protocol` is the protocol between the xref:concepts:glossary.adoc#_proxy[proxy] and what we call language support, i.e. a bridge library which speaks with the proxy and exposes a native API for some programming language.
 * `proxy` contains the protocols which the xref:concepts:glossary.adoc#_proxy[proxy] itself speaks with the outside world.
 

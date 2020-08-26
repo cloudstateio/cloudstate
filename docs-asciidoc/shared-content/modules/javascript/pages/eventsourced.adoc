@@ -17,7 +17,7 @@ include::proto:example$domain.proto[]
 
 In this file, the `Cart` message is the state, while `ItemAdded` and `ItemRemoved` are events. Note that the events are in past tense - events are facts, indisputable things that happened in the past. A fact never becomes false, once you've added an item to a shopping cart, it never becomes untrue that that item was added to the cart. It may be removed later, but that doesn't change the fact that it was added, it only changes the current state of the cart, not what happened in the past. The names of your events should always be in past tense, communicating the indisputable fact that they represent.
 
-## Creating an entity
+== Creating an entity
 
 An event sourced entity can be created using the @extref:[EventSourced](jsdoc:EventSourced.html) class.
 
@@ -45,7 +45,7 @@ The `EventSourced` class provides a helper method called @extref:[`lookupType`](
 include::example$test/eventsourced/shoppingcart.js[tag=lookup-type]
 ----
 
-## Initial state
+== Initial state
 
 When there are no snapshots persisted for an entity (such as when the entity is first created), the entity needs to have an initial state. Note that event sourced entities are not explicitly created, they are implicitly created when a command arrives for them. Additionally, creating an entity doesn't mean anything is persisted, nothing is persisted until an event is created for that entity. So, if user "X" opens their shopping cart for the first time, an entity will be created, but it will have no events in the log yet, and just be in the initial state.
 
@@ -58,11 +58,11 @@ include::example$test/eventsourced/shoppingcart.js[tag=initial]
 
 Note the use of `Cart.create()`, this creates a protobuf message using the `Cart` protobuf message type that we looked up earlier.
 
-## Behavior
+== Behavior
 
 Now we need to define the behavior for our entity. The behavior consists of two parts, command handlers, and event handlers.
 
-### Command handlers
+=== Command handlers
 
 A @extref:[command handler](jsdoc:EventSourced.html#~commandHandler) is a function that takes a command, the current state, and an @extref:[`EventSourcedCommandContext`](jsdoc:EventSourced.EventSourcedCommandContext.html). It implements a service call on the entities gRPC interface.
 
@@ -77,7 +77,7 @@ The following shows the implementation of the `GetCart` command handler. This co
 include::example$test/eventsourced/shoppingcart.js[tag=get-cart]
 ----
 
-#### Emitting events
+==== Emitting events
 
 Commands that modify the state MUST do so by emitting events.
 
@@ -96,7 +96,7 @@ include::example$test/eventsourced/shoppingcart.js[tag=add-item]
 
 This command handler also validates the command, ensuring the quantity items added is greater than zero. Invoking @extref:[`fail`](jsdoc:EventSourced.EventSourcedCommandContext.html#fail) fails the command - this method throws so there's no need to explicitly throw an exception.
 
-### Event handlers
+=== Event handlers
 
 An @extref:[event handler](jsdoc:EventSourced.html#~eventHandler) is invoked at two points, when restoring entities from the journal, before any commands are handled, and each time a new event is emitted. An event handlers responsibility is to update the state of the entity according to the event. Event handlers are the only place where its safe to mutate the state of the entity at all.
 

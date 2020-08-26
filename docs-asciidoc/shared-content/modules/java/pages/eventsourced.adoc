@@ -13,7 +13,7 @@ The `persistenceId` is used to namespace events in the journal. This is useful w
 
 The `snapshotEvery` parameter controls how often snapshots are taken, so that the entity doesn't need to be recovered from the entire history of the journal each time it is loaded. If left unset, it defaults to 100. To disable snapshots, set `snapshotEvery` to a negative value.
 
-## Persistence types and serialization
+== Persistence types and serialization
 
 Event sourced entities persist events and snapshots, and these need to be serialized when persisted. The most straight forward way to persist events and snapshots is to use protobufs. Cloudstate will automatically detect if an emitted event is a protobuf, and serialize it as such. For other serialization options, including JSON, see xref:serialization.adoc[Serialization].
 
@@ -26,7 +26,7 @@ For our shopping cart example, we'll create a new file called `domain.proto`, th
 include::proto:example$domain.proto[]
 ----
 
-## State
+== State
 
 Each entity should store its state locally in a mutable variable, either a mutable field or a multiple structure such as a collection. For our shopping cart, the state is a map of product ids to products, so we'll create a map to contain that:
 
@@ -35,7 +35,7 @@ Each entity should store its state locally in a mutable variable, either a mutab
 include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=entity-state]
 ----
 
-## Constructing
+== Constructing
 
 The context available for injection into the constructor is a @javadoc[`EventSourcedEntityCreationContext`](io.cloudstate.javasupport.eventsourced.EventSourcedEntityCreationContext). While you don't necessarily need to define a constructor, you can define one and have that context injected in. The constructor below shows how the `entityId` is injected:
 
@@ -44,7 +44,7 @@ The context available for injection into the constructor is a @javadoc[`EventSou
 include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=constructing]
 ----
 
-## Handling commands
+== Handling commands
 
 Command handlers can be declared by annotating a method with @javadoc[`@CommandHandler`](io.cloudstate.javasupport.eventsourced.CommandHandler). They take a context class of type @javadoc[`CommandContext`](io.cloudstate.javasupport.eventsourced.CommandContext).
 

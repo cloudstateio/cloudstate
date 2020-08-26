@@ -54,7 +54,7 @@ Here's a command handler for the `AddItem` command that adds the item to the sho
 include::example$docs/user/crdt/ShoppingCartEntity.java[tag=add-item]
 ----
 
-## Deleting a CRDT
+== Deleting a CRDT
 
 A CRDT can be deleted by invoking @javadoc[`CommandContext.delete`](io.cloudstate.javasupport.crdt.CommandContext#delete--). Once a CRDT is deleted, the entity will be shut down, and all subsequent commands for the entity will be rejected.
 

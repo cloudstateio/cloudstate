@@ -18,7 +18,7 @@ Once you have the above, you need to add the `cloudstate` package to your projec
 npm install cloudstate --save
 ```
 
-## Generating the protobuf descriptor set
+== Generating the protobuf descriptor set
 
 A Cloudstate user function needs to report to the Cloudstate proxy the gRPC descriptor that its serving, serialized to binary using the Protobuf [`FileDescriptorSet` message type](https://developers.google.com/protocol-buffers/docs/techniques#self-description). While there is some support for this in the [protobufjs](https://www.npmjs.com/package/protobufjs) library that is used by Cloudstate to load descriptors, it is somewhat incomplete and buggy. Hence, Cloudstate requires that you precompile this descriptor using `protoc` instead.
 
@@ -36,7 +36,7 @@ Multiple protobuf files can be passed, in addition, any arguments accepted by `p
 
 By default, the descriptor is written to `user-function.desc`, if you wish to change this, you can set `--descriptor_set_out=my-descriptor.desc`. Note that if you output the descriptor to a different path, you will also need to pass that custom path to the constructor of the `CloudState` class when you got to instantiate it.
 
-## package.json example
+== package.json example
 
 A minimal `package.json` for a shopping cart example is shown below:
 
@@ -56,11 +56,11 @@ A minimal `package.json` for a shopping cart example is shown below:
 ```
 @@@
 
-## Protobuf files
+== Protobuf files
 
 You can place protobuf files in your project wherever you like, for example, in the root directory, or in a directory named `protos`. In the `package.json` above we've placed the shopping cart application example shown earlier in xref:concepts:grpc.adoc[gRPC descriptors] in a file in the root folder called `shoppingcart.proto`.
 
-## Creating and starting a server
+== Creating and starting a server
 
 There are two ways to create and start a Cloudstate gRPC server. The first is to create an @extref:[`Entity`](jsdoc:Entity.html), and invoke @extref:[`start`](jsdoc:Entity.html#start) on it. This allows creating a server that serves a single entity, with the default options. We'll look at this more in the subsequent pages. Alternatively, you can use the @extref:[`CloudState`](jsdoc:CloudState.html) class, add one or more entities to it, and then invoke @extref:[`start`](jsdoc:CloudState.html#start), like so:
 
