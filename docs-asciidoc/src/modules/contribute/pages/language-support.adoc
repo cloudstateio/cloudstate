@@ -37,12 +37,12 @@ It is also possible to take a look at the various protobuf messages available in
 .Example of an Event where the entity id is defined
 ****
 [source,proto]
-....
+----
 message PongSent {
     string id = 1 [(.cloudstate.entity_key) = true];
         int32 sequence_number = 2;
 }
-....
+----
 ****
 
 ** `.cloudstate.eventing`: used to indicate the name of the topic/queue to use for data input or output.
@@ -50,25 +50,25 @@ message PongSent {
 .Example of topic/queue definition for the function output
 ****
 [source,proto]
-....
+----
 rpc Ping(PongSent) returns (PingSent) {
     option (.cloudstate.eventing) =
               out: "pings",
   };
 }
-....
+----
 ****
 +
 .Example of topic/queue definition for the function input
 ****
 [source,proto]
-....
+----
 rpc SeenPing(PingSent) returns (google.protobuf.Empty) {
     option (.cloudstate.eventing) = {
       in: "pings",
   };
 }
-....
+----
 ****
 
 * `protocol` is the protocol between the xref:concepts:glossary.adoc#_proxy[proxy] and what we call language support, i.e. a bridge library which speaks with the proxy and exposes a native API for some programming language.
@@ -80,10 +80,10 @@ After that, the TCK https://github.com/cloudstateio/cloudstate/blob/master/tck/s
 
 Then in order to run the TCK you need to instruct sbt to run the TCK, but make sure that you have built the Shopping Cart application first.
 
-[source,bash]
-....
+[source,sh]
+----
 # This means: "sbt please run the integration tests for the TCK project"
 sbt tck/it:test
-....
+----
 
 The output of that indicates if the combination of Proxy and User Support libraries yield the expected results.

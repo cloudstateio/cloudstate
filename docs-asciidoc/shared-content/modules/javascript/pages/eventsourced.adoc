@@ -81,9 +81,7 @@ include::example$test/eventsourced/shoppingcart.js[tag=get-cart]
 
 Commands that modify the state MUST do so by emitting events.
 
-@@@ warning
-The **only** way a command handler may modify its state is by emitting an event. Any modifications made directly to the state from the command handler will not be persisted, and will be lost as soon as the command handler finishes executing.
-@@@
+WARNING: The **only** way a command handler may modify its state is by emitting an event. Any modifications made directly to the state from the command handler will not be persisted, and will be lost as soon as the command handler finishes executing.
 
 A command handler may emit an event by using the @extref:[`emit`](jsdoc:EventSourced.EventSourcedCommandContext.html#emit) method on the `EventSourcedCommandContext`.
 

@@ -8,7 +8,7 @@ include::ROOT:partial$include.adoc[]
 Cloudstate entities specify their interfaces using https://grpc.io[gRPC] descriptors. The following example descriptor provides a shopping cart entity. It supports three different commands, `AddItem`, `RemoveItem` and `GetCart`.
 
 [source,proto]
-....
+----
 syntax = "proto3";
 
 import "google/protobuf/empty.proto";
@@ -47,7 +47,7 @@ message LineItem {
 message Cart {
     repeated LineItem items = 1;
 }
-....
+----
 
 
 

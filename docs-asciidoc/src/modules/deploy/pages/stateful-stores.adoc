@@ -3,7 +3,7 @@
 Cloudstate depends on databases to provide all durable entity types, such as event sourcing. Multiple different database backends are supported. The configuration for these backends is deployed independently from the services that consume them. Developers don't need to concern themselves with where or how a database is deployed, nor how to connect and authenticate with it, when they deploy their services. This is done using the `StatefulStore` resource. Here is an example `StatefulStore` resource for a PostgreSQL store:
 
 [source,yaml]
-....
+----
 apiVersion: cloudstate.io/v1alpha1
 kind: StatefulStore
 metadata:
@@ -15,7 +15,7 @@ spec:
     service: postgresql.default.svc.cluster.local
     credentialsFromSecret:
       name: postgres-credentials
-....
+----
 
 <1> `type`: The type of the store. Currently supported stores are `Cassandra`, `Postgres` and `InMemory`.
 
@@ -29,7 +29,7 @@ spec:
 A stateful service can use a stateful store by selecting it using the `datastore` field of the stateful service spec. For example, the following would configure the `shopping-cart` stateful service to use the `my-postgres-store` configured above:
 
 [source,yaml]
-....
+----
 apiVersion: cloudstate.io/v1alpha1
 kind: StatefulService
 metadata:
@@ -39,7 +39,7 @@ spec:
     name: my-postgres-store
   containers:
   - image: my-docker-hub-username/shopping-cart:latest
-....
+----
 
 == Available stores
 

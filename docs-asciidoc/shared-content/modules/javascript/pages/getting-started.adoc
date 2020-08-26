@@ -14,9 +14,10 @@ docker
 
 Once you have the above, you need to add the `cloudstate` package to your project, which can be done by running:
 
-```
+[source,sh]
+----
 npm install cloudstate --save
-```
+----
 
 == Generating the protobuf descriptor set
 
@@ -24,13 +25,14 @@ A Cloudstate user function needs to report to the Cloudstate proxy the gRPC desc
 
 Cloudstate provides a utility that does this for you, downloading the `protoc` binary for your platform, and running it with the necessary arguments and include paths. This can be run manually by running `node_modules/cloudstate/bin/compile-descriptor.js`, or we recommend adding it as a `prestart` script to your npm build:
 
-```json
+[source,json]
+----
 {
   "scripts": {
     "prestart": "compile-descriptor my-descriptor.proto"
   }
 }
-```
+----
 
 Multiple protobuf files can be passed, in addition, any arguments accepted by `protoc` can be passed, for example, if you are importing files from other directories, you can add those directories as an include path by adding `-Ipath/to/protobuf/dir`.
 
@@ -40,21 +42,20 @@ By default, the descriptor is written to `user-function.desc`, if you wish to ch
 
 A minimal `package.json` for a shopping cart example is shown below:
 
-@@@vars
-```json
+[source,json,subs="attributes+"]
+----
 {
   "name": "shopping-cart",
   "version": "0.1.0",
   "dependencies": {
-    "cloudstate": "^$cloudstate.node-support.version$"
+    "cloudstate": "^{cloudstate_node_support_version}"
   },
   "scripts": {
     "prestart": "compile-descriptor shoppingcart.proto",
     "start": "node index.js"
   }
 }
-```
-@@@
+----
 
 == Protobuf files
 

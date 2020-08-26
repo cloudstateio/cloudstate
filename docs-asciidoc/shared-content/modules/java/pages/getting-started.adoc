@@ -44,13 +44,13 @@ Maven::
 In your `.pom` file, add the following:
 +
 [source,xml,subs="attributes+"]
-....
+----
 <dependency>
   <groupId>io.cloudstate</groupId>
   <artifactId>cloudstate-java-support</artifactId>
   <version>{cloudstate_java_support_version}</version>
 </dependency>
-....
+----
 sbt::
 In your dependencies file, add the following:
 +
@@ -65,7 +65,7 @@ libraryDependencies += "io.cloudstate" % "cloudstate-java-support" % "{cloudstat
 A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffers Plugin](https://www.xolstice.org/protobuf-maven-plugin/) and the [Fabric8 Docker Maven Plugin](https://dmp.fabric8.io/), for a shopping cart service, is shown below:
 
 [source,xml, subs="attributes+"]
-....
+----
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
@@ -164,7 +164,7 @@ A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffer
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 </project>
-....
+----
 
 Subsequent source locations and build commands will assume the above Maven project, and may need to be adapted to your particular build tool and setup.
 
@@ -174,9 +174,10 @@ The Xolstice Maven plugin assumes a location of `src/main/proto` for your protob
 
 So, if you were to build the example shopping cart application shown earlier in xref:concepts:grpc.adoc[gRPC descriptors], you could simply paste that protobuf into `src/main/proto/shoppingcart.proto`. You may wish to also define the Java package, to ensure the package name used conforms to Java package naming conventions:
 
-```proto
+[source,proto]
+----
 option java_package = "com.example";
-```
+----
 
 Now if you run `mvn compile`, you'll find your generated protobuf files in `target/generated-sources/protobuf/java`.
 

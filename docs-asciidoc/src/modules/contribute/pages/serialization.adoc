@@ -17,12 +17,13 @@ Serialized primitive values have a `type_url` prefix of `p.cloudstate.io`. The p
 
 The `value` field contains a message that is serialized using the following schema:
 
-```proto
+[source,proto]
+----
 syntax = "proto3";
 message Primitive {
   <type> value = 1;
 }
-```
+----
 
 Where `<type>` is the type of the primitive, eg `string`. Implementations may define messages to represent these, but in most cases this is not necessary, serializing and deserializing the above message can be done manually using the libraries provided by the protobuf support in a given language.
 
@@ -36,12 +37,13 @@ Serialized JSON values have a `type_url` prefix of `json.cloudstate.io`, and a p
 
 The `value` field contains a message that is serialized using the following schema:
 
-```proto
+[source,proto]
+----
 syntax = "proto3";
 message Json {
   bytes json = 1;
 }
-```
+----
 
 The UTF8 encoded serialized JSON is placed in the `json` field of the message above. This encoding is intentionally identical to using a `string` typed `json` field instead, both will yield exactly the same bytes for the same JSON. It is also identical to the primitive encoding for `string` and `bytes`, and so implementations may simply reuse that.
 

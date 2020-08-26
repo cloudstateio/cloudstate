@@ -72,9 +72,10 @@ The callback is then able to return a message to be sent to the client (or empty
 
 If the shopping cart service had a `WatchCart` call, like this:
 
-```proto
+[source,proto]
+----
 rpc WatchCart(GetShoppingCart) returns (stream Cart);
-```
+----
 
 that could be implemented like this:
 
@@ -113,17 +114,19 @@ For determining the result of a vote, @javadoc[`getVoters`](io.cloudstate.javasu
 ====
 Direct mutations to @javadoc[`LWWRegister`](io.cloudstate.javasupport.crdt.LWWRegister) and @javadoc[`LWWRegisterMap`](io.cloudstate.javasupport.crdt.LWWRegisterMap) values will not be replicated to other nodes, only mutations triggered through using the @javadoc[`set`](io.cloudstate.javasupport.crdt.LWWRegister#set-T-) and @javadoc[`put`](io.cloudstate.javasupport.crdt.LWWRegisterMap#put-K-V-) methods will be replicated. Hence, the following update will not be replicated:
 
-```java
+[source,java]
+----
 myLwwRegister.get().setSomeField("foo");
-```
+----
 
 This update however will be replicated:
 
-```java
+[source,java]
+----
 MyValue myValue = myLwwRegister.get();
 myValue.setSomeField("foo");
 myLwwRegister.set(myValue);
-```
+----
 
 In general, we recommend that these values be immutable, as this will prevent accidentally mutating without realising the update won't be applied. If using protobufs as values, this will be straightforward, since compiled protobuf classes are immutable.
 ====
