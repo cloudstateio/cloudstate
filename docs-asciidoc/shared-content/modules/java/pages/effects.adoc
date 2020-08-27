@@ -21,7 +21,7 @@ The `CommandContext` for each entity type implements `ClientActionContext` to al
 
 [source,java]
 ----
-include::example$docs/user/effects/ShoppingCartEntity.java[tag=forward]
+include::example$docs/user/effects/ShoppingCartEntity.java[tag=FORWARD]
 ----
 
 == Emitting an effect

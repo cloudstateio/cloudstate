@@ -81,7 +81,7 @@ that could be implemented like this:
 
 [source,java]
 ----
-include::example$docs/user/crdt/ShoppingCartEntity.java[tag=watch-cart]
+include::example$docs/user/crdt/ShoppingCartEntity.java[tag=WATCH-CART]
 ----
 
 === Ending the stream

@@ -66,7 +66,7 @@ public class ShoppingCartEntity {
   }
   // #add-item end::add-item[]
 
-  // #watch-cart tag::watch-cart[]
+  // #watch-cart tag::WATCH-CART[]
   @CommandHandler
   public Shoppingcart.Cart watchCart(StreamedCommandContext<Shoppingcart.Cart> ctx) {
 
@@ -74,7 +74,7 @@ public class ShoppingCartEntity {
 
     return getCart();
   }
-  // #watch-cart end::watch-cart[]
+  // #watch-cart end::WATCH-CART[]
 
   // #register tag::register[]
   public static void main(String... args) {

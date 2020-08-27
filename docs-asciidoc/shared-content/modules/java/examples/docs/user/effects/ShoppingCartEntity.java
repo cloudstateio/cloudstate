@@ -38,7 +38,7 @@ public class ShoppingCartEntity {
   // #lookup end::lookup[]
 
   class CommandHandlerWithForward {
-    // #forward tag::forward[]
+    // #forward tag::FORWARD[]
     @CommandHandler
     public void addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
       // ... Validate and emit event
@@ -51,7 +51,7 @@ public class ShoppingCartEntity {
                   .setQuantity(item.getQuantity())
                   .build()));
     }
-    // #forward end::forward[]
+    // #forward end::FORWARD[]
   }
 
   class CommandHandlerWithEffect {
