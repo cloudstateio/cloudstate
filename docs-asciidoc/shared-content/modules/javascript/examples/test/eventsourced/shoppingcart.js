@@ -27,24 +27,24 @@ const entity = new EventSourced(
 );
 // #entity-class end::entity-class[]
 
-// #lookup-type
+// #lookup-type tag::lookup-type[]
 const pkg = "example.shoppingcart.domain.";
 const ItemAdded = entity.lookupType(pkg + "ItemAdded");
 const ItemRemoved = entity.lookupType(pkg + "ItemRemoved");
 const Cart = entity.lookupType(pkg + "Cart");
-// #lookup-type
+// #lookup-type end::lookup-type[]
 
-// #initial
+// #initial tag::initial[]
 entity.initial = entityId => Cart.create({items: []});
-// #initial
+// #initial end::initial[]
 
-// #get-cart
+// #get-cart tag::get-cart[]
 function getCart(request, cart) {
     return cart;
 }
-// #get-cart
+// #get-cart end::get-cart[]
 
-// #add-item
+// #add-item tag::add-item[]
 function addItem(addItem, cart, ctx) {
     if (addItem.quantity < 1) {
         ctx.fail("Cannot add negative quantity to item " + addItem.productId);
@@ -60,11 +60,11 @@ function addItem(addItem, cart, ctx) {
         return {};
     }
 }
-// #add-item
+// #add-item end::add-item[]
 
 function removeItem() {}
 
-// #item-added
+// #item-added tag::item-added[]
 function itemAdded(added, cart) {
     const existing = cart.items.find(item => {
         return item.productId === added.item.productId;
@@ -78,11 +78,11 @@ function itemAdded(added, cart) {
 
     return cart;
 }
-//#item-added
+// #item-added end::item-added[]
 
 function itemRemoved() {}
 
-//#behavior
+// #behavior tag::behavior[]
 entity.behavior = cart => {
     return {
         commandHandlers: {
@@ -96,11 +96,11 @@ entity.behavior = cart => {
         }
     };
 };
-//#behavior
+// #behavior end::behavior[]
 
 const CheckedOut = entity.lookupType(pkg + "CheckedOut");
 
-//#multiple-behaviors
+// #multiple-behaviors tag::multiple-behaviors[]
 function checkout(checkout, cart, ctx) {
     ctx.emit(CheckedOut.create({}));
     return {};
@@ -142,20 +142,20 @@ entity.behavior = cart => {
         };
     }
 };
-//#multiple-behaviors
+// #multiple-behaviors end::multiple-behaviors[]
 
 describe("The Eventsourced class", () => {
     it("should allow starting the entity", () => {
-        //#start
+        // #start tag::start[]
         entity.start();
-        //#start
+        // #start end::start[]
         entity.shutdown();
     });
     it("should allow adding the entity to the CloudState server", () => {
-        //#add-entity
+        // #add-entity tag::add-entity[]
         const CloudState = require("cloudstate").CloudState;
         const server = new CloudState();
         server.addEntity(entity);
-        //#add-entity
+        // #add-entity end::add-entity[]
     })
 });

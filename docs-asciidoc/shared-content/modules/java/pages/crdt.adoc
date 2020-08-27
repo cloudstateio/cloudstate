@@ -4,7 +4,10 @@ This page documents how to implement Cloudstate CRDT entities in Java. For infor
 
 A CRDT can be created by annotating it with the @javadoc[`@CrdtEntity`](io.cloudstate.javasupport.crdt.CrdtEntity) annotation.
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/crdt/ShoppingCartEntity.java) { #entity-class }
+[source,java]
+----
+include::example$docs/user/crdt/ShoppingCartEntity.java[tag=entity-class]
+----
 
 == Accessing and creating an entity's CRDT
 
@@ -16,7 +19,10 @@ An entity's CRDT can be created from the entity's constructor using the `CrdtFac
 
 For most use cases, simply injecting the CRDT directly into the constructor, and storing in a local field, will be the most convenient and straightforward method of using a CRDT. In our shopping cart example, we're going to use an @javadoc[`LWWRegisterMap`](io.cloudstate.javasupport.crdt.LWWRegisterMap), this shows how it may be injected:
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/crdt/ShoppingCartEntity.java) { #creation }
+[source,java]
+----
+include::example$docs/user/crdt/ShoppingCartEntity.java[tag=creation]
+----
 
 In addition to the CRDT, the constructor may accept a @javadoc[`CrdtCreationContext`](io.cloudstate.javasupport.crdt.CrdtCreationContext).
 
@@ -32,17 +38,23 @@ The return type of the command handler must be the output type for the gRPC serv
 
 The following shows the implementation of the `GetCart` command handler. This command handler is a read-only command handler, it doesn't update the CRDT, it just returns some state:
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/crdt/ShoppingCartEntity.java) { #get-cart }
+[source,java]
+----
+include::example$docs/user/crdt/ShoppingCartEntity.java[tag=get-cart]
+----
 
 == Updating a CRDT
 
-Due to CloudState's @ref[take in turns approach](../../features/crdts.md#approach-to-crdts-in-cloudstate), CRDTs may only be updated in command handlers and @ref[stream cancellation callbacks](#responding-to-stream-cancellation).
+Due to CloudState's xref:concepts:crdts.adoc#_approach_to_crdts_in_cloudstate[take in turns approach], CRDTs may only be updated in command handlers and <<Responding to stream cancellation,stream cancellation callbacks>>.
 
 Here's a command handler for the `AddItem` command that adds the item to the shopping cart:
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/crdt/ShoppingCartEntity.java) { #add-item }
+[source,java]
+----
+include::example$docs/user/crdt/ShoppingCartEntity.java[tag=add-item]
+----
 
-## Deleting a CRDT
+== Deleting a CRDT
 
 A CRDT can be deleted by invoking @javadoc[`CommandContext.delete`](io.cloudstate.javasupport.crdt.CommandContext#delete--). Once a CRDT is deleted, the entity will be shut down, and all subsequent commands for the entity will be rejected.
 
@@ -60,13 +72,17 @@ The callback is then able to return a message to be sent to the client (or empty
 
 If the shopping cart service had a `WatchCart` call, like this:
 
-```proto
+[source,proto]
+----
 rpc WatchCart(GetShoppingCart) returns (stream Cart);
-```
+----
 
 that could be implemented like this:
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/crdt/ShoppingCartEntity.java) { #watch-cart }
+[source,java]
+----
+include::example$docs/user/crdt/ShoppingCartEntity.java[tag=WATCH-CART]
+----
 
 === Ending the stream
 
@@ -78,7 +94,7 @@ A streamed command handler may also register an @javadoc[`onCancel`](io.cloudsta
 
 == Types of CRDTs
 
-The Cloudstate Java support library offers Java classes for each of the @ref[CRDTs available in Cloudstate](../../features/crdts.md#crdts-available-in-cloudstate).
+The Cloudstate Java support library offers Java classes for each of the xref:concepts:crdts.adoc#_crdts_available_in_cloudstate[CRDTs available in Cloudstate].
 
 === Counters and flags
 
@@ -87,7 +103,7 @@ The Cloudstate Java support library offers Java classes for each of the @ref[CRD
 === Vote
 
 @javadoc[`Vote`](io.cloudstate.javasupport.crdt.Vote) is available for the Vote CRDT. The Vote CRDT allows updating the current node's vote using the @javadoc[`vote`](io.cloudstate.javasupport.crdt.Vote#vote-boolean-) method, the current nodes vote can be queried using the @javadoc[`getSelfVote`](io.cloudstate.javasupport.crdt.Vote#getSelfVote--) method.
- 
+
 For determining the result of a vote, @javadoc[`getVoters`](io.cloudstate.javasupport.crdt.Vote#getVoters--) and @javadoc[`getVotesFor`](io.cloudstate.javasupport.crdt.Vote#getVotesFor--) can be used to check the total number of nodes, and the number of nodes that have voted for the condition, respectively. In addition, convenience methods are provided for common vote decision approaches, @javadoc[`isAtLeastOne`](io.cloudstate.javasupport.crdt.Vote#isAtLeastOne--) returns true if there is at least one voter for the condition, @javadoc[`isMajority`](io.cloudstate.javasupport.crdt.Vote#isMajority--) returns true if the number of votes for is more than half the number of voters, and @javadoc[`isAll`](io.cloudstate.javasupport.crdt.Vote#isUnanimous--) returns true if the number of votes for equals the number of voters.
 
 === Registers
@@ -98,17 +114,19 @@ For determining the result of a vote, @javadoc[`getVoters`](io.cloudstate.javasu
 ====
 Direct mutations to @javadoc[`LWWRegister`](io.cloudstate.javasupport.crdt.LWWRegister) and @javadoc[`LWWRegisterMap`](io.cloudstate.javasupport.crdt.LWWRegisterMap) values will not be replicated to other nodes, only mutations triggered through using the @javadoc[`set`](io.cloudstate.javasupport.crdt.LWWRegister#set-T-) and @javadoc[`put`](io.cloudstate.javasupport.crdt.LWWRegisterMap#put-K-V-) methods will be replicated. Hence, the following update will not be replicated:
 
-```java
+[source,java]
+----
 myLwwRegister.get().setSomeField("foo");
-```
+----
 
 This update however will be replicated:
 
-```java
+[source,java]
+----
 MyValue myValue = myLwwRegister.get();
 myValue.setSomeField("foo");
 myLwwRegister.set(myValue);
-```
+----
 
 In general, we recommend that these values be immutable, as this will prevent accidentally mutating without realising the update won't be applied. If using protobufs as values, this will be straightforward, since compiled protobuf classes are immutable.
 ====
@@ -143,4 +161,7 @@ Some wrapper classes are also provided for ORMap. These provide more convenient 
 Once you've created your entity, you can register it with the @javadoc[`CloudState`](io.cloudstate.javasupport.CloudState) server, by invoking the @javadoc[`registerCrdtEntity`](io.cloudstate.javasupport.CloudState#registerCrdtEntity-java.lang.Class-com.google.protobuf.Descriptors.ServiceDescriptor-com.google.protobuf.Descriptors.FileDescriptor...-) method.
 In addition to passing your entity class and service descriptor, if you use protobuf for serialization and any protobuf message definitions are missing from your service descriptor (they are not declared directly in the file, nor as dependencies), then you'll need to pass those protobuf descriptors as well.
 
-@@snip [ShoppingCartEntity.java](/docs/src/test/java/docs/user/crdt/ShoppingCartEntity.java) { #register }
+[source,java]
+----
+include::example$docs/user/crdt/ShoppingCartEntity.java[tag=register]
+----

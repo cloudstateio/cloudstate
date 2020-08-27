@@ -16,14 +16,15 @@ For further information about setting up the build environment, see https://clou
 
 If you simply want to run the native image locally, you can use the following command:
 
-```
+[source,sh]
+----
 sbt "dockerBuildDevMode publishLocal"
-```
+----
 
 This will take 5 or more minutes. Among the output you should see the result of the native image build, for example:
 
-[source,bash]
-....
+[source,sh]
+----
 …
 [info] [cloudstate-proxy-core:34956]    classlist:  23,867.63 ms
 [info] [cloudstate-proxy-core:34956]        (cap):   1,402.66 ms
@@ -42,7 +43,7 @@ This will take 5 or more minutes. Among the output you should see the result of 
 [info] [cloudstate-proxy-core:34956]        write:   1,930.98 ms
 [info] [cloudstate-proxy-core:34956]      [total]: 296,677.26 ms
 [success] Total time: 304 s, completed Aug 6, 2019 4:00:02 PM
-....
+----
 
 The resulting Docker image is `cloudstate-proxy-dev-mode:latest`.
 
@@ -56,11 +57,11 @@ The docker image can be run by running `docker run cloudstate-proxy-dev-mode`. H
 
 For all other platforms, the simplest way is to run the user function in a docker container, and share the network namespaces between the two containers. The `js-shopping-cart` sample app docker image can be built by running `npm run dockerbuild` from the `samples/js-shopping-cart` directory. Now, to start the images, this should be done in separate windows, or replace `-it` with `-d` to detach:
 
-[source,bash]
-....
+[source,sh]
+----
 docker run -it --rm --name cloudstate -p 9000:9000 cloudstate-proxy-dev-mode
 docker run -it --rm --network container:cloudstate --name shopping-cart -e "DEBUG=cloudstate*" js-shopping-cart
-....
+----
 
 Initially, the Cloudstate container may show errors as it attempts to connect to the shopping-cart user function before it's started. Once running, you can connect to the proxy on port 9000.
 
@@ -74,16 +75,18 @@ Switch to GraalVM 19.2.1 as your current JRE, _and_ add its binaries (in /bin) t
 
 Your `java -version` should report something like:
 
-```bash
+[source,sh]
+----
 openjdk version "1.8.0_232"
 OpenJDK Runtime Environment (build 1.8.0_232-20191008104205.buildslave.jdk8u-src-tar--b07)
 OpenJDK 64-Bit GraalVM CE 19.2.1 (build 25.232-b07-jvmci-19.2-b03, mixed mode)
-```
+----
 
 Install native-image using `gu`.
-```
+[source,sh]
+----
 sudo gu install native-image
-```
+----
 
 Verify that you've added GraalVM correctly by checking that `native-image` is available as a command.
 
@@ -109,28 +112,28 @@ Switch to GraalVM 19.1.1 as your current JRE, and add its binaries (in /bin) to 
 
 Your `java -version` should report something like:
 
-[source,bash]
-....
+[source,sh]
+----
 openjdk version "1.8.0_222"
 OpenJDK Runtime Environment (build 1.8.0_222-20190711112007.graal.jdk8u-src-tar-gz-b08)
 OpenJDK 64-Bit GraalVM CE 19.1.1 (build 25.222-b08-jvmci-19.1-b01, mixed mode)
-....
+----
 
 Also, verify that you've added GraalVM correctly by checking that `native-image` is available as a command.
 
 Then either start creating the binary with the in-memory storage:
 
-[source,bash]
-....
+[source,sh]
+----
 sbt "project proxy-core" "set graalVMVersion := None" graalvm-native-image:packageBin
-....
+----
 
 or the Cassandra-client based storage binary:
 
-[source,bash]
-....
+[source,sh]
+----
 sbt "project proxy-cassandra" "set graalVMVersion := None" graalvm-native-image:packageBin
-....
+----
 
 The executable generated is located here:
 *../cloudstate/proxy/core/target/graalvm-native-image/cloudstate-proxy-core*
@@ -143,16 +146,16 @@ Example: **-Djava.library.path=/Library/Java/JavaVirtualMachines/adoptopenjdk-11
 
 Supplying the runtime configuration, for the simplest experience, you can give it the pre-packaged dev-mode.conf, example: *-Dconfig.resource=dev-mode.conf*
 
-Full example of running the in-memory storage executable: 
+Full example of running the in-memory storage executable:
 
-[source,bash]
-....
+[source,sh]
+----
 cloudstate/proxy/core/target/graalvm-native-image/./cloudstate-proxy-core -Djava.library.path=/Library/Java/JavaVirtualMachines/adoptopenjdk-11.jdk/Contents/Home/lib -Dconfig.resource=dev-mode.conf
-....
+----
 
 Or with the Cassandra client storage:
 
-[source,bash]
-....
+[source,sh]
+----
 cloudstate/proxy/cassandra/target/graalvm-native-image/./cloudstate-proxy-cassandra -Djava.library.path=/Library/Java/JavaVirtualMachines/adoptopenjdk-11.jdk/Contents/Home/lib
-....
+----
