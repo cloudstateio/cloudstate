@@ -28,6 +28,7 @@
 ** xref:java:crdt.adoc[Conflict free replicated data types]
 ** xref:java:effects.adoc[Forwarding and effects]
 ** xref:java:serialization.adoc[Serialization]
+** xref:java:api.adoc[Java API docs]
 
 * xref:javascript:index.adoc[Implementing in Javascript]
 ** xref:javascript:getting-started.adoc[Getting started]
