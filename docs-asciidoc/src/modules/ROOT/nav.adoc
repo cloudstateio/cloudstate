@@ -33,9 +33,10 @@
 * xref:javascript:index.adoc[Implementing in Javascript]
 ** xref:javascript:getting-started.adoc[Getting started]
 ** xref:javascript:eventsourced.adoc[Implementing event sourced entities]
-** xref:javascript:crdt.adoc[Conflict free replicated data types]
+** xref:javascript:crdt.adoc[Conflict-free Replicated Data Types]
 ** xref:javascript:effects.adoc[Forwarding and effects]
 ** xref:javascript:serialization.adoc[Serialization]
+** xref:javascript:api.adoc[Javascript API docs]
 
 * xref:deploy:index.adoc[Deploying to production systems]
 ** xref:deploy:install-production.adoc[Setting up a production cluster]

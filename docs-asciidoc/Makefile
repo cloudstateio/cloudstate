@@ -35,6 +35,8 @@ html-author-mode:
 apidocs:
 	cd ${root_dir} && sbt java-support/doc
 	cp -r ${root_dir}/java-support/target/api ${site_dir}/docs/current/java/api
+	cd ${root_dir}/node-support && npm run jsdoc
+	cp -r ${root_dir}/node-support/apidocs ${site_dir}/docs/current/javascript/api
 
 print-site:
 	@echo

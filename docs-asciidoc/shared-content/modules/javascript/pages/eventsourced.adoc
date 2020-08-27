@@ -1,5 +1,3 @@
-
-
 This page documents how to implement Cloudstate event sourced entities in JavaScript. For information on what Cloudstate event sourced entities are, please read the general xref:concepts:eventsourced.adoc[Event sourcing] documentation first.
 
 == Persistence types and serialization
@@ -19,7 +17,7 @@ In this file, the `Cart` message is the state, while `ItemAdded` and `ItemRemove
 
 == Creating an entity
 
-An event sourced entity can be created using the @extref:[EventSourced](jsdoc:EventSourced.html) class.
+An event sourced entity can be created using the link:api/module-cloudstate.EventSourced.html[EventSourced] class.
 
 [source,js,indent=0]
 ----
@@ -38,7 +36,7 @@ The `snapshotEvery` parameter controls how often snapshots are taken, so that th
 
 When you pass an event or snapshot to Cloudstate to persist, it needs to know how to serialize that. Simply passing a regular object does not provide enough information to know how protobuf should serialize the objects. Hence, any event or snapshot types that you want to use, you have to lookup the protobuf type for, and then use the `create` method to create it.
 
-The `EventSourced` class provides a helper method called @extref:[`lookupType`](jsdoc:EventSourced.html#lookupType) to facilitate this. So before implementing anything, we'll look up these types so we can use them later.
+The `EventSourced` class provides a helper method called link:api/module-cloudstate.EventSourced.html#lookupType[`lookupType`] to facilitate this. So before implementing anything, we'll look up these types so we can use them later.
 
 [source,js,indent=0]
 ----
@@ -49,7 +47,7 @@ include::example$test/eventsourced/shoppingcart.js[tag=lookup-type]
 
 When there are no snapshots persisted for an entity (such as when the entity is first created), the entity needs to have an initial state. Note that event sourced entities are not explicitly created, they are implicitly created when a command arrives for them. Additionally, creating an entity doesn't mean anything is persisted, nothing is persisted until an event is created for that entity. So, if user "X" opens their shopping cart for the first time, an entity will be created, but it will have no events in the log yet, and just be in the initial state.
 
-To create the initial state, we set the @extref:[`initial`](jsdoc:EventSourced.html#initial) callback. This takes the id of the entity being created, and returns a new empty state, in this case, an empty shopping cart:
+To create the initial state, we set the link:api/module-cloudstate.EventSourced.html#initial[`initial`] callback. This takes the id of the entity being created, and returns a new empty state, in this case, an empty shopping cart:
 
 [source,js,indent=0]
 ----
@@ -64,7 +62,7 @@ Now we need to define the behavior for our entity. The behavior consists of two 
 
 === Command handlers
 
-A @extref:[command handler](jsdoc:EventSourced.html#~commandHandler) is a function that takes a command, the current state, and an @extref:[`EventSourcedCommandContext`](jsdoc:EventSourced.EventSourcedCommandContext.html). It implements a service call on the entities gRPC interface.
+A link:api/module-cloudstate.EventSourced.html#~commandHandler[command handler] is a function that takes a command, the current state, and an link:api/module-cloudstate.EventSourced.EventSourcedCommandContext.html[`EventSourcedCommandContext`]. It implements a service call on the entities gRPC interface.
 
 The command is the input message type for the gRPC service call. For example, the `GetCart` service call has an input type of `GetShoppingCart`, while the `AddItem` service call has an input type of `AddLineItem`. The command will be an object that matches the structure of these protobuf types.
 
@@ -83,7 +81,7 @@ Commands that modify the state MUST do so by emitting events.
 
 WARNING: The **only** way a command handler may modify its state is by emitting an event. Any modifications made directly to the state from the command handler will not be persisted, and will be lost as soon as the command handler finishes executing.
 
-A command handler may emit an event by using the @extref:[`emit`](jsdoc:EventSourced.EventSourcedCommandContext.html#emit) method on the `EventSourcedCommandContext`.
+A command handler may emit an event by using the link:api/module-cloudstate.EventSourced.EventSourcedCommandContext.html#emit[`emit`] method on the `EventSourcedCommandContext`.
 
 Here's an example of a command handler that emits an event:
 
@@ -92,11 +90,11 @@ Here's an example of a command handler that emits an event:
 include::example$test/eventsourced/shoppingcart.js[tag=add-item]
 ----
 
-This command handler also validates the command, ensuring the quantity items added is greater than zero. Invoking @extref:[`fail`](jsdoc:EventSourced.EventSourcedCommandContext.html#fail) fails the command - this method throws so there's no need to explicitly throw an exception.
+This command handler also validates the command, ensuring the quantity items added is greater than zero. Invoking link:api/module-cloudstate.EventSourced.EventSourcedCommandContext.html#fail[`fail`] fails the command - this method throws so there's no need to explicitly throw an exception.
 
 === Event handlers
 
-An @extref:[event handler](jsdoc:EventSourced.html#~eventHandler) is invoked at two points, when restoring entities from the journal, before any commands are handled, and each time a new event is emitted. An event handlers responsibility is to update the state of the entity according to the event. Event handlers are the only place where its safe to mutate the state of the entity at all.
+An link:api/module-cloudstate.EventSourced.html#~eventHandler[event handler] is invoked at two points, when restoring entities from the journal, before any commands are handled, and each time a new event is emitted. An event handlers responsibility is to update the state of the entity according to the event. Event handlers are the only place where its safe to mutate the state of the entity at all.
 
 An event handler must be declared for each type of event that gets emitted. The type is defined by the protobuf message type in the case of protobuf events, or the `type` property on a JSON object in the case of JSON events. The mapping for these type names to functions will be discussed later, for now we'll just look at the functions.
 
@@ -111,9 +109,9 @@ include::example$test/eventsourced/shoppingcart.js[tag=item-added]
 
 === Setting the behavior
 
-Once you have your command handler and event handler functions implemented, you can now set your behavior. The @extref:[behavior callback](jsdoc:EventSourced.html#~behaviorCallback) takes the current state of the entity, and returns an object with two properties, `commandHandlers` and `eventHandlers`. The callback may return different sets of handlers according to the current state, this will be explored more <<Multiple behaviors,a little later>>, for now we'll just implement an entity with one set of handlers.
+Once you have your command handler and event handler functions implemented, you can now set your behavior. The link:api/module-cloudstate.EventSourced.html#~behaviorCallback[behavior callback] takes the current state of the entity, and returns an object with two properties, `commandHandlers` and `eventHandlers`. The callback may return different sets of handlers according to the current state, this will be explored more <<Multiple behaviors,a little later>>, for now we'll just implement an entity with one set of handlers.
 
-The behavior callback can be set by setting the @extref:[`behavior`](jsdoc:EventSourced.html#behavior) property on the entity:
+The behavior callback can be set by setting the link:api/module-cloudstate.EventSourced.html#behavior[`behavior`] property on the entity:
 
 [source,js,indent=0]
 ----
@@ -139,7 +137,7 @@ include::example$test/eventsourced/shoppingcart.js[tag=multiple-behaviors]
 
 == Starting the entity
 
-If you only have a single entity, as a convenience, you can start it directly, by invoking the @extref:[`start`](jsdoc:EventSourced.html#start) method, like so:
+If you only have a single entity, as a convenience, you can start it directly, by invoking the link:api/module-cloudstate.EventSourced.html#start[`start`] method, like so:
 
 [source,js,indent=0]
 ----
