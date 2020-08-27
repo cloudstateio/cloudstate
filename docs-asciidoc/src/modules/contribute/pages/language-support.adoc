@@ -31,18 +31,18 @@ It is also possible to take a look at the various protobuf messages available in
 
 * `example` is for implementing the example application, which is also used by the TCK for third-party language (and proxy implementation) validation.
 * `frontend` is what is used by developers of services when they define their proto interfaces. The `cloudstate` subfolder in particular contains the definition of two protobuf options:
-    
+
 **  `.cloudstate.entity_key`: used to indicate the String to be used as an entity key in a given protobuf object.
 +
 .Example of an Event where the entity id is defined
 ****
 [source,proto]
-....
+----
 message PongSent {
     string id = 1 [(.cloudstate.entity_key) = true];
         int32 sequence_number = 2;
 }
-....
+----
 ****
 
 ** `.cloudstate.eventing`: used to indicate the name of the topic/queue to use for data input or output.
@@ -50,27 +50,27 @@ message PongSent {
 .Example of topic/queue definition for the function output
 ****
 [source,proto]
-....
+----
 rpc Ping(PongSent) returns (PingSent) {
-    option (.cloudstate.eventing) = 
+    option (.cloudstate.eventing) =
               out: "pings",
   };
 }
-....
+----
 ****
 +
 .Example of topic/queue definition for the function input
-****    
+****
 [source,proto]
-....
+----
 rpc SeenPing(PingSent) returns (google.protobuf.Empty) {
     option (.cloudstate.eventing) = {
       in: "pings",
   };
 }
-....
+----
 ****
-    
+
 * `protocol` is the protocol between the xref:concepts:glossary.adoc#_proxy[proxy] and what we call language support, i.e. a bridge library which speaks with the proxy and exposes a native API for some programming language.
 * `proxy` contains the protocols which the xref:concepts:glossary.adoc#_proxy[proxy] itself speaks with the outside world.
 
@@ -80,10 +80,10 @@ After that, the TCK https://github.com/cloudstateio/cloudstate/blob/master/tck/s
 
 Then in order to run the TCK you need to instruct sbt to run the TCK, but make sure that you have built the Shopping Cart application first.
 
-[source,bash]
-....
+[source,sh]
+----
 # This means: "sbt please run the integration tests for the TCK project"
 sbt tck/it:test
-....
+----
 
 The output of that indicates if the combination of Proxy and User Support libraries yield the expected results.

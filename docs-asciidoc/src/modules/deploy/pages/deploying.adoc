@@ -2,7 +2,8 @@
 
 Cloudstate services are deployed to Kubernetes using the `StatefulService` resource. Here is a minimal example:
 
-```yaml
+[source,yaml]
+----
 apiVersion: cloudstate.io/v1alpha1
 kind: StatefulService
 metadata:
@@ -10,7 +11,7 @@ metadata:
 spec:
   containers:
   - image: my-docker-hub-username/shopping-cart:latest
-```
+----
 
 Upon deploying this, the Cloudstate operator will create a Kubernetes `Deployment` that contains the container configured in the descriptor, along with a sidecar container for the Cloudstate proxy. The operator will also deploy a Kubernetes `Service` to allow other services to consume the Cloudstate service.
 
