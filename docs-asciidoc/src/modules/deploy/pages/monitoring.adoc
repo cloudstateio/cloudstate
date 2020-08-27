@@ -1,4 +1,4 @@
-# Monitoring
+= Monitoring
 
 * Explain how to monitor external communication with Istio
 * Explain how to collect metrics from Cloudstate (it doesn't currently produce any)

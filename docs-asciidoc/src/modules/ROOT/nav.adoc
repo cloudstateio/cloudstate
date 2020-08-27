@@ -8,7 +8,7 @@
 * xref:concepts:index.adoc[Important concepts]
 ** xref:concepts:glossary.adoc[Glossary]
 ** xref:concepts:grpc.adoc[gRPC]
-** xref:concepts:eventsource.adoc[Event sourcing]
+** xref:concepts:eventsourced.adoc[Event sourcing]
 ** xref:concepts:crdts.adoc[Conflict-free replicated data types]
 ** xref:concepts:effects.adoc[Forwarding and effects]
 
@@ -24,16 +24,16 @@
 
 * xref:java:index.adoc[Implementing in Java]
 ** xref:java:getting-started.adoc[Getting started]
-** xref:java:eventsourced-entities.adoc[Implementing event sourced entities]
+** xref:java:eventsourced.adoc[Implementing event sourced entities]
 ** xref:java:crdt.adoc[Conflict free replicated data types]
-** xref:java:effects.adoc[CRDT effects and forwarding]
+** xref:java:effects.adoc[Forwarding and effects]
 ** xref:java:serialization.adoc[Serialization]
 
 * xref:javascript:index.adoc[Implementing in Javascript]
 ** xref:javascript:getting-started.adoc[Getting started]
 ** xref:javascript:eventsourced.adoc[Implementing event sourced entities]
 ** xref:javascript:crdt.adoc[Conflict free replicated data types]
-** xref:javascript:effects.adoc[CRDT effects and forwarding]
+** xref:javascript:effects.adoc[Forwarding and effects]
 ** xref:javascript:serialization.adoc[Serialization]
 
 * xref:deploy:index.adoc[Deploying to production systems]
