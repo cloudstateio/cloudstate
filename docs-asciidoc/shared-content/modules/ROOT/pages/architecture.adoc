@@ -17,7 +17,7 @@ The gRPC protocol spoken between the Akka sidecar and the user code is a Common 
 * The second part of the IR is **a pluggable entity type protocol:** Each entity type defines its own gRPC protocol for communicating between the sidecar and the user function. Here is a snippet of the event sourcing protocol:
 +
 [source,proto]
-....
+----
 service EventSourced {
     rpc handle(stream EventSourcedStreamIn) returns (stream EventSourcedStreamOut) {}
 }
@@ -43,7 +43,7 @@ message EventSourcedReply {
     }
     repeated google.protobuf.Any events = 3;
 }
-....
+----
 
 When a command for an entity arrives, the following messages are sent using this protocol:
 
@@ -58,14 +58,14 @@ The user function is expected to hold the current state of the entity in the con
 The `Command` message contains, among other things, the name of a gRPC rpc call that is being invoked - this RPC call was declared during the discovery phase. It also contains the payload of that gRPC call, along with an extracted entity id, that identifies which entity the call is for. Entity ids are declared through the use of a Protobuf field extension, here is an example user function message that declares an entity id:
 
 [source,proto]
-....
+----
 message AddLineItem {
     string user_id = 1 [(.cloudstate.entity_key) = true];
     string product_id = 2;
     string name = 3;
     int32 quantity = 4;
 }
-....
+----
 
 === Support for HTTP and JSON
 
@@ -94,9 +94,9 @@ For these reasons, we have implemented our own autoscaler. For simplicity, this 
 * Average database concurrency per pod - this is the number of simultaneous operations being performed on the database at any one time. This is typically subtracted from request concurrency so that database performance does not impact decisions made based on request concurrency.
 * Request rate - this is the rate at which incoming requests are arriving.
 
-In general, scaling decisions are made when user function concurrency and request concurrency exceed or drop below configurable thresholds. The reason for using two metrics is that in sharding situations, request concurrency is highly dependent on the number of nodes. 
-* When there is only one node, no requests are forwarded to other nodes, which means latency stays very low, which means request concurrency stays very low. 
-* When there are two nodes, on average 50% of requests are forwarded to other nodes, when there are many nodes, this number increases. 
+In general, scaling decisions are made when user function concurrency and request concurrency exceed or drop below configurable thresholds. The reason for using two metrics is that in sharding situations, request concurrency is highly dependent on the number of nodes.
+* When there is only one node, no requests are forwarded to other nodes, which means latency stays very low, which means request concurrency stays very low.
+* When there are two nodes, on average 50% of requests are forwarded to other nodes, when there are many nodes, this number increases.
 * For this reason, request concurrency is not a good metric to base scaling decisions on when the number of nodes is low, so user function concurrency is used. However, request concurrency is still an important metric because the impact of cluster sharding on the load being handled is non zero, and indeed, if it performs badly compared to the user function, then user function concurrency will stay low, while requests back up in cluster sharding buffers.
 * Hence, request concurrency is used as scaling metric, but set to something high that would never be triggered when there's only one node, but is more likely to be triggered when load is higher.
 
@@ -126,17 +126,17 @@ Whether a GraalVM Native Image build is available for the Cloudstate Proxy for t
 
 [cols="a*"]
 |===
-| Database | Journal | Key-Value | Native image 
+| Database | Journal | Key-Value | Native image
 
-| Cassandra  
-^| *&#10004;*
-^| *&#10008;*       
-^| *&#10004;* 
-
-
-| Postgresql 
+| Cassandra
 ^| *&#10004;*
 ^| *&#10008;*
-^| *&#10008;*                
+^| *&#10004;*
+
+
+| Postgresql
+^| *&#10004;*
+^| *&#10008;*
+^| *&#10008;*
 
 |===

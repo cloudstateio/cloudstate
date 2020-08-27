@@ -1,9 +1,9 @@
-# In memory
+= In memory
 
 * Explain that an in memory store is available.
 * Point out that it makes no sense whatsoever to use it in production.
 
-## What InMemory is Good For
+== What InMemory is Good For
 An in-memory store for state is useful for a number of things: Running locally and testing (especially end-to-end or functional testing) for example. It is, however
 not useful in an actual production service.
 

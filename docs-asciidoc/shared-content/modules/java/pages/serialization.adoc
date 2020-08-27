@@ -2,8 +2,8 @@
 
 Cloudstate functions serve gRPC interfaces, and naturally the input and output messages are protobuf messages that get serialized to the protobuf wire format. However, in addition to these messages, there are a number of places where Cloudstate needs to serialize other objects, for persistence and replication. This includes:
 
-* Event sourced xref:concepts:eventsource.adoc#_persistence_types_and_serialization[events and snapshots].
-* CRDT xref:crdts.adoc#_sets_and_maps[map keys and set elements], and xref:crdts.adoc#_registers[LWWRegister values].
+* Event sourced xref:eventsourced.adoc#_persistence_types_and_serialization[events and snapshots].
+* CRDT xref:crdt.adoc#_sets_and_maps[map keys and set elements], and xref:crdt.adoc#_registers[LWWRegister values].
 
 Cloudstate supports a number of types and serialization options for these values.
 
@@ -13,30 +13,30 @@ Cloudstate supports serializing the following primitive types:
 
 [cols="a,a"]
 |===
-| Protobuf type | Java type                      
+| Protobuf type | Java type
 
-| string        
-| java.lang.String               
+| string
+| java.lang.String
 
-| bytes         
-| com.google.protobuf.ByteString 
+| bytes
+| com.google.protobuf.ByteString
 
-| int32         
-| java.lang.Integer  
-            
-| int64         
-| java.lang.Long  
-               
-| float         
-| java.lang.Float                
+| int32
+| java.lang.Integer
 
-| double        
-| java.lang.Double               
+| int64
+| java.lang.Long
 
-| bool          
-| java.lang.Boolean  
+| float
+| java.lang.Float
 
-|===            
+| double
+| java.lang.Double
+
+| bool
+| java.lang.Boolean
+
+|===
 
 The details of how these are serialized can be found xref:concepts:serialization.adoc_primitive_values[here].
 

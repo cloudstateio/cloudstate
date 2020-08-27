@@ -55,7 +55,7 @@ The Cloudstate proxy is responsible for implementing the CRDT mechanics. This in
 
 == Streamed CRDT calls
 
-Cloudstate CRDTs support handling server streamed calls, that is, when the gRPC service call for a CRDT marks the return type as `streamed`. When a user function receives a streamed message, it is allowed to update the CRDT, on two occasions - when the call is first received, and when the client cancels the stream. If it wishes to make updates at other times, it can do so by @ref:[emitting effects](effects.md) with the streamed messages that it sends down the stream.
+Cloudstate CRDTs support handling server streamed calls, that is, when the gRPC service call for a CRDT marks the return type as `streamed`. When a user function receives a streamed message, it is allowed to update the CRDT, on two occasions - when the call is first received, and when the client cancels the stream. If it wishes to make updates at other times, it can do so by xref:effects.adoc[emitting effects] with the streamed messages that it sends down the stream.
 
 A user function can send a message down a stream in response to anything, however the Cloudstate supplied support libraries only allow sending messages in response to the CRDT changing. In this way, use cases that require monitoring the state of a CRDT can be implemented.
 

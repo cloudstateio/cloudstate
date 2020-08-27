@@ -32,26 +32,26 @@ import java.util.stream.Collectors;
 public class ShoppingCartEntity {
   // #entity-class end::entity-class[]
 
-  // #entity-state
+  // #entity-state tag::entity-state[]
   private final Map<String, Shoppingcart.LineItem> cart = new LinkedHashMap<>();
-  // #entity-state
+  // #entity-state end::entity-state[]
 
-  // #constructing
+  // #constructing tag::constructing[]
   private final String entityId;
 
   public ShoppingCartEntity(@EntityId String entityId) {
     this.entityId = entityId;
   }
-  // #constructing
+  // #constructing end::constructing[]
 
-  // #get-cart
+  // #get-cart tag::get-cart[]
   @CommandHandler
   public Shoppingcart.Cart getCart() {
     return Shoppingcart.Cart.newBuilder().addAllItems(cart.values()).build();
   }
-  // #get-cart
+  // #get-cart end::get-cart[]
 
-  // #add-item
+  // #add-item tag::add-item[]
   @CommandHandler
   public Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
     if (item.getQuantity() <= 0) {
@@ -68,9 +68,9 @@ public class ShoppingCartEntity {
             .build());
     return Empty.getDefaultInstance();
   }
-  // #add-item
+  // #add-item end::add-item[]
 
-  // #item-added
+  // #item-added tag::item-added[]
   @EventHandler
   public void itemAdded(Domain.ItemAdded itemAdded) {
     Shoppingcart.LineItem item = cart.get(itemAdded.getItem().getProductId());
@@ -92,9 +92,9 @@ public class ShoppingCartEntity {
         .setQuantity(item.getQuantity())
         .build();
   }
-  // #item-added
+  // #item-added end::item-added[]
 
-  // #snapshot
+  // #snapshot tag::snapshot[]
   @Snapshot
   public Domain.Cart snapshot() {
     return Domain.Cart.newBuilder()
@@ -109,9 +109,9 @@ public class ShoppingCartEntity {
         .setQuantity(item.getQuantity())
         .build();
   }
-  // #snapshot
+  // #snapshot end::snapshot[]
 
-  // #handle-snapshot
+  // #handle-snapshot tag::handle-snapshot[]
   @SnapshotHandler
   public void handleSnapshot(Domain.Cart cart) {
     this.cart.clear();
@@ -119,9 +119,9 @@ public class ShoppingCartEntity {
       this.cart.put(item.getProductId(), convert(item));
     }
   }
-  // #handle-snapshot
+  // #handle-snapshot end::handle-snapshot[]
 
-  // #register
+  // #register tag::register[]
   public static void main(String... args) {
     new CloudState()
         .registerEventSourcedEntity(
@@ -130,6 +130,6 @@ public class ShoppingCartEntity {
             Domain.getDescriptor())
         .start();
   }
-  // #register
+  // #register end::register[]
 
 }

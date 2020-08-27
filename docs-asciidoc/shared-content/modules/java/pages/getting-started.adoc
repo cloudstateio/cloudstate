@@ -8,7 +8,7 @@ ifdef::todo[TODO: link to where the reader can find instructions for installing 
 
 [cols="a,a"]
 |===
- 
+
 | *Java version*
 | Cloudstate Java support requires at least Java {minimum-java-version}, though we recommend using Java {recommended-java-version}, which has better support for running in containers. While it is possible to build a GraalVM native image for Cloudstate Java user functions, at this stage Cloudstate offers no specific assistance or configuration to aid in doing that.
 
@@ -30,9 +30,9 @@ ifdef::todo[TODO: link to where the reader can find instructions for installing 
 
 == Install the Cloudstate library
 
-As mentioned, you can use the build tool of your choice. The following examples show how to install the Java Cloudstate library for Gradle, Maven, and sbt. 
+As mentioned, you can use the build tool of your choice. The following examples show how to install the Java Cloudstate library for Gradle, Maven, and sbt.
 
-[.tabset]    
+[.tabset]
 Gradle::
 In your `build.gradle` file, add the following:
 +
@@ -44,13 +44,13 @@ Maven::
 In your `.pom` file, add the following:
 +
 [source,xml,subs="attributes+"]
-....
+----
 <dependency>
   <groupId>io.cloudstate</groupId>
   <artifactId>cloudstate-java-support</artifactId>
   <version>{cloudstate_java_support_version}</version>
 </dependency>
-....
+----
 sbt::
 In your dependencies file, add the following:
 +
@@ -65,7 +65,7 @@ libraryDependencies += "io.cloudstate" % "cloudstate-java-support" % "{cloudstat
 A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffers Plugin](https://www.xolstice.org/protobuf-maven-plugin/) and the [Fabric8 Docker Maven Plugin](https://dmp.fabric8.io/), for a shopping cart service, is shown below:
 
 [source,xml, subs="attributes+"]
-....
+----
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
@@ -86,7 +86,7 @@ A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffer
       </extension>
     </extensions>
     <plugins>
-      
+
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -95,7 +95,7 @@ A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffer
           <target>1.8</target>
         </configuration>
       </plugin>
-      
+
       <plugin>
         <groupId>org.xolstice.maven.plugins</groupId>
         <artifactId>protobuf-maven-plugin</artifactId>
@@ -111,7 +111,7 @@ A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffer
           </execution>
         </executions>
       </plugin>
-      
+
       <plugin>
         <groupId>io.fabric8</groupId>
         <artifactId>docker-maven-plugin</artifactId>
@@ -148,7 +148,7 @@ A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffer
           </execution>
         </executions>
       </plugin>
-      
+
     </plugins>
   </build>
 
@@ -164,7 +164,7 @@ A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffer
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 </project>
-....
+----
 
 Subsequent source locations and build commands will assume the above Maven project, and may need to be adapted to your particular build tool and setup.
 
@@ -172,11 +172,12 @@ Subsequent source locations and build commands will assume the above Maven proje
 
 The Xolstice Maven plugin assumes a location of `src/main/proto` for your protobuf files. In addition, it includes any protobuf files from your Java dependencies in the protoc include path, so there's nothing you need to do to pull in either the Cloudstate protobuf types, or any of the Google standard protobuf types, they are all automatically available for import.
 
-So, if you were to build the example shopping cart application shown earlier in @ref:[gRPC descriptors](../../features/grpc.md), you could simply paste that protobuf into `src/main/proto/shoppingcart.proto`. You may wish to also define the Java package, to ensure the package name used conforms to Java package naming conventions:
+So, if you were to build the example shopping cart application shown earlier in xref:concepts:grpc.adoc[gRPC descriptors], you could simply paste that protobuf into `src/main/proto/shoppingcart.proto`. You may wish to also define the Java package, to ensure the package name used conforms to Java package naming conventions:
 
-```proto
+[source,proto]
+----
 option java_package = "com.example";
-```
+----
 
 Now if you run `mvn compile`, you'll find your generated protobuf files in `target/generated-sources/protobuf/java`.
 
@@ -184,7 +185,10 @@ Now if you run `mvn compile`, you'll find your generated protobuf files in `targ
 
 Your main class will be responsible for creating the Cloudstate gRPC server, registering the entities for it to serve, and starting it. To do this, you can use the @javadoc[`CloudState`](io.cloudstate.javasupport.CloudState) server builder, for example:
 
-@@snip [ShoppingCartMain.java](/docs/src/test/java/docs/user/gettingstarted/ShoppingCartMain.java) { #shopping-cart-main }
+[source,java]
+----
+include::example$docs/user/gettingstarted/ShoppingCartMain.java[tag=shopping-cart-main]
+----
 
 We will see more details on registering entities in the coming pages.
 
@@ -195,15 +199,15 @@ Cloudstate entities work by annotating classes and methods to be instantiated an
 Exactly which context parameters are available depend on the type of entity and the type of handler, in subsequent pages we'll detail which parameters are available in which circumstances. The order of the parameters in the method signature can be anything, parameters are matched by type and sometimes by annotation. The following context parameters are available in every context:
 
 |====
-| Type | Annotation | Description        
+| Type | Annotation | Description
 
-| @javadoc[`Context`](io.cloudstate.javasupport.Context) 
-|                       
-| The super type of all Cloudstate contexts. Every invoker makes a subtype of this available for injection, and method or constructor may accept that sub type, or any super type of that subtype that is a subtype of `Context`. 
+| @javadoc[`Context`](io.cloudstate.javasupport.Context)
+|
+| The super type of all Cloudstate contexts. Every invoker makes a subtype of this available for injection, and method or constructor may accept that sub type, or any super type of that subtype that is a subtype of `Context`.
 
-| `java.lang.String` 
-| @javadoc[`@EntityId`](io.cloudstate.javasupport.EntityId) 
-| The ID of the entity. 
+| `java.lang.String`
+| @javadoc[`@EntityId`](io.cloudstate.javasupport.EntityId)
+| The ID of the entity.
 
 |====
 
