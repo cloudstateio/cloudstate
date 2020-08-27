@@ -4,7 +4,7 @@ This page documents how to implement Cloudstate CRDT entities in Java. For infor
 
 A CRDT can be created by annotating it with the @javadoc[`@CrdtEntity`](io.cloudstate.javasupport.crdt.CrdtEntity) annotation.
 
-[source,java]
+[source,java,indent=0]
 ----
 include::example$docs/user/crdt/ShoppingCartEntity.java[tag=entity-class]
 ----
@@ -19,7 +19,7 @@ An entity's CRDT can be created from the entity's constructor using the `CrdtFac
 
 For most use cases, simply injecting the CRDT directly into the constructor, and storing in a local field, will be the most convenient and straightforward method of using a CRDT. In our shopping cart example, we're going to use an @javadoc[`LWWRegisterMap`](io.cloudstate.javasupport.crdt.LWWRegisterMap), this shows how it may be injected:
 
-[source,java]
+[source,java,indent=0]
 ----
 include::example$docs/user/crdt/ShoppingCartEntity.java[tag=creation]
 ----
@@ -38,7 +38,7 @@ The return type of the command handler must be the output type for the gRPC serv
 
 The following shows the implementation of the `GetCart` command handler. This command handler is a read-only command handler, it doesn't update the CRDT, it just returns some state:
 
-[source,java]
+[source,java,indent=0]
 ----
 include::example$docs/user/crdt/ShoppingCartEntity.java[tag=get-cart]
 ----
@@ -49,7 +49,7 @@ Due to CloudState's xref:concepts:crdts.adoc#_approach_to_crdts_in_cloudstate[ta
 
 Here's a command handler for the `AddItem` command that adds the item to the shopping cart:
 
-[source,java]
+[source,java,indent=0]
 ----
 include::example$docs/user/crdt/ShoppingCartEntity.java[tag=add-item]
 ----
@@ -79,7 +79,7 @@ rpc WatchCart(GetShoppingCart) returns (stream Cart);
 
 that could be implemented like this:
 
-[source,java]
+[source,java,indent=0]
 ----
 include::example$docs/user/crdt/ShoppingCartEntity.java[tag=WATCH-CART]
 ----
@@ -161,7 +161,7 @@ Some wrapper classes are also provided for ORMap. These provide more convenient 
 Once you've created your entity, you can register it with the @javadoc[`CloudState`](io.cloudstate.javasupport.CloudState) server, by invoking the @javadoc[`registerCrdtEntity`](io.cloudstate.javasupport.CloudState#registerCrdtEntity-java.lang.Class-com.google.protobuf.Descriptors.ServiceDescriptor-com.google.protobuf.Descriptors.FileDescriptor...-) method.
 In addition to passing your entity class and service descriptor, if you use protobuf for serialization and any protobuf message definitions are missing from your service descriptor (they are not declared directly in the file, nor as dependencies), then you'll need to pass those protobuf descriptors as well.
 
-[source,java]
+[source,java,indent=0]
 ----
 include::example$docs/user/crdt/ShoppingCartEntity.java[tag=register]
 ----
