@@ -1,4 +1,4 @@
-This page documents how to use Cloudstate effects and forwarding in Java. For high level information on what Cloudstate effects and forwarding is, please read the general xref:concepts:effects.adoc[forwarding and effects] documentation first.
+This page documents how to use Cloudstate effects and forwarding in Java. For high level information on what Cloudstate effects and forwarding is, please read the general xref:docs:concepts:effects.adoc[forwarding and effects] documentation first.
 
 == Looking up service call references
 
@@ -31,4 +31,4 @@ The `CommandContext` for each entity type implements `EffectContext` to allow em
 include::example$docs/user/effects/ShoppingCartEntity.java[tag=effect]
 ----
 
-Please note that, contrary to command forwarding, the result of the effect is ignored by the current command `addItem`. More details in the common section xref:concepts:effects.adoc[Forwarding and effects]
+Please note that, contrary to command forwarding, the result of the effect is ignored by the current command `addItem`. More details in the common section xref:docs:concepts:effects.adoc[Forwarding and effects]

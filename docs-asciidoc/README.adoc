@@ -12,10 +12,16 @@ Open the docs index page:
 open build/site/docs/current/index.html
 ....
 
-Or build in author mode, served locally:
+Or build and serve locally:
 
 ....
 make preview
 ....
 
 Browse at http://localhost:8000/docs/current/
+
+Build in author mode and serve locally with:
+
+....
+make preview-author-mode
+....

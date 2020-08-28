@@ -1,4 +1,4 @@
-This page documents how to implement Cloudstate event sourced entities in Java. For information on what Cloudstate event sourced entities are, please read the general xref:concepts:eventsourced.adoc[Event sourcing] documentation first.
+This page documents how to implement Cloudstate event sourced entities in Java. For information on what Cloudstate event sourced entities are, please read the general xref:docs:concepts:eventsourced.adoc[Event sourcing] documentation first.
 
 An event sourced entity can be created by annotating it with the link:api/io/cloudstate/javasupport/eventsourced/EventSourcedEntity.html[`@EventSourcedEntity`] annotation.
 

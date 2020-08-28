@@ -62,7 +62,7 @@ libraryDependencies += "io.cloudstate" % "cloudstate-java-support" % "{cloudstat
 
 == Maven example
 
-A minimal Maven example pom file, which uses the [Xolstice Maven Protocol Buffers Plugin](https://www.xolstice.org/protobuf-maven-plugin/) and the [Fabric8 Docker Maven Plugin](https://dmp.fabric8.io/), for a shopping cart service, is shown below:
+A minimal Maven example pom file, which uses the https://www.xolstice.org/protobuf-maven-plugin/[Xolstice Maven Protocol Buffers Plugin] and the https://dmp.fabric8.io/[Fabric8 Docker Maven Plugin], for a shopping cart service, is shown below:
 
 [source,xml, subs="attributes+"]
 ----
@@ -172,7 +172,7 @@ Subsequent source locations and build commands will assume the above Maven proje
 
 The Xolstice Maven plugin assumes a location of `src/main/proto` for your protobuf files. In addition, it includes any protobuf files from your Java dependencies in the protoc include path, so there's nothing you need to do to pull in either the Cloudstate protobuf types, or any of the Google standard protobuf types, they are all automatically available for import.
 
-So, if you were to build the example shopping cart application shown earlier in xref:concepts:grpc.adoc[gRPC descriptors], you could simply paste that protobuf into `src/main/proto/shoppingcart.proto`. You may wish to also define the Java package, to ensure the package name used conforms to Java package naming conventions:
+So, if you were to build the example shopping cart application shown earlier in xref:docs:concepts:grpc.adoc[gRPC descriptors], you could simply paste that protobuf into `src/main/proto/shoppingcart.proto`. You may wish to also define the Java package, to ensure the package name used conforms to Java package naming conventions:
 
 [source,proto]
 ----
