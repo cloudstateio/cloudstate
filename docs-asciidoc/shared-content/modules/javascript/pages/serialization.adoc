@@ -1,5 +1,3 @@
-
-
 * Explain what serialization is provided, what types can be serialized etc.
 * Explain how to use protobufs for serialization.
 * Explain how to use primitive values for serialization.
