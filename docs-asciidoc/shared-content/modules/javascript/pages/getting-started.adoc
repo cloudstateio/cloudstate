@@ -1,5 +1,3 @@
-
-
 Node version
 : Cloudstate uses the https://github.com/grpc/grpc-node[grpc node package], which compiles a native gRPC implementation using node-gyp. It requires a minimum of node 4.0.
 
@@ -63,7 +61,7 @@ You can place protobuf files in your project wherever you like, for example, in 
 
 == Creating and starting a server
 
-There are two ways to create and start a Cloudstate gRPC server. The first is to create an @extref:[`Entity`](jsdoc:Entity.html), and invoke @extref:[`start`](jsdoc:Entity.html#start) on it. This allows creating a server that serves a single entity, with the default options. We'll look at this more in the subsequent pages. Alternatively, you can use the @extref:[`CloudState`](jsdoc:CloudState.html) class, add one or more entities to it, and then invoke @extref:[`start`](jsdoc:CloudState.html#start), like so:
+There are two ways to create and start a Cloudstate gRPC server. The first is to create an link:api/module-cloudstate.Entity.html[`Entity`], and invoke link:api/module-cloudstate.Entity.html#start[`start`] on it. This allows creating a server that serves a single entity, with the default options. We'll look at this more in the subsequent pages. Alternatively, you can use the link:api/module-cloudstate.CloudState.html[`CloudState`] class, add one or more entities to it, and then invoke link:api/module-cloudstate.CloudState.html#start[`start`], like so:
 
 [source,js,indent=0]
 ----
@@ -77,4 +75,4 @@ If you created your protobuf file descriptor set at a different location to the 
 include::example$test/gettingstarted/index.js[tag=custom-desc]
 ----
 
-For the full range of options available on the `CloudState` class, see @extref:[`CloudState~options`](jsdoc:CloudState.html#~options).
+For the full range of options available on the `CloudState` class, see link:++api/module-cloudstate.CloudState.html#~options++[`CloudState~options`].

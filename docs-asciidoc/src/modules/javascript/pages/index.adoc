@@ -11,9 +11,9 @@ include::ROOT:partial$include.adoc[]
 //The source of this file is in the ../shared-content folder so that it can be shared with other Cloudstate doc repos
 include::cloudstateio-shared:javascript:page$index.adoc[]
 
-* [Getting started](gettingstarted.md)
-* [Event sourcing](eventsourced.md)
-* [Conflict-free Replicated Data Types](crdt.md)
-* [Forwarding and effects](effects.md)
-* [Serialization](serialization.md)
-* [API docs](api.md)
+* xref:getting-started.adoc[Getting started]
+* xref:eventsourced.adoc[Implementing event sourced entities]
+* xref:crdt.adoc[Conflict-free Replicated Data Types]
+* xref:effects.adoc[Forwarding and effects]
+* xref:serialization.adoc[Serialization]
+* xref:api.adoc[Javascript API docs]
