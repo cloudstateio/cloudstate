@@ -1,4 +1,4 @@
-= Conflict-free Replicated Data Types
+= Javascript API docs
 :toc:
 :toc-title: ON THIS PAGE
 :toclevels: 2
@@ -9,4 +9,4 @@ include::ROOT:partial$include.adoc[]
 
 
 //The source of this file is in the ../shared-content folder so that it can be shared with other Cloudstate doc repos
-include::cloudstateio-shared:javascript:page$crdt.adoc[]
+include::cloudstateio-shared:javascript:page$api.adoc[]
