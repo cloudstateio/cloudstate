@@ -1,4 +1,4 @@
-Cloudstate provides a good developer experience by implementing the low level details that allow you to focus on your business logic. When using Cloudstate open source, you need to provide your own Kubernetes environment and provision Cloudstate to run in it. Lightbend also provides a https://lbcs.io[paid Cloudstate service] that manages the Kubernetes environment for you.
+Cloudstate provides a good developer experience by implementing the low level details that allow you to focus on your business logic. When using Cloudstate open source, you need to provide your own Kubernetes environment and provision Cloudstate to run in it. Lightbend also provides a https://www.lightbend.com/akka-serverless[Cloudstate service] that manages the Kubernetes environment for you.
 
 This page introduces the basics of working with Cloudstate open source.
 
