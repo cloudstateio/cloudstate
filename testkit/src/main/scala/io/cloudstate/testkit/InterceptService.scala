@@ -38,7 +38,7 @@ final class InterceptService(settings: InterceptorSettings) {
 
   import context.system
 
-  entityDiscovery.expectOnline(30.seconds)
+  entityDiscovery.expectOnline(60.seconds)
 
   Await.result(
     Http().bindAndHandleAsync(

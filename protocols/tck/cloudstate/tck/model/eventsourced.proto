@@ -1,0 +1,123 @@
+// Copyright 2019 Lightbend Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//
+// == Cloudstate TCK model test for event-sourced entities ==
+//
+
+syntax = "proto3";
+
+package cloudstate.tck.model;
+
+import "cloudstate/entity_key.proto";
+
+option java_package = "io.cloudstate.tck.model";
+
+//
+// The `EventSourcedTckModel` service should be implemented in the following ways:
+//
+// - The entity persistence-id must be `event-sourced-tck-model`.
+// - Snapshots must be configured for every 5 events.
+// - The state of the entity is simply a string.
+// - Event and snapshot string values are wrapped in `Persisted` messages.
+// - The snapshot handler must set the state to the value of a `Persisted` message.
+// - The event handler must append the value of a `Persisted` message to the state string.
+// - The `Process` method receives a `Request` message with actions to take.
+// - Request actions must be processed in order, and can require emitting events, forwarding, side effects, or failing.
+// - The `Process` method must reply with the state in a `Response`, after taking actions, unless forwarding or failing.
+// - Forwarding and side effects must always be made to the second service `EventSourcedTwo`.
+//
+service EventSourcedTckModel {
+  rpc Process(Request) returns (Response);
+}
+
+//
+// The `EventSourcedTwo` service is only for verifying forward actions and side effects.
+// The `Call` method is not required to do anything, and may simply return an empty `Response` message.
+//
+service EventSourcedTwo {
+  rpc Call(Request) returns (Response);
+}
+
+//
+// A `Request` message contains any actions that the entity should process.
+// Actions must be processed in order. Any actions after a `Fail` may be ignored.
+//
+message Request {
+  string id = 1 [(.cloudstate.entity_key) = true];
+  repeated RequestAction actions = 2;
+}
+
+//
+// Each `RequestAction` is one of:
+//
+// - Emit: emit an event, with a given value.
+// - Forward: forward to another service, in place of replying with a Response.
+// - Effect: add a side effect to another service to the reply.
+// - Fail: fail the current `Process` command.
+//
+message RequestAction {
+  oneof action {
+    Emit emit = 1;
+    Forward forward = 2;
+    Effect effect = 3;
+    Fail fail = 4;
+  }
+}
+
+//
+// Emit an event, with the event value in a `Persisted` message.
+//
+message Emit {
+  string value = 1;
+}
+
+//
+// Replace the response with a forward to `cloudstate.tck.model.EventSourcedTwo/Call`.
+// The payload must be a `Request` message with the given `id`.
+//
+message Forward {
+  string id = 1;
+}
+
+//
+// Add a side effect to the reply, to `cloudstate.tck.model.EventSourcedTwo/Call`.
+// The payload must be a `Request` message with the given `id`.
+// The side effect should be marked synchronous based on the given `synchronous` value.
+//
+message Effect {
+  string id = 1;
+  bool synchronous = 2;
+}
+
+//
+// Fail the current command with the given description `message`.
+//
+message Fail {
+  string message = 1;
+}
+
+//
+// The `Response` message for the `Process` must contain the current state (after processing actions).
+//
+message Response {
+  string message = 1;
+}
+
+//
+// The `Persisted` message wraps both snapshot and event values.
+//
+message Persisted {
+  string value = 1;
+}
