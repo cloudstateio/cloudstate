@@ -58,13 +58,13 @@ object TckProcessConfig {
 
 final case class TckConfiguration private (name: String,
                                            proxy: TckProcessConfig,
-                                           frontend: TckProcessConfig,
+                                           service: TckProcessConfig,
                                            tckHostname: String,
                                            tckPort: Int) {
 
   def validate(): Unit = {
     proxy.validate()
-    frontend.validate()
+    service.validate()
     // FIXME implement
   }
 }
@@ -76,7 +76,7 @@ object TckConfiguration {
     TckConfiguration(
       name = c.getString("name"),
       proxy = TckProcessConfig.parseFrom(c.getConfig("proxy")),
-      frontend = TckProcessConfig.parseFrom(c.getConfig("frontend")),
+      service = TckProcessConfig.parseFrom(c.getConfig("service")),
       tckHostname = c.getString("tck.hostname"),
       tckPort = c.getInt("tck.port")
     )

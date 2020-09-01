@@ -23,37 +23,35 @@ import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.TestProbe
 import com.google.protobuf.Descriptors.ServiceDescriptor
 import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.event_sourced._
-import io.cloudstate.testkit.TestService
+import io.cloudstate.testkit.TestService.TestServiceContext
+import io.cloudstate.testkit.discovery.TestEntityDiscoveryService
 import scala.concurrent.Future
 
-final class TestEventSourcedService extends TestService {
-  private val eventSourced = new TestEventSourcedService.TestEventSourced(system, probe)
+final class TestEventSourcedService(context: TestServiceContext) {
+  import TestEventSourcedService._
 
-  override protected def handler: PartialFunction[HttpRequest, Future[HttpResponse]] =
-    super.handler orElse EventSourcedHandler.partial(eventSourced)
+  private val testEventSourced = new TestEventSourced(context)
 
-  def expectConnection(): TestEventSourcedService.Connection = probe.expectMsgType[TestEventSourcedService.Connection]
+  def expectConnection(): Connection = context.probe.expectMsgType[Connection]
 
-  start()
+  def handler: PartialFunction[HttpRequest, Future[HttpResponse]] =
+    EventSourcedHandler.partial(testEventSourced)(context.system)
 }
 
 object TestEventSourcedService {
-  def apply(): TestEventSourcedService = new TestEventSourcedService
-
   def entitySpec(service: ServiceDescription): EntitySpec =
-    TestService.entitySpec(EventSourced.name, service)
+    TestEntityDiscoveryService.entitySpec(EventSourced.name, service)
 
   def entitySpec(descriptors: Seq[ServiceDescriptor]): EntitySpec =
-    TestService.entitySpec(EventSourced.name, descriptors)
+    TestEntityDiscoveryService.entitySpec(EventSourced.name, descriptors)
 
-  final class TestEventSourced(system: ActorSystem, probe: TestProbe) extends EventSourced {
+  final class TestEventSourced(context: TestServiceContext) extends EventSourced {
     override def handle(source: Source[EventSourcedStreamIn, NotUsed]): Source[EventSourcedStreamOut, NotUsed] = {
-      val connection = new Connection(system, source)
-      probe.ref ! connection
+      val connection = new Connection(context.system, source)
+      context.probe.ref ! connection
       connection.outSource
     }
   }

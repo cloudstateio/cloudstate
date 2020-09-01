@@ -17,6 +17,7 @@
 package io.cloudstate.testkit.eventsourced
 
 import com.google.protobuf.any.{Any => ScalaPbAny}
+import com.google.protobuf.empty.{Empty => ScalaPbEmpty}
 import com.google.protobuf.{Empty => JavaPbEmpty, Message => JavaPbMessage}
 import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.event_sourced._
@@ -26,9 +27,9 @@ object EventSourcedMessages {
   import EventSourcedStreamIn.{Message => InMessage}
   import EventSourcedStreamOut.{Message => OutMessage}
 
-  val EmptyMessage: InMessage = InMessage.Empty
-  val EmptyPayload: JavaPbMessage = JavaPbEmpty.getDefaultInstance
-  val EmptyAny: ScalaPbAny = protobufAny(EmptyPayload)
+  val EmptyInMessage: InMessage = InMessage.Empty
+  val EmptyJavaMessage: JavaPbMessage = JavaPbEmpty.getDefaultInstance
+  val EmptyScalaMessage: ScalaPbMessage = ScalaPbEmpty.defaultInstance
 
   def init(serviceName: String, entityId: String): InMessage =
     init(serviceName, entityId, None)
@@ -58,7 +59,7 @@ object EventSourcedMessages {
     InMessage.Event(EventSourcedEvent(sequence, payload))
 
   def command(id: Long, entityId: String, name: String): InMessage =
-    command(id, entityId, name, EmptyPayload)
+    command(id, entityId, name, EmptyJavaMessage)
 
   def command(id: Long, entityId: String, name: String, payload: JavaPbMessage): InMessage =
     command(id, entityId, name, messagePayload(payload))

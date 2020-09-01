@@ -16,7 +16,7 @@
 
 package io.cloudstate.proxy
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.annotation.tailrec
 import akka.grpc.internal.{
@@ -46,7 +46,6 @@ import io.cloudstate.proxy.EntityDiscoveryManager.ServableEntity
 import io.cloudstate.proxy.entity.UserFunctionReply
 import io.cloudstate.proxy.protobuf.Types
 import io.grpc.{Status, StatusRuntimeException}
-import org.slf4j.{Logger, LoggerFactory}
 
 object Serve {
   private[this] final val fallback: Any => Any = _ => fallback
@@ -165,7 +164,7 @@ object Serve {
       HttpApi.serve(entities.map(_.serviceDescriptor -> grpcProxy).toList),
       handleNetworkProbe(),
       ServerReflectionHandler.partial(
-        ServerReflectionImpl(fileDescriptors, entities.map(_.serviceName).toList)
+        ServerReflectionImpl(fileDescriptors, entities.map(_.serviceName).sorted.toList)
       )
     )
 

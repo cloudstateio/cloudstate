@@ -757,7 +757,7 @@ lazy val `testkit` = (project in file("testkit"))
 lazy val `tck` = (project in file("tck"))
   .enablePlugins(AkkaGrpcPlugin, JavaAppPackaging, DockerPlugin, NoPublish)
   .configs(IntegrationTest)
-  .dependsOn(`akka-client`)
+  .dependsOn(`akka-client`, testkit)
   .settings(
     Defaults.itSettings,
     common,
@@ -780,7 +780,9 @@ lazy val `tck` = (project in file("tck"))
     bashScriptExtraDefines += "addApp io.cloudstate.tck.ConfiguredCloudStateTCK",
     headerSettings(IntegrationTest),
     automateHeaderSettings(IntegrationTest),
-    javaOptions in IntegrationTest := sys.props.get("config.resource").map(r => s"-Dconfig.resource=$r").toSeq,
+    fork in IntegrationTest := true,
+    javaOptions in IntegrationTest := Seq("config.resource", "user.dir")
+        .flatMap(key => sys.props.get(key).map(value => s"-D$key=$value")),
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
         .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly)
