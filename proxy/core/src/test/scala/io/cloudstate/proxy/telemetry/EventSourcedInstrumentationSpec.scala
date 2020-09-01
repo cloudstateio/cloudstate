@@ -130,7 +130,7 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
       val event3 = ProtoAny("event", ByteString.copyFromUtf8("event3"))
       val snapshot1 = ProtoAny("snapshot", ByteString.copyFromUtf8("snapshot1"))
 
-      connection.send(reply(1, reply1, Seq(event1, event2, event3), snapshot1))
+      connection.send(reply(1, reply1, persist(event1, event2, event3).withSnapshot(snapshot1)))
 
       expectMsg(UserFunctionReply(clientActionReply(messagePayload(reply1))))
 
@@ -169,7 +169,7 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
       val event4 = ProtoAny("event", ByteString.copyFromUtf8("event4"))
       val event5 = ProtoAny("event", ByteString.copyFromUtf8("event5"))
 
-      connection.send(reply(2, reply2, event4, event5))
+      connection.send(reply(2, reply2, persist(event4, event5)))
 
       expectMsg(UserFunctionReply(clientActionReply(messagePayload(reply2))))
 

@@ -47,15 +47,17 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
       entity.send(command(1, "cart", "GetCart"))
       entity.expect(reply(1, EmptyCart))
       entity.send(command(2, "cart", "AddItem", addItem("abc", "apple", 1)))
-      entity.expect(reply(2, EmptyJavaMessage, itemAdded("abc", "apple", 1)))
+      entity.expect(reply(2, EmptyJavaMessage, persist(itemAdded("abc", "apple", 1))))
       entity.send(command(3, "cart", "AddItem", addItem("abc", "apple", 2)))
       entity.expect(
-        reply(3, EmptyJavaMessage, Seq(itemAdded("abc", "apple", 2)), cartSnapshot(Item("abc", "apple", 3)))
+        reply(3,
+              EmptyJavaMessage,
+              persist(itemAdded("abc", "apple", 2)).withSnapshot(cartSnapshot(Item("abc", "apple", 3))))
       )
       entity.send(command(4, "cart", "GetCart"))
       entity.expect(reply(4, cart(Item("abc", "apple", 3))))
       entity.send(command(5, "cart", "AddItem", addItem("123", "banana", 4)))
-      entity.expect(reply(5, EmptyJavaMessage, itemAdded("123", "banana", 4)))
+      entity.expect(reply(5, EmptyJavaMessage, persist(itemAdded("123", "banana", 4))))
       entity.passivate()
       val reactivated = protocol.eventSourced.connect()
       reactivated.send(init(ShoppingCart.Name, "cart", snapshot(3, cartSnapshot(Item("abc", "apple", 3)))))

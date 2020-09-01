@@ -22,14 +22,16 @@ import akka.testkit.TestKit
 import com.example.shoppingcart.persistence.domain
 import com.example.shoppingcart.shoppingcart._
 import com.google.protobuf.DescriptorProtos
+import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.protocol.crdt.Crdt
 import io.cloudstate.protocol.event_sourced._
 import io.cloudstate.protocol.function.StatelessFunction
 import io.cloudstate.testkit.InterceptService.InterceptorSettings
 import io.cloudstate.testkit.eventsourced.{EventSourcedMessages, InterceptEventSourcedService}
-import io.cloudstate.testkit.{InterceptService, ServiceAddress, TestClient}
+import io.cloudstate.testkit.{InterceptService, ServiceAddress, TestClient, TestProtocol}
 import io.grpc.StatusRuntimeException
+import io.cloudstate.tck.model.eventsourced.{EventSourcedTckModel, EventSourcedTwo}
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 import scala.collection.mutable
@@ -65,6 +67,8 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
   private[this] final val client = TestClient(settings.proxy.host, settings.proxy.port)
   private[this] final val shoppingCartClient = ShoppingCartClient(client.settings)(system)
 
+  private[this] final val protocol = TestProtocol(settings.service.host, settings.service.port)
+
   @volatile private[this] final var interceptor: InterceptService = _
   @volatile private[this] final var enabledServices = Seq.empty[String]
 
@@ -76,6 +80,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
   override def afterAll(): Unit =
     try shoppingCartClient.close().futureValue
     finally try client.terminate()
+    finally try protocol.terminate()
     finally interceptor.terminate()
 
   def expectProxyOnline(): Unit =
@@ -114,6 +119,17 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
 
         serviceNames.size mustBe spec.entities.size
 
+        spec.entities.find(_.serviceName == EventSourcedTckModel.name).foreach { entity =>
+          serviceNames must contain("EventSourcedTckModel")
+          entity.entityType mustBe EventSourced.name
+          entity.persistenceId mustBe "event-sourced-tck-model"
+        }
+
+        spec.entities.find(_.serviceName == EventSourcedTwo.name).foreach { entity =>
+          serviceNames must contain("EventSourcedTwo")
+          entity.entityType mustBe EventSourced.name
+        }
+
         spec.entities.find(_.serviceName == ShoppingCart.name).foreach { entity =>
           serviceNames must contain("ShoppingCart")
           entity.entityType mustBe EventSourced.name
@@ -121,6 +137,274 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         }
 
         enabledServices = spec.entities.map(_.serviceName)
+      }
+    }
+
+    "verifying model test: event-sourced entities" must {
+      import EventSourcedMessages._
+      import io.cloudstate.tck.model.eventsourced._
+
+      val ServiceTwo = EventSourcedTwo.name
+
+      var entityId: Int = 0
+      def nextEntityId(): String = { entityId += 1; s"entity:$entityId" }
+
+      def eventSourcedTest(test: String => Any): Unit =
+        testFor(EventSourcedTckModel, EventSourcedTwo)(test(nextEntityId()))
+
+      def emitEvent(value: String): RequestAction =
+        RequestAction(RequestAction.Action.Emit(Emit(value)))
+
+      def emitEvents(values: String*): Seq[RequestAction] =
+        values.map(emitEvent)
+
+      def forwardTo(id: String): RequestAction =
+        RequestAction(RequestAction.Action.Forward(Forward(id)))
+
+      def sideEffectTo(id: String, synchronous: Boolean = false): RequestAction =
+        RequestAction(RequestAction.Action.Effect(Effect(id, synchronous)))
+
+      def sideEffectsTo(ids: String*): Seq[RequestAction] =
+        ids.map(id => sideEffectTo(id, synchronous = false))
+
+      def failWith(message: String): RequestAction =
+        RequestAction(RequestAction.Action.Fail(Fail(message)))
+
+      def persisted(value: String): ScalaPbAny =
+        protobufAny(Persisted(value))
+
+      def events(values: String*): Effects =
+        Effects(events = values.map(persisted))
+
+      def snapshotAndEvents(snapshotValue: String, eventValues: String*): Effects =
+        events(eventValues: _*).withSnapshot(persisted(snapshotValue))
+
+      def sideEffects(ids: String*): Effects =
+        ids.foldLeft(Effects.empty) { case (e, id) => e.withSideEffect(ServiceTwo, "Call", Request(id)) }
+
+      // FIXME #375: events applied immediately to state - https://github.com/cloudstateio/cloudstate/issues/375
+
+      "verify initial empty state" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id)))
+          .expect(reply(1, Response()))
+          .passivate()
+      }
+
+      "verify single emitted event" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, emitEvents("A"))))
+          .expect(reply(1, Response(), events("A"))) // FIXME #375: response = "A"
+          .send(command(2, id, "Process", Request(id)))
+          .expect(reply(2, Response("A")))
+          .passivate()
+      }
+
+      "verify multiple emitted events" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
+          .expect(reply(1, Response(), events("A", "B", "C"))) // FIXME #375: response = "ABC"
+          .send(command(2, id, "Process", Request(id)))
+          .expect(reply(2, Response("ABC")))
+          .passivate()
+      }
+
+      "verify multiple emitted events and snapshots" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, emitEvents("A"))))
+          .expect(reply(1, Response(), events("A"))) // FIXME #375: response = "A"
+          .send(command(2, id, "Process", Request(id, emitEvents("B"))))
+          .expect(reply(2, Response("A"), events("B"))) // FIXME #375: response = "AB"
+          .send(command(3, id, "Process", Request(id, emitEvents("C"))))
+          .expect(reply(3, Response("AB"), events("C"))) // FIXME #375: response = "ABC"
+          .send(command(4, id, "Process", Request(id, emitEvents("D"))))
+          .expect(reply(4, Response("ABC"), events("D"))) // FIXME #375: response = "ABCD"
+          .send(command(5, id, "Process", Request(id, emitEvents("E"))))
+          .expect(reply(5, Response("ABCD"), snapshotAndEvents("ABCDE", "E"))) // FIXME #375: response = "ABCDE"
+          .send(command(6, id, "Process", Request(id, emitEvents("F", "G", "H"))))
+          .expect(reply(6, Response("ABCDE"), events("F", "G", "H"))) // FIXME #375: response = "ABCDEFGH"
+          .send(command(7, id, "Process", Request(id, emitEvents("I", "J"))))
+          .expect(reply(7, Response("ABCDEFGH"), snapshotAndEvents("ABCDEFGHIJ", "I", "J"))) // FIXME #375: response = "ABCDEFGHIJ"
+          .send(command(8, id, "Process", Request(id, emitEvents("K"))))
+          .expect(reply(8, Response("ABCDEFGHIJ"), events("K"))) // FIXME #375: response = "ABCDEFGHIJK"
+          .send(command(9, id, "Process", Request(id)))
+          .expect(reply(9, Response("ABCDEFGHIJK")))
+          .passivate()
+      }
+
+      "verify initial snapshot" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id, snapshot(5, persisted("ABCDE"))))
+          .send(command(1, id, "Process", Request(id)))
+          .expect(reply(1, Response("ABCDE")))
+          .passivate()
+      }
+
+      "verify initial snapshot and events" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id, snapshot(5, persisted("ABCDE"))))
+          .send(event(6, persisted("F")))
+          .send(event(7, persisted("G")))
+          .send(command(1, id, "Process", Request(id)))
+          .expect(reply(1, Response("ABCDEFG")))
+          .passivate()
+      }
+
+      "verify rehydration after passivation" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
+          .expect(reply(1, Response(), events("A", "B", "C"))) // FIXME #375: response = "ABC"
+          .send(command(2, id, "Process", Request(id, emitEvents("D", "E"))))
+          .expect(reply(2, Response("ABC"), snapshotAndEvents("ABCDE", "D", "E"))) // FIXME #375: response = "ABCDE"
+          .send(command(3, id, "Process", Request(id, emitEvents("F"))))
+          .expect(reply(3, Response("ABCDE"), events("F"))) // FIXME #375: response = "ABCDEF"
+          .send(command(4, id, "Process", Request(id, emitEvents("G"))))
+          .expect(reply(4, Response("ABCDEF"), events("G"))) // FIXME #375: response = "ABCDEFG"
+          .passivate()
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id, snapshot(5, persisted("ABCDE"))))
+          .send(event(6, persisted("F")))
+          .send(event(7, persisted("G")))
+          .send(command(1, id, "Process", Request(id)))
+          .expect(reply(1, Response("ABCDEFG")))
+          .passivate()
+      }
+
+      "verify forward to second service" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(forwardTo(id)))))
+          .expect(forward(1, EventSourcedTwo.name, "Call", Request(id)))
+          .passivate()
+      }
+
+      "verify forward with emitted events" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(emitEvent("A"), forwardTo(id)))))
+          .expect(forward(1, EventSourcedTwo.name, "Call", Request(id), events("A")))
+          .passivate()
+      }
+
+      "verify forward with emitted events and snapshot" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
+          .expect(reply(1, Response(), events("A", "B", "C"))) // FIXME #375: response = "ABC"
+          .send(command(2, id, "Process", Request(id, Seq(emitEvent("D"), emitEvent("E"), forwardTo(id)))))
+          .expect(forward(2, EventSourcedTwo.name, "Call", Request(id), snapshotAndEvents("ABCDE", "D", "E")))
+          .passivate()
+      }
+
+      "verify reply with side effect to second service" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id)))))
+          .expect(reply(1, Response(), sideEffect(EventSourcedTwo.name, "Call", Request(id))))
+          .passivate()
+      }
+
+      "verify synchronous side effect to second service" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id, synchronous = true)))))
+          .expect(reply(1, Response(), sideEffect(EventSourcedTwo.name, "Call", Request(id), synchronous = true)))
+          .passivate()
+      }
+
+      "verify forward and side effect to second service" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id), forwardTo(id)))))
+          .expect(forward(1, ServiceTwo, "Call", Request(id), sideEffect(ServiceTwo, "Call", Request(id))))
+          .passivate()
+      }
+
+      "verify reply with multiple side effects" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, sideEffectsTo("1", "2", "3"))))
+          .expect(reply(1, Response(), sideEffects("1", "2", "3")))
+          .passivate()
+      }
+
+      "verify reply with multiple side effects, events, and snapshot" in eventSourcedTest { id =>
+        val actions = emitEvents("A", "B", "C", "D", "E") ++ sideEffectsTo("1", "2", "3")
+        val effects = snapshotAndEvents("ABCDE", "A", "B", "C", "D", "E") ++ sideEffects("1", "2", "3")
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, actions)))
+          .expect(reply(1, Response(), effects)) // FIXME #375: response = "ABCDE"
+          .passivate()
+      }
+
+      "verify failure action" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(failWith("expected failure")))))
+          .expect(actionFailure(1, "expected failure"))
+          .passivate()
+      }
+
+      "verify connection after failure action" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(emitEvent("A")))))
+          .expect(reply(1, Response(), events("A"))) // FIXME #375: response = "A"
+          .send(command(2, id, "Process", Request(id, Seq(failWith("expected failure")))))
+          .expect(actionFailure(2, "expected failure"))
+          .send(command(3, id, "Process", Request(id)))
+          .expect(reply(3, Response("A")))
+          .passivate()
+      }
+
+      "verify failure actions do not persist events or snapshots" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
+          .expect(reply(1, Response(), events("A", "B", "C"))) // FIXME #375: response = "ABC"
+          .send(command(2, id, "Process", Request(id, Seq(emitEvent("4"), emitEvent("5"), failWith("failure 1")))))
+          .expect(actionFailure(2, "failure 1"))
+          .send(command(3, id, "Process", Request(id, emitEvents("D"))))
+          .expect(reply(3, Response("ABC"), events("D"))) // FIXME #375: response = "ABCD"
+          .send(command(4, id, "Process", Request(id, Seq(emitEvent("6"), failWith("failure 2"), emitEvent("7")))))
+          .expect(actionFailure(4, "failure 2"))
+          .send(command(5, id, "Process", Request(id, emitEvents("E"))))
+          .expect(reply(5, Response("ABCD"), snapshotAndEvents("ABCDE", "E"))) // FIXME #375: response = "ABCDE"
+          .passivate()
+      }
+
+      "verify failure actions do not allow side effects" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id), failWith("expected failure")))))
+          .expect(actionFailure(1, "expected failure"))
+          .passivate()
       }
     }
 
@@ -318,7 +602,7 @@ class ShoppingCartVerifier(interceptor: InterceptService) extends MustMatchers {
     connection.expectClient(command(commandId, cartId, "AddItem", addLineItem))
     // shopping cart implementations may or may not have snapshots configured, so match without snapshot
     val replied = connection.expectServiceMessage[EventSourcedStreamOut.Message.Reply]
-    replied.copy(value = replied.value.clearSnapshot) mustBe reply(commandId, EmptyScalaMessage, itemAdded)
+    replied.copy(value = replied.value.clearSnapshot) mustBe reply(commandId, EmptyScalaMessage, persist(itemAdded))
     connection.expectNoInteraction()
   }
 
@@ -329,7 +613,7 @@ class ShoppingCartVerifier(interceptor: InterceptService) extends MustMatchers {
     connection.expectClient(command(commandId, cartId, "RemoveItem", removeLineItem))
     // shopping cart implementations may or may not have snapshots configured, so match without snapshot
     val replied = connection.expectServiceMessage[EventSourcedStreamOut.Message.Reply]
-    replied.copy(value = replied.value.clearSnapshot) mustBe reply(commandId, EmptyScalaMessage, itemRemoved)
+    replied.copy(value = replied.value.clearSnapshot) mustBe reply(commandId, EmptyScalaMessage, persist(itemRemoved))
     connection.expectNoInteraction()
   }
 
