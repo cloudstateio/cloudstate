@@ -150,9 +150,7 @@ module.exports = class CommandHelper {
         ctx.reply.clientAction = {
           reply: {
             payload: AnySupport.serialize(grpcMethod.resolvedResponseType.create(userReply), false, false),
-            metadata: {
-              entries: ctx.replyMetadata.entries
-            }
+            metadata: (ctx.replyMetadata.entries.length) ? { entries: ctx.replyMetadata.entries } : null
           }
         };
         ctx.commandDebug("%s reply with type [%s] with %d side effects.", desc, ctx.reply.clientAction.reply.payload.type_url, ctx.effects.length);

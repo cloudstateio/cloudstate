@@ -16,48 +16,38 @@
 
 package io.cloudstate.testkit.eventsourced
 
-import akka.actor.ActorSystem
-import akka.grpc.GrpcClientSettings
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.TestKit
-import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.protocol.event_sourced._
+import io.cloudstate.testkit.TestProtocol.TestProtocolContext
 
-final class TestEventSourcedClient(port: Int) {
-  private val config: Config = ConfigFactory.load(ConfigFactory.parseString("""
-    akka.http.server {
-      preview.enable-http2 = on
-    }
-  """))
+final class TestEventSourcedProtocol(context: TestProtocolContext) {
+  private val client = EventSourcedClient(context.clientSettings)(context.system)
 
-  private implicit val system: ActorSystem = ActorSystem("TestEventSourcedClient", config)
-  private val client = EventSourcedClient(GrpcClientSettings.connectToServiceAt("localhost", port).withTls(false))
+  def connect(): TestEventSourcedProtocol.Connection = new TestEventSourcedProtocol.Connection(client, context)
 
-  def connect: TestEventSourcedClient.Connection = new TestEventSourcedClient.Connection(client, system)
-
-  def terminate(): Unit = {
-    client.close()
-    TestKit.shutdownActorSystem(system)
-  }
+  def terminate(): Unit = client.close()
 }
 
-object TestEventSourcedClient {
-  def apply(port: Int): TestEventSourcedClient = new TestEventSourcedClient(port)
+object TestEventSourcedProtocol {
+  final class Connection(client: EventSourcedClient, context: TestProtocolContext) {
+    import context.system
 
-  final class Connection(client: EventSourcedClient, system: ActorSystem) {
-    private implicit val actorSystem: ActorSystem = system
     private val in = TestPublisher.probe[EventSourcedStreamIn]()
     private val out = client.handle(Source.fromPublisher(in)).runWith(TestSink.probe[EventSourcedStreamOut])
 
     out.ensureSubscription()
 
-    def send(message: EventSourcedStreamIn.Message): Unit =
+    def send(message: EventSourcedStreamIn.Message): Connection = {
       in.sendNext(EventSourcedStreamIn(message))
+      this
+    }
 
-    def expect(message: EventSourcedStreamOut.Message): Unit =
+    def expect(message: EventSourcedStreamOut.Message): Connection = {
       out.request(1).expectNext(EventSourcedStreamOut(message))
+      this
+    }
 
     def expectClosed(): Unit = {
       out.expectComplete()

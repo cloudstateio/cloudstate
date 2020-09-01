@@ -22,12 +22,13 @@ import akka.testkit.TestEvent.Mute
 import akka.testkit.{EventFilter, TestProbe}
 import com.google.protobuf.ByteString
 import com.google.protobuf.any.{Any => ProtoAny}
-import io.cloudstate.protocol.entity.{ClientAction, Failure, Reply}
+import io.cloudstate.protocol.entity.{ClientAction, Failure}
 import io.cloudstate.protocol.event_sourced._
 import io.cloudstate.proxy.ConcurrencyEnforcer
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.eventsourced.{EventSourcedEntity, EventSourcedEntitySupervisor}
-import io.cloudstate.testkit.eventsourced.{EventSourcedMessages, TestEventSourcedService}
+import io.cloudstate.testkit.TestService
+import io.cloudstate.testkit.eventsourced.EventSourcedMessages
 import io.prometheus.client.CollectorRegistry
 import scala.concurrent.duration._
 
@@ -61,7 +62,7 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
 
       implicit val replyTo: ActorRef = testActor
 
-      val service = TestEventSourcedService()
+      val service = TestService()
       val client = EventSourcedClient(GrpcClientSettings.connectToServiceAt("localhost", service.port).withTls(false))
 
       val statsCollector = TestProbe() // ignored
@@ -92,9 +93,11 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
 
       watch(entity)
 
+      val emptyCommand = Some(protobufAny(EmptyJavaMessage))
+
       // init with empty snapshot
 
-      val connection = service.expectConnection()
+      val connection = service.eventSourced.expectConnection()
 
       connection.expect(init("service", "entity"))
 
@@ -104,7 +107,7 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
 
       // first command
 
-      entity ! EntityCommand(entityId = "test", name = "command1", Some(EmptyAny))
+      entity ! EntityCommand(entityId = "test", name = "command1", emptyCommand)
 
       connection.expect(command(1, "entity", "command1"))
 
@@ -112,7 +115,7 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
 
       // second command (will be stashed)
 
-      entity ! EntityCommand(entityId = "test", name = "command2", Some(EmptyAny))
+      entity ! EntityCommand(entityId = "test", name = "command2", emptyCommand)
 
       eventually(timeout(5.seconds), interval(100.millis)) {
         metricValue(ReceivedCommandsTotal, EntityName -> "test") shouldBe 2
@@ -174,7 +177,7 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
       metricValue(CommandProcessingTimeSeconds + "_sum", EntityName -> "test") should be > 0.0
 
       val expectedPersistedBytes2 = Seq(event4, event5).map(protobufAny).map(_.serializedSize).sum
-      val totalExpectedPersistedBytes = (expectedPersistedBytes1 + expectedPersistedBytes2)
+      val totalExpectedPersistedBytes = expectedPersistedBytes1 + expectedPersistedBytes2
 
       metricValue(PersistedEventsTotal, EntityName -> "test") shouldBe 5
       metricValue(PersistedEventBytesTotal, EntityName -> "test") shouldBe totalExpectedPersistedBytes
@@ -213,7 +216,7 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
 
       // init with snapshot and events
 
-      val connection2 = service.expectConnection()
+      val connection2 = service.eventSourced.expectConnection()
 
       connection2.expect(init("service", "entity", snapshot(sequence = 3, snapshot1)))
 
@@ -236,7 +239,7 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
 
       // send a command that fails
 
-      reactivatedEntity ! EntityCommand(entityId = "test", name = "command3", Some(EmptyAny))
+      reactivatedEntity ! EntityCommand(entityId = "test", name = "command3", emptyCommand)
 
       connection2.expect(command(1, "entity", "command3"))
 
@@ -259,7 +262,7 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
 
       // create unexpected entity failure
 
-      reactivatedEntity ! EntityCommand(entityId = "test", name = "command4", Some(EmptyAny))
+      reactivatedEntity ! EntityCommand(entityId = "test", name = "command4", emptyCommand)
 
       connection2.expect(command(2, "entity", "command4"))
 
