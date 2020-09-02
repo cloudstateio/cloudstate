@@ -19,7 +19,7 @@ npm install cloudstate --save
 
 == Generating the protobuf descriptor set
 
-A Cloudstate user function needs to report to the Cloudstate proxy the gRPC descriptor that its serving, serialized to binary using the Protobuf [`FileDescriptorSet` message type](https://developers.google.com/protocol-buffers/docs/techniques#self-description). While there is some support for this in the [protobufjs](https://www.npmjs.com/package/protobufjs) library that is used by Cloudstate to load descriptors, it is somewhat incomplete and buggy. Hence, Cloudstate requires that you precompile this descriptor using `protoc` instead.
+A Cloudstate user function needs to report to the Cloudstate proxy the gRPC descriptor that its serving, serialized to binary using the Protobuf https://developers.google.com/protocol-buffers/docs/techniques#self-description[`FileDescriptorSet` message type]. While there is some support for this in the https://www.npmjs.com/package/protobufjs[protobufjs] library that is used by Cloudstate to load descriptors, it is somewhat incomplete and buggy. Hence, Cloudstate requires that you precompile this descriptor using `protoc` instead.
 
 Cloudstate provides a utility that does this for you, downloading the `protoc` binary for your platform, and running it with the necessary arguments and include paths. This can be run manually by running `node_modules/cloudstate/bin/compile-descriptor.js`, or we recommend adding it as a `prestart` script to your npm build:
 
@@ -57,7 +57,7 @@ A minimal `package.json` for a shopping cart example is shown below:
 
 == Protobuf files
 
-You can place protobuf files in your project wherever you like, for example, in the root directory, or in a directory named `protos`. In the `package.json` above we've placed the shopping cart application example shown earlier in xref:concepts:grpc.adoc[gRPC descriptors] in a file in the root folder called `shoppingcart.proto`.
+You can place protobuf files in your project wherever you like, for example, in the root directory, or in a directory named `protos`. In the `package.json` above we've placed the shopping cart application example shown earlier in xref:docs:concepts:grpc.adoc[gRPC descriptors] in a file in the root folder called `shoppingcart.proto`.
 
 == Creating and starting a server
 

@@ -43,7 +43,7 @@ include::example$docs/user/crdt/ShoppingCartEntity.java[tag=get-cart]
 
 == Updating a CRDT
 
-Due to CloudState's xref:concepts:crdts.adoc#_approach_to_crdts_in_cloudstate[take in turns approach], CRDTs may only be updated in command handlers and <<Responding to stream cancellation,stream cancellation callbacks>>.
+Due to CloudState's xref:docs:concepts:crdts.adoc#_approach_to_crdts_in_cloudstate[take in turns approach], CRDTs may only be updated in command handlers and <<Responding to stream cancellation,stream cancellation callbacks>>.
 
 Here's a command handler for the `AddItem` command that adds the item to the shopping cart:
 
@@ -92,7 +92,7 @@ A streamed command handler may also register an link:api/io/cloudstate/javasuppo
 
 == Types of CRDTs
 
-The Cloudstate Java support library offers Java classes for each of the xref:concepts:crdts.adoc#_crdts_available_in_cloudstate[CRDTs available in Cloudstate].
+The Cloudstate Java support library offers Java classes for each of the xref:docs:concepts:crdts.adoc#_crdts_available_in_cloudstate[CRDTs available in Cloudstate].
 
 === Counters and flags
 
