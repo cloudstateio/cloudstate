@@ -102,7 +102,7 @@ Verify that you've added GraalVM correctly by checking that `native-image` is av
 
 === LLVM Clang installation
 
-Download and install [`clang`](http://releases.llvm.org/).
+Download and install http://releases.llvm.org/[`clang`].
 Ensure your system is using `clang` as its c compiler, such as with `alternatives` on linux.
 `sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100`
 
