@@ -1,4 +1,4 @@
-Cloudstate provides a good developer experience by implementing the low level details that allow you to focus on your business logic. When using Cloudstate open source, you need to provide your own Kubernetes environment and provision Cloudstate to run in it. Lightbend also provides a https://lbcs.io[paid Cloudstate service] that manages the Kubernetes environment for you. 
+Cloudstate provides a good developer experience by implementing the low level details that allow you to focus on your business logic. When using Cloudstate open source, you need to provide your own Kubernetes environment and provision Cloudstate to run in it. Lightbend also provides a https://www.lightbend.com/akka-serverless[Cloudstate service] that manages the Kubernetes environment for you.
 
 This page introduces the basics of working with Cloudstate open source.
 
@@ -14,7 +14,7 @@ Currently, Cloudstate supports:
 * Javascript
 * Kotlin
 
-To write your Cloudstate services, you of course will need to know how to code in your chosen language. However, you will not need to learn a substantially different paradigm for using that language: The API for Cloudstate itself is short and straightfoward. And, you won't need anything else to be productive, unlike many other platforms that have a long and steep learning curve. See the  https://cloudstate.io/docs/core/current/user/lang/java/api/index.html[Javadoc, window="javadoc"] for the API as an example. 
+To write your Cloudstate services, you of course will need to know how to code in your chosen language. However, you will not need to learn a substantially different paradigm for using that language: The API for Cloudstate itself is short and straightfoward. And, you won't need anything else to be productive, unlike many other platforms that have a long and steep learning curve. See the  https://cloudstate.io/docs/core/current/user/lang/java/api/index.html[Javadoc, window="javadoc"] for the API as an example.
 
 == Cloudstate projects
 
@@ -42,4 +42,4 @@ TBW.
 
 == What's next
 
-After verifying xref:develop:prerequisites.adoc[Prerequisites] and xref:develop:install.adoc[Installing Cloudstate], we recommend that you start with a xref:develop:tutorial.index.adoc[Tutorial] to learn Cloudstate basics. 
+After verifying xref:docs:develop:prerequisites.adoc[Prerequisites] and xref:docs:develop:install.adoc[Installing Cloudstate], we recommend that you start with a xref:docs:develop:tutorial.adoc[Tutorial] to learn Cloudstate basics.

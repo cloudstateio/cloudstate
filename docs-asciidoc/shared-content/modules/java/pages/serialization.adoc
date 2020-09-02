@@ -36,12 +36,12 @@ Cloudstate supports serializing the following primitive types:
 
 |===
 
-The details of how these are serialized can be found xref:concepts:serialization.adoc_primitive_values[here].
+The details of how these are serialized can be found xref:docs:contribute:serialization.adoc#_primitive_values[here].
 
 == JSON
 
 Cloudstate uses https://github.com/FasterXML/jackson[Jackson] to serialize JSON. Any classes that are annotated with link:api/io/cloudstate/javasupport/Jsonable.html[`@Jsonable`] will be serialized to and from JSON using Jackson.
 
-The serialization of JSON values is described in xref:contribute:serialization.adoc#_json_values[Language support / Cloudstate serialization convention].
+The serialization of JSON values is described in xref:docs:contribute:serialization.adoc#_json_values[Language support / Cloudstate serialization convention].
 
-Note that if you are using JSON values in CRDT sets or maps, the serialization of these values **must** be stable. This means you must not use maps or sets in your value, and you should define an explicit ordering for the fields in your objects, using the [`@JsonPropertyOrder`](http://fasterxml.github.io/jackson-annotations/javadoc/2.9/com/fasterxml/jackson/annotation/JsonPropertyOrder.html) annotation. This constraint is explained in xref:concepts:crdts.adoc[CRDTs].
+Note that if you are using JSON values in CRDT sets or maps, the serialization of these values **must** be stable. This means you must not use maps or sets in your value, and you should define an explicit ordering for the fields in your objects, using the http://fasterxml.github.io/jackson-annotations/javadoc/2.9/com/fasterxml/jackson/annotation/JsonPropertyOrder.html[`@JsonPropertyOrder`] annotation. This constraint is explained in xref:docs:concepts:crdts.adoc[CRDTs].

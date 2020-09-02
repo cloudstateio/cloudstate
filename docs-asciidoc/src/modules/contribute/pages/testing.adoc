@@ -8,7 +8,7 @@ include::ROOT:partial$include.adoc[]
 
 === Compliance Testing
 
-The [TCK](tck/src/test/resources/application.conf) makes it possible to verify that combinations of backends and frontends behave as expected. In order to make a frontend eligible for testing in the TCK a sample application, implementing a simple [Shopping Cart](samples/js-shopping-cart) (here showcased with the Node.js frontend) is required.
+The https://github.com/cloudstateio/cloudstate/blob/master/tck/src/it/resources/application.conf[TCK] makes it possible to verify that combinations of backends and frontends behave as expected. In order to make a frontend eligible for testing in the TCK a sample application, implementing a simple https://github.com/cloudstateio/cloudstate/tree/master/samples/js-shopping-cart[Shopping Cart] (here showcased with the Node.js frontend) is required.
 
 In order to make sure that each individual component performs its duties, and when combined has the expected outcome, the following categories need to be considered.
 
