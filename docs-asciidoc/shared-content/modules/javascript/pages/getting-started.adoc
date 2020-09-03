@@ -1,14 +1,19 @@
-Node version
-: Cloudstate uses the https://github.com/grpc/grpc-node[grpc node package], which compiles a native gRPC implementation using node-gyp. It requires a minimum of node 4.0.
 
-Build tool
-: Cloudstate doesn't require any particular build tool, though npm install scripts do need to be run.
+== Prerequisites
 
-protoc
-: Cloudstate requires using the protoc compiler to serialize your protobuf definitions into the protobuf binary descriptor format. Helper scripts are provided to automatically download the protoc compiler for your platform and do this compilation.
+The following are required to start writing Cloudstate services in Javascript:
 
-docker
-: Cloudstate runs in Kubernetes with [Docker], hence you will need Docker to build a container that you can deploy to Kubernetes.
+Node version::
+Cloudstate uses the https://github.com/grpc/grpc-node[grpc node package], which compiles a native gRPC implementation using node-gyp. It requires a minimum of node 4.0.
+
+Build tool::
+Cloudstate doesn't require any particular build tool, though npm install scripts do need to be run.
+
+protoc::
+Cloudstate requires using the protoc compiler to serialize your protobuf definitions into the protobuf binary descriptor format. Helper scripts are provided to automatically download the protoc compiler for your platform and do this compilation.
+
+docker::
+Cloudstate runs in Kubernetes with [Docker], hence you will need Docker to build a container that you can deploy to Kubernetes.
 
 Once you have the above, you need to add the `cloudstate` package to your project, which can be done by running:
 
