@@ -2,6 +2,9 @@
 
 Build the docs using the Makefile:
 
+Be sure that you have `npm` installed on your system.
+
+https://www.npmjs.com/get-npm
 ....
 make build
 ....
