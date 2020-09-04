@@ -7,7 +7,7 @@ import com.example.counter.domain.CounterDomain.CounterEvent.CounterStarted
 import com.example.counter.domain.CounterDomain.CounterState
 import io.cloudstate.entity.CommandEffects
 
-class StoppedCounterHandler extends StoppedCounterDefaultHandler {
+class StoppedCounterHandlerImpl extends StoppedCounterDefaultHandler {
 
   /*
   * Command Handler(s)

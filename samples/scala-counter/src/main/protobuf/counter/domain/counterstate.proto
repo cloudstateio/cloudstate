@@ -4,7 +4,6 @@ import "cloudstate/entity_key.proto";
 
 package com.example.counter.domain;
 
-
 message UninitializedCounter {
   option (cloudstate.entity).domain_state = true;
 }
