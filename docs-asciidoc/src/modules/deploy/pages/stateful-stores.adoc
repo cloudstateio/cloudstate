@@ -11,7 +11,7 @@ metadata:
 spec:
   type: Postgres <1>
   deployment: Unmanaged <2>
-  config:
+  config: <3>
     service: postgresql.default.svc.cluster.local
     credentialsFromSecret:
       name: postgres-credentials
@@ -21,8 +21,7 @@ spec:
 
 <2> `deployment`: How the store is deployed. Valid values depend on the store type. `Unmanaged` means that the Cloudstate operator does not manage the deployment of the stateful store, currently, all stores only support unmanaged deployment. In the future, support may be added to allow Cloudstate to deploy the database itself, this will typically rely on a third party cloud database management service.
 
-`config`
-: Configuration specific to the type of database and it's mode of deployment. The available configuration options are detailed in the store specific documentation.
+<3> `config`: Configuration specific to the type of database and it's mode of deployment. The available configuration options are detailed in the store specific documentation.
 
 == Using a stateful store
 
