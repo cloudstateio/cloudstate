@@ -16,8 +16,6 @@
 
 package io.cloudstate.proxy
 
-import java.util.Base64
-
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.grpc.internal.{Codecs, GrpcProtocolNative, GrpcResponseHelpers}

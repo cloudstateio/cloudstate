@@ -97,31 +97,6 @@ object CloudStateProxyMain {
 
   private val isGraalVM = sys.props.get("org.graalvm.nativeimage.imagecode").contains("runtime")
 
-  /**
-   * Work around for https://github.com/oracle/graal/issues/1610.
-   *
-   * ThreadLocalRandom gets initialized with a static seed generator, from this generator all seeds for
-   * each thread are generated, but this gets computed at build time when compiling a native image, which
-   * means that you get the same sequence of seeds each time you run the native image, and one serious
-   * consequence of this is that every cluster node ends up with the same UID, and that causes big problems.
-   * We can't tell Graal not to initialize at build time because it's already loaded by Graal itself.
-   * So, we have to reset that field ourselves.
-   */
-  private def initializeThreadLocalRandom(): Unit = {
-    // MurmurHash3 64 bit mixer to give an even distribution of seeds:
-    // https://github.com/aappleby/smhasher/wiki/MurmurHash3
-    def mix64(z: Long): Long = {
-      val z1 = (z ^ (z >>> 33)) * 0xFF51AFD7ED558CCDL
-      val z2 = (z1 ^ (z1 >>> 33)) * 0xC4CEB9FE1A85EC53L
-      z2 ^ (z2 >>> 33)
-    }
-
-    val seed = mix64(System.currentTimeMillis) ^ mix64(System.nanoTime)
-    val field = classOf[ThreadLocalRandom].getDeclaredField("seeder")
-    field.setAccessible(true)
-    field.get(null).asInstanceOf[AtomicLong].set(seed)
-  }
-
   final def main(args: Array[String]): Unit =
     start()
 
@@ -132,10 +107,6 @@ object CloudStateProxyMain {
     start(Option(config))
 
   private def start(configuration: Option[Config]): ActorSystem = {
-    // Must do this first, before anything uses ThreadLocalRandom
-    if (isGraalVM) {
-      initializeThreadLocalRandom()
-    }
 
     implicit val system = configuration.fold(ActorSystem("cloudstate-proxy"))(c => ActorSystem("cloudstate-proxy", c))
     implicit val materializer = SystemMaterializer(system)
