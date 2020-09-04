@@ -1,0 +1,25 @@
+syntax = "proto3";
+import "cloudstate/entity_key.proto";
+
+package com.example.counter.domain.event;
+
+message CounterInitialized {
+  option (cloudstate.entity).domain_event = true;
+  uint32 initial_value = 1;
+  uint32 max_value = 2;
+}
+
+message CounterStarted {
+  option (cloudstate.entity).domain_event = true;
+  uint32 initial_value = 1;
+  uint32 max_value = 2;
+}
+
+message CounterIncremented {
+  option (cloudstate.entity).domain_event = true;
+  uint32 amount = 3;
+}
+
+message CounterStopped {
+  option (cloudstate.entity).domain_event = true;
+}

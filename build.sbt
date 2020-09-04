@@ -741,6 +741,16 @@ lazy val `load-generator` = (project in file("samples/js-shopping-cart-load-gene
     dockerExposedPorts := Nil
   )
 
+lazy val `scala-counter-sample` = (project in file("samples/scala-counter"))
+  //  .enablePlugins(JavaAppPackaging, DockerPlugin, NoPublish)
+  //  .dependsOn(`akka-client`)
+  .settings(
+    Compile / unmanagedSourceDirectories += baseDirectory.value / "src" / "main" / "scala-gen",
+    Compile / unmanagedSourceDirectories += baseDirectory.value / "src" / "main" / "scala-cloudstate",
+    common,
+    name := "scala-counter",
+  )
+
 lazy val `testkit` = (project in file("testkit"))
   .enablePlugins(AkkaGrpcPlugin)
   .settings(

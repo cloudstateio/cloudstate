@@ -1,0 +1,133 @@
+syntax = "proto3";
+import "cloudstate/entity_key.proto";
+
+package com.example.counter.api;
+
+service CounterService {
+
+  rpc Initialize(InitializeRequest) returns (InitializeResponse) {}
+
+  rpc Start(StartRequest) returns (StartResponse) {}
+
+  rpc Increment(IncrementRequest) returns (IncrementResponse) {}
+
+  rpc Stop(StopRequest) returns (StopResponse) {}
+
+  rpc GetCounter(GetCounterRequest) returns (GetCounterResponse) {}
+
+}
+
+/*
+ * Start
+ */
+
+message InitializeRequest {
+  option (cloudstate.entity).api_request = true;
+  string counter_id = 1 [(.cloudstate.entity_key) = true] ;
+  uint32 initial_value = 2;
+}
+
+message InitializeResponse {
+  option (cloudstate.entity).api_value_response = true;
+  oneof counter  {
+    UninitializedCounter uninitializedCounter = 1;
+    ActiveCounter activeCounter = 2;
+    StoppedCounter stoppedCounter = 3;
+  }
+}
+
+/*
+ * Start
+ */
+
+message StartRequest {
+  option (cloudstate.entity).api_request = true;
+  string counter_id = 1 [(.cloudstate.entity_key) = true];
+  uint32 max_value = 2;
+}
+
+message StartResponse {
+  option (cloudstate.entity).api_value_response = true;
+  oneof value  {
+    UninitializedCounter uninitializedCounter = 1;
+    ActiveCounter activeCounter = 2;
+    StoppedCounter stoppedCounter = 3;
+  }
+}
+
+
+
+message IncrementRequest {
+  option (cloudstate.entity).api_request = true;
+  string counter_id = 1 [(.cloudstate.entity_key) = true];
+  uint32 amount = 2;
+}
+
+message IncrementResponse {
+  option (cloudstate.entity).api_value_response = true;
+  oneof value {
+    UninitializedCounter uninitializedCounter = 1;
+    ActiveCounter activeCounter = 2;
+    StoppedCounter stoppedCounter = 3;
+  }
+}
+
+/*
+ * Stop
+ */
+
+message StopRequest {
+  option (cloudstate.entity).api_request = true;
+  string counter_id = 2;
+}
+
+message StopResponse {
+  option (cloudstate.entity).api_value_response = true;
+  oneof counter  {
+    UninitializedCounter uninitializedCounter = 1;
+    ActiveCounter activeCounter = 2;
+    StoppedCounter stoppedCounter = 3;
+  }
+}
+
+
+/*
+ * Get summary
+ */
+
+message GetCounterRequest {
+  option (cloudstate.entity).api_request = true;
+  string counter_id = 1;
+}
+
+message GetCounterResponse {
+  option (cloudstate.entity).api_value_response = true;
+  oneof counter  {
+    UninitializedCounter uninitializedCounter = 1;
+    ActiveCounter activeCounter = 2;
+    StoppedCounter stoppedCounter = 3;
+  }
+}
+
+/*
+* Shared RequestResponse Types
+*/
+
+
+message UninitializedCounter {
+  option (cloudstate.entity).api_value = true;
+  string counter_id = 1;
+}
+
+message ActiveCounter {
+  option (cloudstate.entity).api_value = true;
+  string counter_id = 1;
+  uint32 value = 2;
+  uint32 max_value = 3;
+}
+
+message StoppedCounter {
+  option (cloudstate.entity).api_value = true;
+  string counter_id = 1;
+  uint32 value = 2;
+}

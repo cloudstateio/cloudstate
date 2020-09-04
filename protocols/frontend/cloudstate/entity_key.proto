@@ -28,3 +28,18 @@ option go_package = "github.com/cloudstateio/go-support/cloudstate/;cloudstate";
 extend google.protobuf.FieldOptions {
     bool entity_key = 50002;
 }
+extend google.protobuf.MessageOptions {
+    EntityMessageOptions entity = 50002;
+}
+
+extend google.protobuf.OneofOptions {
+    bool api_response_value = 50002;
+}
+
+message EntityMessageOptions {
+    bool api_request = 50002;
+    bool api_value_response = 50003;
+    bool api_value = 50004;
+    bool domain_event = 50005;
+    bool domain_state = 50006;
+}

@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+import "cloudstate/entity_key.proto";
+
+package com.example.counter.domain;
+
+
+message UninitializedCounter {
+  option (cloudstate.entity).domain_state = true;
+}
+
+message ActiveCounter {
+  option (cloudstate.entity).domain_state = true;
+  uint32 value = 1;
+  uint32 max_value = 2;
+}
+
+message StoppedCounter {
+  option (cloudstate.entity).domain_state = true;
+  uint32 value = 1;
+}
+
