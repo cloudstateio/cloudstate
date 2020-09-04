@@ -148,11 +148,11 @@ If using JSON serialization, it is recommended that you explicitly define the fi
 
 Some wrapper classes are also provided for ORMap. These provide more convenient APIs for working with values of particular CRDT types. They are:
 
-link:api/io/cloudstate/javasupport/crdt/LWWRegisterMap.html[`LWWRegisterMap`]
-: A map of LWWRegister values. This exposes the LWWRegister values as values directly in the map.
+link:api/io/cloudstate/javasupport/crdt/LWWRegisterMap.html[`LWWRegisterMap`]::
+A map of LWWRegister values. This exposes the LWWRegister values as values directly in the map.
 
-link:api/io/cloudstate/javasupport/crdt/PNCounterMap.html[`PNCounterMap`]
-: A map of PNCounter values. This exposes the current value of the PNCounters directly as values in the map, and offers link:api/io/cloudstate/javasupport/crdt/PNCounterMap.html#increment-java.lang.Object-long-[`increment`] and link:api/io/cloudstate/javasupport/crdt/PNCounterMap.html#decrement-java.lang.Object-long-[`decrement`] methods to update the values.
+link:api/io/cloudstate/javasupport/crdt/PNCounterMap.html[`PNCounterMap`]::
+A map of PNCounter values. This exposes the current value of the PNCounters directly as values in the map, and offers link:api/io/cloudstate/javasupport/crdt/PNCounterMap.html#increment-java.lang.Object-long-[`increment`] and link:api/io/cloudstate/javasupport/crdt/PNCounterMap.html#decrement-java.lang.Object-long-[`decrement`] methods to update the values.
 
 == Registering the entity
 
