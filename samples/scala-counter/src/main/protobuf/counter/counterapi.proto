@@ -18,7 +18,7 @@ service CounterService {
 }
 
 /*
- * Start
+ * Initialize
  */
 
 message InitializeRequest {
@@ -48,14 +48,16 @@ message StartRequest {
 
 message StartResponse {
   option (cloudstate.entity).api_value_response = true;
-  oneof value  {
+  oneof counter  {
     UninitializedCounter uninitializedCounter = 1;
     ActiveCounter activeCounter = 2;
     StoppedCounter stoppedCounter = 3;
   }
 }
 
-
+/*
+ * Increment
+ */
 
 message IncrementRequest {
   option (cloudstate.entity).api_request = true;
@@ -65,7 +67,7 @@ message IncrementRequest {
 
 message IncrementResponse {
   option (cloudstate.entity).api_value_response = true;
-  oneof value {
+  oneof counter {
     UninitializedCounter uninitializedCounter = 1;
     ActiveCounter activeCounter = 2;
     StoppedCounter stoppedCounter = 3;
@@ -92,7 +94,7 @@ message StopResponse {
 
 
 /*
- * Get summary
+ * Get Counter
  */
 
 message GetCounterRequest {
@@ -110,7 +112,7 @@ message GetCounterResponse {
 }
 
 /*
-* Shared RequestResponse Types
+* Counter value types
 */
 
 
@@ -122,12 +124,12 @@ message UninitializedCounter {
 message ActiveCounter {
   option (cloudstate.entity).api_value = true;
   string counter_id = 1;
-  uint32 value = 2;
+  uint32 counter = 2;
   uint32 max_value = 3;
 }
 
 message StoppedCounter {
   option (cloudstate.entity).api_value = true;
   string counter_id = 1;
-  uint32 value = 2;
+  uint32 counter = 2;
 }
