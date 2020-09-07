@@ -254,13 +254,10 @@ public final class CloudState {
     }
 
     final String persistenceId;
-    final int snapshotEvery;
     if (entity.persistenceId().isEmpty()) {
       persistenceId = entityClass.getSimpleName();
-      snapshotEvery = 0; // Default
     } else {
       persistenceId = entity.persistenceId();
-      snapshotEvery = entity.snapshotEvery();
     }
 
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
@@ -271,8 +268,7 @@ public final class CloudState {
             new AnnotationBasedCrudSupport(entityClass, anySupport, descriptor),
             descriptor,
             anySupport,
-            persistenceId,
-            snapshotEvery));
+            persistenceId));
 
     return this;
   }
@@ -286,9 +282,6 @@ public final class CloudState {
    * @param factory The CRUD factory.
    * @param descriptor The descriptor for the service that this entity implements.
    * @param persistenceId The persistence id for this entity.
-   * @param snapshotEvery Specifies how snapshots of the entity state should be made: Zero means use
-   *     default from configuration file. (Default) Any negative value means never snapshot. Any
-   *     positive value means snapshot at-or-after that number of events.
    * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
    *     types when needed.
    * @return This stateful service builder.
@@ -297,16 +290,11 @@ public final class CloudState {
       CrudEntityFactory factory,
       Descriptors.ServiceDescriptor descriptor,
       String persistenceId,
-      int snapshotEvery,
       Descriptors.FileDescriptor... additionalDescriptors) {
     services.put(
         descriptor.getFullName(),
         new CrudStatefulService(
-            factory,
-            descriptor,
-            newAnySupport(additionalDescriptors),
-            persistenceId,
-            snapshotEvery));
+            factory, descriptor, newAnySupport(additionalDescriptors), persistenceId));
 
     return this;
   }

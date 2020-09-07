@@ -61,7 +61,7 @@ public class ShoppingCartEntity {
   }
 
   @CommandHandler
-  public Empty addItem(Shoppingcart.AddLineItem item, CommandContext<Domain.Cart> ctx) {
+  public Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
     if (item.getQuantity() <= 0) {
       ctx.fail("Cannot add negative quantity of to item " + item.getProductId());
     }
@@ -84,7 +84,7 @@ public class ShoppingCartEntity {
   }
 
   @CommandHandler
-  public Empty removeItem(Shoppingcart.RemoveLineItem item, CommandContext<Domain.Cart> ctx) {
+  public Empty removeItem(Shoppingcart.RemoveLineItem item, CommandContext ctx) {
     if (!cart.containsKey(item.getProductId())) {
       ctx.fail("Cannot remove item " + item.getProductId() + " because it is not in the cart.");
     }
@@ -100,8 +100,7 @@ public class ShoppingCartEntity {
   }
 
   @CommandHandler
-  public Empty removeCart(
-      Shoppingcart.RemoveShoppingCart cartItem, CommandContext<Domain.Cart> ctx) {
+  public Empty removeCart(Shoppingcart.RemoveShoppingCart cartItem, CommandContext ctx) {
     if (!entityId.equals(cartItem.getUserId())) {
       ctx.fail("Cannot remove unknown cart " + cartItem.getUserId());
     }

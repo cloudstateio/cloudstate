@@ -51,7 +51,7 @@ class CrudEntitySpec extends AbstractCrudEntitySpec {
       expectTerminated(entity)
 
       // reactivating the entity
-      reactiveAndExpectInitState(Some(CrudInitState(Some(state2), 2)))
+      reactiveAndExpectInitState(Some(CrudInitState(Some(state2))))
 
       val commandId3 = sendAndExpectCommand("cmd", command, reactivatedEntity)
       sendAndExpectReply(commandId3, Some(Update(CrudUpdate(Some(state2)))), reactivatedEntity)
@@ -75,7 +75,7 @@ class CrudEntitySpec extends AbstractCrudEntitySpec {
       expectTerminated(entity)
 
       // reactivating the entity
-      reactiveAndExpectInitState(Some(CrudInitState(None, 2)))
+      reactiveAndExpectInitState(Some(CrudInitState(None)))
 
       userFunction.expectNoMessage(200.millis)
       expectNoMessage(200.millis)

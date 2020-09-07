@@ -76,6 +76,7 @@ object EntityDiscoveryManager {
       concurrencySettings: ConcurrencyEnforcerSettings,
       statsCollectorSettings: StatsCollectorSettings,
       journalEnabled: Boolean,
+      crudEnabled: Boolean,
       config: Config
   ) {
     validate()
@@ -99,6 +100,7 @@ object EntityDiscoveryManager {
            ),
            statsCollectorSettings = new StatsCollectorSettings(config.getConfig("stats")),
            journalEnabled = config.getBoolean("journal-enabled"),
+           crudEnabled = config.getBoolean("crud-enabled"),
            config = config)
     }
 
@@ -199,8 +201,13 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
                                                               config,
                                                               clientSettings,
                                                               concurrencyEnforcer = concurrencyEnforcer,
-                                                              statsCollector = statsCollector),
-          Crud.name -> new CrudSupportFactory(context.system,
+                                                              statsCollector = statsCollector)
+        )
+      else Map.empty
+    } ++ {
+      if (config.crudEnabled)
+        Map(
+          Crud.name -> new CrudSupportFactory(system,
                                               config,
                                               clientSettings,
                                               concurrencyEnforcer = concurrencyEnforcer,

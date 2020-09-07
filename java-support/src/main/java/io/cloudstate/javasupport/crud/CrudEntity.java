@@ -35,11 +35,4 @@ public @interface CrudEntity {
    * that you specify it explicitly.
    */
   String persistenceId() default "";
-
-  /**
-   * Specifies how snapshots of the entity state should be made: Zero means use default from
-   * configuration file. (Default) Any negative value means never snapshot. Any positive value means
-   * snapshot at-or-after that number of events.
-   */
-  int snapshotEvery() default 0;
 }

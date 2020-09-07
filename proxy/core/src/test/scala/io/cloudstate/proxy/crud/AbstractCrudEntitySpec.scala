@@ -149,7 +149,8 @@ abstract class AbstractCrudEntitySpec
         entityId,
         userFunction.ref,
         concurrencyEnforcer,
-        statsCollector.ref
+        statsCollector.ref,
+        null
       ),
       s"crud-test-entity-$entityId"
     )
@@ -173,7 +174,8 @@ abstract class AbstractCrudEntitySpec
         entityId,
         userFunction.ref,
         concurrencyEnforcer,
-        statsCollector.ref
+        statsCollector.ref,
+        null
       ),
       s"crud-test-entity-reactivated-$entityId"
     )

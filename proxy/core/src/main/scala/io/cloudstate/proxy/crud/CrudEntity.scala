@@ -22,18 +22,18 @@ import java.util.concurrent.atomic.AtomicLong
 import akka.NotUsed
 import akka.actor._
 import akka.cluster.sharding.ShardRegion
-import akka.persistence._
+import akka.pattern.pipe
 import akka.stream.scaladsl._
 import akka.stream.{CompletionStrategy, Materializer, OverflowStrategy}
 import akka.util.Timeout
 import com.google.protobuf.any.{Any => pbAny}
 import io.cloudstate.protocol.crud.CrudAction.Action.{Delete, Update}
 import io.cloudstate.protocol.crud.{
+  CrudAction,
   CrudClient,
   CrudInit,
   CrudInitState,
   CrudReply,
-  CrudSnapshot,
   CrudStreamIn,
   CrudStreamOut,
   CrudUpdate
@@ -41,9 +41,12 @@ import io.cloudstate.protocol.crud.{
 import io.cloudstate.protocol.entity._
 import io.cloudstate.proxy.ConcurrencyEnforcer.{Action, ActionCompleted}
 import io.cloudstate.proxy.StatsCollector
+import io.cloudstate.proxy.crud.store.JdbcRepository
+import io.cloudstate.proxy.crud.store.JdbcStore.Key
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 
 import scala.collection.immutable.Queue
+import scala.concurrent.Future
 
 object CrudEntitySupervisor {
 
@@ -52,8 +55,9 @@ object CrudEntitySupervisor {
   def props(client: CrudClient,
             configuration: CrudEntity.Configuration,
             concurrencyEnforcer: ActorRef,
-            statsCollector: ActorRef)(implicit mat: Materializer): Props =
-    Props(new CrudEntitySupervisor(client, configuration, concurrencyEnforcer, statsCollector))
+            statsCollector: ActorRef,
+            repository: JdbcRepository)(implicit mat: Materializer): Props =
+    Props(new CrudEntitySupervisor(client, configuration, concurrencyEnforcer, statsCollector, repository))
 }
 
 /**
@@ -69,7 +73,8 @@ object CrudEntitySupervisor {
 final class CrudEntitySupervisor(client: CrudClient,
                                  configuration: CrudEntity.Configuration,
                                  concurrencyEnforcer: ActorRef,
-                                 statsCollector: ActorRef)(implicit mat: Materializer)
+                                 statsCollector: ActorRef,
+                                 repository: JdbcRepository)(implicit mat: Materializer)
     extends Actor
     with Stash {
 
@@ -99,7 +104,8 @@ final class CrudEntitySupervisor(client: CrudClient,
       val entityId = URLDecoder.decode(self.path.name, "utf-8")
       val manager = context.watch(
         context
-          .actorOf(CrudEntity.props(configuration, entityId, relayRef, concurrencyEnforcer, statsCollector), "entity")
+          .actorOf(CrudEntity.props(configuration, entityId, relayRef, concurrencyEnforcer, statsCollector, repository),
+                   "entity")
       )
       context.become(forwarding(manager, relayRef))
       unstashAll()
@@ -160,12 +166,15 @@ object CrudEntity {
       replyTo: ActorRef
   )
 
+  private case object DatabaseOperationSuccess
+
   final def props(configuration: Configuration,
                   entityId: String,
                   relay: ActorRef,
                   concurrencyEnforcer: ActorRef,
-                  statsCollector: ActorRef): Props =
-    Props(new CrudEntity(configuration, entityId, relay, concurrencyEnforcer, statsCollector))
+                  statsCollector: ActorRef,
+                  repository: JdbcRepository): Props =
+    Props(new CrudEntity(configuration, entityId, relay, concurrencyEnforcer, statsCollector, repository))
 
   /**
    * Used to ensure the action ids sent to the concurrency enforcer are indeed unique.
@@ -178,14 +187,18 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
                        entityId: String,
                        relay: ActorRef,
                        concurrencyEnforcer: ActorRef,
-                       statsCollector: ActorRef)
-    extends PersistentActor
+                       statsCollector: ActorRef,
+                       repository: JdbcRepository)
+    extends Actor
     with ActorLogging {
-  override final def persistenceId: String = configuration.userFunctionName + entityId
+
+  private implicit val ec = context.dispatcher
+
+  private val persistenceId: String = configuration.userFunctionName + entityId
 
   private val actorId = CrudEntity.actorCounter.incrementAndGet()
 
-  private[this] final var recoveredState: Option[pbAny] = None
+  private[this] final var initState: Option[pbAny] = None
   private[this] final var stashedCommands = Queue.empty[(EntityCommand, ActorRef)] // PERFORMANCE: look at options for data structures
   private[this] final var currentCommand: CrudEntity.OutstandingCommand = null
   private[this] final var stopped = false
@@ -200,6 +213,15 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
 
   // First thing actor will do is access database
   reportDatabaseOperationStarted()
+
+  override final def preStart(): Unit =
+    repository
+      .get(Key(persistenceId, entityId))
+      .map { state =>
+        handleInitState(state)
+        CrudEntity.DatabaseOperationSuccess
+      }
+      .pipeTo(self)
 
   override final def postStop(): Unit = {
     if (currentCommand != null) {
@@ -267,7 +289,7 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       clientAction = Some(ClientAction(ClientAction.Action.Failure(Failure(description = message))))
     )
 
-  override final def receiveCommand: PartialFunction[Any, Unit] = {
+  override final def receive: PartialFunction[Any, Unit] = {
 
     case command: EntityCommand if currentCommand != null =>
       stashedCommands = stashedCommands.enqueue((command, sender()))
@@ -294,25 +316,18 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
           } else {
             reportDatabaseOperationStarted()
             r.crudAction map { a =>
-              // map the CrudAction to state
-              val state = a.action match {
-                case Update(CrudUpdate(Some(value), _)) => Some(value)
-                case Delete(_) => None
-              }
-
-              persist(state) { _ =>
-                reportDatabaseOperationFinished()
-                // try to save a snapshot
-                r.snapshot.foreach {
-                  case CrudSnapshot(value, _) => saveSnapshot(value)
+              performCrudAction(a)
+                .map { _ =>
+                  reportDatabaseOperationFinished()
+                  // Make sure that the current request is still ours
+                  if (currentCommand == null || currentCommand.commandId != commandId) {
+                    crash("Internal error - currentRequest changed before all events were persisted")
+                  }
+                  currentCommand.replyTo ! esReplyToUfReply(r)
+                  commandHandled()
+                  CrudEntity.DatabaseOperationSuccess
                 }
-                // Make sure that the current request is still ours
-                if (currentCommand == null || currentCommand.commandId != commandId) {
-                  crash("Internal error - currentRequest changed before all events were persisted")
-                }
-                currentCommand.replyTo ! esReplyToUfReply(r)
-                commandHandled()
-              }
+                .pipeTo(self)
             }
           }
 
@@ -344,11 +359,8 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       notifyOutstandingRequests("Unexpected CRUD entity termination")
       throw error
 
-    case SaveSnapshotSuccess(metadata) =>
-    // Nothing to do
-
-    case SaveSnapshotFailure(metadata, cause) =>
-      log.error("Error saving snapshot for CRUD entity", cause)
+    case CrudEntity.DatabaseOperationSuccess =>
+    // Nothing to do, access the native crud database was successful
 
     case ReceiveTimeout =>
       context.parent ! ShardRegion.Passivate(stopMessage = CrudEntity.Stop)
@@ -360,40 +372,36 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       }
   }
 
-  override final def receiveRecover: PartialFunction[Any, Unit] = {
-    case offer: SnapshotOffer =>
-      if (!inited) {
-        // apply snapshot on recoveredState only when the entity is not fully initialized
-        recoveredState = offer.snapshot match {
-          case Some(updated: pbAny) => Some(updated)
-          case other =>
-            throw new IllegalStateException(s"CRUD entity received a unexpected snapshot type : ${other.getClass}")
-        }
+  private def performCrudAction(crudAction: CrudAction): Future[Unit] =
+    crudAction.action match {
+      case Update(CrudUpdate(Some(value), _)) =>
+        repository.update(Key(persistenceId, entityId), value)
+
+      case Delete(_) =>
+        repository.delete(Key(persistenceId, entityId))
+    }
+
+  private[this] final def handleInitState(state: Option[pbAny]): Unit = {
+    // related to the first access to the database when the actor starts
+    reportDatabaseOperationFinished()
+    if (!inited) {
+      // apply the initial state only when the entity is not fully initialized
+      initState = state match {
+        case Some(updated: pbAny) => Some(updated)
+        case _ => None
       }
 
-    case RecoveryCompleted =>
-      reportDatabaseOperationFinished()
-      if (!inited) {
-        relay ! CrudStreamIn(
-          CrudStreamIn.Message.Init(
-            CrudInit(
-              serviceName = configuration.serviceName,
-              entityId = entityId,
-              state = Some(CrudInitState(recoveredState, lastSequenceNr))
-            )
+      relay ! CrudStreamIn(
+        CrudStreamIn.Message.Init(
+          CrudInit(
+            serviceName = configuration.serviceName,
+            entityId = entityId,
+            state = Some(CrudInitState(initState))
           )
         )
-        inited = true
-      }
-
-    case event: Any =>
-      if (!inited) {
-        // apply event on recoveredState only when the entity is not fully initialized
-        recoveredState = event match {
-          case Some(updated: pbAny) => Some(updated)
-          case _ => None
-        }
-      }
+      )
+      inited = true
+    }
   }
 
   private def reportDatabaseOperationStarted(): Unit =

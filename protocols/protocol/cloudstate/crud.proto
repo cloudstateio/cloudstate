@@ -65,9 +65,6 @@ message CrudInit {
 message CrudInitState {
   // The value of the entity state, if the entity has already been created.
   google.protobuf.Any value = 1;
-
-  // The sequence number of the entity state.
-  int64 sequence = 2;
 }
 
 // Output message type for the gRPC stream out.
@@ -91,17 +88,6 @@ message CrudReply {
 
   // The action to take on the CRUD entity
   CrudAction crud_action = 4;
-
-  // An optional snapshot to persist.
-  // It is assumed that this snapshot will have the state of any actions in the crud action field applied to it.
-  // It is illegal to send a snapshot without sending any crud action.
-  CrudSnapshot snapshot = 5;
-}
-
-// A snapshot of the entity.
-message CrudSnapshot {
-  // The value of the snapshot, if a snapshot has already been created.
-  google.protobuf.Any value = 1;
 }
 
 // An action to take for changing the entity state.
