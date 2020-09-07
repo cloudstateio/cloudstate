@@ -16,6 +16,7 @@
 
 package io.cloudstate.javasupport.crud;
 
+import com.google.protobuf.Any;
 import io.cloudstate.javasupport.ClientActionContext;
 import io.cloudstate.javasupport.EffectContext;
 
@@ -26,9 +27,7 @@ import io.cloudstate.javasupport.EffectContext;
  * or deleting the entity state in response to a command, along with forwarding the result to other
  * entities, and performing side effects on other entities.
  */
-public interface CommandContext extends CrudContext, ClientActionContext, EffectContext {
-
-  // TODO: add generic type for the state in updateEntity
+public interface CommandContext<T> extends CrudContext, ClientActionContext, EffectContext {
 
   /**
    * The current sequence number of state in this entity.
@@ -56,7 +55,7 @@ public interface CommandContext extends CrudContext, ClientActionContext, Effect
    *
    * @param state The state to persist.
    */
-  void updateEntity(Object state);
+  void updateEntity(T state);
 
   /** Delete the entity. */
   void deleteEntity();

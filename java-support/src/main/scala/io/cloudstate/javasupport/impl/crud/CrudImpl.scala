@@ -216,7 +216,7 @@ final class CrudImpl(_system: ActorSystem,
                                          override val commandId: Long,
                                          val anySupport: AnySupport,
                                          val handler: CrudEntityHandler)
-      extends CommandContext
+      extends CommandContext[AnyRef]
       with AbstractContext
       with AbstractClientActionContext
       with AbstractEffectContext

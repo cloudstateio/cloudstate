@@ -36,8 +36,7 @@ public interface CrudEntityHandler {
    * @param context The command context.
    * @return The reply to the command, if the command isn't being forwarded elsewhere.
    */
-  Optional<Any> handleCommand(Any command, CommandContext context);
-  // Optional<Any> handleCommand(Any command, CommandContext<Object> context);
+  <T> Optional<Any> handleCommand(Any command, CommandContext<T> context);
 
   /**
    * Handle the given state.
