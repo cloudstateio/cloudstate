@@ -34,7 +34,7 @@ final class JdbcInMemoryStore extends JdbcStore[Key, ByteString] {
   }
 
   override def update(key: Key, value: ByteString): Future[Unit] = {
-    logger.info(s"update called with key - $key and value - $value")
+    logger.info(s"update called with key - $key and value - ${value.utf8String}")
     store += key -> value
     Future.unit
   }
