@@ -105,104 +105,87 @@ final class CrudImpl(_system: ActorSystem,
       services.getOrElse(init.serviceName, throw new RuntimeException(s"Service not found: ${init.serviceName}"))
     val handler = service.factory.create(new CrudContextImpl(init.entityId))
     val thisEntityId = init.entityId
-    val sequenceNumber = 0L //TODO: should be removed every where, CRUD do not need sequence!!!
 
-    val startingSequenceNumber = init.state match {
+    init.state match {
       case Some(CrudInitState(Some(payload), _)) =>
         val encoded = service.anySupport.encodeScala(payload)
-        handler.handleUpdate(ScalaPbAny.toJavaProto(encoded), new StateContextImpl(thisEntityId, sequenceNumber))
-        sequenceNumber
+        handler.handleUpdate(ScalaPbAny.toJavaProto(encoded), new StateContextImpl(thisEntityId))
 
       case Some(CrudInitState(None, _)) =>
-        handler.handleDelete(new StateContextImpl(thisEntityId, sequenceNumber))
-        sequenceNumber
+        handler.handleDelete(new StateContextImpl(thisEntityId))
 
-      case _ => 0L // should not happen!
+      case _ =>
+      // should not happen!
     }
 
     Flow[CrudStreamIn]
-      .map(_.message)
-      .scan[(Long, Option[CrudStreamOut.Message])]((startingSequenceNumber, None)) {
-        case ((sequence, _), InCommand(command)) if thisEntityId != command.entityId =>
-          (sequence,
-           Some(
-             CrudStreamOut.Message.Failure(
-               Failure(
-                 command.id,
-                 s"""Cloudstate protocol failure for CRUD entity:
-                       |Receiving entity - $thisEntityId is not the intended recipient
-                       |of command with id - ${command.id} and name - ${command.name}""".stripMargin.replaceAll("\n",
-                                                                                                                " ")
-               )
-             )
-           ))
+      .map { m =>
+        m.message match {
+          case InCommand(command) if thisEntityId != command.entityId =>
+            CrudStreamOut.Message.Failure(
+              Failure(
+                command.id,
+                s"""Cloudstate protocol failure for CRUD entity:
+                   |Receiving entity - $thisEntityId is not the intended recipient
+                   |of command with id - ${command.id} and name - ${command.name}""".stripMargin.replaceAll("\n", " ")
+              )
+            )
 
-        case ((sequence, _), InCommand(command)) if command.payload.isEmpty =>
-          (sequence,
-           Some(
-             CrudStreamOut.Message.Failure(
-               Failure(
-                 command.id,
-                 s"Cloudstate protocol failure for CRUD entity: Command (id: ${command.id}, name: ${command.name}) should have a payload"
-               )
-             )
-           ))
+          case InCommand(command) if command.payload.isEmpty =>
+            CrudStreamOut.Message.Failure(
+              Failure(
+                command.id,
+                s"Cloudstate protocol failure for CRUD entity: Command (id: ${command.id}, name: ${command.name}) should have a payload"
+              )
+            )
 
-        case ((sequence, _), InCommand(command)) =>
-          val cmd = ScalaPbAny.toJavaProto(command.payload.get)
-          val context = new CommandContextImpl(
-            thisEntityId,
-            sequence,
-            command.name,
-            command.id,
-            service.anySupport,
-            handler
-          )
-          val reply = try {
-            handler.handleCommand(cmd, context)
-          } catch {
-            case FailInvoked => Option.empty[JavaPbAny].asJava
-          } finally {
-            context.deactivate() // Very important!
-          }
+          case InCommand(command) =>
+            val cmd = ScalaPbAny.toJavaProto(command.payload.get)
+            val context = new CommandContextImpl(
+              thisEntityId,
+              command.name,
+              command.id,
+              service.anySupport,
+              handler
+            )
+            val reply = try {
+              handler.handleCommand(cmd, context)
+            } catch {
+              case FailInvoked => Option.empty[JavaPbAny].asJava
+            } finally {
+              context.deactivate()
+            }
 
-          val clientAction = context.createClientAction(reply, false)
-          if (!context.hasError) {
-            context.applyCrudAction()
-            val endSequenceNumber = context.nextSequenceNumber
+            val clientAction = context.createClientAction(reply, false)
+            if (!context.hasError) {
+              context.applyCrudAction()
+              CrudStreamOut.Message.Reply(
+                CrudReply(
+                  command.id,
+                  clientAction,
+                  context.sideEffects,
+                  context.crudAction()
+                )
+              )
+            } else {
+              CrudStreamOut.Message.Reply(
+                CrudReply(
+                  commandId = command.id,
+                  clientAction = clientAction,
+                  crudAction = context.crudAction()
+                )
+              )
+            }
 
-            (endSequenceNumber,
-             Some(
-               CrudStreamOut.Message.Reply(
-                 CrudReply(
-                   command.id,
-                   clientAction,
-                   context.sideEffects,
-                   context.crudAction()
-                 )
-               )
-             ))
-          } else {
-            (sequence,
-             Some(
-               CrudStreamOut.Message.Reply(
-                 CrudReply(
-                   commandId = command.id,
-                   clientAction = clientAction,
-                   crudAction = context.crudAction()
-                 )
-               )
-             ))
-          }
+          case InInit(_) =>
+            throw new IllegalStateException("CRUD Entity already inited")
 
-        case (_, InInit(_)) =>
-          throw new IllegalStateException("CRUD Entity already inited")
-
-        case (_, InEmpty) =>
-          throw new IllegalStateException("CRUD Entity received empty/unknown message")
+          case InEmpty =>
+            throw new IllegalStateException("CRUD Entity received empty/unknown message")
+        }
       }
       .collect {
-        case (_, Some(message)) => CrudStreamOut(message)
+        case message: CrudStreamOut.Message => CrudStreamOut(message)
       }
   }
 
@@ -211,7 +194,6 @@ final class CrudImpl(_system: ActorSystem,
   }
 
   private final class CommandContextImpl(override val entityId: String,
-                                         override val sequenceNumber: Long,
                                          override val commandName: String,
                                          override val commandId: Long,
                                          val anySupport: AnySupport,
@@ -222,7 +204,6 @@ final class CrudImpl(_system: ActorSystem,
       with AbstractEffectContext
       with ActivatableContext {
 
-    private var _nextSequenceNumber: Long = sequenceNumber
     private var mayBeAction: Option[CrudAction] = None
 
     override def updateEntity(state: AnyRef): Unit = {
@@ -237,8 +218,6 @@ final class CrudImpl(_system: ActorSystem,
       mayBeAction = Some(CrudAction(Delete(CrudDelete())))
     }
 
-    def nextSequenceNumber: Long = _nextSequenceNumber
-
     def crudAction(): Option[CrudAction] = mayBeAction
 
     def applyCrudAction(): Unit =
@@ -246,12 +225,10 @@ final class CrudImpl(_system: ActorSystem,
         case Some(CrudAction(action, _)) =>
           action match {
             case Update(CrudUpdate(Some(value), _)) =>
-              _nextSequenceNumber += 1
-              handler.handleUpdate(ScalaPbAny.toJavaProto(value), new StateContextImpl(entityId, _nextSequenceNumber))
+              handler.handleUpdate(ScalaPbAny.toJavaProto(value), new StateContextImpl(entityId))
 
             case Delete(CrudDelete(_)) =>
-              _nextSequenceNumber += 1
-              handler.handleDelete(new StateContextImpl(entityId, _nextSequenceNumber))
+              handler.handleDelete(new StateContextImpl(entityId))
           }
         case None =>
         // ignored, nothing to do it is a get request!
@@ -260,7 +237,5 @@ final class CrudImpl(_system: ActorSystem,
 
   private final class CrudContextImpl(override final val entityId: String) extends CrudContext with AbstractContext
 
-  private final class StateContextImpl(override final val entityId: String, override val sequenceNumber: Long)
-      extends StateContext
-      with AbstractContext
+  private final class StateContextImpl(override final val entityId: String) extends StateContext with AbstractContext
 }

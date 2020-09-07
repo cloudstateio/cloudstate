@@ -47,7 +47,6 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
 
   class MockCommandContext extends CommandContext[JavaPbAny] with BaseContext {
     var action: Option[AnyRef] = None
-    override def sequenceNumber(): Long = 10
     override def commandName(): String = "AddItem"
     override def commandId(): Long = 20
     override def updateEntity(state: JavaPbAny): Unit = action = Some(state)
@@ -224,8 +223,6 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
 
     "support update state handlers" when {
       val ctx = new StateContext with BaseContext {
-        override def sequenceNumber(): Long = 10
-
         override def entityId(): String = "foo"
       }
 
@@ -248,7 +245,6 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
           @UpdateStateHandler
           def updateState(state: String, context: StateContext): Unit = {
             state should ===("state!")
-            context.sequenceNumber() should ===(10)
             invoked = true
           }
         })
@@ -290,7 +286,6 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
 
     "support delete state handlers" when {
       val ctx = new StateContext with BaseContext {
-        override def sequenceNumber(): Long = 10
         override def entityId(): String = "foo"
       }
 

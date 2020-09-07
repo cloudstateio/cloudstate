@@ -88,9 +88,7 @@ private[impl] class AnnotationBasedCrudSupport(
 
       behavior.getCachedUpdateHandlerForClass(state.getClass) match {
         case Some(handler) =>
-          val ctx = new DelegatingCrudContext(context) with StateContext {
-            override def sequenceNumber(): Long = context.sequenceNumber()
-          }
+          val ctx = new DelegatingCrudContext(context) with StateContext
           handler.invoke(entity, state, ctx)
         case None =>
           throw new RuntimeException(

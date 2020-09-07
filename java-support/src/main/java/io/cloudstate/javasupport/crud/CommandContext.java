@@ -16,7 +16,6 @@
 
 package io.cloudstate.javasupport.crud;
 
-import com.google.protobuf.Any;
 import io.cloudstate.javasupport.ClientActionContext;
 import io.cloudstate.javasupport.EffectContext;
 
@@ -28,13 +27,6 @@ import io.cloudstate.javasupport.EffectContext;
  * entities, and performing side effects on other entities.
  */
 public interface CommandContext<T> extends CrudContext, ClientActionContext, EffectContext {
-
-  /**
-   * The current sequence number of state in this entity.
-   *
-   * @return The current sequence number.
-   */
-  long sequenceNumber();
 
   /**
    * The name of the command being executed.
