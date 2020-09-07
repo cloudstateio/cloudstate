@@ -149,11 +149,12 @@ final class CrudImpl(_system: ActorSystem,
               handler
             )
             val reply = try {
+              //TODO: deal with exception!
               handler.handleCommand(cmd, context)
             } catch {
-              case FailInvoked => Option.empty[JavaPbAny].asJava
+              case FailInvoked => Option.empty[JavaPbAny].asJava // Ignore, error already captured
             } finally {
-              context.deactivate()
+              context.deactivate() // Very important!
             }
 
             val clientAction = context.createClientAction(reply, false)
@@ -178,7 +179,7 @@ final class CrudImpl(_system: ActorSystem,
             }
 
           case InInit(_) =>
-            throw new IllegalStateException("CRUD Entity already inited")
+            throw new IllegalStateException("CRUD Entity already initialized")
 
           case InEmpty =>
             throw new IllegalStateException("CRUD Entity received empty/unknown message")
@@ -207,7 +208,9 @@ final class CrudImpl(_system: ActorSystem,
     private var mayBeAction: Option[CrudAction] = None
 
     override def updateEntity(state: AnyRef): Unit = {
-      // TODO null check for state
+      if (state == null)
+        throw new IllegalArgumentException(s"Cannot update a 'null' state for CRUD Entity")
+
       checkActive()
       val encoded = anySupport.encodeScala(state)
       mayBeAction = Some(CrudAction(Update(CrudUpdate(Some(encoded)))))

@@ -16,7 +16,8 @@
 - add Postgres native CRUD support
 - remove the sequence number from the protocol from the implementation :white_check_mark:
 - add generic type for io.cloudstate.javasupport.crud.CommandContext :white_check_mark:
-- deal with null value for io.cloudstate.javasupport.crud.CommandContext#updateEntity
+- deal with null value for io.cloudstate.javasupport.crud.CommandContext#updateEntity :white_check_mark:
 - deal with the order of call for io.cloudstate.javasupport.crud.CommandContext#deleteEntity and io.cloudstate.javasupport.crud.CommandContext#updateEntity
+- deal with exceptions
 - write tests
 - extend the TCK
