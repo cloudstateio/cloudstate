@@ -18,19 +18,23 @@ package io.cloudstate.javasupport.impl.crud
 
 import akka.NotUsed
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Flow, Source}
+import akka.event.{Logging, LoggingAdapter}
+import akka.stream.scaladsl.Flow
 import io.cloudstate.javasupport.CloudStateRunner.Configuration
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import io.cloudstate.javasupport.crud._
 import io.cloudstate.javasupport.impl._
+import io.cloudstate.javasupport.impl.crud.CrudImpl.{failure, failureMessage, EntityException, ProtocolException}
 import io.cloudstate.javasupport.{Context, ServiceCallFactory, StatefulService}
 import io.cloudstate.protocol.crud.CrudAction.Action.{Delete, Update}
 import io.cloudstate.protocol.crud._
 import io.cloudstate.protocol.crud.CrudStreamIn.Message.{Command => InCommand, Empty => InEmpty, Init => InInit}
-import io.cloudstate.protocol.entity.Failure
+import io.cloudstate.protocol.crud.CrudStreamOut.Message.{Failure => OutFailure, Reply => OutReply}
+import io.cloudstate.protocol.entity.{Command, Failure}
 
 import scala.compat.java8.OptionConverters._
+import scala.util.control.NonFatal
 
 final class CrudStatefulService(val factory: CrudEntityFactory,
                                 override val descriptor: Descriptors.ServiceDescriptor,
@@ -47,6 +51,46 @@ final class CrudStatefulService(val factory: CrudEntityFactory,
   override final val entityType = io.cloudstate.protocol.crud.Crud.name
 }
 
+object CrudImpl {
+  final case class EntityException(entityId: String, commandId: Long, commandName: String, message: String)
+      extends RuntimeException(message)
+
+  object EntityException {
+    def apply(message: String): EntityException =
+      EntityException(entityId = "", commandId = 0, commandName = "", message)
+
+    def apply(command: Command, message: String): EntityException =
+      EntityException(command.entityId, command.id, command.name, message)
+
+    def apply(context: CommandContext[_], message: String): EntityException =
+      EntityException(context.entityId, context.commandId, context.commandName, message)
+  }
+
+  object ProtocolException {
+    def apply(message: String): EntityException =
+      EntityException(entityId = "", commandId = 0, commandName = "", "Protocol error: " + message)
+
+    def apply(init: CrudInit, message: String): EntityException =
+      EntityException(init.entityId, commandId = 0, commandName = "", "Protocol error: " + message)
+
+    def apply(command: Command, message: String): EntityException =
+      EntityException(command.entityId, command.id, command.name, "Protocol error: " + message)
+  }
+
+  def failure(cause: Throwable): Failure = cause match {
+    case e: EntityException => Failure(e.commandId, e.message)
+    case e => Failure(description = "Unexpected failure: " + e.getMessage)
+  }
+
+  def failureMessage(cause: Throwable): String = cause match {
+    case EntityException(entityId, commandId, commandName, _) =>
+      val commandDescription = if (commandId != 0) s" for command [$commandName]" else ""
+      val entityDescription = if (entityId.nonEmpty) s"entity [$entityId]" else "entity"
+      s"Terminating $entityDescription due to unexpected failure$commandDescription"
+    case _ => "Terminating entity due to unexpected failure"
+  }
+}
+
 final class CrudImpl(_system: ActorSystem,
                      _services: Map[String, CrudStatefulService],
                      rootContext: Context,
@@ -56,6 +100,7 @@ final class CrudImpl(_system: ActorSystem,
   private final val system = _system
   private final implicit val ec = system.dispatcher
   private final val services = _services.iterator.toMap
+  private final val log = Logging(system.eventStream, this.getClass)
 
   /**
    * One stream will be established per active entity.
@@ -77,33 +122,17 @@ final class CrudImpl(_system: ActorSystem,
         case (Seq(CrudStreamIn(InInit(init), _)), source) =>
           source.via(runEntity(init))
         case _ =>
-          Source.single(
-            CrudStreamOut(
-              CrudStreamOut.Message.Failure(
-                Failure(
-                  0,
-                  "Cloudstate protocol failure for CRUD entity: expected init message"
-                )
-              )
-            )
-          )
+          throw ProtocolException("Expected Init message for CRUD entity")
       }
       .recover {
-        case e =>
-          system.log.error(e, "Unexpected error, terminating CRUD Entity")
-          CrudStreamOut(
-            CrudStreamOut.Message.Failure(
-              Failure(
-                0,
-                s"Cloudstate protocol failure for CRUD entity: ${e.getMessage}"
-              )
-            )
-          )
+        case error =>
+          log.error(error, failureMessage(error))
+          CrudStreamOut(OutFailure(failure(error)))
       }
 
   private def runEntity(init: CrudInit): Flow[CrudStreamIn, CrudStreamOut, NotUsed] = {
     val service =
-      services.getOrElse(init.serviceName, throw new RuntimeException(s"Service not found: ${init.serviceName}"))
+      services.getOrElse(init.serviceName, throw ProtocolException(s"Service not found: ${init.serviceName}"))
     val handler = service.factory.create(new CrudContextImpl(init.entityId))
     val thisEntityId = init.entityId
 
@@ -123,22 +152,10 @@ final class CrudImpl(_system: ActorSystem,
       .map { m =>
         m.message match {
           case InCommand(command) if thisEntityId != command.entityId =>
-            CrudStreamOut.Message.Failure(
-              Failure(
-                command.id,
-                s"""Cloudstate protocol failure for CRUD entity:
-                   |Receiving entity - $thisEntityId is not the intended recipient
-                   |of command with id - ${command.id} and name - ${command.name}""".stripMargin.replaceAll("\n", " ")
-              )
-            )
+            throw ProtocolException(command, "Receiving entity is not the intended recipient for CRUD entity")
 
           case InCommand(command) if command.payload.isEmpty =>
-            CrudStreamOut.Message.Failure(
-              Failure(
-                command.id,
-                s"Cloudstate protocol failure for CRUD entity: Command (id: ${command.id}, name: ${command.name}) should have a payload"
-              )
-            )
+            throw ProtocolException(command, "No command payload for CRUD entity")
 
           case InCommand(command) =>
             val cmd = ScalaPbAny.toJavaProto(command.payload.get)
@@ -147,13 +164,16 @@ final class CrudImpl(_system: ActorSystem,
               command.name,
               command.id,
               service.anySupport,
-              handler
+              handler,
+              log
             )
             val reply = try {
-              //TODO: deal with exception!
               handler.handleCommand(cmd, context)
             } catch {
               case FailInvoked => Option.empty[JavaPbAny].asJava // Ignore, error already captured
+              case e: EntityException => throw e
+              case NonFatal(error) =>
+                throw EntityException(command, s"CRUD entity Unexpected failure: ${error.getMessage}")
             } finally {
               context.deactivate() // Very important!
             }
@@ -161,7 +181,7 @@ final class CrudImpl(_system: ActorSystem,
             val clientAction = context.createClientAction(reply, false)
             if (!context.hasError) {
               context.applyCrudAction()
-              CrudStreamOut.Message.Reply(
+              OutReply(
                 CrudReply(
                   command.id,
                   clientAction,
@@ -170,7 +190,7 @@ final class CrudImpl(_system: ActorSystem,
                 )
               )
             } else {
-              CrudStreamOut.Message.Reply(
+              OutReply(
                 CrudReply(
                   commandId = command.id,
                   clientAction = clientAction,
@@ -180,10 +200,10 @@ final class CrudImpl(_system: ActorSystem,
             }
 
           case InInit(_) =>
-            throw new IllegalStateException("CRUD Entity already initialized")
+            throw ProtocolException(init, "CRUD entity already initialized")
 
           case InEmpty =>
-            throw new IllegalStateException("CRUD Entity received empty/unknown message")
+            throw ProtocolException(init, "CRUD entity received empty/unknown message")
         }
       }
       .collect {
@@ -199,7 +219,8 @@ final class CrudImpl(_system: ActorSystem,
                                          override val commandName: String,
                                          override val commandId: Long,
                                          val anySupport: AnySupport,
-                                         val handler: CrudEntityHandler)
+                                         val handler: CrudEntityHandler,
+                                         val log: LoggingAdapter)
       extends CommandContext[AnyRef]
       with AbstractContext
       with AbstractClientActionContext
@@ -209,10 +230,11 @@ final class CrudImpl(_system: ActorSystem,
     private var mayBeAction: Option[CrudAction] = None
 
     override def updateEntity(state: AnyRef): Unit = {
-      if (state == null)
-        throw new IllegalArgumentException(s"Cannot update a 'null' state for CRUD Entity")
-
       checkActive()
+
+      if (state == null)
+        throw EntityException("CRUD entity cannot update a 'null' state")
+
       val encoded = anySupport.encodeScala(state)
       mayBeAction = Some(CrudAction(Update(CrudUpdate(Some(encoded)))))
     }
@@ -221,6 +243,9 @@ final class CrudImpl(_system: ActorSystem,
       checkActive()
       mayBeAction = Some(CrudAction(Delete(CrudDelete())))
     }
+
+    override protected def logError(message: String): Unit =
+      log.error("Fail invoked for command [{}] for CRUD entity [{}]: {}", commandName, entityId, message)
 
     def crudAction(): Option[CrudAction] = mayBeAction
 

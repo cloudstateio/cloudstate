@@ -34,6 +34,7 @@ import io.cloudstate.javasupport.crud.{
   UpdateStateHandler
 }
 import io.cloudstate.javasupport.impl.ReflectionHelper.{InvocationContext, MainArgumentParameterHandler}
+import io.cloudstate.javasupport.impl.crud.CrudImpl.EntityException
 import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEntityFactory, ResolvedServiceMethod}
 
 import scala.collection.concurrent.TrieMap
@@ -77,7 +78,7 @@ private[impl] class AnnotationBasedCrudSupport(
       behavior.commandHandlers.get(context.commandName()).map { handler =>
         handler.invoke(entity, command, context)
       } getOrElse {
-        throw new RuntimeException(
+        throw EntityException(
           s"No command handler found for command [${context.commandName()}] on $behaviorsString"
         )
       }
@@ -91,7 +92,7 @@ private[impl] class AnnotationBasedCrudSupport(
           val ctx = new DelegatingCrudContext(context) with StateContext
           handler.invoke(entity, state, ctx)
         case None =>
-          throw new RuntimeException(
+          throw EntityException(
             s"No update state handler found for ${state.getClass} on $behaviorsString"
           )
       }
@@ -101,7 +102,7 @@ private[impl] class AnnotationBasedCrudSupport(
       behavior.deleteHandler match {
         case Some(handler) => handler.invoke(entity, context)
         case None =>
-          throw new RuntimeException(s"No delete state handler found on $behaviorsString")
+          throw EntityException(s"No delete state handler found on $behaviorsString")
       }
     }
 
