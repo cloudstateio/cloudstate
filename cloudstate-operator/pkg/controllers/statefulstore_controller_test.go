@@ -43,7 +43,7 @@ var _ = Describe("StatefulStore Controller", func() {
 					Namespace: namespace,
 				},
 				Spec: cloudstate.StatefulStoreSpec{
-					InMemory: &cloudstate.InMemoryStore{},
+					InMemory: true,
 				},
 			}
 

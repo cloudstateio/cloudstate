@@ -66,7 +66,8 @@ spec:
     statefulStore:
       name: $statefulstore
   containers:
-    - image: cloudstatedev/java-shopping-cart:dev
+    - image: cloudstateio/java-shopping-cart:latest
+      imagePullPolicy: Never
       name: user-function
 YAML
 ;;
@@ -98,7 +99,8 @@ spec:
       name: $statefulstore
     database: shoppingcart
   containers:
-    - image: cloudstatedev/java-shopping-cart:dev
+    - image: cloudstateio/java-shopping-cart:latest
+      imagePullPolicy: Never
       name: user-function
 YAML
 ;;
@@ -114,7 +116,7 @@ kind: StatefulStore
 metadata:
   name: $statefulstore
 spec:
-  inMemory: {}
+  inMemory: true
 ---
 apiVersion: cloudstate.io/v1alpha1
 kind: StatefulService
@@ -125,7 +127,8 @@ spec:
     statefulStore:
       name: $statefulstore
   containers:
-    - image: cloudstatedev/java-shopping-cart:dev
+    - image: cloudstateio/java-shopping-cart:latest
+      imagePullPolicy: Never
       name: user-function
 YAML
 ;;
@@ -148,7 +151,7 @@ function fail_with_details {
   echo
   echo "=== Operator logs ==="
   echo
-  kubectl logs -l app=cloudstate-operator -n cloudstate --tail=-1
+  kubectl logs -l control-plane=controller-manager -n cloudstate-system --tail=-1
   echo
   echo "=== Deployment description ==="
   echo
@@ -160,11 +163,11 @@ function fail_with_details {
   echo
   echo "=== Proxy logs ==="
   echo
-  kubectl logs -l app=$statefulservice -c akka-sidecar --tail=-1
+  kubectl logs -l cloudstate.io/stateful-service=$statefulservice -c cloudstate-sidecar --tail=-1
   echo
   echo "=== User container logs ==="
   echo
-  kubectl logs -l app=$statefulservice -c user-container --tail=-1
+  kubectl logs -l cloudstate.io/stateful-service=$statefulservice -c user-container --tail=-1
   exit 1
 }
 
@@ -233,7 +236,7 @@ if [ "$logs" == true ] ; then
   echo
   echo "=== Proxy logs ==="
   echo
-  kubectl logs -l app=$statefulservice -c akka-sidecar --tail=-1
+  kubectl logs -l cloudstate.io/stateful-service=$statefulservice -c cloudstate-sidecar --tail=-1
 fi
 
 # Delete shopping-cart
@@ -241,6 +244,7 @@ if [ "$delete" == true ] ; then
   echo
   echo "Deleting $statefulservice ..."
   kubectl delete service $deployment
+  kubectl delete service $nodeport
   kubectl delete statefulservice $statefulservice
   kubectl delete statefulstore $statefulstore
 fi

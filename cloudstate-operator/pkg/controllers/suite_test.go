@@ -22,6 +22,7 @@ import (
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/stores"
 	istio "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	"path/filepath"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	"testing"
 	"time"
 
@@ -62,7 +63,7 @@ func TestAPIs(t *testing.T) {
 
 	RunSpecsWithDefaultAndCustomReporters(t,
 		"Controller Suite",
-		[]Reporter{envtest.NewlineReporter{}})
+		[]Reporter{printer.NewlineReporter{}})
 }
 
 var _ = BeforeSuite(func(done Done) {

@@ -114,6 +114,7 @@ func main() {
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
+		LeaderElectionID:   "cloudstate-leader-election-helper",
 		Port:               9443,
 	})
 	if err != nil {
@@ -136,7 +137,7 @@ func main() {
 		Scheme:           mgr.GetScheme(),
 		ReconcileTimeout: reconcileTimeout,
 		OperatorConfig:   &cfg,
-		Stores: store,
+		Stores:           store,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StatefulStore")
 		os.Exit(1)
@@ -147,7 +148,7 @@ func main() {
 		Scheme:           mgr.GetScheme(),
 		ReconcileTimeout: reconcileTimeout,
 		OperatorConfig:   &cfg,
-		Stores: store,
+		Stores:           store,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StatefulService")
 		os.Exit(1)

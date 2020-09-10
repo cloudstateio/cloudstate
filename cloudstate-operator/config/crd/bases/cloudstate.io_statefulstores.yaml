@@ -85,7 +85,7 @@ spec:
             inMemory:
               description: InMemory store will keep everything in memory. This is
                 the simplest option to get started, but must not be used in production.
-              type: object
+              type: boolean
             postgres:
               description: Postgres will store state in Postgres.
               properties:

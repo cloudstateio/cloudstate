@@ -4,7 +4,7 @@ metadata:
   labels:
     app.kubernetes.io/name: cloudstate-operator
     app.kubernetes.io/part-of: cloudstatemachine
-  name: cloudstate-operator-system
+  name: cloudstate-system
 ---
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
@@ -720,6 +720,7 @@ spec:
                           type: string
                       required:
                       - containerPort
+                      - protocol
                       type: object
                     type: array
                     x-kubernetes-list-map-keys:
@@ -978,15 +979,11 @@ spec:
                             description: GMSACredentialSpec is where the GMSA admission
                               webhook (https://github.com/kubernetes-sigs/windows-gmsa)
                               inlines the contents of the GMSA credential spec named
-                              by the GMSACredentialSpecName field. This field is alpha-level
-                              and is only honored by servers that enable the WindowsGMSA
-                              feature flag.
+                              by the GMSACredentialSpecName field.
                             type: string
                           gmsaCredentialSpecName:
                             description: GMSACredentialSpecName is the name of the
-                              GMSA credential spec to use. This field is alpha-level
-                              and is only honored by servers that enable the WindowsGMSA
-                              feature flag.
+                              GMSA credential spec to use.
                             type: string
                           runAsUserName:
                             description: The UserName in Windows to run the entrypoint
@@ -994,8 +991,7 @@ spec:
                               in image metadata if unspecified. May also be set in
                               PodSecurityContext. If set in both SecurityContext and
                               PodSecurityContext, the value specified in SecurityContext
-                              takes precedence. This field is beta-level and may be
-                              disabled with the WindowsRunAsUserName feature flag.
+                              takes precedence.
                             type: string
                         type: object
                     type: object
@@ -1007,7 +1003,7 @@ spec:
                       be used to provide different probe parameters at the beginning
                       of a Pod''s lifecycle, when it might take a long time to load
                       data or warm a cache, than during steady-state operation. This
-                      cannot be updated. This is an alpha feature enabled by the StartupProbe
+                      cannot be updated. This is a beta feature enabled by the StartupProbe
                       feature flag. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
                     properties:
                       exec:
@@ -1162,7 +1158,7 @@ spec:
                     type: boolean
                   volumeDevices:
                     description: volumeDevices is the list of block devices to be
-                      used by the container. This is a beta feature.
+                      used by the container.
                     items:
                       description: volumeDevice describes a mapping of a raw block
                         device within a container.
@@ -1420,7 +1416,7 @@ spec:
             inMemory:
               description: InMemory store will keep everything in memory. This is
                 the simplest option to get started, but must not be used in production.
-              type: object
+              type: boolean
             postgres:
               description: Postgres will store state in Postgres.
               properties:
@@ -1628,15 +1624,15 @@ apiVersion: admissionregistration.k8s.io/v1beta1
 kind: MutatingWebhookConfiguration
 metadata:
   annotations:
-    cert-manager.io/inject-ca-from: cloudstate-operator-system/cloudstate-operator-serving-cert
+    cert-manager.io/inject-ca-from: cloudstate-system/cloudstate-serving-cert
   creationTimestamp: null
-  name: cloudstate-operator-cloudstate-operator-webhook
+  name: cloudstate-cloudstate-operator-webhook
 webhooks:
 - clientConfig:
     caBundle: Cg==
     service:
-      name: cloudstate-operator-webhook-service
-      namespace: cloudstate-operator-system
+      name: cloudstate-webhook-service
+      namespace: cloudstate-system
       path: /inject-v1-pod
   failurePolicy: Fail
   name: mpod.kb.io
@@ -1658,8 +1654,8 @@ webhooks:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: cloudstate-operator-leader-election-role
-  namespace: cloudstate-operator-system
+  name: cloudstate-leader-election-role
+  namespace: cloudstate-system
 rules:
 - apiGroups:
   - ""
@@ -1692,7 +1688,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: cloudstate-operator-manager-role
+  name: cloudstate-manager-role
 rules:
 - apiGroups:
   - apps
@@ -1855,7 +1851,7 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: cloudstate-operator-proxy-role
+  name: cloudstate-proxy-role
 rules:
 - apiGroups:
   - authentication.k8s.io
@@ -1873,42 +1869,42 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
-  name: cloudstate-operator-leader-election-rolebinding
-  namespace: cloudstate-operator-system
+  name: cloudstate-leader-election-rolebinding
+  namespace: cloudstate-system
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
-  name: cloudstate-operator-leader-election-role
+  name: cloudstate-leader-election-role
 subjects:
 - kind: ServiceAccount
   name: default
-  namespace: cloudstate-operator-system
+  namespace: cloudstate-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: cloudstate-operator-manager-rolebinding
+  name: cloudstate-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: cloudstate-operator-manager-role
+  name: cloudstate-manager-role
 subjects:
 - kind: ServiceAccount
   name: default
-  namespace: cloudstate-operator-system
+  namespace: cloudstate-system
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: cloudstate-operator-proxy-rolebinding
+  name: cloudstate-proxy-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: cloudstate-operator-proxy-role
+  name: cloudstate-proxy-role
 subjects:
 - kind: ServiceAccount
   name: default
-  namespace: cloudstate-operator-system
+  namespace: cloudstate-system
 ---
 apiVersion: v1
 data:
@@ -1923,16 +1919,16 @@ data:
       image: cloudstateio/cloudstate-proxy-cassandra:latest
 kind: ConfigMap
 metadata:
-  name: cloudstate-operator-config
-  namespace: cloudstate-operator-system
+  name: cloudstate-config
+  namespace: cloudstate-system
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
     control-plane: controller-manager
-  name: cloudstate-operator-controller-manager-metrics-service
-  namespace: cloudstate-operator-system
+  name: cloudstate-controller-manager-metrics-service
+  namespace: cloudstate-system
 spec:
   ports:
   - name: https
@@ -1944,8 +1940,8 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: cloudstate-operator-webhook-service
-  namespace: cloudstate-operator-system
+  name: cloudstate-webhook-service
+  namespace: cloudstate-system
 spec:
   ports:
   - port: 443
@@ -1958,8 +1954,8 @@ kind: Deployment
 metadata:
   labels:
     control-plane: controller-manager
-  name: cloudstate-operator-controller-manager
-  namespace: cloudstate-operator-system
+  name: cloudstate-controller-manager
+  namespace: cloudstate-system
 spec:
   replicas: 1
   selector:
@@ -1988,7 +1984,7 @@ spec:
         - --enable-leader-election
         command:
         - /manager
-        image: cloudstate/cloudstate-operator:latest
+        image: cloudstateio/cloudstate-operator:latest
         imagePullPolicy: IfNotPresent
         name: manager
         ports:
@@ -2015,28 +2011,28 @@ spec:
           defaultMode: 420
           secretName: webhook-server-cert
       - configMap:
-          name: cloudstate-operator-config
+          name: cloudstate-config
           optional: true
         name: config-volume
 ---
 apiVersion: cert-manager.io/v1alpha2
 kind: Certificate
 metadata:
-  name: cloudstate-operator-serving-cert
-  namespace: cloudstate-operator-system
+  name: cloudstate-serving-cert
+  namespace: cloudstate-system
 spec:
   dnsNames:
-  - cloudstate-operator-webhook-service.cloudstate-operator-system.svc
-  - cloudstate-operator-webhook-service.cloudstate-operator-system.svc.cluster.local
+  - cloudstate-webhook-service.cloudstate-system.svc
+  - cloudstate-webhook-service.cloudstate-system.svc.cluster.local
   issuerRef:
     kind: Issuer
-    name: cloudstate-operator-selfsigned-issuer
+    name: cloudstate-selfsigned-issuer
   secretName: webhook-server-cert
 ---
 apiVersion: cert-manager.io/v1alpha2
 kind: Issuer
 metadata:
-  name: cloudstate-operator-selfsigned-issuer
-  namespace: cloudstate-operator-system
+  name: cloudstate-selfsigned-issuer
+  namespace: cloudstate-system
 spec:
   selfSigned: {}

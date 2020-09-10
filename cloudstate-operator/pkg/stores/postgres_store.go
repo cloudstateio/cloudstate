@@ -126,6 +126,7 @@ func (c *PostgresStore) ReconcileStatefulService(
 	store *cloudstate.StatefulStore,
 ) ([]cloudstate.CloudstateCondition, error) {
 
+	log := c.Log.WithValues("statefulservice", statefulService.Namespace+"/"+statefulService.Name)
 	spec := store.Spec.Postgres
 
 	if spec == nil {
@@ -134,7 +135,7 @@ func (c *PostgresStore) ReconcileStatefulService(
 
 	host := spec.Host
 	if host != "" {
-		c.reconcileUnmanagedDeploymentStoreConfig(statefulService, deployment)
+		c.reconcileUnmanagedDeploymentStoreConfig(spec, statefulService, deployment)
 	} else if spec.GoogleCloudSQL != nil {
 		if !c.Config.GoogleCloudSql.Enabled {
 			return []cloudstate.CloudstateCondition{
@@ -146,7 +147,7 @@ func (c *PostgresStore) ReconcileStatefulService(
 				},
 			}, nil
 		}
-		return c.reconcileGoogleCloudSqlDeployment(ctx, statefulService, deployment, store)
+		return c.reconcileGoogleCloudSqlDeployment(ctx, statefulService, deployment, store, log)
 	} else {
 		return nil, fmt.Errorf("postgres host must not be empty")
 	}
@@ -241,6 +242,7 @@ func (p *PostgresStore) reconcileGoogleCloudSqlDeployment(
 	statefulService *cloudstate.StatefulService,
 	deployment *appsv1.Deployment,
 	store *cloudstate.StatefulStore,
+	log logr.Logger,
 ) ([]cloudstate.CloudstateCondition, error) {
 
 	ownedSqlDatabases, err := reconciliation.GetControlledUnstructured(ctx, p.Client, statefulService.Name, statefulService.Namespace,
@@ -280,19 +282,21 @@ func (p *PostgresStore) reconcileGoogleCloudSqlDeployment(
 	}
 	secretName := postgresCredsSecretPrefix + statefulService.Name
 
+	var instanceName string
+
 	if store.Status.Postgres != nil && store.Status.Postgres.GoogleCloudSQL != nil &&
 		store.Status.Postgres.GoogleCloudSQL.InstanceName != "" {
-		instanceName := store.Status.Postgres.GoogleCloudSQL.InstanceName
-		// Create SQLDatabase, SQLUser, and secret (password)
-		if err := p.reconcileGoogleCloudSQLDatabase(ctx, statefulService, ownedSqlDatabase, instanceName, databaseName); err != nil {
-			return nil, fmt.Errorf("unable to reconcile sqldatabase: %w", err)
-		}
-		if err := p.reconcileGoogleCloudSQLUser(ctx, statefulService, ownedSqlUser, ownedSqlUserSecret, instanceName, secretName); err != nil {
-			return nil, fmt.Errorf("unable to reconcile sqluser: %w", err)
-		}
+		instanceName = store.Status.Postgres.GoogleCloudSQL.InstanceName
 	} else {
-		// Don't reconcile database or user yet because we don't have an instance.
+		instanceName = p.createCloudSQLInstanceName(store)
 		conditions = append(conditions, p.conditionForSQLInstance(nil))
+	}
+	// Create SQLDatabase, SQLUser, and secret (password)
+	if err := p.reconcileGoogleCloudSQLDatabase(ctx, statefulService, ownedSqlDatabase, instanceName, databaseName, log); err != nil {
+		return nil, fmt.Errorf("unable to reconcile sqldatabase: %w", err)
+	}
+	if err := p.reconcileGoogleCloudSQLUser(ctx, statefulService, ownedSqlUser, ownedSqlUserSecret, instanceName, secretName, log); err != nil {
+		return nil, fmt.Errorf("unable to reconcile sqluser: %w", err)
 	}
 
 	// Add the relevant annotations to the deployment
@@ -517,12 +521,14 @@ func (p *PostgresStore) reconcileGoogleCloudSQLUser(
 	actualSecret *corev1.Secret,
 	instanceName string,
 	secretName string,
+	log logr.Logger,
 ) error {
 	if actualSecret == nil {
 		desiredSecret, err := p.createDesiredGoogleCloudSQLUserSecret(statefulService, secretName)
 		if err != nil {
 			return err
 		}
+		log.Info("Creating secret for CloudSQL user", "secret", secretName)
 		if err := p.Client.Create(ctx, desiredSecret); err != nil {
 			return err
 		}
@@ -536,6 +542,7 @@ func (p *PostgresStore) reconcileGoogleCloudSQLUser(
 
 	if actualSqlUser == nil {
 		reconciliation.SetLastApplied(desired)
+		log.Info("Creating CloudSQL user", "SQLUser", desired.GetName())
 		return p.Client.Create(ctx, desired)
 	}
 
@@ -555,6 +562,7 @@ func (p *PostgresStore) reconcileGoogleCloudSQLUser(
 		return err
 	}
 
+	log.Info("Updating CloudSQL user", "SQLUser", desired.GetName())
 	if err = p.Client.Update(ctx, desired); err != nil {
 		return err
 	}
@@ -567,6 +575,7 @@ func (p *PostgresStore) reconcileGoogleCloudSQLDatabase(
 	actual *gcloud.SQLDatabase,
 	instanceName string,
 	databaseName string,
+	log logr.Logger,
 ) error {
 	desired, err := p.createDesiredGoogleCloudSQLDatabase(statefulService, instanceName, databaseName)
 	if err != nil {
@@ -574,6 +583,7 @@ func (p *PostgresStore) reconcileGoogleCloudSQLDatabase(
 	}
 
 	if actual == nil {
+		log.Info("Creating CloudSQL database", "SQLDatabase", databaseName)
 		if err = p.Client.Create(ctx, desired); err != nil {
 			return err
 		} else {
@@ -584,7 +594,7 @@ func (p *PostgresStore) reconcileGoogleCloudSQLDatabase(
 	desired.SetAnnotations(actual.GetAnnotations())
 	reconciliation.SetLastApplied(desired)
 
-	if !reconciliation.NeedsUpdate(p.Log.WithValues("type", "SQLDatabase"), actual, desired) {
+	if !reconciliation.NeedsUpdate(log.WithValues("type", "SQLDatabase"), actual, desired) {
 		return nil
 	}
 
@@ -593,6 +603,7 @@ func (p *PostgresStore) reconcileGoogleCloudSQLDatabase(
 		return err
 	}
 
+	log.Info("Updating CloudSQL database", "SQLDatabase", databaseName)
 	if err = p.Client.Update(ctx, desired); err != nil {
 		return err
 	}
@@ -809,10 +820,7 @@ func (p *PostgresStore) createDesiredSQLInstance(statefulStore *cloudstate.State
 
 	// Create a unique name for the SQLInstance if we need to
 	if name == "" {
-		name = statefulStore.Spec.Postgres.GoogleCloudSQL.Name
-		if name == "" {
-			name = statefulStore.Name
-		}
+		name = p.createCloudSQLInstanceName(statefulStore)
 	}
 
 	sqlInstance := gcloud.MakeSQLInstance(
@@ -893,6 +901,14 @@ func (p *PostgresStore) createDesiredSQLInstance(statefulStore *cloudstate.State
 	}
 
 	return sqlInstance, nil
+}
+
+func (p *PostgresStore) createCloudSQLInstanceName(statefulStore *cloudstate.StatefulStore) string {
+	name := statefulStore.Spec.Postgres.GoogleCloudSQL.Name
+	if name == "" {
+		name = statefulStore.Name
+	}
+	return name
 }
 
 func (p *PostgresStore) createDesiredSQLCnxSecret(statefulStore *cloudstate.StatefulStore, sqlInstance *gcloud.SQLInstance) (*corev1.Secret, error) {

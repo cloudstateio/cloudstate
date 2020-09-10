@@ -30,7 +30,7 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        image: cloudstate/cloudstate-operator:latest
+        image: cloudstateio/cloudstate-operator:latest
         imagePullPolicy: IfNotPresent
         name: manager
         resources:
@@ -47,5 +47,5 @@ spec:
       volumes:
         - name: config-volume
           configMap:
-            name: cloudstate-operator-config
+            name: cloudstate-config
             optional: true
