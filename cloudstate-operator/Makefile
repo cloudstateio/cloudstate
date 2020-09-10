@@ -1,6 +1,6 @@
 # Image URL to use for all building/pushing image targets
 VERSION ?= latest
-IMG ?= cloudstate/cloudstate-operator:${VERSION}
+IMG ?= cloudstateio/cloudstate-operator:${VERSION}
 
 # controller-gen generator and options
 CRD_OPTIONS ?= crd

@@ -83,7 +83,7 @@ func DefaultMultiStores(client client.Client, scheme *runtime.Scheme, log logr.L
 		stores[PostgresStoreType] = &PostgresStore{
 			Client: client,
 			Scheme: scheme,
-			Log:    log,
+			Log:    log.WithValues("store", "postgres"),
 			Config: &cfg.Postgres,
 			Gcp:    &cfg.Gcp,
 		}
@@ -206,11 +206,11 @@ func (m *MultiStores) ReconcileStatefulStore(
 		storeSupport := m.stores[storeType]
 		return storeSupport.ReconcileStatefulStore(ctx, store)
 	}
-	return []v1alpha1.CloudstateCondition {
+	return []v1alpha1.CloudstateCondition{
 		{
-			Type: v1alpha1.CloudstateNotReady,
-			Status: corev1.ConditionTrue,
-			Reason: "StatefulStoreNotSupported",
+			Type:    v1alpha1.CloudstateNotReady,
+			Status:  corev1.ConditionTrue,
+			Reason:  "StatefulStoreNotSupported",
 			Message: fmt.Sprintf("StatefulStore of type %s not supported by this Cloudstate installation", storeType),
 		},
 	}, false, nil
@@ -226,7 +226,7 @@ func (m *MultiStores) SetupWithStatefulStoreController(builder *builder.Builder)
 }
 
 func (m *MultiStores) storeTypeFromSpec(store *v1alpha1.StatefulStore) StoreType {
-	if store.Spec.InMemory != nil {
+	if store.Spec.InMemory {
 		return InMemoryStoreType
 	} else if store.Spec.Cassandra != nil {
 		return CassandraStoreType

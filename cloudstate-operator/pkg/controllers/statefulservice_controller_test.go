@@ -287,18 +287,19 @@ autoscaler:
 			waitForResource(ctx, namespace, statefulService.Name, actual)
 
 			By("SQLDatabase not ready yet")
-			Expect(actual.Status.Conditions).To(HaveLen(3), "should have 3 status conditions")
-			databaseCondition := actual.Status.Conditions[0]
+			Expect(actual.Status.Conditions).To(Or(HaveLen(3), HaveLen(4)), "should have 3 or 4 status conditions")
+			cs := len(actual.Status.Conditions)
+			databaseCondition := actual.Status.Conditions[cs-3]
 			Expect(databaseCondition.Type).To(Equal(stores.PostgresGoogleCloudSqlDatabaseNotReady))
 			Expect(databaseCondition.Status).To(Equal(corev1.ConditionTrue))
-			userCondition := actual.Status.Conditions[1]
+			userCondition := actual.Status.Conditions[cs-2]
 			Expect(userCondition.Type).To(Equal(stores.PostgresGoogleCloudSqlUserNotReady))
 			Expect(userCondition.Status).To(Equal(corev1.ConditionTrue))
-			notReadyCondition := actual.Status.Conditions[2]
+			notReadyCondition := actual.Status.Conditions[cs-1]
 			Expect(notReadyCondition.Type).To(Equal(cloudstate.CloudstateNotReady))
 			Expect(notReadyCondition.Status).To(Equal(corev1.ConditionTrue))
 
-			Expect(actual.Status.Summary).To(Equal("CloudSqlDatabaseUnknownStatus"))
+			Expect(actual.Status.Summary).To(Or(Equal("CloudSqlDatabaseUnknownStatus"), Equal("CloudSqlInstanceNotCreated")))
 
 			// Todo: In order for the status to progress further we'll need the test
 			// environment actually wired to GCP or have mocks in place.

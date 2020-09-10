@@ -26,23 +26,19 @@ type StatefulStoreSpec struct {
 	// InMemory store will keep everything in memory. This is the simplest
 	// option to get started, but must not be used in production.
 	// +optional
-	InMemory *InMemoryStore `json:"inMemory"`
+	InMemory bool `json:"inMemory,omitempty"`
 
 	// Postgres will store state in Postgres.
 	// +optional
-	Postgres *PostgresStore `json:"postgres"`
+	Postgres *PostgresStore `json:"postgres,omitempty"`
 
 	// SpannerStore uses a Spanner store managed by the Cloudstate infrastructure.
 	// +optional
-	Spanner *SpannerStore `json:"spanner"`
+	Spanner *SpannerStore `json:"spanner,omitempty"`
 
 	// Cassandra
 	// +optional
-	Cassandra *CassandraStore `json:"cassandra"`
-}
-
-// InMemoryStore uses memory-only storage for the StatefulService.
-type InMemoryStore struct {
+	Cassandra *CassandraStore `json:"cassandra,omitempty"`
 }
 
 // PostgresStore represents a Postgres instance.

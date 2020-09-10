@@ -47,12 +47,13 @@ then
 fi
 
 kubectl apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v0.16.1/cert-manager.yaml
+kubectl wait --for=condition=available --timeout=2m -n cert-manager deployment/cert-manager-webhook
 make -C cloudstate-operator deploy
 echo "Waiting for operator deployment to be ready..."
-if ! kubectl wait --for=condition=available --timeout=2m -n cloudstate-operator-system deployment/cloudstate-operator-controller-manager
+if ! kubectl wait --for=condition=available --timeout=2m -n cloudstate-system deployment/cloudstate-controller-manager
 then
-    kubectl describe -n cloudstate-operator-system deployment/cloudstate-operator-controller-manager
-    kubectl describe -n cloudstate-operator-system pods -l control-plane=controller-manager
-    kubectl logs -l control-plane=controller-manager -n cloudstate-operator-system -c manager
+    kubectl describe -n cloudstate-system deployment/cloudstate-controller-manager
+    kubectl describe -n cloudstate-system pods -l control-plane=controller-manager
+    kubectl logs -l control-plane=controller-manager -n cloudstate-system -c manager
     exit 1
 fi

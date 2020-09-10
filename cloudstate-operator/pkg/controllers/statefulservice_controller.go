@@ -446,7 +446,7 @@ func (r *StatefulServiceReconciler) reconcileRoleAndBinding(
 
 	actualRole := &rbacv1.Role{}
 	err := r.Client.Get(ctx, client.ObjectKey{
-		Name: "cloudstate-pod-reader",
+		Name:      "cloudstate-pod-reader",
 		Namespace: namespace,
 	}, actualRole)
 	if err != nil && apierrs.IsNotFound(err) {
@@ -455,11 +455,11 @@ func (r *StatefulServiceReconciler) reconcileRoleAndBinding(
 				Name:      "cloudstate-pod-reader",
 				Namespace: namespace,
 			},
-			Rules: []rbacv1.PolicyRule {
+			Rules: []rbacv1.PolicyRule{
 				{
-					APIGroups: []string {""},
-					Resources: []string {"pods"},
-					Verbs: []string{"get", "watch", "list"},
+					APIGroups: []string{""},
+					Resources: []string{"pods"},
+					Verbs:     []string{"get", "watch", "list"},
 				},
 			},
 		}
@@ -473,7 +473,7 @@ func (r *StatefulServiceReconciler) reconcileRoleAndBinding(
 
 	actualBinding := &rbacv1.RoleBinding{}
 	err = r.Client.Get(ctx, client.ObjectKey{
-		Name: "cloudstate-pod-reader-binding",
+		Name:      "cloudstate-pod-reader-binding",
 		Namespace: namespace,
 	}, actualBinding)
 	if err != nil && apierrs.IsNotFound(err) {
@@ -484,10 +484,10 @@ func (r *StatefulServiceReconciler) reconcileRoleAndBinding(
 			},
 			RoleRef: rbacv1.RoleRef{
 				APIGroup: "rbac.authorization.k8s.io",
-				Kind: "Role",
-				Name: "cloudstate-pod-reader",
+				Kind:     "Role",
+				Name:     "cloudstate-pod-reader",
 			},
-			Subjects: []rbacv1.Subject {
+			Subjects: []rbacv1.Subject{
 				{
 					Kind: "ServiceAccount",
 					Name: "default",

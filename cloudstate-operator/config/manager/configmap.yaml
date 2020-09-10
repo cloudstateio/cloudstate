@@ -1,6 +1,3 @@
-# If overriding things in .../deploy/k8s/execution/overlays/... one has to include the entire
-# desired config.yaml spec in the patch file.
-
 apiVersion: v1
 kind: ConfigMap
 metadata:
