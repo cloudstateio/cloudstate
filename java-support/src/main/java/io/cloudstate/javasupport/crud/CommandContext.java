@@ -19,6 +19,8 @@ package io.cloudstate.javasupport.crud;
 import io.cloudstate.javasupport.ClientActionContext;
 import io.cloudstate.javasupport.EffectContext;
 
+import java.util.Optional;
+
 /**
  * A CRUD command context.
  *
@@ -43,12 +45,21 @@ public interface CommandContext<T> extends CrudContext, ClientActionContext, Eff
   long commandId();
 
   /**
+   * Retrieve the state.
+   *
+   * @return the current state or empty if none have been created.
+   * @throws IllegalStateException If the current entity state have been deleted in the command
+   *     invocation.
+   */
+  Optional<T> getState() throws IllegalStateException;
+
+  /**
    * Update the entity with the new state. The state will be persisted.
    *
    * @param state The state to persist.
    */
-  void updateEntity(T state);
+  void updateState(T state);
 
-  /** Delete the entity. */
-  void deleteEntity();
+  /** Delete the entity state. */
+  void deleteState();
 }

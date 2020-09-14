@@ -16,6 +16,8 @@
 
 package io.cloudstate.javasupport.impl.crud
 
+import java.util.Optional
+
 import com.example.crud.shoppingcart.Shoppingcart
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.google.protobuf.{ByteString, Any => JavaPbAny}
@@ -24,14 +26,12 @@ import io.cloudstate.javasupport.crud.{
   CommandHandler,
   CrudContext,
   CrudEntity,
-  CrudEntityCreationContext,
-  DeleteStateHandler,
-  StateContext,
-  UpdateStateHandler
+  CrudEntityCreationContext
 }
 import io.cloudstate.javasupport.impl.{AnySupport, ResolvedServiceMethod, ResolvedType}
 import io.cloudstate.javasupport.{Context, EntityId, ServiceCall, ServiceCallFactory, ServiceCallRef}
 import org.scalatest.{Matchers, WordSpec}
+import scala.compat.java8.OptionConverters._
 
 class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
   trait BaseContext extends Context {
@@ -46,11 +46,12 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
   }
 
   class MockCommandContext extends CommandContext[JavaPbAny] with BaseContext {
-    var action: Option[AnyRef] = None
+    var action: Option[JavaPbAny] = None
     override def commandName(): String = "AddItem"
     override def commandId(): Long = 20
-    override def updateEntity(state: JavaPbAny): Unit = action = Some(state)
-    override def deleteEntity(): Unit = action = None
+    override def getState(): Optional[JavaPbAny] = action.asJava
+    override def updateState(state: JavaPbAny): Unit = action = Some(state)
+    override def deleteState(): Unit = action = None
     override def entityId(): String = "foo"
     override def fail(errorMessage: String): RuntimeException = ???
     override def forward(to: ServiceCall): Unit = ???
@@ -156,12 +157,29 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         decodeWrapped(handler.handleCommand(command("blah"), new MockCommandContext).get) should ===(Wrapped("blah"))
       }
 
-      "allow updating the state" in {
+      "reading the state" in {
         val handler = create(
           new {
             @CommandHandler
             def addItem(msg: String, ctx: CommandContext[JavaPbAny]): Wrapped = {
-              ctx.updateEntity(state(msg + " state"))
+              ctx.updateState(state(msg + " state"))
+              ctx.commandName() should ===("AddItem")
+              Wrapped(msg)
+            }
+          },
+          method
+        )
+        val ctx = new MockCommandContext
+        decodeWrapped(handler.handleCommand(command("blah"), ctx).get) should ===(Wrapped("blah"))
+        ctx.getState().get should ===(state("blah state"))
+      }
+
+      "updating the state" in {
+        val handler = create(
+          new {
+            @CommandHandler
+            def addItem(msg: String, ctx: CommandContext[JavaPbAny]): Wrapped = {
+              ctx.updateState(state(msg + " state"))
               ctx.commandName() should ===("AddItem")
               Wrapped(msg)
             }
@@ -176,7 +194,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
       "fail if there's a bad context type" in {
         a[RuntimeException] should be thrownBy create(new {
           @CommandHandler
-          def addItem(msg: String, ctx: StateContext) =
+          def addItem(msg: String, ctx: BaseContext) =
             Wrapped(msg)
         }, method)
       }
@@ -200,6 +218,15 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         }, method)
       }
 
+      "unwrap exceptions" in {
+        val handler = create(new {
+          @CommandHandler
+          def addItem(): Wrapped = throw new RuntimeException("foo")
+        }, method)
+        val ex = the[RuntimeException] thrownBy handler.handleCommand(command("nothing"), new MockCommandContext)
+        ex.getMessage should ===("foo")
+      }
+
       "fail if there's a CRDT command handler" in {
         val ex = the[RuntimeException] thrownBy create(new {
             @io.cloudstate.javasupport.crdt.CommandHandler
@@ -210,131 +237,18 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         ex.getMessage should include(classOf[CommandHandler].getName)
       }
 
-      "unwrap exceptions" in {
-        val handler = create(new {
-          @CommandHandler
-          def addItem(): Wrapped = throw new RuntimeException("foo")
-        }, method)
-        val ex = the[RuntimeException] thrownBy handler.handleCommand(command("nothing"), new MockCommandContext)
-        ex.getMessage should ===("foo")
+      "fail if there's a EventSourced command handler" in {
+        val ex = the[RuntimeException] thrownBy create(new {
+            @io.cloudstate.javasupport.eventsourced.CommandHandler
+            def addItem(msg: String) =
+              Wrapped(msg)
+          }, method)
+        ex.getMessage should include("Did you mean")
+        ex.getMessage should include(classOf[CommandHandler].getName)
       }
 
     }
 
-    "support update state handlers" when {
-      val ctx = new StateContext with BaseContext {
-        override def entityId(): String = "foo"
-      }
-
-      "single parameter" in {
-        var invoked = false
-        val handler = create(new {
-          @UpdateStateHandler
-          def updateState(state: String): Unit = {
-            state should ===("state!")
-            invoked = true
-          }
-        })
-        handler.handleUpdate(state("state!"), ctx)
-        invoked shouldBe true
-      }
-
-      "context parameter" in {
-        var invoked = false
-        val handler = create(new {
-          @UpdateStateHandler
-          def updateState(state: String, context: StateContext): Unit = {
-            state should ===("state!")
-            invoked = true
-          }
-        })
-        handler.handleUpdate(state("state!"), ctx)
-        invoked shouldBe true
-      }
-
-      "fail if there's a bad context" in {
-        a[RuntimeException] should be thrownBy create(new {
-          @UpdateStateHandler
-          def updateState(state: String, context: CommandContext[JavaPbAny]): Unit = ()
-        })
-      }
-
-      "fail if there's no state parameter" in {
-        a[RuntimeException] should be thrownBy create(new {
-          @UpdateStateHandler
-          def updateState(context: StateContext): Unit = ()
-        })
-      }
-
-      "fail if there's no update handler for the given type" in {
-        val handler = create(new {
-          @UpdateStateHandler
-          def updateState(state: Int): Unit = ()
-        })
-        a[RuntimeException] should be thrownBy handler.handleUpdate(state(10), ctx)
-      }
-
-      "fail if there are two update handler methods" in {
-        a[RuntimeException] should be thrownBy create(new {
-          @UpdateStateHandler
-          def updateState1(context: StateContext): Unit = ()
-          @UpdateStateHandler
-          def updateState2(context: StateContext): Unit = ()
-        })
-      }
-    }
-
-    "support delete state handlers" when {
-      val ctx = new StateContext with BaseContext {
-        override def entityId(): String = "foo"
-      }
-
-      "no arg parameter" in {
-        var invoked = false
-        val handler = create(new {
-          @DeleteStateHandler
-          def deleteState(): Unit =
-            invoked = true
-        })
-        handler.handleDelete(ctx)
-        invoked shouldBe true
-      }
-
-      "context parameter" in {
-        var invoked = false
-        val handler = create(new {
-          @DeleteStateHandler
-          def deleteState(context: StateContext): Unit =
-            invoked = true
-        })
-        handler.handleDelete(ctx)
-        invoked shouldBe true
-      }
-
-      "fail if there's a single argument is not the context" in {
-        a[RuntimeException] should be thrownBy create(new {
-          @DeleteStateHandler
-          def deleteState(state: String): Unit = ()
-        })
-      }
-
-      "fail if there's two delete methods" in {
-        a[RuntimeException] should be thrownBy create(new {
-          @DeleteStateHandler
-          def deleteState1: Unit = ()
-
-          @DeleteStateHandler
-          def deleteState2: Unit = ()
-        })
-      }
-
-      "fail if there's a bad context" in {
-        a[RuntimeException] should be thrownBy create(new {
-          @DeleteStateHandler
-          def deleteState(context: CommandContext[JavaPbAny]): Unit = ()
-        })
-      }
-    }
   }
 }
 

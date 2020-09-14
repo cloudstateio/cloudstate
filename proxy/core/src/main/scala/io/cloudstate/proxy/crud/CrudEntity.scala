@@ -166,7 +166,10 @@ object CrudEntity {
       replyTo: ActorRef
   )
 
-  private case object DatabaseOperationSuccess
+  private case object LoadInitStateSuccess
+  private case class LoadInitStateFailure(cause: Throwable)
+
+  private case object SaveStateSuccess
 
   final def props(configuration: Configuration,
                   entityId: String,
@@ -190,6 +193,7 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
                        statsCollector: ActorRef,
                        repository: JdbcRepository)
     extends Actor
+    with Stash
     with ActorLogging {
 
   private implicit val ec = context.dispatcher
@@ -198,7 +202,6 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
 
   private val actorId = CrudEntity.actorCounter.incrementAndGet()
 
-  private[this] final var initState: Option[pbAny] = None
   private[this] final var stashedCommands = Queue.empty[(EntityCommand, ActorRef)] // PERFORMANCE: look at options for data structures
   private[this] final var currentCommand: CrudEntity.OutstandingCommand = null
   private[this] final var stopped = false
@@ -218,8 +221,24 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
     repository
       .get(Key(persistenceId, entityId))
       .map { state =>
-        handleInitState(state)
-        CrudEntity.DatabaseOperationSuccess
+        // related to the first access to the database when the actor starts
+        reportDatabaseOperationFinished()
+        if (!inited) {
+          relay ! CrudStreamIn(
+            CrudStreamIn.Message.Init(
+              CrudInit(
+                serviceName = configuration.serviceName,
+                entityId = entityId,
+                state = Some(CrudInitState(state))
+              )
+            )
+          )
+          inited = true
+        }
+        CrudEntity.LoadInitStateSuccess
+      }
+      .recover {
+        case error => CrudEntity.LoadInitStateFailure(error)
       }
       .pipeTo(self)
 
@@ -289,7 +308,21 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       clientAction = Some(ClientAction(ClientAction.Action.Failure(Failure(description = message))))
     )
 
-  override final def receive: PartialFunction[Any, Unit] = {
+  override final def receive: PartialFunction[Any, Unit] = waitingForInitState
+
+  private def waitingForInitState: PartialFunction[Any, Unit] = {
+    case CrudEntity.LoadInitStateSuccess =>
+      context.become(initialized)
+      unstashAll()
+
+    case CrudEntity.LoadInitStateFailure(error) =>
+      log.error(error, s"CRUD Entity cannot load the initial state due to unexpected failure ${error.getMessage}")
+      throw error
+
+    case _ => stash()
+  }
+
+  private def initialized: PartialFunction[Any, Unit] = {
 
     case command: EntityCommand if currentCommand != null =>
       stashedCommands = stashedCommands.enqueue((command, sender()))
@@ -325,7 +358,7 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
                   }
                   currentCommand.replyTo ! esReplyToUfReply(r)
                   commandHandled()
-                  CrudEntity.DatabaseOperationSuccess
+                  CrudEntity.SaveStateSuccess
                 }
                 .pipeTo(self)
             }
@@ -359,7 +392,7 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       notifyOutstandingRequests("Unexpected CRUD entity termination")
       throw error
 
-    case CrudEntity.DatabaseOperationSuccess =>
+    case CrudEntity.SaveStateSuccess =>
     // Nothing to do, access the native crud database was successful
 
     case ReceiveTimeout =>
@@ -380,29 +413,6 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       case Delete(_) =>
         repository.delete(Key(persistenceId, entityId))
     }
-
-  private[this] final def handleInitState(state: Option[pbAny]): Unit = {
-    // related to the first access to the database when the actor starts
-    reportDatabaseOperationFinished()
-    if (!inited) {
-      // apply the initial state only when the entity is not fully initialized
-      initState = state match {
-        case Some(updated: pbAny) => Some(updated)
-        case _ => None
-      }
-
-      relay ! CrudStreamIn(
-        CrudStreamIn.Message.Init(
-          CrudInit(
-            serviceName = configuration.serviceName,
-            entityId = entityId,
-            state = Some(CrudInitState(initState))
-          )
-        )
-      )
-      inited = true
-    }
-  }
 
   private def reportDatabaseOperationStarted(): Unit =
     if (reportedDatabaseOperationStarted) {

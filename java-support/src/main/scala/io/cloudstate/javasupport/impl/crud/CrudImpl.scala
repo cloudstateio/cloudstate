@@ -16,6 +16,8 @@
 
 package io.cloudstate.javasupport.impl.crud
 
+import java.util.Optional
+
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.event.{Logging, LoggingAdapter}
@@ -132,82 +134,80 @@ final class CrudImpl(_system: ActorSystem,
 
   private def runEntity(init: CrudInit): Flow[CrudStreamIn, CrudStreamOut, NotUsed] = {
     val service =
-      services.getOrElse(init.serviceName, throw ProtocolException(s"Service not found: ${init.serviceName}"))
+      services.getOrElse(init.serviceName, throw new RuntimeException(s"Service not found: ${init.serviceName}"))
     val handler = service.factory.create(new CrudContextImpl(init.entityId))
     val thisEntityId = init.entityId
 
-    init.state match {
-      case Some(CrudInitState(Some(payload), _)) =>
-        val encoded = service.anySupport.encodeScala(payload)
-        handler.handleUpdate(ScalaPbAny.toJavaProto(encoded), new StateContextImpl(thisEntityId))
-
-      case Some(CrudInitState(None, _)) =>
-        handler.handleDelete(new StateContextImpl(thisEntityId))
-
-      case _ =>
-      // should not happen!
+    val initState = init.state match {
+      case Some(CrudInitState(state, _)) => state
+      case _ => None
     }
 
     Flow[CrudStreamIn]
-      .map { m =>
-        m.message match {
-          case InCommand(command) if thisEntityId != command.entityId =>
-            throw ProtocolException(command, "Receiving entity is not the intended recipient for CRUD entity")
+      .map(_.message)
+      .scan[(Option[ScalaPbAny], Option[CrudStreamOut.Message])]((initState, None)) {
+        case (_, InCommand(command)) if thisEntityId != command.entityId =>
+          throw ProtocolException(command, "Receiving entity is not the intended recipient for CRUD entity")
 
-          case InCommand(command) if command.payload.isEmpty =>
-            throw ProtocolException(command, "No command payload for CRUD entity")
+        case (_, InCommand(command)) if command.payload.isEmpty =>
+          throw ProtocolException(command, "No command payload for CRUD entity")
 
-          case InCommand(command) =>
-            val cmd = ScalaPbAny.toJavaProto(command.payload.get)
-            val context = new CommandContextImpl(
-              thisEntityId,
-              command.name,
-              command.id,
-              service.anySupport,
-              handler,
-              log
-            )
-            val reply = try {
-              handler.handleCommand(cmd, context)
-            } catch {
-              case FailInvoked => Option.empty[JavaPbAny].asJava // Ignore, error already captured
-              case e: EntityException => throw e
-              case NonFatal(error) =>
-                throw EntityException(command, s"CRUD entity Unexpected failure: ${error.getMessage}")
-            } finally {
-              context.deactivate() // Very important!
-            }
+        case ((state, _), InCommand(command)) =>
+          val cmd = ScalaPbAny.toJavaProto(command.payload.get)
+          val context = new CommandContextImpl(
+            thisEntityId,
+            command.name,
+            command.id,
+            state,
+            service.anySupport,
+            log
+          )
+          val reply = try {
+            handler.handleCommand(cmd, context)
+          } catch {
+            case FailInvoked => Option.empty[JavaPbAny].asJava
+            case e: EntityException => throw e
+            case NonFatal(error) =>
+              throw EntityException(command, s"CRUD entity Unexpected failure: ${error.getMessage}")
+          } finally {
+            context.deactivate() // Very important!
+          }
 
-            val clientAction = context.createClientAction(reply, false)
-            if (!context.hasError) {
-              context.applyCrudAction()
-              OutReply(
-                CrudReply(
-                  command.id,
-                  clientAction,
-                  context.sideEffects,
-                  context.crudAction()
-                )
-              )
-            } else {
-              OutReply(
-                CrudReply(
-                  commandId = command.id,
-                  clientAction = clientAction,
-                  crudAction = context.crudAction()
-                )
-              )
-            }
+          val clientAction = context.createClientAction(reply, false)
+          if (!context.hasError) {
+            val nextState = context.currentState()
+            (nextState,
+             Some(
+               OutReply(
+                 CrudReply(
+                   command.id,
+                   clientAction,
+                   context.sideEffects,
+                   context.action
+                 )
+               )
+             ))
+          } else {
+            (state,
+             Some(
+               OutReply(
+                 CrudReply(
+                   commandId = command.id,
+                   clientAction = clientAction,
+                   crudAction = context.action
+                 )
+               )
+             ))
+          }
 
-          case InInit(_) =>
-            throw ProtocolException(init, "CRUD entity already initialized")
+        case (_, InInit(_)) =>
+          throw ProtocolException(init, "CRUD Entity already inited")
 
-          case InEmpty =>
-            throw ProtocolException(init, "CRUD entity received empty/unknown message")
-        }
+        case (_, InEmpty) =>
+          throw ProtocolException(init, "CRUD entity received empty/unknown message")
       }
       .collect {
-        case message: CrudStreamOut.Message => CrudStreamOut(message)
+        case (_, Some(message)) => CrudStreamOut(message)
       }
   }
 
@@ -218,53 +218,62 @@ final class CrudImpl(_system: ActorSystem,
   private final class CommandContextImpl(override val entityId: String,
                                          override val commandName: String,
                                          override val commandId: Long,
+                                         val state: Option[ScalaPbAny],
                                          val anySupport: AnySupport,
-                                         val handler: CrudEntityHandler,
                                          val log: LoggingAdapter)
-      extends CommandContext[AnyRef]
+      extends CommandContext[JavaPbAny]
       with AbstractContext
       with AbstractClientActionContext
       with AbstractEffectContext
-      with ActivatableContext {
+      with ActivatableContext
+      with CrudActionInvocationChecker {
 
-    private var mayBeAction: Option[CrudAction] = None
+    final var stateDeleted = false
+    final var action: Option[CrudAction] = None
+    private var _currentState: Option[ScalaPbAny] = state
 
-    override def updateEntity(state: AnyRef): Unit = {
+    override def getState(): Optional[JavaPbAny] = {
       checkActive()
+      checkStateDeleted(CrudActionInvocationChecker.CrudActionInvocationContext(entityId, commandId, commandName))
 
-      if (state == null)
-        throw EntityException("CRUD entity cannot update a 'null' state")
-
-      val encoded = anySupport.encodeScala(state)
-      mayBeAction = Some(CrudAction(Update(CrudUpdate(Some(encoded)))))
+      _currentState.map(ScalaPbAny.toJavaProto(_)).asJava
     }
 
-    override def deleteEntity(): Unit = {
+    override def updateState(state: JavaPbAny): Unit = {
       checkActive()
-      mayBeAction = Some(CrudAction(Delete(CrudDelete())))
+      if (state == null)
+        throw EntityException("CRUD entity cannot update a 'null' state")
+      checkInvocation(
+        CrudActionInvocationChecker.CrudActionInvocationContext(entityId, commandId, commandName),
+        CrudAction(Update(CrudUpdate(None)))
+      )
+
+      val encoded = anySupport.encodeScala(state)
+      _currentState = Some(encoded)
+      action = Some(CrudAction(Update(CrudUpdate(Some(encoded)))))
+      stateDeleted = false
+    }
+
+    override def deleteState(): Unit = {
+      checkActive()
+      checkInvocation(
+        CrudActionInvocationChecker.CrudActionInvocationContext(entityId, commandId, commandName),
+        CrudAction(Delete(CrudDelete()))
+      )
+
+      _currentState = None
+      action = Some(CrudAction(Delete(CrudDelete())))
+      stateDeleted = true
     }
 
     override protected def logError(message: String): Unit =
       log.error("Fail invoked for command [{}] for CRUD entity [{}]: {}", commandName, entityId, message)
 
-    def crudAction(): Option[CrudAction] = mayBeAction
+    def currentState(): Option[ScalaPbAny] =
+      _currentState
 
-    def applyCrudAction(): Unit =
-      mayBeAction match {
-        case Some(CrudAction(action, _)) =>
-          action match {
-            case Update(CrudUpdate(Some(value), _)) =>
-              handler.handleUpdate(ScalaPbAny.toJavaProto(value), new StateContextImpl(entityId))
-
-            case Delete(CrudDelete(_)) =>
-              handler.handleDelete(new StateContextImpl(entityId))
-          }
-        case None =>
-        // ignored, nothing to do it is a get request!
-      }
   }
 
   private final class CrudContextImpl(override final val entityId: String) extends CrudContext with AbstractContext
 
-  private final class StateContextImpl(override final val entityId: String) extends StateContext with AbstractContext
 }

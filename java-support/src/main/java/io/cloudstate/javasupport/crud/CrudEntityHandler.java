@@ -25,7 +25,7 @@ import java.util.Optional;
  * an CRUD entity.
  *
  * <p>Generally, this should not be needed, instead, a class annotated with the {@link
- * StateHandler}, {@link CommandHandler} and similar annotations should be used.
+ * CommandHandler} and similar annotations should be used.
  */
 public interface CrudEntityHandler {
 
@@ -36,20 +36,5 @@ public interface CrudEntityHandler {
    * @param context The command context.
    * @return The reply to the command, if the command isn't being forwarded elsewhere.
    */
-  <T> Optional<Any> handleCommand(Any command, CommandContext<T> context);
-
-  /**
-   * Handle the given state.
-   *
-   * @param state The state to handle.
-   * @param context The state context.
-   */
-  void handleUpdate(Any state, StateContext context);
-
-  /**
-   * Handle the state deletion.
-   *
-   * @param context The state context.
-   */
-  void handleDelete(StateContext context);
+  Optional<Any> handleCommand(Any command, CommandContext<Any> context);
 }

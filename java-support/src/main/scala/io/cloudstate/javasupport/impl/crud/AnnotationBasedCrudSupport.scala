@@ -20,7 +20,7 @@ import java.lang.reflect.{Constructor, InvocationTargetException, Method}
 import java.util.Optional
 
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
-import io.cloudstate.javasupport.ServiceCallFactory
+import io.cloudstate.javasupport.{ServiceCall, ServiceCallFactory}
 import io.cloudstate.javasupport.crud.{
   CommandContext,
   CommandHandler,
@@ -28,16 +28,11 @@ import io.cloudstate.javasupport.crud.{
   CrudEntity,
   CrudEntityCreationContext,
   CrudEntityFactory,
-  CrudEntityHandler,
-  DeleteStateHandler,
-  StateContext,
-  UpdateStateHandler
+  CrudEntityHandler
 }
 import io.cloudstate.javasupport.impl.ReflectionHelper.{InvocationContext, MainArgumentParameterHandler}
 import io.cloudstate.javasupport.impl.crud.CrudImpl.EntityException
 import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEntityFactory, ResolvedServiceMethod}
-
-import scala.collection.concurrent.TrieMap
 
 /**
  * Annotation based implementation of the [[CrudEntityFactory]].
@@ -74,35 +69,15 @@ private[impl] class AnnotationBasedCrudSupport(
       })
     }
 
-    override def handleCommand[T](command: JavaPbAny, context: CommandContext[T]): Optional[JavaPbAny] = unwrap {
+    override def handleCommand(command: JavaPbAny, context: CommandContext[JavaPbAny]): Optional[JavaPbAny] = unwrap {
       behavior.commandHandlers.get(context.commandName()).map { handler =>
-        handler.invoke(entity, command, context)
+        val adaptedContext =
+          new AdaptedCommandContext(context, anySupport)
+        handler.invoke(entity, command, adaptedContext)
       } getOrElse {
         throw EntityException(
           s"No command handler found for command [${context.commandName()}] on $behaviorsString"
         )
-      }
-    }
-
-    override def handleUpdate(anyState: JavaPbAny, context: StateContext): Unit = unwrap {
-      val state = anySupport.decode(anyState).asInstanceOf[AnyRef]
-
-      behavior.getCachedUpdateHandlerForClass(state.getClass) match {
-        case Some(handler) =>
-          val ctx = new DelegatingCrudContext(context) with StateContext
-          handler.invoke(entity, state, ctx)
-        case None =>
-          throw EntityException(
-            s"No update state handler found for ${state.getClass} on $behaviorsString"
-          )
-      }
-    }
-
-    override def handleDelete(context: StateContext): Unit = unwrap {
-      behavior.deleteHandler match {
-        case Some(handler) => handler.invoke(entity, context)
-        case None =>
-          throw EntityException(s"No delete state handler found on $behaviorsString")
       }
     }
 
@@ -124,27 +99,8 @@ private[impl] class AnnotationBasedCrudSupport(
 }
 
 private class CrudBehaviorReflection(
-    val commandHandlers: Map[String, ReflectionHelper.CommandHandlerInvoker[CommandContext[_]]],
-    val updateHandlers: Map[Class[_], UpdateInvoker],
-    val deleteHandler: Option[DeleteInvoker]
-) {
-
-  private val updateStateHandlerCache = TrieMap.empty[Class[_], Option[UpdateInvoker]]
-
-  def getCachedUpdateHandlerForClass(clazz: Class[_]): Option[UpdateInvoker] =
-    updateStateHandlerCache.getOrElseUpdate(clazz, getHandlerForClass(updateHandlers)(clazz))
-
-  private def getHandlerForClass[T](handlers: Map[Class[_], T])(clazz: Class[_]): Option[T] =
-    handlers.get(clazz) match {
-      case some @ Some(_) => some
-      case None =>
-        clazz.getInterfaces.collectFirst(Function.unlift(getHandlerForClass(handlers))) match {
-          case some @ Some(_) => some
-          case None if clazz.getSuperclass != null => getHandlerForClass(handlers)(clazz.getSuperclass)
-          case None => None
-        }
-    }
-}
+    val commandHandlers: Map[String, ReflectionHelper.CommandHandlerInvoker[CommandContext[AnyRef]]]
+) {}
 
 private object CrudBehaviorReflection {
   def apply(behaviorClass: Class[_],
@@ -165,8 +121,8 @@ private object CrudBehaviorReflection {
           )
         })
 
-        new ReflectionHelper.CommandHandlerInvoker[CommandContext[_]](ReflectionHelper.ensureAccessible(method),
-                                                                      serviceMethod)
+        new ReflectionHelper.CommandHandlerInvoker[CommandContext[AnyRef]](ReflectionHelper.ensureAccessible(method),
+                                                                           serviceMethod)
       }
       .groupBy(_.serviceMethod.name)
       .map {
@@ -177,40 +133,13 @@ private object CrudBehaviorReflection {
           )
       }
 
-    val updateStateHandlers = allMethods
-      .filter(_.getAnnotation(classOf[UpdateStateHandler]) != null)
-      .map { method =>
-        new UpdateInvoker(ReflectionHelper.ensureAccessible(method))
-      }
-      .groupBy(_.stateClass)
-      .map {
-        case (stateClass, Seq(invoker)) => (stateClass: Any) -> invoker
-        case (clazz, many) =>
-          throw new RuntimeException(
-            s"Multiple CRUD update handlers found of type $clazz: ${many.map(_.method.getName)}"
-          )
-      }
-      .asInstanceOf[Map[Class[_], UpdateInvoker]]
-
-    val deleteStateHandler = allMethods
-      .filter(_.getAnnotation(classOf[DeleteStateHandler]) != null)
-      .map { method =>
-        new DeleteInvoker(ReflectionHelper.ensureAccessible(method))
-      } match {
-      case Seq() => None
-      case Seq(single) =>
-        Some(single)
-      case _ =>
-        throw new RuntimeException(s"Multiple CRUD delete methods found on behavior $behaviorClass")
-    }
-
     ReflectionHelper.validateNoBadMethods(
       allMethods,
       classOf[CrudEntity],
-      Set(classOf[CommandHandler], classOf[UpdateStateHandler], classOf[DeleteStateHandler])
+      Set(classOf[CommandHandler])
     )
 
-    new CrudBehaviorReflection(commandHandlers, updateStateHandlers, deleteStateHandler)
+    new CrudBehaviorReflection(commandHandlers)
   }
 }
 
@@ -228,41 +157,30 @@ private class EntityConstructorInvoker(constructor: Constructor[_]) extends (Cru
   }
 }
 
-private class UpdateInvoker(val method: Method) {
-  private val parameters = ReflectionHelper.getParameterHandlers[StateContext](method)()
+/*
+ * This class is a conversion bridge between CommandContext[JavaPbAny] and CommandContext[AnyRef].
+ * It helps for making the conversion from JavaPbAny to AnyRef and backward.
+ */
+private class AdaptedCommandContext(val delegate: CommandContext[JavaPbAny], anySupport: AnySupport)
+    extends CommandContext[AnyRef] {
 
-  // Verify that there is at most one update state handler
-  val stateClass: Class[_] = parameters.collect {
-    case MainArgumentParameterHandler(clazz) => clazz
-  } match {
-    case Array(handlerClass) => handlerClass
-    case other =>
-      throw new RuntimeException(
-        s"UpdateStateHandler method $method must defined at most one non context parameter to handle state, the parameters defined were: ${other
-          .mkString(",")}"
-      )
+  override def getState(): Optional[AnyRef] = {
+    val result = delegate.getState
+    result.map(anySupport.decode(_).asInstanceOf[AnyRef])
   }
 
-  def invoke(obj: AnyRef, state: AnyRef, context: StateContext): Unit = {
-    val ctx = InvocationContext(state, context)
-    method.invoke(obj, parameters.map(_.apply(ctx)): _*)
-  }
-}
-
-private class DeleteInvoker(val method: Method) {
-
-  private val parameters = ReflectionHelper.getParameterHandlers[StateContext](method)()
-
-  parameters.foreach {
-    case MainArgumentParameterHandler(clazz) =>
-      throw new RuntimeException(
-        s"DeleteStateHandler method $method must defined only a context parameter to handle the state, the parameter defined is: ${clazz.getName}"
-      )
-    case _ =>
+  override def updateState(state: AnyRef): Unit = {
+    val encoded = anySupport.encodeJava(state)
+    delegate.updateState(encoded)
   }
 
-  def invoke(obj: AnyRef, context: StateContext): Unit = {
-    val ctx = InvocationContext("", context)
-    method.invoke(obj, parameters.map(_.apply(ctx)): _*)
-  }
+  override def deleteState(): Unit = delegate.deleteState()
+
+  override def commandName(): String = delegate.commandName()
+  override def commandId(): Long = delegate.commandId()
+  override def entityId(): String = delegate.entityId()
+  override def effect(effect: ServiceCall, synchronous: Boolean): Unit = delegate.effect(effect, synchronous)
+  override def fail(errorMessage: String): RuntimeException = delegate.fail(errorMessage)
+  override def forward(to: ServiceCall): Unit = delegate.forward(to)
+  override def serviceCallFactory(): ServiceCallFactory = delegate.serviceCallFactory()
 }
