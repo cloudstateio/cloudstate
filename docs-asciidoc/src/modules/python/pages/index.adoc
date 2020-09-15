@@ -1,0 +1,5 @@
+= Implementing in Python
+
+Information on implementing Cloudstate services in Python is published at:
+
+https://cloudstate.io/old/docs/python/current/

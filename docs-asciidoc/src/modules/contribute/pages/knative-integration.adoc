@@ -1,0 +1,61 @@
+= Knative integration
+
+ifdef::review[REVIWEERS: This looks to me like an internal func spec. Is this something OSS contributors need to know?]
+
+This page serves to outline a potential way that Stateful Serverless might integrate with Knative. This includes potential modifications necessary to Knative.
+
+It assumed that the reader is familiar with Knative, in particular, they have read and understood the Knative serving https://github.com/knative/serving/blob/master/docs/spec/overview.md[overview] and https://github.com/knative/serving/blob/master/docs/spec/spec.md[spec], and therefore are familiar with Knative `Services`, `Configurations`, `Revisions` and `Routes`.
+
+It's also assumed that the reader is familiar with the Stateful Serverless project. https://www.youtube.com/watch?v=AOY8yRC6dVY[This screencast] introduces the project. In particular, familiarity with the `EventSourcedService` CRD shown in use https://github.com/lightbend/stateful-serverless/blob/f9da1a2b7272733cba94e504c76bd7fca3355c68/src/samples/js-shopping-cart/eventsourced.yaml[here] will demonstrate how some of the requirements for this project have been solved in a non Knative based deployment.
+
+== Goals with the Knative integration
+
+The primary goal is that Stateful Serverless functions are deployed and managed just like any other Knative function, by deploying a Knative `Service`, which results in a Knative `Route` and `Configuration` being created, each change to `Configurations` results in a new Knative `Revision` being created, and then `Revisions` get deployed as replica sets according to `Route` configuration and load. Ideally, as much of Knative serving as possible should be used by stateful serverless functions, so that the differences between maintaining and deploying Stateful Serverless functions, and Knative functions, is minimal.
+
+== Requirements for Stateful Serverless
+
+Stateful serverless has two primary requirements:
+
+* The ability specify Stateful Serverless specific configuration for a function (ie, a `Configuration`, and therefore also a `Service`). For example, this includes database configuration, such as https://github.com/lightbend/stateful-serverless/blob/f9da1a2b7272733cba94e504c76bd7fca3355c68/src/samples/js-shopping-cart/eventsourced.yaml##L12-L23[this].
+* The ability to replace the Knative serving sidecar with a Stateful Serverless (Akka) side car, configured according to the custom Stateful Serverless configuration. Ideally, this should be done via a high level configuration item, which a (custom) operator translates to the necessary container spec for the sidecar.
+
+The above should work alongside regular Knative serving functions, that is to say, whether the Stateful Serverless or regular Knative serving sidecar is used should be selected on a `Configuration` by `Configuration` basis.
+
+== Possible design
+
+Here we propose a design, with a focus on what changes would be needed in Knative to support it.
+
+=== Custom configuration
+
+One configuration mechanism that would work today for supplying custom configuration would be to use custom annotations in the template spec. These should be passed on from `Service` to `Configuration` to `Revision`, and therefore can be read by whatever component is configuring the Akka sidecar.
+
+However, this isn't ideal, as such configuration may be better described, from the developers perspective, in structured YAML/json, as shown https://github.com/lightbend/stateful-serverless/blob/f9da1a2b7272733cba94e504c76bd7fca3355c68/src/samples/js-shopping-cart/eventsourced.yaml##L12-L23[here]. To support this, Knative would need to ensure that the custom configuration is passed from Service to `Configuration` to `Revision`. Here are two ideas for how this could be done:
+
+1. Any unknown top level properties on the Service or `Configuration` specs should not be ignored, instead, they should be read and passed as is down to the `Configuration`/`Revision`. Any changes to top level properties, including additions/removals, or changes in the nested structures, would result in a new `Revision` being created.
+2. A custom configuration property, eg `customConfig`, could be defined, which Knative treats as an opaque YAML/json object that it passes as is from Service to `Configuration`, and any changes to it results in a new `Revision` with that config in it. `customConfig` may be a bad name, another name could be `module`, with a convention that any custom modules (eg stateful serverless) selects a name under that, and puts all its configuration under that name.
+
+Option 1 may feel more natural from the developers perspective (they don't care if the config is custom or not), however, it does mean that typos will be harder to diagnose, as they will be passed as is down the chain, and it will be less obvious that the typos are being ignored. Option 2 is more future proofed, since it contains all custom configuration to the custom config namespace, thereby ensuring future changes to the serving CRDs will not conflict with any custom configuration.
+
+=== Custom sidecar injection
+
+TODO: We've made an assumption that Knative is using `Deployments` for this. But maybe it's not; maybe it's using `ReplicaSets`; or maybe it's using something else altogether.
+
+The Knative operator is responsible for translating `Revisions` into `Deployments`. As part of this, it injects the Knative sidecar into the template spec. This translation needs to be disabled, and Stateful Serverless needs to provide its own operator that watches `Revisions`, and translates the ones that it is responsible for into `Deployments`, including the injection of its own sidecar.
+
+To support this, an annotation could be used (as the flag to disable it), but as discussed in <<Custom configuration>>, this is not ideal. An alternative solution is to add a new configuration parameter to the `Service`, `Configuration` and `Revision` specs. This could be called `moduleName`, which could default to `knative` and would indicate that `knative` is going to do the translation. Any value other than `knative` will indicate that Knative should not do the translation. If following the suggestion of using a `module` property for the custom configuration, then the custom configuration could be made to live under a property that is equal to the `moduleName`.
+
+== Additional notes
+
+=== Knative Build
+
+Knative Build has not yet been taken into consideration, and I haven't even looked at how it works. Investigation needs to be done to ensure that this approach will be compatible with the current Knative Build workflow.
+
+=== Routing, updates, and canary deployments
+
+Stateful Serverless deployments will form a cluster involving all pods for the service. This applies across revisions. This is necessary: For example, event sourcing requires that each entity live on at most one node to ensure strong consistency of command-handling on that node. As such, when a new revision is deployed, and an update is underway, new nodes for the new revision need to join the cluster of existing nodes (from the old revision). Otherwise, entities could be started in both clusters.
+
+This presents an interesting conflict with canary deployments and routing. For cluster sharded entities, Akka will by default attempt to distribute load evenly across all nodes in the cluster. So if there are two existing nodes, and an update is done, using a canary deployment that initially routes 5% of the traffic to the new node, Akka's cluster sharding will make that 5% irrelevant, and one third of the traffic will end up being handled by the new node. Furthermore, the 5% of traffic that is routed to the new node may or may not end up being handled by that node.
+
+The Akka sidecar will need to be careful to ensure that metrics collection is done post cluster sharding. Assuming that Knative's canary deployment support uses the metrics reported by the sidecars to decide on the health of the canary node, this should ensure that canary deployments still work as intended. If not, if for example metrics reported by the service mesh are used, then that may need to be modified to support this.
+
+A custom Akka cluster sharding rebalancing strategy may be able to be used to try and replicate traffic routing percentages. Perhaps the biggest unanswered question there is how the strategy would discover the current required percentages.

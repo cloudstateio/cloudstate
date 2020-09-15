@@ -1,0 +1,56 @@
+As discussed in previous pages, the motivation for Cloudstate is based on the following:
+
+*   The Serverless Developer Experience, from development to production, is revolutionary and will grow to dominate the future of Cloud Computing
+    *   FaaS is—with its ephemeral, stateless, and short-lived functions—merely the first step and implementation of the Serverless Developer Experience.
+    *   FaaS is great for processing intensive, parallelizable workloads, moving data from A to B providing enrichment and transformation along the way. But it is quite limited and constrained in terms of the use-cases it addresses well, which makes it difficult and inefficient to carry out traditional application development and to implement distributed systems protocols.
+*   What's needed is a next-generation Serverless platform (Serverless 2.0) and programming model for general-purpose application development (e.g. microservices, streaming pipelines, AI/ML, etc.).
+    *   One that lets us implement common use-cases such as: shopping carts, user sessions, transactions, ML models training, low-latency prediction serving, job scheduling, and much more.
+    *   What is missing is support for long-lived virtual stateful services, a way to manage distributed state in a scalable and available fashion, and options for choosing the right consistency model for the job.
+
+Cloudstate addresses these problems with a next-generation Serverless platform based on on Knative/Kubernetes, gRPC, and Akka (Cluster, Persistence, etc.), with a rich set of client APIs (JavaScript, Go, Python, Java, Scala, PHP, etc.) https://cloudstate.io[Cloudstate] is a standards effort defining a specification, protocol, and reference implementation, aiming to extend the promise of Serverless and its Developer Experience to general-purpose application development.
+
+Cloudstate builds on and extends the traditional stateless FaaS model, by adding support for long-lived addressable stateful services and a way of accessing mapped well-formed data via https://grpc.io/[gRPC], while allowing for a range of different consistency model—from strong to eventual consistency—based on the nature of the data and how it should be processed, managed, and stored.
+
+You define your data model, choose its consistency mode and resolution method, and access both your data, data-centric operations, streaming pipelines, and events via a well-formed protocol of gRPC command and read channels.
+
+== New use-Cases that Cloudstate enables
+
+As discussed previously, implementing traditional application development, microservices, stateful data pipelines, and general-purpose distributed system problems using stateless functions (FaaS) is very hard to do in a low-latency, performant, reliable way.
+
+Cloudstate is designed to extend the model and make it straightforward to implement use-cases such as:
+
+*   **Training and Serving of Machine Learning Models**
++
+Any use-case that needs to build up, and provide low latency serving of, dynamic models
+*   **Low-latency Real-time Prediction/Recommendation Serving**
+*   **Low-latency Real-time Fraud Detection**
+*   **Low-latency Real-time Anomaly Detection**
+*   **User Session, Shopping Cart, and similar**
++
+Managing in-memory (but potentially durable) session state across the lifecycle of individual requests. A very common use-case, e.g. retail, online gaming, real-time betting, etc.
+*   **Transaction and Workflow Management**
++
+Transactional distributed workflow management, such as the Saga Pattern. Manage each step in the workflow including rollback/compensating actions in the case of failure, while offering options in terms of consistency guarantees.
+*   **Shared Collaborative Workspaces** E.g. Collaborative Document Editing and Chat Rooms.
+*   **Distributed counting, voting, etc.**
+*   **Leader Election, and other distributed systems protocols for coordination**
++
+Trivial to implement with Akka Cluster/Distributed Data, while always coordinating over a distributed storage (such as DynamoDB in the case of Lambda) is too costly, slow, and can become a single point of failure.
+
+The goal of Cloudstate is to provide a way for implementing these use-cases in a scalable and available way, working in concert with the application itself, all the while providing end-to-end correctness, consistency, and safety.
+
+== Design overview
+
+The Cloudstate reference implementation is built on top of Kubernetes, https://cloud.google.com/knative[Knative], https://www.graalvm.org[Graal VM], https://grpc.io[gRPC], and https://akka.io[Akka], with a growing set of client API libraries for different languages. Inbound and outbound communication goes through https://docs.microsoft.com/en-us/azure/architecture/patterns/sidecar#:~:text=Sidecars%20are%20supporting%20processes%20or,fate%20of%20its%20parent%20application[sidecars] over a gRPC channel using a constrained and well-defined protocol, in which the user defines commands in, events in, command replies out, and events out. A gRPC channel is at most one per service/entity, allowing the infrastructure to safely cache entity state in memory in the context of the gRPC stream. Communicating over a gRPC allows the user code to be implemented in different languages (JavaScript, Java, Go, Scala, Python, etc.).
+
+image::ROOT:serving_stateful_functions.png[Serving of polyglot stateful functions]
+
+Each stateful service is backed by an Akka cluster of durable Akka actors (supporting several data models, storage techniques, and databases). The user, however, is shielded from these complexities through a set of sidecars bridging the user code to the backend state and cluster management.
+
+image::ROOT:powered_by_akka_sidecars.png[Powered by gRPC and Akka sidecars]
+
+Managing distributed state isn't just about pushing data from A to B in a reliable fashion. It's about selecting a model that reflects the real world use of the data, and its convergence on usable consistency, not artificially enforced consistency. Being able to have data span clusters, data centers, availability zones, and continents, and maintain a useful coherent state is something that the combination of Kubernetes and Akka excel at. Additionally, repetitive work that is better executed in the stateful cluster, or needs to maintain long-running state can be embedded via command channels.
+
+== What's next
+
+Learn more about xref:working.adoc[Working with Cloudstate].

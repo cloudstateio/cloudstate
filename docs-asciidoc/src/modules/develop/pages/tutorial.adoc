@@ -1,0 +1,3 @@
+= The shopping cart tutorial
+
+include::develop:partial$tutorial.adoc[]

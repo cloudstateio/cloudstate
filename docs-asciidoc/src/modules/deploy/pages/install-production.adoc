@@ -1,0 +1,61 @@
+= Setting up a production cluster
+
+include::ROOT:partial$attributes.adoc[]
+include::ROOT:partial$include.adoc[]
+
+Installing the Cloudstate operator requires cluster admin, so that the necessary Custom Resource Definitions (CRD) can be installed, and the necessary roles and role bindings can be created. Before you install the Cloudstate operator, make sure that you have Kubernetes {minimum-kubernetes-version} or later, and optionally, Istio {minimum-istio-version} or later.
+
+== Operator requirements
+
+The Cloudstate operator typically gets deployed to its own namespace, for the rest of this guide we will assume that is called `cloudstate`, and needs permissions to manage deployments, services, roles and role bindings in every namespace that it manages Cloudstate services in. Cloudstate provides a single deployment descriptor, available from the https://github.com/cloudstateio/cloudstate/releases[Cloudstate GitHub release page].
+
+The deployment descriptor is built from the descriptors found in the https://github.com/cloudstateio/cloudstate/tree/master/operator/deploy[operator `deploy` directory], and can be modified accordingly if, for example, you wish to grant more fine grained access controls.
+
+== Operator configuration
+
+The operator is configured using a `ConfigMap` called `cloudstate-operator-config` deployed to the same namespace as the operator runs in. This config map contains a https://github.com/lightbend/config/blob/master/HOCON.md[HOCON] configuration file.
+
+To edit the operator configuration, once deployed, run:
+
+[source,sh]
+----
+kubectl edit -n cloudstate configmap/cloudstate-operator-config
+----
+
+Changes to the config map will be picked up immediately by the operator, and if necessary, will be applied to all Cloudstate stateful service deployments immediately.
+
+=== Configuring namespaces to watch
+
+The namespaces that the operator should watch are configured using the `cloudstate.operator.watch.namespaces` list. If any of the namespaces in the list is `\*`, then all namespaces will be watched. Otherwise, just the namespaces specified in the list are watched. To watch the namespaces `my-namespace-1` and `my-namespace-2`, it can be configured like so:
+
+[source,hocon]
+----
+cloudstate.operator.watch.namespaces = ["my-namespace-1", "my-namespace-2"]
+----
+
+=== Configuring proxy images
+
+Cloudstate selects a proxy image based on what type of store is being used, if any. To customize the image used for a particular store, for example, to use a custom build, or a different version, these can be modified using `cloudstate.operator.proxy.image.<store-name>`. For example, to use the non-native build of the Cassandra proxy:
+
+[source,hocon,subs="attributes+"]
+----
+cloudstate.operator.proxy.image.cassandra = "cloudstateio/cloudstate-proxy-cassandra:{cloudstate-version}"
+----
+
+== Installing the operator
+
+To install the operator, first create the namespace it is to be deployed to:
+
+[source,sh]
+----
+kubectl create namespace cloudstate
+----
+
+Now install Cloudstate into that namespace:
+
+[subs="attributes+"]
+----
+kubectl apply -n cloudstate -f https://github.com/cloudstateio/cloudstate/releases/download/v{cloudstate-version}/cloudstate-{cloudstate-version}.yaml
+----
+
+You should now be ready to deploy stateful services to Cloudstate.

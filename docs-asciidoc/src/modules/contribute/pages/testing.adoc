@@ -1,0 +1,88 @@
+= Testing
+
+== Testing strategy
+
+=== Compliance Testing
+
+The https://github.com/cloudstateio/cloudstate/blob/master/tck/src/it/resources/application.conf[TCK] makes it possible to verify that combinations of backends and frontends behave as expected. In order to make a frontend eligible for testing in the TCK a sample application, implementing a simple https://github.com/cloudstateio/cloudstate/tree/master/samples/js-shopping-cart[Shopping Cart] (here showcased with the Node.js frontend) is required.
+
+In order to make sure that each individual component performs its duties, and when combined has the expected outcome, the following categories need to be considered.
+
+=== Verification of backend functionality
+
+Answers the question: How do we know that a given backend performs the duties expected of it when paired with a frontend and a user function written for that given backend?
+
+Solution:
+
+Devise a TestKit using one of the frontend implementations which will:
+
+  * Use a preselected frontend implementation
+  * Define a set of user functions
+  * Make calls to those user functions
+  * Verify the results of those interactions with expected outcomes
+  * Mandate a /live and /ready endpoint for all backend implementations
+
+Implementation details:
+
+  * Create an Akka-based frontend implementation
+      - Gives us a Java and a Scala viable frontend implementation
+  * Define invalid user functions for different reasons to verify behavior caused by user error
+  * Define a canonical correctly-behaving user function which exercises the different combinations of interactions expected
+  * Define a set of tests which simulates different types of networking / lag issues
+  * Use the generated client library to call the user function
+
+=== Verification of frontend functionality
+
+Answers the question: How do we know that a given frontend performs the duties expected of it when paired with a backend and a user function written for that given frontend?
+
+Solution:
+
+  * Use the existing backend implementation
+  * Define a canonical set of permutations of gRPC service descriptors
+  * Require each frontend implementation to implement the user functions based on the canonical set of permutations of gRPC service descriptors
+  * Use generated clients from the canonical set of gRPC service descriptors to call the frontend implementation
+  * Verify that the end results are as expected
+
+Implementation details:
+
+=== Managing external dependencies
+
+Answers the question: How do we know which the external dependencies are, and if they are configured properly, and that they are available to perform the duties assigned to them?
+
+Solution:
+
+  * Require that backend implementations are ready when their /ready endpoint says so.
+  * Require that frontend implementations are ready when their ready() gRPC endpoint says so.
+
+Implementation details:
+
+  * Will vary on a per-backend and per-frontend basis
+  * Verify using CI
+
+=== End-to-end testing
+
+Answers the question: How do we know that a given backend, frontend, and user function, we get the expected results when we call the user function?
+
+Solution:
+
+  * Permute backend + frontend combinations + frontend user functions for verification
+  * Verify that calling the verification services' gRPC contract gives the expected outcome—thereby validating that end-to-end communcation works.
+  * Simulate container failures at specific (or even stochastic) points to ensure that operation of the combination is within spec.
+
+Implementation details:
+
+  * None for now
+
+=== User function testing
+
+Answers the question: How does the user test their user functions?
+
+Solution:
+
+  * Implement a TestKit as a part of each frontend user function API
+  * Document how to add such tests, optionally generate a test harness which can be plugged into the builds for that platform.
+
+Implementation details:
+
+  * Will depend on each frontend implementation
+  * API should be idiomatic for each specific platform

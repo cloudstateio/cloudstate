@@ -1,0 +1,18 @@
+= Important concepts
+
+In a traditional n-tier architecture, one tier (an application tier) will invoke another tier (a database tier) to retrieve and manipulate its state. This architectural approach has some challenges that grate with the serverless philosophy:
+
+* The application must be aware of the location of the datastore, what technology is being used, how to talk to it etc.
+* The application is responsible for handling errors associated with managing state, both infrastructure level failures, as well as domain level errors such as concurrent updates and transactions.
+
+Cloudstate inverts this model. The application code does not call out to the state management system, the state management system calls out to the application code. How to access the data, what technology is being used, etc, becomes 100% the domain of the state management system. Data access errors also become the domain of the state management system - user code never has to concern itself with that. Transactional concerns, such as managing concurrent updates, caching, sharding, routing all become a concern of the state management system, not the user code.
+
+In moving state management concerns out of the domain of user code and into the domain of the infrastructure, we can simplify the code that users need to write, allowing more to be automated, and allowing more in depth monitoring to be achieved out of the box.
+
+To put it another way, when inverting state management, application code does not talk to the database, it's more correct to think of it as the database (or rather, the state management system) talks to the application code. The application code does not make a connection or any calls to the database, the state management system connects to the application code as necessary. The application code does not issue queries for the state it needs, the state management system passes state to the application code as needed to handle commands.
+
+The following diagram illustrates how the different components of a Cloudstate system fit together.
+
+image::overview.svg[Diagram showing how different Cloudstate concepts fit together]
+
+For a definition of terms, see the xref:glossary.adoc[Glossary].
