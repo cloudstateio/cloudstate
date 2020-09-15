@@ -317,7 +317,7 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         ),
         env = orig.env ++ List(
             EnvVar(UserPortEnvVar, userPort.toString),
-            EnvVar(MetricPortEnvVar, metricsPort.toString),
+            EnvVar(MetricPortEnvVar, metricsPort.toString)
           ),
         stdin = Some(false),
         tty = Some(false),
