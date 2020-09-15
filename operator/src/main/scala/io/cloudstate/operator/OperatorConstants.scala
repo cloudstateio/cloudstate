@@ -69,6 +69,10 @@ object OperatorConstants {
   final val DefaultUserPort = 8080
   final val UserPortEnvVar = "PORT"
 
+  final val MetricPortName = "metric-port"
+  final val DefaultMetricPort = 9090
+  final val MetricPortEnvVar = "METRICS"
+
   final val KnativeRevisionEnvVar = "K_REVISION"
   final val KnativeConfigruationEnvVar = "K_CONFIGURATION"
   final val KnativeServiceEnvVar = "K_SERVICE"
