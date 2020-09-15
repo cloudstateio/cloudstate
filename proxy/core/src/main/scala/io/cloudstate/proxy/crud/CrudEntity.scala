@@ -311,6 +311,9 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
   override final def receive: PartialFunction[Any, Unit] = waitingForInitState
 
   private def waitingForInitState: PartialFunction[Any, Unit] = {
+    case CrudEntity.LoadInitStateSuccess if inited == true =>
+      // ignore entity already initialized
+
     case CrudEntity.LoadInitStateSuccess =>
       context.become(initialized)
       unstashAll()
