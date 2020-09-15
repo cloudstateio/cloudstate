@@ -158,7 +158,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         decodeWrapped(handler.handleCommand(command("blah"), new MockCommandContext).get) should ===(Wrapped("blah"))
       }
 
-      "reading the state" in {
+      "read state" in {
         val handler = create(
           new {
             @CommandHandler
@@ -174,7 +174,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         decodeWrapped(handler.handleCommand(command("blah"), ctx).get) should ===(Wrapped("blah"))
       }
 
-      "updating the state" in {
+      "update state" in {
         val handler = create(
           new {
             @CommandHandler
@@ -191,7 +191,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         ctx.currentState.get should ===(state("blah state"))
       }
 
-      "deleting the state" in {
+      "delete state" in {
         val handler = create(
           new {
             @CommandHandler
