@@ -1,0 +1,1 @@
+:cloudstate-java-support-version: 0.5.2
