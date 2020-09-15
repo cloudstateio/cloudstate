@@ -4,4 +4,4 @@
 ** xref:crdt.adoc[Conflict-free Replicated Data Types]
 ** xref:effects.adoc[Forwarding and effects]
 ** xref:serialization.adoc[Serialization]
-** link:{attachmentsdir}/api/index.html[JavaScript API docs]
+** xref:api.adoc[JavaScript API docs]
