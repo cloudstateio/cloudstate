@@ -1,0 +1,10 @@
+= Cloudstate JavaScript
+
+Cloudstate offers a straightforward JavaScript API for implementing Cloudstate services.
+
+* xref:getting-started.adoc[Getting started]
+* xref:eventsourced.adoc[Event sourcing]
+* xref:crdt.adoc[Conflict-free Replicated Data Types]
+* xref:effects.adoc[Forwarding and effects]
+* xref:serialization.adoc[Serialization]
+* link:{attachmentsdir}/api/index.html[JavaScript API docs]

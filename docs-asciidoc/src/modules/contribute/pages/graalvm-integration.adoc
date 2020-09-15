@@ -1,10 +1,4 @@
 = GraalVM integration
-:toc:
-:toc-title: ON THIS PAGE
-:toclevels: 2
-:leveloffset: -1
-
-include::ROOT:partial$include.adoc[]
 
 ifdef::review[REVIWEERS: This looks to me like an internal func spec. Is this something OSS contributors need to know?]
 
@@ -12,7 +6,7 @@ By default, we build a GraalVM native image for Linux. This is done inside a Doc
 
 For further information about setting up the build environment, see https://cloudstate.io/docs/core/current/developer/thebuild.html[The Cloudstate Build] documentation.
 
-=== Building the native image
+== Building the native image
 
 If you simply want to run the native image locally, you can use the following command:
 
@@ -51,7 +45,7 @@ This image is a dev mode image, it uses an in memory store, and forms a single c
 
 Substituting `publishLocal` for `publish` will push the docker images to a remote Docker registry, to enable this the `-Ddocker.registry` and `-Ddocker.username` flags must be specified to the `sbt` command.
 
-=== Running the docker image
+== Running the docker image
 
 The docker image can be run by running `docker run cloudstate-proxy-dev-mode`. However, by itself this won't be useful because the container won't be able to locate the user function from its container. If running the user function locally and your platform is Linux, then this can be enabled simply by passing the `--network=host` flag to use the hosts network namespace.
 
@@ -65,11 +59,11 @@ docker run -it --rm --network container:cloudstate --name shopping-cart -e "DEBU
 
 Initially, the Cloudstate container may show errors as it attempts to connect to the shopping-cart user function before it's started. Once running, you can connect to the proxy on port 9000.
 
-=== Building the native image outside of a container
+== Building the native image outside of a container
 
 If you wish to build a Native Image outside of a container, eg because you're using OSX, and you want better performance (since OSX runs Docker in a VM) or you want to run the image locally, then you can follow the following instructions.
 
-=== GraalVM installation
+== GraalVM installation
 
 Switch to GraalVM 19.2.1 as your current JRE, _and_ add its binaries (in /bin) to $PATH. You *MUST* do this otherwise you'll get weird warnings since the GraalVM Substitution mechanism won't work.
 
@@ -100,13 +94,13 @@ Verify that you've added GraalVM correctly by checking that `native-image` is av
   Example:
     export PATH=$GRAALVM_HOME/bin:$PATH
 
-=== LLVM Clang installation
+== LLVM Clang installation
 
 Download and install http://releases.llvm.org/[`clang`].
 Ensure your system is using `clang` as its c compiler, such as with `alternatives` on linux.
 `sudo update-alternatives --install /usr/bin/cc cc /usr/bin/clang 100`
 
-=== Building
+== Building
 
 Switch to GraalVM 19.1.1 as your current JRE, and add its binaries (in /bin) to $PATH. You *MUST* do this otherwise you'll get weird warnings since the GraalVM Substitution mechanism won't work.
 
@@ -138,7 +132,7 @@ sbt "project proxy-cassandra" "set graalVMVersion := None" graalvm-native-image:
 The executable generated is located here:
 *../cloudstate/proxy/core/target/graalvm-native-image/cloudstate-proxy-core*
 
-=== Running a generated executable
+== Running a generated executable
 
 The binary will have to dynamically link to a *SunEC* provider, and needs to source it either from the present working dir, or via the **java.library.path**, this is achieved by passing in the following property when executing the binary:  *-Djava.library.path=<path-to-JRE>/lib*
 

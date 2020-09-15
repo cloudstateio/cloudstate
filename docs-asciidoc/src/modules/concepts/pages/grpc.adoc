@@ -1,9 +1,4 @@
 = gRPC descriptors
-:toc:
-:toc-title: ON THIS PAGE
-:toclevels: 2
-
-include::ROOT:partial$include.adoc[]
 
 Cloudstate entities specify their interfaces using https://grpc.io[gRPC] descriptors. The following example descriptor provides a shopping cart entity. It supports three different commands, `AddItem`, `RemoveItem` and `GetCart`.
 
@@ -48,8 +43,6 @@ message Cart {
     repeated LineItem items = 1;
 }
 ----
-
-
 
 == Specifying the entity key
 

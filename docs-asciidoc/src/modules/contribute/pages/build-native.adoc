@@ -1,9 +1,4 @@
 = Building native images
-:toc:
-:toc-title: ON THIS PAGE
-:toclevels: 2
-
-include::ROOT:partial$include.adoc[]
 
 Cloudstate uses the GraalVM native image compiler to compile native images, to ensure that when a Cloudstate proxy starts due to autoscaling, it is immediately ready to handle load at full capacity, with no classloading or JIT overheads.
 

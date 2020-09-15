@@ -1,0 +1,6 @@
+* xref:index.adoc[Important concepts]
+** xref:glossary.adoc[Glossary]
+** xref:grpc.adoc[gRPC]
+** xref:eventsourced.adoc[Event sourcing]
+** xref:crdts.adoc[Conflict-free replicated data types]
+** xref:effects.adoc[Forwarding and effects]

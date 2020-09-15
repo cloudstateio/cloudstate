@@ -1,0 +1,3 @@
+= JavaScript API docs
+
+The JavaScript API docs can be found link:{attachmentsdir}/api/index.html[here].

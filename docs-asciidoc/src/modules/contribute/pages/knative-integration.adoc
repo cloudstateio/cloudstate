@@ -1,8 +1,4 @@
 = Knative integration
-:toc:
-:toc-title: ON THIS PAGE
-:toclevels: 2
-
 
 ifdef::review[REVIWEERS: This looks to me like an internal func spec. Is this something OSS contributors need to know?]
 
