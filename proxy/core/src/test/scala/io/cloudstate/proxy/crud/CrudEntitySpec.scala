@@ -21,9 +21,11 @@ import io.cloudstate.protocol.crud._
 import io.cloudstate.protocol.entity.{ClientAction, Failure}
 import io.cloudstate.proxy.crud.CrudEntity.{Stop, StreamClosed, StreamFailed}
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
+import org.scalatest.Ignore
 
 import scala.concurrent.duration._
 
+@Ignore
 class CrudEntitySpec extends AbstractCrudEntitySpec {
 
   import AbstractCrudEntitySpec._
