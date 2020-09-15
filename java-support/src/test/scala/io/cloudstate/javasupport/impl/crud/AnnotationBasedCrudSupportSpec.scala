@@ -45,13 +45,14 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
     override def entityId(): String = "foo"
   }
 
-  class MockCommandContext extends CommandContext[JavaPbAny] with BaseContext {
-    var action: Option[JavaPbAny] = None
-    override def commandName(): String = "AddItem"
+  class MockCommandContext(override val commandName: String = "AddItem", state: Option[JavaPbAny] = None)
+      extends CommandContext[JavaPbAny]
+      with BaseContext {
+    var currentState: Option[JavaPbAny] = state
     override def commandId(): Long = 20
-    override def getState(): Optional[JavaPbAny] = action.asJava
-    override def updateState(state: JavaPbAny): Unit = action = Some(state)
-    override def deleteState(): Unit = action = None
+    override def getState(): Optional[JavaPbAny] = currentState.asJava
+    override def updateState(newState: JavaPbAny): Unit = currentState = Some(newState)
+    override def deleteState(): Unit = currentState = None
     override def entityId(): String = "foo"
     override def fail(errorMessage: String): RuntimeException = ???
     override def forward(to: ServiceCall): Unit = ???
@@ -75,10 +76,10 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
   case class Wrapped(value: String)
 
   val anySupport = new AnySupport(Array(Shoppingcart.getDescriptor), this.getClass.getClassLoader)
-  val descriptor = Shoppingcart.getDescriptor
-    .findServiceByName("ShoppingCart")
-    .findMethodByName("AddItem")
-  val method = ResolvedServiceMethod(descriptor, StringResolvedType, WrappedResolvedType)
+  val serviceDescriptor = Shoppingcart.getDescriptor.findServiceByName("ShoppingCart")
+
+  def method(name: String = "AddItem") =
+    ResolvedServiceMethod(serviceDescriptor.findMethodByName(name), StringResolvedType, WrappedResolvedType)
 
   def create(behavior: AnyRef, methods: ResolvedServiceMethod[_, _]*) =
     new AnnotationBasedCrudSupport(behavior.getClass,
@@ -130,7 +131,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         val handler = create(new {
           @CommandHandler
           def addItem() = Wrapped("blah")
-        }, method)
+        }, method())
         decodeWrapped(handler.handleCommand(command("nothing"), new MockCommandContext).get) should ===(Wrapped("blah"))
       }
 
@@ -138,7 +139,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         val handler = create(new {
           @CommandHandler
           def addItem(msg: String) = Wrapped(msg)
-        }, method)
+        }, method())
         decodeWrapped(handler.handleCommand(command("blah"), new MockCommandContext).get) should ===(Wrapped("blah"))
       }
 
@@ -152,7 +153,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
               Wrapped(msg)
             }
           },
-          method
+          method()
         )
         decodeWrapped(handler.handleCommand(command("blah"), new MockCommandContext).get) should ===(Wrapped("blah"))
       }
@@ -161,17 +162,16 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
         val handler = create(
           new {
             @CommandHandler
-            def addItem(msg: String, ctx: CommandContext[JavaPbAny]): Wrapped = {
-              ctx.updateState(state(msg + " state"))
-              ctx.commandName() should ===("AddItem")
+            def getCart(msg: String, ctx: CommandContext[JavaPbAny]): Wrapped = {
+              ctx.getState().asScala.get.asInstanceOf[String] should ===("state")
+              ctx.commandName() should ===("GetCart")
               Wrapped(msg)
             }
           },
-          method
+          method("GetCart")
         )
-        val ctx = new MockCommandContext
+        val ctx = new MockCommandContext("GetCart", Some(state("state")))
         decodeWrapped(handler.handleCommand(command("blah"), ctx).get) should ===(Wrapped("blah"))
-        ctx.getState().get should ===(state("blah state"))
       }
 
       "updating the state" in {
@@ -184,11 +184,28 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
               Wrapped(msg)
             }
           },
-          method
+          method()
         )
         val ctx = new MockCommandContext
         decodeWrapped(handler.handleCommand(command("blah"), ctx).get) should ===(Wrapped("blah"))
-        ctx.action.get should ===(state("blah state"))
+        ctx.currentState.get should ===(state("blah state"))
+      }
+
+      "deleting the state" in {
+        val handler = create(
+          new {
+            @CommandHandler
+            def removeCart(msg: String, ctx: CommandContext[JavaPbAny]): Wrapped = {
+              ctx.deleteState()
+              ctx.commandName() should ===("RemoveCart")
+              Wrapped(msg)
+            }
+          },
+          method("RemoveCart")
+        )
+        val ctx = new MockCommandContext("RemoveCart")
+        decodeWrapped(handler.handleCommand(command("blah"), ctx).get) should ===(Wrapped("blah"))
+        ctx.currentState should ===(None)
       }
 
       "fail if there's a bad context type" in {
@@ -196,7 +213,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
           @CommandHandler
           def addItem(msg: String, ctx: BaseContext) =
             Wrapped(msg)
-        }, method)
+        }, method())
       }
 
       "fail if there's two command handlers for the same command" in {
@@ -207,7 +224,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
           @CommandHandler
           def addItem(msg: String) =
             Wrapped(msg)
-        }, method)
+        }, method())
       }
 
       "fail if there's no command with that name" in {
@@ -215,14 +232,14 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
           @CommandHandler
           def wrongName(msg: String) =
             Wrapped(msg)
-        }, method)
+        }, method())
       }
 
       "unwrap exceptions" in {
         val handler = create(new {
           @CommandHandler
           def addItem(): Wrapped = throw new RuntimeException("foo")
-        }, method)
+        }, method())
         val ex = the[RuntimeException] thrownBy handler.handleCommand(command("nothing"), new MockCommandContext)
         ex.getMessage should ===("foo")
       }
@@ -232,7 +249,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
             @io.cloudstate.javasupport.crdt.CommandHandler
             def addItem(msg: String) =
               Wrapped(msg)
-          }, method)
+          }, method())
         ex.getMessage should include("Did you mean")
         ex.getMessage should include(classOf[CommandHandler].getName)
       }
@@ -242,7 +259,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
             @io.cloudstate.javasupport.eventsourced.CommandHandler
             def addItem(msg: String) =
               Wrapped(msg)
-          }, method)
+          }, method())
         ex.getMessage should include("Did you mean")
         ex.getMessage should include(classOf[CommandHandler].getName)
       }

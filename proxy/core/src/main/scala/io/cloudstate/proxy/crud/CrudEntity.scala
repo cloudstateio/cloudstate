@@ -312,7 +312,7 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
 
   private def waitingForInitState: PartialFunction[Any, Unit] = {
     case CrudEntity.LoadInitStateSuccess if inited == true =>
-      // ignore entity already initialized
+    // ignore entity already initialized
 
     case CrudEntity.LoadInitStateSuccess =>
       context.become(initialized)
