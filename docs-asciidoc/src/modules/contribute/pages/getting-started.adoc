@@ -1,9 +1,4 @@
 = Getting started
-:toc:
-:toc-title: ON THIS PAGE
-:toclevels: 2
-
-include::ROOT:partial$include.adoc[]
 
 The Cloudstate Build uses `sbt` as its build tool.
 

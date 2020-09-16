@@ -1,0 +1,5 @@
+{
+  "ignorePatterns": [
+    { "pattern": "^http://maven\\.apache\\.org/POM" }
+  ]
+}

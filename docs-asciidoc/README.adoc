@@ -2,9 +2,6 @@
 
 Build the docs using the Makefile:
 
-Be sure that you have `npm` installed on your system.
-
-https://www.npmjs.com/get-npm
 ....
 make build
 ....
@@ -12,7 +9,7 @@ make build
 Open the docs index page:
 
 ....
-open build/site/docs/current/index.html
+open build/site/index.html
 ....
 
 Or build and serve locally:
@@ -21,7 +18,7 @@ Or build and serve locally:
 make preview
 ....
 
-Browse at http://localhost:8000/docs/current/
+Browse at http://localhost:8000
 
 Build in author mode and serve locally with:
 

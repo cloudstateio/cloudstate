@@ -1,3 +1,0 @@
-// The content for this page is shared across many repositories
-
-Cloudstate offers a straight forward JavaScript API for implements stateful service entities.

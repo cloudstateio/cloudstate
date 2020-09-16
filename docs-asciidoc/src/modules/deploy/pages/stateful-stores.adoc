@@ -42,10 +42,6 @@ spec:
 
 == Available stores
 
-
 * xref:cassandra.adoc[Apache Cassandra]
 * xref:postgresql.adoc[PostgreSQL]
 * xref:inmemory.adoc[In memory]
-
-
-

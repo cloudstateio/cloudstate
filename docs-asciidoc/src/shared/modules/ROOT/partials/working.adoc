@@ -1,0 +1,44 @@
+Cloudstate provides a good developer experience by implementing the low level details that allow you to focus on your business logic. When using Cloudstate open source, you need to provide your own Kubernetes environment and provision Cloudstate to run in it. Lightbend also provides a https://www.lightbend.com/akka-serverless[Cloudstate service] that manages the Kubernetes environment for you.
+
+This page introduces the basics of working with Cloudstate open source.
+
+== Use the programming language of choice
+
+Cloudstate uses https://grpc.io/[gRPC], which is not tied to any programming language, for communication between services. Cloudstate includes connectors to gRPC for a growing number of programming languages.  And, any language with reasonable support for gRPC can have a connector written for it in short order. If you don't see your chosen language, don't be concerned, just let us know, it may already be in the works!
+
+Currently, Cloudstate supports:
+
+* Dart
+* Go
+* Java
+* Javascript
+* Kotlin
+
+To write your Cloudstate services, you of course will need to know how to code in your chosen language. However, you will not need to learn a substantially different paradigm for using that language: The API for Cloudstate itself is short and straightfoward. And, you won't need anything else to be productive, unlike many other platforms that have a long and steep learning curve. See the  https://cloudstate.io/docs/core/current/user/lang/java/api/index.html[Javadoc, window="javadoc"] for the API as an example.
+
+== Cloudstate projects
+
+ifdef::review[REVIEWERS: later pages refer to a collection of services as an application. Should we connect the dots here to say that a project's services can be thought of as an application?]
+
+A Cloudstate project contains one or more _services_ that can be deployed, which can all communicate with each other. Services in different projects cannot directly call each other except through defined ingresses.
+
+== Cloudstate services
+
+Cloudstate services contain your business logic. Each service is a unit of functionality that (typically) relates to a single entity and can consume and operate on various messages relating to that entity. For instance, a `shopping cart` entity might have messages that operate on it such as `addItem`, `removeItem` and `getCart`. A Cloudstate project can contain multiple services.
+
+A Cloudstate service looks like this:
+
+image::ROOT:high-level-design.svg[]
+
+* **Ingress** - This can be Istio, Knative, or just regular ClusterIP service communication in Kubernetes. Whatever service approach is used, Cloudstate expects traffic to be load balanced across its pods randomly and evenly.
+* **Akka Sidecar** - This sidecar is injected by the Cloudstate operator. All requests go through it. The sidecars of a single Cloudstate service form a cluster, communicating directly with each other using Akka remoting. This cluster, and the communication links between the sidecars, allows for sharding and replication of state, along with addressed P2P messaging between pods.
+* **Code** - This is the function implemented by the developer. It can be written in any language that supports gRPC. The Akka sidecars communicate with the user functions using a predefined gRPC protocol. This protocol carries both incoming requests and outgoing responses, as well as messages conveying the current state of the system. Typically, Cloudstate will provide support libraries for each language that adapt the gRPC protocol to an idiomatic API for that language.
+* **Distributed Datastore** - When a service needs to persist state (such as when implementing Event Sourced entities), this state will be persisted to a distributed datastore. It is important to note, the user code does not interact directly with the datastore - it interacts with the Akka sidecars, and the Akka sidecars communicate with the datastore. This way, all database communication can be directly managed and monitored by the Akka sidecar. And since this is done through the provision of high level patterns, assumptions can be made that allow the sidecars to safely cache, shard, and replicate data across the cluster.
+
+== The Cloudstate development process
+
+TBW.
+
+== What's next
+
+After verifying xref:develop:prerequisites.adoc[Prerequisites] and xref:develop:install.adoc[Installing Cloudstate], we recommend that you start with a xref:develop:tutorial.adoc[Tutorial] to learn Cloudstate basics.

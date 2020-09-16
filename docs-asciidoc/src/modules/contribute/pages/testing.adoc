@@ -1,9 +1,5 @@
 = Testing
-:toc:
-:toc-title: ON THIS PAGE
-:toclevels: 2
 
-include::ROOT:partial$include.adoc[]
 == Testing strategy
 
 === Compliance Testing

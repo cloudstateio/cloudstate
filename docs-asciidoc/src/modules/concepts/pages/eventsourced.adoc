@@ -1,9 +1,4 @@
 = Event sourcing
-:toc:
-:toc-title: ON THIS PAGE
-:toclevels: 2
-
-include::ROOT:partial$include.adoc[]
 
 Event sourcing is a method of persistence that offers ACID semantics, with horizontal scaling across entities and failure isolation.
 
@@ -67,5 +62,6 @@ so that their entity instances don't conflict.
 
 For detailed documentation on implementing event sourced entities in your favourite language, follow the links below:
 
-* xref:java:eventsourced.adoc[Implementing event sourced entities] in Java
-* xref:javascript:eventsourced.adoc[Implementing event sourced entities] in Javascript
+// note: links rather than xrefs for building without these modules
+* link:../java/eventsourced.html[Implementing event sourced entities] in Java
+* link:../javascript/eventsourced.html[Implementing event sourced entities] in Javascript

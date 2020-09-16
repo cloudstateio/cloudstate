@@ -1,14 +1,6 @@
 = Glossary
-:toc:
-:toc-title: ON THIS PAGE
-:toclevels: 2
 
-include::ROOT:partial$include.adoc[]
-
-
-
-
-ifdef::todo[The following need to be arranged so they can be digested more easily. Maybe alphabetically with a list with links above them?]
+ifdef::todo[TODO: The following need to be arranged so they can be digested more easily. Maybe alphabetically with a list with links above them?]
 
 == Stateful service
 

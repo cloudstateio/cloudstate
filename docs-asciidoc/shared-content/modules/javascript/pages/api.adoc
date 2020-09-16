@@ -1,1 +1,0 @@
-The Javascript API docs can be found link:api/index.html[here].

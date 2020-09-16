@@ -13,4 +13,3 @@ your data is gone.
 This is basically *never* what you want in production. So why have it?
 
 As we hinted above, InMemory is valuable for running locally. There is no need do so some things, and it puts far less load on your local system.
-

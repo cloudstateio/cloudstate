@@ -71,6 +71,7 @@
     }
   },
   "scripts": {
+    "print-version": "echo $npm_package_version",
     "watch-jsdoc": "npm-watch jsdoc",
     "jsdoc": "jsdoc -c jsdoc.json",
     "test": "mocha --recursive",

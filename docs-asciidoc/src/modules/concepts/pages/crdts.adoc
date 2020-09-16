@@ -1,9 +1,4 @@
 = Conflict-free Replicated Data Types
-:toc:
-:toc-title: ON THIS PAGE
-:toclevels: 2
-
-include::ROOT:partial$include.adoc[]
 
 Conflict-free Replicated Data Types (CRDTs) are data structures that can be used to support highly available and scalable sharing of state in a distributed system. A CRDTs state is replicated to every node in the system. Each node can read and update the CRDT, without requiring any coordination from other nodes. If two or more nodes modify the CRDT concurrently, the modifications can be merged together, and the CRDT guarantees that eventually, all nodes will agree on what the current state of that CRDT is.
 

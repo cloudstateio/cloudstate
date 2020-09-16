@@ -1,76 +1,62 @@
 # Make Cloudstate documentation
 
-antora_version      := 2.3.3
-antora_docker_image := cloudstateio/cloudstate-antora
+module   := core
+upstream := cloudstateio/cloudstate
+branch   := docs/current
+sources  := src src/shared build/src/managed
 
-docs_dir  := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
-root_dir  := ${docs_dir}/..
-build_dir := ${docs_dir}/build
-site_dir  := ${build_dir}/site
-base_dir  := /antora/$(shell basename ${docs_dir})
+cloudstate_antora := .cache/bin/cloudstate-antora
 
-build: clean validate-xrefs html apidocs print-site
+.SILENT:
 
-build-author-mode: clean validate-xrefs html-author-mode apidocs print-site
+build: clean managed validate html
 
-clean:
-	rm -rf ${build_dir}
+install:
+	[ -f ${cloudstate_antora} ] || ( \
+		mkdir -p .cache/bin ;\
+		curl -Lo ${cloudstate_antora} https://github.com/cloudstateio/cloudstate-antora/raw/master/cloudstate-antora ;\
+		chmod +x ${cloudstate_antora} )
 
-html:
-	docker run \
-		-u $(shell id -u):$(shell id -g) \
-		-v ${root_dir}:/antora \
-		--rm \
-		--entrypoint /bin/sh \
-		-t ${antora_docker_image}:${antora_version} \
-		-c "cd ${base_dir} && antora --cache-dir=.cache/antora --stacktrace site.yml"
+clean-cache:
+	rm -rf .cache
 
-html-author-mode:
-	docker run \
-		-u $(shell id -u):$(shell id -g) \
-		-v ${root_dir}:/antora \
-		--rm \
-		--entrypoint /bin/sh \
-		-t ${antora_docker_image}:${antora_version} \
-		-c "cd ${base_dir} && antora --cache-dir=.cache/antora --stacktrace author-mode-site.yml"
+update: clean-cache install
 
-apidocs:
-	cd ${root_dir} && sbt java-support/doc
-	cp -r ${root_dir}/java-support/target/api ${site_dir}/docs/current/java/api
-	cd ${root_dir}/node-support && npm i
-	npm i -g jsdoc
-	cd ${root_dir}/node-support && npm run jsdoc
-	cp -r ${root_dir}/node-support/apidocs ${site_dir}/docs/current/javascript/api
+clean: install
+	${cloudstate_antora} clean
 
-validate-xrefs:
-	docker run \
-		-v ${root_dir}:/antora \
-		--rm \
-		--entrypoint /bin/sh \
-		-t ${antora_docker_image}:${antora_version} \
-		-c 'cd ${base_dir} && NODE_PATH="$$(npm -g root)" antora --generator @antora/xref-validator site.yml'
+managed: attributes
+	mkdir -p build/src/managed
+	cp src/antora.yml build/src/managed/antora.yml
 
-# Note: variable substitution in links is not currently supported: https://github.com/gaurav-nelson/asciidoc-link-check/issues/16
-validate-links:
-	docker run \
-		-v ${root_dir}:/antora \
-		--rm \
-		--entrypoint /bin/sh \
-		-t ${antora_docker_image}:${antora_version} \
-		-c "find ${base_dir} -name '*.adoc' -print0 | xargs -0 -n1 asciidoc-link-check --progress -c ${base_dir}/asciidoc-link-check-config.json"
+attributes: install
+	mkdir -p build/src/managed/modules/ROOT/partials
+	${cloudstate_antora} version | xargs -0  printf ":cloudstate-version: %s" \
+		> build/src/managed/modules/ROOT/partials/attributes.adoc
 
-print-site:
-	@echo
-	@echo "Cloudstate documentation: ${site_dir}"
+descriptor: install
+	mkdir -p build
+	${cloudstate_antora} source --preview --upstream ${upstream} ${sources} > build/source.yml
+
+validate: descriptor
+	${cloudstate_antora} validate --site-from build/source.yml
+
+html: descriptor
+	${cloudstate_antora} build --site-from build/source.yml
 
 preview: build
-	@echo
-	@echo "Cloudstate documentation: http://localhost:8000/docs/current/"
-	@echo
-	python3 -m http.server --directory ${site_dir}
+	${cloudstate_antora} preview
+
+build-author-mode: clean managed validate html-author-mode
+
+html-author-mode: descriptor
+	${cloudstate_antora} build --author-mode --site-from build/source.yml
 
 preview-author-mode: build-author-mode
-	@echo
-	@echo "Cloudstate documentation: http://localhost:8000/docs/current/"
-	@echo
-	python3 -m http.server --directory ${site_dir}
+	${cloudstate_antora} preview
+
+validate-links: install
+	${cloudstate_antora} validate --no-xrefs --links --links-config config/validate-links.json
+
+deploy: clean managed
+	${cloudstate_antora} deploy --module ${module} --upstream ${upstream} --branch ${branch} ${sources}
