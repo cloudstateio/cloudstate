@@ -1,0 +1,5 @@
+= Implementing in Go
+
+Information on implementing Cloudstate services in Go is published at:
+
+https://cloudstate.io/old/docs/go/current/

@@ -38,12 +38,12 @@ private[impl] trait AbstractEffectContext extends EffectContext {
 
   override final def effect(effect: ServiceCall, synchronous: Boolean): Unit = {
     checkActive()
-    SideEffect(
-      serviceName = effect.ref().method().getService.getFullName,
-      commandName = effect.ref().method().getName,
-      payload = Some(ScalaPbAny.fromJavaProto(effect.message())),
-      synchronous = synchronous
-    ) :: effects
+    effects = SideEffect(
+        serviceName = effect.ref().method().getService.getFullName,
+        commandName = effect.ref().method().getName,
+        payload = Some(ScalaPbAny.fromJavaProto(effect.message())),
+        synchronous = synchronous
+      ) :: effects
   }
 
   final def sideEffects: List[SideEffect] = effects.reverse

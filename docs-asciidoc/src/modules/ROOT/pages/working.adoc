@@ -1,0 +1,3 @@
+= Working with Cloudstate
+
+include::ROOT:partial$working.adoc[]

@@ -1,0 +1,3 @@
+= Architecture
+
+include::ROOT:partial$architecture.adoc[]

@@ -1,0 +1,4 @@
+= Current limitations of Serverless platforms
+
+include::ROOT:partial$stateless-limitations.adoc[]
+

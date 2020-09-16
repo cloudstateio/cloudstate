@@ -1,0 +1,10 @@
+= Implementing in Java
+
+Cloudstate offers an idiomatic, annotation based Java support library for writing stateful services. Before you attempt to write your first service in Java, we recommend that you understand Cloudstate concepts and terminology. We also suggest that you work through one of the tutorials first.
+
+* xref:getting-started.adoc[Getting started]
+* xref:eventsourced.adoc[Event sourcing]
+* xref:crdt.adoc[Conflict-free Replicated Data Types]
+* xref:effects.adoc[Forwarding and effects]
+* xref:serialization.adoc[Serialization]
+* link:{attachmentsdir}/api/index.html[Java API docs]

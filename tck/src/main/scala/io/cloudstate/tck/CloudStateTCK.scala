@@ -16,488 +16,620 @@
 
 package io.cloudstate.tck
 
-import akka.NotUsed
-import akka.actor.{ActorSystem, Scheduler}
-import akka.grpc.GrpcClientSettings
-import akka.http.scaladsl.Http
-import akka.http.scaladsl.Http.ServerBinding
-import akka.http.scaladsl.model._
-import akka.http.scaladsl.unmarshalling._
-import akka.pattern.after
-import akka.stream.ActorMaterializer
-import akka.stream.scaladsl.{Sink, Source}
-import akka.testkit.TestProbe
+import akka.actor.ActorSystem
+import akka.grpc.ServiceDescription
+import akka.testkit.TestKit
+import com.example.shoppingcart.persistence.domain
 import com.example.shoppingcart.shoppingcart._
-import com.google.protobuf.empty.Empty
-import com.google.protobuf.{ByteString => ProtobufByteString}
+import com.google.protobuf.DescriptorProtos
+import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.typesafe.config.{Config, ConfigFactory}
-import io.cloudstate.protocol.entity._
+import io.cloudstate.protocol.crdt.Crdt
 import io.cloudstate.protocol.event_sourced._
-import org.scalatest._
-
+import io.cloudstate.protocol.function.StatelessFunction
+import io.cloudstate.testkit.InterceptService.InterceptorSettings
+import io.cloudstate.testkit.eventsourced.{EventSourcedMessages, InterceptEventSourcedService}
+import io.cloudstate.testkit.{InterceptService, ServiceAddress, TestClient, TestProtocol}
+import io.grpc.StatusRuntimeException
+import io.cloudstate.tck.model.eventsourced.{EventSourcedTckModel, EventSourcedTwo}
+import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
+import scala.collection.mutable
 import scala.concurrent.duration._
-import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.util.Try
 
 object CloudStateTCK {
-  final case class Address(hostname: String, port: Int)
-  final case class Settings(tck: Address, proxy: Address, frontend: Address)
+  final case class Settings(tck: ServiceAddress, proxy: ServiceAddress, service: ServiceAddress)
 
   object Settings {
     def fromConfig(config: Config): Settings = {
       val tckConfig = config.getConfig("cloudstate.tck")
       Settings(
-        Address(tckConfig.getString("hostname"), tckConfig.getInt("port")),
-        Address(tckConfig.getString("proxy.hostname"), tckConfig.getInt("proxy.port")),
-        Address(tckConfig.getString("frontend.hostname"), tckConfig.getInt("frontend.port"))
+        ServiceAddress(tckConfig.getString("hostname"), tckConfig.getInt("port")),
+        ServiceAddress(tckConfig.getString("proxy.hostname"), tckConfig.getInt("proxy.port")),
+        ServiceAddress(tckConfig.getString("service.hostname"), tckConfig.getInt("service.port"))
       )
     }
   }
-
-  final val noWait = 0.seconds
-
-  // FIXME add interception to enable asserting exchanges
-  final class EventSourcedInterceptor(val client: EventSourcedClient,
-                                      val fromBackend: TestProbe,
-                                      val fromFrontend: TestProbe)(implicit ec: ExecutionContext)
-      extends EventSourced {
-
-    private final val fromBackendInterceptor = Sink.actorRef[AnyRef](fromBackend.ref, "BACKEND_TERMINATED")
-    private final val fromFrontendInterceptor = Sink.actorRef[AnyRef](fromFrontend.ref, "FRONTEND_TERMINATED")
-
-    override def handle(in: Source[EventSourcedStreamIn, NotUsed]): Source[EventSourcedStreamOut, NotUsed] =
-      client.handle(in.alsoTo(fromBackendInterceptor)).alsoTo(fromFrontendInterceptor)
-  }
-
-  // FIXME add interception to enable asserting exchanges
-  final class EntityDiscoveryInterceptor(val client: EntityDiscoveryClient,
-                                         val fromBackend: TestProbe,
-                                         val fromFrontend: TestProbe)(implicit ec: ExecutionContext)
-      extends EntityDiscovery {
-    import scala.util.{Failure, Success}
-
-    override def discover(info: ProxyInfo): Future[EntitySpec] = {
-      fromBackend.ref ! info
-      client.discover(info).andThen {
-        case Success(es) => fromFrontend.ref ! es
-        case Failure(f) =>
-          // If a failure occurs during discovery, don't record it. The proxy will continue retrying until it
-          // succeeds.
-          //fromFrontend.ref ! f
-          println(s"[warn] TCK: Intercepted discovery call failed: $f")
-      }
-    }
-
-    override def reportError(error: UserFunctionError): Future[Empty] = {
-      fromBackend.ref ! error
-      client.reportError(error).andThen {
-        case Success(e) => fromFrontend.ref ! e
-        case Failure(f) => fromFrontend.ref ! f
-      }
-    }
-  }
-
-  def attempt[T](op: => Future[T], delay: FiniteDuration, retries: Int)(implicit ec: ExecutionContext,
-                                                                        s: Scheduler): Future[T] =
-    Future.unit.flatMap(_ => op) recoverWith {
-      case _ if retries > 0 => after(delay, s)(attempt(op, delay, retries - 1))
-    }
-
-  final val proxyInfo = ProxyInfo(
-    protocolMajorVersion = 0,
-    protocolMinorVersion = 1,
-    proxyName = "TCK",
-    proxyVersion = "0.1",
-    supportedEntityTypes = Seq(EventSourced.name)
-  )
 }
 
 class ConfiguredCloudStateTCK extends CloudStateTCK(CloudStateTCK.Settings.fromConfig(ConfigFactory.load()))
 
 class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
-    extends AsyncWordSpec
+    extends WordSpec
     with MustMatchers
-    with BeforeAndAfterAll {
-  import CloudStateTCK._
+    with BeforeAndAfterAll
+    with ScalaFutures {
 
   def this(settings: CloudStateTCK.Settings) = this("", settings)
 
   private[this] final val system = ActorSystem("CloudStateTCK", ConfigFactory.load("tck"))
-  private[this] final val mat = ActorMaterializer()(system)
-  private[this] final val discoveryFromBackend = TestProbe("discoveryFromBackend")(system)
-  private[this] final val discoveryFromFrontend = TestProbe("discoveryFromFrontend")(system)
-  private[this] final val eventSourcedFromBackend = TestProbe("eventSourcedFromBackend")(system)
-  private[this] final val eventSourcedFromFrontend = TestProbe("eventSourcedFromFrontend")(system)
-  @volatile private[this] final var shoppingClient: ShoppingCartClient = _
-  @volatile private[this] final var entityDiscoveryClient: EntityDiscoveryClient = _
-  @volatile private[this] final var eventSourcedClient: EventSourcedClient = _
-  @volatile private[this] final var tckProxy: ServerBinding = _
 
-  def buildTCKProxy(entityDiscovery: EntityDiscovery, eventSourced: EventSourced): Future[ServerBinding] = {
-    implicit val s = system
-    implicit val m = mat
-    Http().bindAndHandleAsync(
-      handler = EntityDiscoveryHandler.partial(entityDiscovery) orElse EventSourcedHandler.partial(eventSourced),
-      interface = settings.tck.hostname,
-      port = settings.tck.port
-    )
-  }
+  private[this] final val client = TestClient(settings.proxy.host, settings.proxy.port)
+  private[this] final val shoppingCartClient = ShoppingCartClient(client.settings)(system)
 
-  override def beforeAll(): Unit = {
-    val clientSettings =
-      GrpcClientSettings.connectToServiceAt(settings.frontend.hostname, settings.frontend.port)(system).withTls(false)
+  private[this] final val protocol = TestProtocol(settings.service.host, settings.service.port)
 
-    val edc = EntityDiscoveryClient(clientSettings)(system)
+  @volatile private[this] final var interceptor: InterceptService = _
+  @volatile private[this] final var enabledServices = Seq.empty[String]
 
-    entityDiscoveryClient = edc
+  override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = 3.seconds, interval = 100.millis)
 
-    val esc = EventSourcedClient(clientSettings)(system)
-
-    eventSourcedClient = esc
-
-    val tp = Await.result(
-      buildTCKProxy(
-        new EntityDiscoveryInterceptor(edc, discoveryFromBackend, discoveryFromFrontend),
-        new EventSourcedInterceptor(esc, eventSourcedFromBackend, eventSourcedFromFrontend)(system.dispatcher)
-      ),
-      10.seconds
-    )
-
-    tckProxy = tp
-
-    // Wait for the frontend to come up before starting the backend, otherwise the discovery call from the backend,
-    // if it happens before the frontend starts, will cause the proxy probes to have failures in them
-    Await.ready(attempt(entityDiscoveryClient.discover(proxyInfo), 4.seconds, 10)(system.dispatcher, system.scheduler),
-                1.minute)
-
-    val sc = ShoppingCartClient(
-      GrpcClientSettings.connectToServiceAt(settings.proxy.hostname, settings.proxy.port)(system).withTls(false)
-    )(system)
-
-    shoppingClient = sc
-  }
+  override def beforeAll(): Unit =
+    interceptor = new InterceptService(InterceptorSettings(bind = settings.tck, intercept = settings.service))
 
   override def afterAll(): Unit =
-    try Option(shoppingClient).foreach(c => Await.result(c.close(), 10.seconds))
-    finally try Seq(entityDiscoveryClient, eventSourcedClient).foreach(c => Await.result(c.close(), 10.seconds))
-    finally Await.ready(tckProxy.unbind().transformWith(_ => system.terminate())(system.dispatcher), 30.seconds)
+    try shoppingCartClient.close().futureValue
+    finally try client.terminate()
+    finally try protocol.terminate()
+    finally interceptor.terminate()
 
-  final def fromFrontend_expectEntitySpec(within: FiniteDuration): EntitySpec =
-    withClue("EntitySpec was not received, or not well-formed: ") {
-      val spec = discoveryFromFrontend.expectMsgType[EntitySpec](within)
-      spec.proto must not be ProtobufByteString.EMPTY
-      spec.entities must not be empty
-      spec.entities.head.serviceName must not be empty
-      spec.entities.head.persistenceId must not be empty
-      // fixme event sourced?
-      spec.entities.head.entityType must not be empty
-      spec
-    }
+  def expectProxyOnline(): Unit =
+    TestKit.awaitCond(client.http.probe(), max = 10.seconds)
 
-  final def fromBackend_expectInit(within: FiniteDuration): EventSourcedInit =
-    withClue("Init message was not received, or not well-formed: ") {
-      val init = eventSourcedFromBackend.expectMsgType[EventSourcedStreamIn](noWait)
-      init must not be (null)
-      init.message must be('init)
-      init.message.init must be(defined)
-      init.message.init.get
-    }
-
-  final def fromBackend_expectCommand(within: FiniteDuration): Command =
-    withClue("Command was not received, or not well-formed: ") {
-      val command = eventSourcedFromBackend.expectMsgType[EventSourcedStreamIn](noWait)
-      command must not be (null) // FIXME validate Command
-      command.message must be('command)
-      command.message.command must be(defined)
-      val c = command.message.command.get
-      c.entityId must not be (empty)
-      c
-    }
-
-  final def fromFrontend_expectReply(events: Int, within: FiniteDuration): EventSourcedReply =
-    withClue("Reply was not received, or not well-formed: ") {
-      val reply = eventSourcedFromFrontend.expectMsgType[EventSourcedStreamOut](noWait)
-      reply must not be (null)
-      reply.message must be('reply)
-      reply.message.reply must be(defined)
-      val r = reply.message.reply.get
-      r.clientAction must be(defined)
-      val clientAction = r.clientAction.get
-      clientAction.action must be('reply)
-      clientAction.action.reply must be('defined)
-      withClue("Reply did not have the expected number of events: ") { r.events.size must be(events) }
-      r
-    }
-
-  final def fromFrontend_expectActionFailure(within: FiniteDuration): Failure =
-    withClue("Failure was not received, or not well-formed: ") {
-      val failure = eventSourcedFromFrontend.expectMsgType[EventSourcedStreamOut](noWait)
-      failure must not be (null)
-      failure.message must be('reply)
-      failure.message.reply must be(defined)
-      failure.message.reply.get.clientAction must be(defined)
-      val clientAction = failure.message.reply.get.clientAction.get
-      clientAction.action must be('failure)
-      clientAction.action.failure must be('defined)
-      clientAction.action.failure.get
-    }
-
-  final def correlate(cmd: Command, commandId: Long) = withClue("Command had the wrong id: ") {
-    cmd.id must be(commandId)
-  }
-  final def unrelated(cmd: Command, commandId: Long) = withClue("Command had the wrong id: ") {
-    cmd.id must not be commandId
+  def testFor(services: ServiceDescription*)(test: => Any): Unit = {
+    val enabled = services.map(_.name).forall(enabledServices.contains)
+    if (enabled) test else pending
   }
 
-  ("Cloudstate TCK " + description) must {
-    implicit val scheduler = system.scheduler
+  ("Cloudstate TCK " + description) when {
 
-    "verify that the user function process responds" in {
-      attempt(entityDiscoveryClient.discover(proxyInfo), 4.seconds, 10) map { spec =>
-        spec.proto must not be ProtobufByteString.EMPTY
-        spec.entities must not be empty
-        spec.entities.head.serviceName must not be empty
-        spec.entities.head.persistenceId must not be empty
+    "verifying discovery protocol" must {
+      "verify proxy info and entity discovery" in {
+        import scala.jdk.CollectionConverters._
+
+        expectProxyOnline()
+
+        val discovery = interceptor.expectEntityDiscovery()
+
+        val info = discovery.expectProxyInfo()
+
+        info.protocolMajorVersion mustBe 0
+        info.protocolMinorVersion mustBe 1
+
+        info.supportedEntityTypes must contain theSameElementsAs Seq(
+          EventSourced.name,
+          Crdt.name,
+          StatelessFunction.name
+        )
+
+        val spec = discovery.expectEntitySpec()
+
+        val descriptorSet = DescriptorProtos.FileDescriptorSet.parseFrom(spec.proto)
+        val serviceNames = descriptorSet.getFileList.asScala.flatMap(_.getServiceList.asScala.map(_.getName))
+
+        serviceNames.size mustBe spec.entities.size
+
+        spec.entities.find(_.serviceName == EventSourcedTckModel.name).foreach { entity =>
+          serviceNames must contain("EventSourcedTckModel")
+          entity.entityType mustBe EventSourced.name
+          entity.persistenceId mustBe "event-sourced-tck-model"
+        }
+
+        spec.entities.find(_.serviceName == EventSourcedTwo.name).foreach { entity =>
+          serviceNames must contain("EventSourcedTwo")
+          entity.entityType mustBe EventSourced.name
+        }
+
+        spec.entities.find(_.serviceName == ShoppingCart.name).foreach { entity =>
+          serviceNames must contain("ShoppingCart")
+          entity.entityType mustBe EventSourced.name
+          entity.persistenceId must not be empty
+        }
+
+        enabledServices = spec.entities.map(_.serviceName)
       }
     }
 
-    "verify that an initial GetShoppingCart request succeeds" in {
-      val userId = "testuser:1"
-      attempt(shoppingClient.getCart(GetShoppingCart(userId)), 4.seconds, 10) map { cart =>
-        // Interaction test
-        val proxyInfo = discoveryFromBackend.expectMsgType[ProxyInfo]
-        proxyInfo.supportedEntityTypes must contain(EventSourced.name)
-        proxyInfo.protocolMajorVersion must be >= 0
-        proxyInfo.protocolMinorVersion must be >= 0
+    "verifying model test: event-sourced entities" must {
+      import EventSourcedMessages._
+      import io.cloudstate.tck.model.eventsourced._
 
-        fromFrontend_expectEntitySpec(noWait)
+      val ServiceTwo = EventSourcedTwo.name
 
-        fromBackend_expectInit(noWait)
+      var entityId: Int = 0
+      def nextEntityId(): String = { entityId += 1; s"entity:$entityId" }
 
-        correlate(fromBackend_expectCommand(noWait), fromFrontend_expectReply(events = 0, noWait).commandId)
+      def eventSourcedTest(test: String => Any): Unit =
+        testFor(EventSourcedTckModel, EventSourcedTwo)(test(nextEntityId()))
 
-        eventSourcedFromBackend.expectNoMsg(noWait)
-        eventSourcedFromFrontend.expectNoMsg(noWait)
+      def emitEvent(value: String): RequestAction =
+        RequestAction(RequestAction.Action.Emit(Emit(value)))
 
-        // Semantical test
-        cart must not be (null)
-        cart.items must be(empty)
+      def emitEvents(values: String*): Seq[RequestAction] =
+        values.map(emitEvent)
+
+      def forwardTo(id: String): RequestAction =
+        RequestAction(RequestAction.Action.Forward(Forward(id)))
+
+      def sideEffectTo(id: String, synchronous: Boolean = false): RequestAction =
+        RequestAction(RequestAction.Action.Effect(Effect(id, synchronous)))
+
+      def sideEffectsTo(ids: String*): Seq[RequestAction] =
+        ids.map(id => sideEffectTo(id, synchronous = false))
+
+      def failWith(message: String): RequestAction =
+        RequestAction(RequestAction.Action.Fail(Fail(message)))
+
+      def persisted(value: String): ScalaPbAny =
+        protobufAny(Persisted(value))
+
+      def events(values: String*): Effects =
+        Effects(events = values.map(persisted))
+
+      def snapshotAndEvents(snapshotValue: String, eventValues: String*): Effects =
+        events(eventValues: _*).withSnapshot(persisted(snapshotValue))
+
+      def sideEffects(ids: String*): Effects =
+        ids.foldLeft(Effects.empty) { case (e, id) => e.withSideEffect(ServiceTwo, "Call", Request(id)) }
+
+      // FIXME #375: events applied immediately to state - https://github.com/cloudstateio/cloudstate/issues/375
+
+      "verify initial empty state" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id)))
+          .expect(reply(1, Response()))
+          .passivate()
+      }
+
+      "verify single emitted event" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, emitEvents("A"))))
+          .expect(reply(1, Response(), events("A"))) // FIXME #375: response = "A"
+          .send(command(2, id, "Process", Request(id)))
+          .expect(reply(2, Response("A")))
+          .passivate()
+      }
+
+      "verify multiple emitted events" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
+          .expect(reply(1, Response(), events("A", "B", "C"))) // FIXME #375: response = "ABC"
+          .send(command(2, id, "Process", Request(id)))
+          .expect(reply(2, Response("ABC")))
+          .passivate()
+      }
+
+      "verify multiple emitted events and snapshots" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, emitEvents("A"))))
+          .expect(reply(1, Response(), events("A"))) // FIXME #375: response = "A"
+          .send(command(2, id, "Process", Request(id, emitEvents("B"))))
+          .expect(reply(2, Response("A"), events("B"))) // FIXME #375: response = "AB"
+          .send(command(3, id, "Process", Request(id, emitEvents("C"))))
+          .expect(reply(3, Response("AB"), events("C"))) // FIXME #375: response = "ABC"
+          .send(command(4, id, "Process", Request(id, emitEvents("D"))))
+          .expect(reply(4, Response("ABC"), events("D"))) // FIXME #375: response = "ABCD"
+          .send(command(5, id, "Process", Request(id, emitEvents("E"))))
+          .expect(reply(5, Response("ABCD"), snapshotAndEvents("ABCDE", "E"))) // FIXME #375: response = "ABCDE"
+          .send(command(6, id, "Process", Request(id, emitEvents("F", "G", "H"))))
+          .expect(reply(6, Response("ABCDE"), events("F", "G", "H"))) // FIXME #375: response = "ABCDEFGH"
+          .send(command(7, id, "Process", Request(id, emitEvents("I", "J"))))
+          .expect(reply(7, Response("ABCDEFGH"), snapshotAndEvents("ABCDEFGHIJ", "I", "J"))) // FIXME #375: response = "ABCDEFGHIJ"
+          .send(command(8, id, "Process", Request(id, emitEvents("K"))))
+          .expect(reply(8, Response("ABCDEFGHIJ"), events("K"))) // FIXME #375: response = "ABCDEFGHIJK"
+          .send(command(9, id, "Process", Request(id)))
+          .expect(reply(9, Response("ABCDEFGHIJK")))
+          .passivate()
+      }
+
+      "verify initial snapshot" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id, snapshot(5, persisted("ABCDE"))))
+          .send(command(1, id, "Process", Request(id)))
+          .expect(reply(1, Response("ABCDE")))
+          .passivate()
+      }
+
+      "verify initial snapshot and events" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id, snapshot(5, persisted("ABCDE"))))
+          .send(event(6, persisted("F")))
+          .send(event(7, persisted("G")))
+          .send(command(1, id, "Process", Request(id)))
+          .expect(reply(1, Response("ABCDEFG")))
+          .passivate()
+      }
+
+      "verify rehydration after passivation" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
+          .expect(reply(1, Response(), events("A", "B", "C"))) // FIXME #375: response = "ABC"
+          .send(command(2, id, "Process", Request(id, emitEvents("D", "E"))))
+          .expect(reply(2, Response("ABC"), snapshotAndEvents("ABCDE", "D", "E"))) // FIXME #375: response = "ABCDE"
+          .send(command(3, id, "Process", Request(id, emitEvents("F"))))
+          .expect(reply(3, Response("ABCDE"), events("F"))) // FIXME #375: response = "ABCDEF"
+          .send(command(4, id, "Process", Request(id, emitEvents("G"))))
+          .expect(reply(4, Response("ABCDEF"), events("G"))) // FIXME #375: response = "ABCDEFG"
+          .passivate()
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id, snapshot(5, persisted("ABCDE"))))
+          .send(event(6, persisted("F")))
+          .send(event(7, persisted("G")))
+          .send(command(1, id, "Process", Request(id)))
+          .expect(reply(1, Response("ABCDEFG")))
+          .passivate()
+      }
+
+      "verify forward to second service" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(forwardTo(id)))))
+          .expect(forward(1, EventSourcedTwo.name, "Call", Request(id)))
+          .passivate()
+      }
+
+      "verify forward with emitted events" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(emitEvent("A"), forwardTo(id)))))
+          .expect(forward(1, EventSourcedTwo.name, "Call", Request(id), events("A")))
+          .passivate()
+      }
+
+      "verify forward with emitted events and snapshot" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
+          .expect(reply(1, Response(), events("A", "B", "C"))) // FIXME #375: response = "ABC"
+          .send(command(2, id, "Process", Request(id, Seq(emitEvent("D"), emitEvent("E"), forwardTo(id)))))
+          .expect(forward(2, EventSourcedTwo.name, "Call", Request(id), snapshotAndEvents("ABCDE", "D", "E")))
+          .passivate()
+      }
+
+      "verify reply with side effect to second service" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id)))))
+          .expect(reply(1, Response(), sideEffect(EventSourcedTwo.name, "Call", Request(id))))
+          .passivate()
+      }
+
+      "verify synchronous side effect to second service" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id, synchronous = true)))))
+          .expect(reply(1, Response(), sideEffect(EventSourcedTwo.name, "Call", Request(id), synchronous = true)))
+          .passivate()
+      }
+
+      "verify forward and side effect to second service" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id), forwardTo(id)))))
+          .expect(forward(1, ServiceTwo, "Call", Request(id), sideEffect(ServiceTwo, "Call", Request(id))))
+          .passivate()
+      }
+
+      "verify reply with multiple side effects" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, sideEffectsTo("1", "2", "3"))))
+          .expect(reply(1, Response(), sideEffects("1", "2", "3")))
+          .passivate()
+      }
+
+      "verify reply with multiple side effects, events, and snapshot" in eventSourcedTest { id =>
+        val actions = emitEvents("A", "B", "C", "D", "E") ++ sideEffectsTo("1", "2", "3")
+        val effects = snapshotAndEvents("ABCDE", "A", "B", "C", "D", "E") ++ sideEffects("1", "2", "3")
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, actions)))
+          .expect(reply(1, Response(), effects)) // FIXME #375: response = "ABCDE"
+          .passivate()
+      }
+
+      "verify failure action" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(failWith("expected failure")))))
+          .expect(actionFailure(1, "expected failure"))
+          .passivate()
+      }
+
+      "verify connection after failure action" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(emitEvent("A")))))
+          .expect(reply(1, Response(), events("A"))) // FIXME #375: response = "A"
+          .send(command(2, id, "Process", Request(id, Seq(failWith("expected failure")))))
+          .expect(actionFailure(2, "expected failure"))
+          .send(command(3, id, "Process", Request(id)))
+          .expect(reply(3, Response("A")))
+          .passivate()
+      }
+
+      "verify failure actions do not persist events or snapshots" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
+          .expect(reply(1, Response(), events("A", "B", "C"))) // FIXME #375: response = "ABC"
+          .send(command(2, id, "Process", Request(id, Seq(emitEvent("4"), emitEvent("5"), failWith("failure 1")))))
+          .expect(actionFailure(2, "failure 1"))
+          .send(command(3, id, "Process", Request(id, emitEvents("D"))))
+          .expect(reply(3, Response("ABC"), events("D"))) // FIXME #375: response = "ABCD"
+          .send(command(4, id, "Process", Request(id, Seq(emitEvent("6"), failWith("failure 2"), emitEvent("7")))))
+          .expect(actionFailure(4, "failure 2"))
+          .send(command(5, id, "Process", Request(id, emitEvents("E"))))
+          .expect(reply(5, Response("ABCD"), snapshotAndEvents("ABCDE", "E"))) // FIXME #375: response = "ABCDE"
+          .passivate()
+      }
+
+      "verify failure actions do not allow side effects" in eventSourcedTest { id =>
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id), failWith("expected failure")))))
+          .expect(actionFailure(1, "expected failure"))
+          .passivate()
       }
     }
 
     // TODO convert this into a ScalaCheck generated test case
-    "verify that items can be added to, and removed from, a shopping cart" in {
-      val sc = shoppingClient
-      import sc.{addItem, getCart, removeItem}
+    "verifying app test: event-sourced shopping cart" must {
+      import EventSourcedMessages._
+      import ShoppingCartVerifier._
 
-      val userId = "testuser:2"
-      val productId1 = "testproduct:1"
-      val productId2 = "testproduct:2"
-      val productName1 = "Test Product 1"
-      val productName2 = "Test Product 2"
+      def verifyGetInitialEmptyCart(session: ShoppingCartVerifier, cartId: String): Unit = {
+        shoppingCartClient.getCart(GetShoppingCart(cartId)).futureValue mustBe Cart()
+        session.verifyConnection()
+        session.verifyGetInitialEmptyCart(cartId)
+      }
 
-      for {
-        Cart(Nil, _) <- getCart(GetShoppingCart(userId)) // Test initial state
-        Empty(_) <- addItem(AddLineItem(userId, productId1, productName1, 1)) // Test add the first product
-        Empty(_) <- addItem(AddLineItem(userId, productId2, productName2, 2)) // Test add the second product
-        Empty(_) <- addItem(AddLineItem(userId, productId1, productName1, 11)) // Test increase quantity
-        Empty(_) <- addItem(AddLineItem(userId, productId2, productName2, 31)) // Test increase quantity
-        Cart(items1, _) <- getCart(GetShoppingCart(userId)) // Test intermediate state
-        Empty(_) <- removeItem(RemoveLineItem(userId, productId1)) // Test removal of first product
-        addNeg <- addItem(AddLineItem(userId, productId2, productName2, -7))
-          .transform(scala.util.Success(_)) // Test decrement quantity of second product
-        add0 <- addItem(AddLineItem(userId, productId1, productName1, 0))
-          .transform(scala.util.Success(_)) // Test add 0 of new product
-        removeNone <- removeItem(RemoveLineItem(userId, productId1))
-          .transform(scala.util.Success(_)) // Test remove non-exiting product
-        Cart(items2, _) <- getCart(GetShoppingCart(userId)) // Test end state
-      } yield {
-        val init = fromBackend_expectInit(noWait)
-        init.entityId must not be (empty)
+      def verifyGetCart(session: ShoppingCartVerifier, cartId: String, expected: Item*): Unit = {
+        val expectedCart = shoppingCart(expected: _*)
+        shoppingCartClient.getCart(GetShoppingCart(cartId)).futureValue mustBe expectedCart
+        session.verifyGetCart(cartId, expectedCart)
+      }
 
-        val commands = Seq((true, 0),
-                           (true, 1),
-                           (true, 1),
-                           (true, 1),
-                           (true, 1),
-                           (true, 0),
-                           (true, 1),
-                           (false, 0),
-                           (false, 0),
-                           (false, 0),
-                           (true, 0)).foldLeft(Set.empty[Long]) {
-          case (set, (isReply, eventCount)) =>
-            val cmd = fromBackend_expectCommand(noWait)
-            correlate(
-              cmd,
-              if (isReply) fromFrontend_expectReply(events = eventCount, noWait).commandId
-              else fromFrontend_expectActionFailure(noWait).commandId
-            )
-            init.entityId must be(cmd.entityId)
-            set must not contain (cmd.id)
-            set + cmd.id
-        }
+      def verifyAddItem(session: ShoppingCartVerifier, cartId: String, item: Item): Unit = {
+        val addLineItem = AddLineItem(cartId, item.id, item.name, item.quantity)
+        shoppingCartClient.addItem(addLineItem).futureValue mustBe EmptyScalaMessage
+        session.verifyAddItem(cartId, item)
+      }
 
-        eventSourcedFromBackend.expectNoMsg(noWait)
-        eventSourcedFromFrontend.expectNoMsg(noWait)
+      def verifyRemoveItem(session: ShoppingCartVerifier, cartId: String, itemId: String): Unit = {
+        val removeLineItem = RemoveLineItem(cartId, itemId)
+        shoppingCartClient.removeItem(removeLineItem).futureValue mustBe EmptyScalaMessage
+        session.verifyRemoveItem(cartId, itemId)
+      }
 
-        commands must have(size(11)) // Verify command id uniqueness
+      def verifyAddItemFailure(session: ShoppingCartVerifier, cartId: String, item: Item): Unit = {
+        val addLineItem = AddLineItem(cartId, item.id, item.name, item.quantity)
+        val error = shoppingCartClient.addItem(addLineItem).failed.futureValue
+        error mustBe a[StatusRuntimeException]
+        val description = error.asInstanceOf[StatusRuntimeException].getStatus.getDescription
+        session.verifyAddItemFailure(cartId, item, description)
+      }
 
-        addNeg must be('failure) // Verfify that we get a failure when adding a negative quantity
-        add0 must be('failure) // Verify that we get a failure when adding a line item of 0 items
-        removeNone must be('failure) // Verify that we get a failure when removing a non-existing item
+      def verifyRemoveItemFailure(session: ShoppingCartVerifier, cartId: String, itemId: String): Unit = {
+        val removeLineItem = RemoveLineItem(cartId, itemId)
+        val error = shoppingCartClient.removeItem(removeLineItem).failed.futureValue
+        error mustBe a[StatusRuntimeException]
+        val description = error.asInstanceOf[StatusRuntimeException].getStatus.getDescription
+        session.verifyRemoveItemFailure(cartId, itemId, description)
+      }
 
-        //Semantical test
-        items1.toSet must equal(Set(LineItem(productId1, productName1, 12), LineItem(productId2, productName2, 33)))
-        items2.toSet must equal(Set(LineItem(productId2, productName2, 33)))
+      "verify get cart, add item, remove item, and failures" in testFor(ShoppingCart) {
+        val session = shoppingCartSession(interceptor)
+        verifyGetInitialEmptyCart(session, "cart:1") // initial empty state
+        verifyAddItem(session, "cart:1", Item("product:1", "Product1", 1)) // add the first product
+        verifyAddItem(session, "cart:1", Item("product:2", "Product2", 2)) // add the second product
+        verifyAddItem(session, "cart:1", Item("product:1", "Product1", 11)) // increase first product
+        verifyAddItem(session, "cart:1", Item("product:2", "Product2", 31)) // increase second product
+        verifyGetCart(session, "cart:1", Item("product:1", "Product1", 12), Item("product:2", "Product2", 33)) // check state
+        verifyRemoveItem(session, "cart:1", "product:1") // remove first product
+        verifyAddItemFailure(session, "cart:1", Item("product:2", "Product2", -7)) // add negative quantity
+        verifyAddItemFailure(session, "cart:1", Item("product:1", "Product1", 0)) // add zero quantity
+        verifyRemoveItemFailure(session, "cart:1", "product:1") // remove non-existing product
+        verifyGetCart(session, "cart:1", Item("product:2", "Product2", 33)) // check final state
       }
     }
 
-    "verify that the backend supports the ServerReflection API" in {
-      import grpc.reflection.v1alpha.reflection._
-      import ServerReflectionRequest.{MessageRequest => In}
-      import ServerReflectionResponse.{MessageResponse => Out}
+    "verifying proxy test: gRPC ServerReflection API" must {
+      "verify that the proxy supports server reflection" in {
+        import grpc.reflection.v1alpha.reflection._
+        import ServerReflectionRequest.{MessageRequest => In}
+        import ServerReflectionResponse.{MessageResponse => Out}
 
-      val reflectionClient = ServerReflectionClient(
-        GrpcClientSettings.connectToServiceAt(settings.proxy.hostname, settings.proxy.port)(system).withTls(false)
-      )(system)
+        val expectedServices = Seq(ServerReflection.name) ++ enabledServices.sorted
 
-      val Host = settings.proxy.hostname
-      val ShoppingCart = "com.example.shoppingcart.ShoppingCart"
+        val connection = client.serverReflection.connect()
 
-      val testData = List[(In, Out)](
-          (In.ListServices(""),
-           Out.ListServicesResponse(
-             ListServiceResponse(Vector(ServiceResponse(ServerReflection.name), ServiceResponse(ShoppingCart)))
-           )),
-          (In.ListServices("nonsense.blabla."),
-           Out.ListServicesResponse(
-             ListServiceResponse(Vector(ServiceResponse(ServerReflection.name), ServiceResponse(ShoppingCart)))
-           )),
-          (In.FileContainingSymbol("nonsense.blabla.Void"), Out.FileDescriptorResponse(FileDescriptorResponse(Nil)))
-        ) map {
-          case (in, out) =>
-            val req = ServerReflectionRequest(Host, in)
-            val res = ServerReflectionResponse(Host, Some(req), out)
-            (req, res)
-        }
-      val input = testData.map(_._1)
-      val expected = testData.map(_._2)
-      val test = for {
-        output <- reflectionClient.serverReflectionInfo(Source(input)).runWith(Sink.seq)(mat)
-      } yield {
-        testData.zip(output) foreach {
-          case ((in, exp), out) => (in, out) must equal((in, exp))
-        }
-        output must not(be(empty))
-      }
+        connection.sendAndExpect(
+          In.ListServices(""),
+          Out.ListServicesResponse(ListServiceResponse(expectedServices.map(s => ServiceResponse(s))))
+        )
 
-      test andThen {
-        case _ => Try(reflectionClient.close())
+        connection.sendAndExpect(
+          In.ListServices("nonsense.blabla."),
+          Out.ListServicesResponse(ListServiceResponse(expectedServices.map(s => ServiceResponse(s))))
+        )
+
+        connection.sendAndExpect(
+          In.FileContainingSymbol("nonsense.blabla.Void"),
+          Out.FileDescriptorResponse(FileDescriptorResponse(Nil))
+        )
+
+        connection.close()
       }
     }
 
-    "verify that the HTTP API of ShoppingCart protocol works" in {
-      implicit val s = system
-      implicit val m = mat
+    "verifying proxy test: HTTP API" must {
+      "verify the HTTP API for ShoppingCart service" in testFor(ShoppingCart) {
+        import ShoppingCartVerifier._
 
-      def validateResponse(response: HttpResponse): Future[String] = {
-        response.status must be(StatusCodes.OK)
-        response.entity.contentType must be(ContentTypes.`application/json`)
-        Unmarshal(response).to[String]
-      }
+        def checkHttpRequest(path: String, body: String = null)(expected: => String): Unit = {
+          val response = client.http.request(path, body)
+          val expectedResponse = expected
+          response.futureValue mustBe expectedResponse
+        }
 
-      def getCart(userId: String): Future[String] =
-        Http()
-          .singleRequest(
-            HttpRequest(
-              method = HttpMethods.GET,
-              headers = Nil,
-              uri = s"http://${settings.proxy.hostname}:${settings.proxy.port}/carts/${userId}",
-              entity = HttpEntity.Empty,
-              protocol = HttpProtocols.`HTTP/1.1`
-            )
-          )
-          .flatMap(validateResponse)
+        val session = shoppingCartSession(interceptor)
 
-      def getItems(userId: String): Future[String] =
-        Http()
-          .singleRequest(
-            HttpRequest(
-              method = HttpMethods.GET,
-              headers = Nil,
-              uri = s"http://${settings.proxy.hostname}:${settings.proxy.port}/carts/${userId}/items",
-              entity = HttpEntity.Empty,
-              protocol = HttpProtocols.`HTTP/1.1`
-            )
-          )
-          .flatMap(validateResponse)
+        checkHttpRequest("carts/foo") {
+          session.verifyConnection()
+          session.verifyGetInitialEmptyCart("foo")
+          """{"items":[]}"""
+        }
 
-      def addItem(userId: String, productId: String, productName: String, quantity: Int): Future[String] =
-        Http()
-          .singleRequest(
-            HttpRequest(
-              method = HttpMethods.POST,
-              headers = Nil,
-              uri = s"http://${settings.proxy.hostname}:${settings.proxy.port}/cart/${userId}/items/add",
-              entity = HttpEntity(
-                ContentTypes.`application/json`,
-                s"""
-              {
-                "product_id": "${productId}",
-                "name": "${productName}",
-                "quantity": ${quantity}
-              }
-              """.trim
-              ),
-              protocol = HttpProtocols.`HTTP/1.1`
-            )
-          )
-          .flatMap(validateResponse)
+        checkHttpRequest("cart/foo/items/add", """{"productId": "A14362347", "name": "Deluxe", "quantity": 5}""") {
+          session.verifyAddItem("foo", Item("A14362347", "Deluxe", 5))
+          "{}"
+        }
 
-      def removeItem(userId: String, productId: String): Future[String] =
-        Http()
-          .singleRequest(
-            HttpRequest(
-              method = HttpMethods.POST,
-              headers = Nil,
-              uri = s"http://${settings.proxy.hostname}:${settings.proxy.port}/cart/${userId}/items/${productId}/remove",
-              entity = HttpEntity.Empty,
-              protocol = HttpProtocols.`HTTP/1.1`
-            )
-          )
-          .flatMap(validateResponse)
+        checkHttpRequest("cart/foo/items/add", """{"productId": "B14623482", "name": "Basic", "quantity": 1}""") {
+          session.verifyAddItem("foo", Item("B14623482", "Basic", 1))
+          "{}"
+        }
 
-      val userId = "foo"
-      for {
-        c0 <- getCart(userId)
-        a0 <- addItem(userId, "A14362347", "Deluxe", 5)
-        a1 <- addItem(userId, "B14623482", "Basic", 1)
-        a2 <- addItem(userId, "A14362347", "Deluxe", 2)
-        c1 <- getCart(userId)
-        l0 <- getItems(userId)
-        r0 <- removeItem(userId, "A14362347")
-        c2 <- getCart(userId)
-        l1 <- getItems(userId)
-      } yield {
-        c0 must equal("""{"items":[]}""")
-        a0 must equal("""{}""")
-        a1 must equal("""{}""")
-        a2 must equal("""{}""")
-        c1 must equal(
+        checkHttpRequest("cart/foo/items/add", """{"productId": "A14362347", "name": "Deluxe", "quantity": 2}""") {
+          session.verifyAddItem("foo", Item("A14362347", "Deluxe", 2))
+          "{}"
+        }
+
+        checkHttpRequest("carts/foo") {
+          session.verifyGetCart("foo", shoppingCart(Item("A14362347", "Deluxe", 7), Item("B14623482", "Basic", 1)))
           """{"items":[{"productId":"A14362347","name":"Deluxe","quantity":7},{"productId":"B14623482","name":"Basic","quantity":1}]}"""
-        )
-        l0 must equal(
+        }
+
+        checkHttpRequest("carts/foo/items") {
+          session.verifyGetCart("foo", shoppingCart(Item("A14362347", "Deluxe", 7), Item("B14623482", "Basic", 1)))
           """[{"productId":"A14362347","name":"Deluxe","quantity":7.0},{"productId":"B14623482","name":"Basic","quantity":1.0}]"""
-        )
-        r0 must equal("""{}""")
-        c2 must equal(
+        }
+
+        checkHttpRequest("cart/foo/items/A14362347/remove", "") {
+          session.verifyRemoveItem("foo", "A14362347")
+          "{}"
+        }
+
+        checkHttpRequest("carts/foo") {
+          session.verifyGetCart("foo", shoppingCart(Item("B14623482", "Basic", 1)))
           """{"items":[{"productId":"B14623482","name":"Basic","quantity":1}]}"""
-        )
-        l1 must equal(
+        }
+
+        checkHttpRequest("carts/foo/items") {
+          session.verifyGetCart("foo", shoppingCart(Item("B14623482", "Basic", 1)))
           """[{"productId":"B14623482","name":"Basic","quantity":1.0}]"""
-        )
+        }
       }
     }
+
+  }
+}
+
+object ShoppingCartVerifier {
+  case class Item(id: String, name: String, quantity: Int)
+
+  def shoppingCartSession(interceptor: InterceptService): ShoppingCartVerifier = new ShoppingCartVerifier(interceptor)
+
+  def shoppingCart(items: Item*): Cart = Cart(items.map(i => LineItem(i.id, i.name, i.quantity)))
+}
+
+class ShoppingCartVerifier(interceptor: InterceptService) extends MustMatchers {
+  import EventSourcedMessages._
+  import ShoppingCartVerifier.Item
+
+  private val commandIds = mutable.Map.empty[String, Long]
+  private def nextCommandId(cartId: String): Long = commandIds.updateWith(cartId)(_.map(_ + 1).orElse(Some(1L))).get
+
+  private var connection: InterceptEventSourcedService.Connection = _
+
+  def verifyConnection(): Unit = connection = interceptor.expectEventSourcedConnection()
+
+  def verifyGetInitialEmptyCart(cartId: String): Unit = {
+    val commandId = nextCommandId(cartId)
+    connection.expectClient(init(ShoppingCart.name, cartId))
+    connection.expectClient(command(commandId, cartId, "GetCart", GetShoppingCart(cartId)))
+    connection.expectService(reply(commandId, Cart()))
+    connection.expectNoInteraction()
+  }
+
+  def verifyGetCart(cartId: String, expected: Cart): Unit = {
+    val commandId = nextCommandId(cartId)
+    connection.expectClient(command(commandId, cartId, "GetCart", GetShoppingCart(cartId)))
+    connection.expectService(reply(commandId, expected))
+    connection.expectNoInteraction()
+  }
+
+  def verifyAddItem(cartId: String, item: Item): Unit = {
+    val commandId = nextCommandId(cartId)
+    val addLineItem = AddLineItem(cartId, item.id, item.name, item.quantity)
+    val itemAdded = domain.ItemAdded(Some(domain.LineItem(item.id, item.name, item.quantity)))
+    connection.expectClient(command(commandId, cartId, "AddItem", addLineItem))
+    // shopping cart implementations may or may not have snapshots configured, so match without snapshot
+    val replied = connection.expectServiceMessage[EventSourcedStreamOut.Message.Reply]
+    replied.copy(value = replied.value.clearSnapshot) mustBe reply(commandId, EmptyScalaMessage, persist(itemAdded))
+    connection.expectNoInteraction()
+  }
+
+  def verifyRemoveItem(cartId: String, itemId: String): Unit = {
+    val commandId = nextCommandId(cartId)
+    val removeLineItem = RemoveLineItem(cartId, itemId)
+    val itemRemoved = domain.ItemRemoved(itemId)
+    connection.expectClient(command(commandId, cartId, "RemoveItem", removeLineItem))
+    // shopping cart implementations may or may not have snapshots configured, so match without snapshot
+    val replied = connection.expectServiceMessage[EventSourcedStreamOut.Message.Reply]
+    replied.copy(value = replied.value.clearSnapshot) mustBe reply(commandId, EmptyScalaMessage, persist(itemRemoved))
+    connection.expectNoInteraction()
+  }
+
+  def verifyAddItemFailure(cartId: String, item: Item, failure: String): Unit = {
+    val commandId = nextCommandId(cartId)
+    val addLineItem = AddLineItem(cartId, item.id, item.name, item.quantity)
+    connection.expectClient(command(commandId, cartId, "AddItem", addLineItem))
+    connection.expectService(actionFailure(commandId, failure))
+    connection.expectNoInteraction()
+  }
+
+  def verifyRemoveItemFailure(cartId: String, itemId: String, failure: String): Unit = {
+    val commandId = nextCommandId(cartId)
+    val removeLineItem = RemoveLineItem(cartId, itemId)
+    connection.expectClient(command(commandId, cartId, "RemoveItem", removeLineItem))
+    connection.expectService(actionFailure(commandId, failure))
+    connection.expectNoInteraction()
   }
 }

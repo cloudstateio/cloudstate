@@ -110,6 +110,7 @@ lazy val root = (project in file("."))
     `protocols`,
     `proxy`,
     `java-support`,
+    `java-support-tck`,
     `java-shopping-cart`,
     `java-pingpong`,
     `akka-client`,
@@ -668,6 +669,20 @@ lazy val `java-support` = (project in file("java-support"))
     )
   )
 
+lazy val `java-support-tck` = (project in file("java-support/tck"))
+  .dependsOn(`java-support`, `java-shopping-cart`)
+  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
+  .settings(
+    name := "cloudstate-java-tck",
+    dockerSettings,
+    mainClass in Compile := Some("io.cloudstate.javasupport.tck.JavaSupportTck"),
+    akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
+    PB.protoSources in Compile += (baseDirectory in ThisBuild).value / "protocols" / "tck",
+    PB.targets in Compile := Seq(PB.gens.java -> (sourceManaged in Compile).value),
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8"),
+    assemblySettings("cloudstate-java-tck.jar")
+  )
+
 lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
   .dependsOn(`java-support`)
   .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
@@ -757,7 +772,7 @@ lazy val `testkit` = (project in file("testkit"))
 lazy val `tck` = (project in file("tck"))
   .enablePlugins(AkkaGrpcPlugin, JavaAppPackaging, DockerPlugin, NoPublish)
   .configs(IntegrationTest)
-  .dependsOn(`akka-client`)
+  .dependsOn(`akka-client`, testkit)
   .settings(
     Defaults.itSettings,
     common,
@@ -773,17 +788,19 @@ lazy val `tck` = (project in file("tck"))
       ),
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "protocol")
+      Seq(baseDir / "protocol", baseDir / "tck")
     },
     dockerSettings,
     Compile / bashScriptDefines / mainClass := Some("org.scalatest.run"),
     bashScriptExtraDefines += "addApp io.cloudstate.tck.ConfiguredCloudStateTCK",
     headerSettings(IntegrationTest),
     automateHeaderSettings(IntegrationTest),
-    javaOptions in IntegrationTest := sys.props.get("config.resource").map(r => s"-Dconfig.resource=$r").toSeq,
+    fork in IntegrationTest := true,
+    javaOptions in IntegrationTest := Seq("config.resource", "user.dir")
+        .flatMap(key => sys.props.get(key).map(value => s"-D$key=$value")),
     parallelExecution in IntegrationTest := false,
     executeTests in IntegrationTest := (executeTests in IntegrationTest)
-        .dependsOn(`proxy-core` / assembly, `java-shopping-cart` / assembly)
+        .dependsOn(`proxy-core` / assembly, `java-support-tck` / assembly)
         .value
   )
 

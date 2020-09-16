@@ -1,0 +1,6 @@
+* xref:index.adoc[Introduction]
+** xref:stateless-limitations.adoc[Current limitations of Serverless platforms]
+** xref:crud-limitations.adoc[Rethinking CRUD]
+** xref:cloudstate-solution.adoc[The Cloudstate solution]
+** xref:working.adoc[Working with Cloudstate]
+** xref:examples.adoc[Example Applications]

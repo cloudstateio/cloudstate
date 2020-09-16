@@ -1,0 +1,17 @@
+name: ""
+version: master
+title: "Cloudstate"
+nav:
+- modules/ROOT/nav.adoc
+- modules/concepts/nav.adoc
+- modules/develop/nav.adoc
+- modules/dart/nav.adoc
+- modules/go/nav.adoc
+- modules/java/nav.adoc
+- modules/javascript/nav.adoc
+- modules/kotlin/nav.adoc
+- modules/python/nav.adoc
+- modules/springboot/nav.adoc
+- modules/dotnet/nav.adoc
+- modules/deploy/nav.adoc
+- modules/contribute/nav.adoc

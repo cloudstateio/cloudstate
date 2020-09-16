@@ -19,7 +19,8 @@ package io.cloudstate.javasupport.impl.eventsourced
 import com.google.protobuf.Empty
 import io.cloudstate.javasupport.EntityId
 import io.cloudstate.javasupport.eventsourced._
-import io.cloudstate.testkit.eventsourced.{EventSourcedMessages, TestEventSourcedClient}
+import io.cloudstate.testkit.TestProtocol
+import io.cloudstate.testkit.eventsourced.EventSourcedMessages
 import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpec}
 import scala.collection.mutable
 import scala.reflect.ClassTag
@@ -31,30 +32,34 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
   import ShoppingCart.Protocol._
 
   val service: TestEventSourcedService = ShoppingCart.testService
-  val client: TestEventSourcedClient = TestEventSourcedClient(service.port)
+  val protocol: TestProtocol = TestProtocol(service.port)
 
   override def afterAll(): Unit = {
-    client.terminate()
+    protocol.terminate()
     service.terminate()
   }
 
   "EventSourcedImpl" should {
 
     "manage entities with expected commands and events" in {
-      val entity = client.connect
+      val entity = protocol.eventSourced.connect()
       entity.send(init(ShoppingCart.Name, "cart"))
       entity.send(command(1, "cart", "GetCart"))
       entity.expect(reply(1, EmptyCart))
       entity.send(command(2, "cart", "AddItem", addItem("abc", "apple", 1)))
-      entity.expect(reply(2, EmptyPayload, itemAdded("abc", "apple", 1)))
+      entity.expect(reply(2, EmptyJavaMessage, persist(itemAdded("abc", "apple", 1))))
       entity.send(command(3, "cart", "AddItem", addItem("abc", "apple", 2)))
-      entity.expect(reply(3, EmptyPayload, Seq(itemAdded("abc", "apple", 2)), cartSnapshot(Item("abc", "apple", 3))))
+      entity.expect(
+        reply(3,
+              EmptyJavaMessage,
+              persist(itemAdded("abc", "apple", 2)).withSnapshot(cartSnapshot(Item("abc", "apple", 3))))
+      )
       entity.send(command(4, "cart", "GetCart"))
       entity.expect(reply(4, cart(Item("abc", "apple", 3))))
       entity.send(command(5, "cart", "AddItem", addItem("123", "banana", 4)))
-      entity.expect(reply(5, EmptyPayload, itemAdded("123", "banana", 4)))
+      entity.expect(reply(5, EmptyJavaMessage, persist(itemAdded("123", "banana", 4))))
       entity.passivate()
-      val reactivated = client.connect
+      val reactivated = protocol.eventSourced.connect()
       reactivated.send(init(ShoppingCart.Name, "cart", snapshot(3, cartSnapshot(Item("abc", "apple", 3)))))
       reactivated.send(event(4, itemAdded("123", "banana", 4)))
       reactivated.send(command(1, "cart", "GetCart"))
@@ -64,7 +69,7 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
 
     "fail when first message is not init" in {
       service.expectLogError("Terminating entity due to unexpected failure") {
-        val entity = client.connect
+        val entity = protocol.eventSourced.connect()
         entity.send(command(1, "cart", "command"))
         entity.expect(failure("Protocol error: Expected Init message"))
         entity.expectClosed()
@@ -73,7 +78,7 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
 
     "fail when service doesn't exist" in {
       service.expectLogError("Terminating entity [foo] due to unexpected failure") {
-        val entity = client.connect
+        val entity = protocol.eventSourced.connect()
         entity.send(init(serviceName = "DoesNotExist", entityId = "foo"))
         entity.expect(failure("Protocol error: Service not found: DoesNotExist"))
         entity.expectClosed()
@@ -82,7 +87,7 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
 
     "fail when command payload is missing" in {
       service.expectLogError("Terminating entity [cart] due to unexpected failure for command [foo]") {
-        val entity = client.connect
+        val entity = protocol.eventSourced.connect()
         entity.send(init(ShoppingCart.Name, "cart"))
         entity.send(command(1, "cart", "foo", payload = None))
         entity.expect(failure(1, "Protocol error: No command payload"))
@@ -92,7 +97,7 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
 
     "fail when command entity id is incorrect" in {
       service.expectLogError("Terminating entity [cart2] due to unexpected failure for command [foo]") {
-        val entity = client.connect
+        val entity = protocol.eventSourced.connect()
         entity.send(init(ShoppingCart.Name, "cart1"))
         entity.send(command(1, "cart2", "foo"))
         entity.expect(failure(1, "Protocol error: Receiving entity is not the intended recipient of command"))
@@ -102,7 +107,7 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
 
     "fail when entity is sent multiple init" in {
       service.expectLogError("Terminating entity [cart] due to unexpected failure") {
-        val entity = client.connect
+        val entity = protocol.eventSourced.connect()
         entity.send(init(ShoppingCart.Name, "cart"))
         entity.send(init(ShoppingCart.Name, "cart"))
         entity.expect(failure("Protocol error: Entity already inited"))
@@ -112,9 +117,9 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
 
     "fail when entity is sent empty message" in {
       service.expectLogError("Terminating entity [cart] due to unexpected failure") {
-        val entity = client.connect
+        val entity = protocol.eventSourced.connect()
         entity.send(init(ShoppingCart.Name, "cart"))
-        entity.send(EmptyMessage)
+        entity.send(EmptyInMessage)
         entity.expect(failure("Protocol error: Received empty/unknown message"))
         entity.expectClosed()
       }
@@ -122,7 +127,7 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
 
     "fail when snapshot handler does not exist" in {
       service.expectLogError("Terminating entity due to unexpected failure") {
-        val entity = client.connect
+        val entity = protocol.eventSourced.connect()
         val notSnapshot = domainLineItem("?", "not a cart snapshot", 1)
         val snapshotClass = notSnapshot.getClass
         entity.send(init(ShoppingCart.Name, "cart", snapshot(42, notSnapshot)))
@@ -135,7 +140,7 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
 
     "fail when snapshot handler throws exception" in {
       service.expectLogError("Terminating entity due to unexpected failure") {
-        val entity = client.connect
+        val entity = protocol.eventSourced.connect()
         entity.send(init(ShoppingCart.Name, "cart", snapshot(42, cartSnapshot())))
         entity.expect(failure("Unexpected failure: Boom: no items"))
         entity.expectClosed()
@@ -144,7 +149,7 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
 
     "fail when event handler does not exist" in {
       service.expectLogError("Terminating entity due to unexpected failure") {
-        val entity = client.connect
+        val entity = protocol.eventSourced.connect()
         val notEvent = domainLineItem("?", "not an event", 1)
         val eventClass = notEvent.getClass
         entity.send(init(ShoppingCart.Name, "cart"))
@@ -156,7 +161,7 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
 
     "fail when event handler throws exception" in {
       service.expectLogError("Terminating entity due to unexpected failure") {
-        val entity = client.connect
+        val entity = protocol.eventSourced.connect()
         entity.send(init(ShoppingCart.Name, "cart"))
         entity.send(event(1, itemAdded("123", "FAIL", 42)))
         entity.expect(failure("Unexpected failure: Boom: name is FAIL"))
@@ -166,7 +171,7 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
 
     "fail when command handler does not exist" in {
       service.expectLogError("Terminating entity [cart] due to unexpected failure for command [foo]") {
-        val entity = client.connect
+        val entity = protocol.eventSourced.connect()
         entity.send(init(ShoppingCart.Name, "cart"))
         entity.send(command(1, "cart", "foo"))
         entity.expect(failure(1, s"No command handler found for command [foo] on ${ShoppingCart.TestCartClass}"))
@@ -178,14 +183,14 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
       service.expectLogError(
         "Fail invoked for command [AddItem] for entity [cart]: Cannot add negative quantity of item [foo]"
       ) {
-        val entity = client.connect
+        val entity = protocol.eventSourced.connect()
         entity.send(init(ShoppingCart.Name, "cart"))
         entity.send(command(1, "cart", "AddItem", addItem("foo", "bar", -1)))
         entity.expect(actionFailure(1, "Cannot add negative quantity of item [foo]"))
         entity.send(command(2, "cart", "GetCart"))
         entity.expect(reply(2, EmptyCart)) // check emit-then-fail doesn't change entity state
         entity.passivate()
-        val reactivated = client.connect
+        val reactivated = protocol.eventSourced.connect()
         reactivated.send(init(ShoppingCart.Name, "cart"))
         reactivated.send(command(1, "cart", "GetCart"))
         reactivated.expect(reply(1, EmptyCart))
@@ -195,7 +200,7 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
 
     "fail when command handler throws exception" in {
       service.expectLogError("Terminating entity [cart] due to unexpected failure for command [RemoveItem]") {
-        val entity = client.connect
+        val entity = protocol.eventSourced.connect()
         entity.send(init(ShoppingCart.Name, "cart"))
         entity.send(command(1, "cart", "RemoveItem", removeItem("foo")))
         entity.expect(failure(1, "Unexpected failure: Boom: foo"))

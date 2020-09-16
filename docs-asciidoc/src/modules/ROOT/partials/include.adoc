@@ -1,0 +1,2 @@
+:minimum-istio-version: 1.2.0
+:minimum-kubernetes-version: 1.11

@@ -5,9 +5,8 @@ apiVersion: cloudstate.io/v1alpha1
 kind: StatefulStore
 metadata:
   name: inmemory
+  labels:
+      foo: bar
 spec:
-
-  # The type of store - valid values would come from an enum of supported databases.
-  # This is the InMemory store, which obviously should not be used in production.
-  type: InMemory
+  inMemory: {}
 

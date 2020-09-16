@@ -1,0 +1,7 @@
+= Conflict-free Replicated Data Types
+
+* Explain how to use the CRDT API
+* Explain default values
+* Explain onStateSet
+* Explain how to handle streamed calls
+* Explain the APIs for each different CRDT

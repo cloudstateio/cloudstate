@@ -45,32 +45,30 @@ case "$store" in
   statefulstore="postgres"
   statefulservice="shopping-cart-$statefulstore"
 
-  [ -f postgres-env.sh ] && source postgres-env.sh
-
   kubectl apply -f - <<YAML
 apiVersion: cloudstate.io/v1alpha1
 kind: StatefulStore
 metadata:
   name: $statefulstore
 spec:
-  type: Postgres
-  deployment: Unmanaged
-  config:
-    service: $POSTGRES_SERVICE
+  postgres:
+    host: postgres-postgresql.default.svc.cluster.local
     credentials:
-      database: $POSTGRES_DATABASE
-      username: $POSTGRES_USERNAME
-      password: $POSTGRES_PASSWORD
+      secret:
+        name: postgres-credentials
 ---
 apiVersion: cloudstate.io/v1alpha1
 kind: StatefulService
 metadata:
   name: $statefulservice
 spec:
-  datastore:
-    name: $statefulstore
+  storeConfig:
+    statefulStore:
+      name: $statefulstore
   containers:
-    - image: cloudstatedev/java-shopping-cart:dev
+    - image: cloudstateio/java-shopping-cart:latest
+      imagePullPolicy: Never
+      name: user-function
 YAML
 ;;
 
@@ -79,33 +77,31 @@ YAML
   statefulstore="cassandra"
   statefulservice="shopping-cart-$statefulstore"
 
-  [ -f cassandra-env.sh ] && source cassandra-env.sh
-
   kubectl apply -f - <<YAML
 apiVersion: cloudstate.io/v1alpha1
 kind: StatefulStore
 metadata:
   name: $statefulstore
 spec:
-  type: Cassandra
-  deployment: Unmanaged
-  config:
-    service: $CASSANDRA_SERVICE
+  cassandra:
+    host: cassandra.default.svc.cluster.local
     credentials:
-      username: $CASSANDRA_USERNAME
-      password: $CASSANDRA_PASSWORD
+      secret:
+        name: cassandra-credentials
 ---
 apiVersion: cloudstate.io/v1alpha1
 kind: StatefulService
 metadata:
   name: $statefulservice
 spec:
-  datastore:
-    name: $statefulstore
-    config:
-      keyspace: shoppingcart
+  storeConfig:
+    statefulStore:
+      name: $statefulstore
+    database: shoppingcart
   containers:
-    - image: cloudstatedev/java-shopping-cart:dev
+    - image: cloudstateio/java-shopping-cart:latest
+      imagePullPolicy: Never
+      name: user-function
 YAML
 ;;
 
@@ -120,23 +116,26 @@ kind: StatefulStore
 metadata:
   name: $statefulstore
 spec:
-  type: InMemory
+  inMemory: true
 ---
 apiVersion: cloudstate.io/v1alpha1
 kind: StatefulService
 metadata:
   name: $statefulservice
 spec:
-  datastore:
-    name: $statefulstore
+  storeConfig:
+    statefulStore:
+      name: $statefulstore
   containers:
-    - image: cloudstatedev/java-shopping-cart:dev
+    - image: cloudstateio/java-shopping-cart:latest
+      imagePullPolicy: Never
+      name: user-function
 YAML
 ;;
 
 esac
 
-deployment="$statefulservice-deployment"
+deployment="$statefulservice"
 
 # Can only kubectl wait when the resource already exists
 echo
@@ -152,7 +151,7 @@ function fail_with_details {
   echo
   echo "=== Operator logs ==="
   echo
-  kubectl logs -l app=cloudstate-operator -n cloudstate --tail=-1
+  kubectl logs -l control-plane=controller-manager -n cloudstate-system --tail=-1
   echo
   echo "=== Deployment description ==="
   echo
@@ -164,11 +163,11 @@ function fail_with_details {
   echo
   echo "=== Proxy logs ==="
   echo
-  kubectl logs -l app=$statefulservice -c akka-sidecar --tail=-1
+  kubectl logs -l cloudstate.io/stateful-service=$statefulservice -c cloudstate-sidecar --tail=-1
   echo
   echo "=== User container logs ==="
   echo
-  kubectl logs -l app=$statefulservice -c user-container --tail=-1
+  kubectl logs -l cloudstate.io/stateful-service=$statefulservice -c user-container --tail=-1
   exit 1
 }
 
@@ -191,10 +190,11 @@ kubectl wait --for=condition=available --timeout=5m deployment/$deployment || fa
 kubectl get deployment $deployment
 
 # Expose the shopping-cart service
-kubectl expose deployment $deployment --port=8013 --type=NodePort
+nodeport="$deployment-node-port"
+kubectl expose deployment $deployment --name=$nodeport --port=8013 --type=NodePort
 
 # Get the URL for the shopping-cart service
-url=$(minikube service $deployment --url)
+url=$(minikube service $nodeport --url)
 
 # Now we use the REST interface to test it (because it's easier to use curl than a grpc
 # command line client)
@@ -236,7 +236,7 @@ if [ "$logs" == true ] ; then
   echo
   echo "=== Proxy logs ==="
   echo
-  kubectl logs -l app=$statefulservice -c akka-sidecar --tail=-1
+  kubectl logs -l cloudstate.io/stateful-service=$statefulservice -c cloudstate-sidecar --tail=-1
 fi
 
 # Delete shopping-cart
@@ -244,6 +244,7 @@ if [ "$delete" == true ] ; then
   echo
   echo "Deleting $statefulservice ..."
   kubectl delete service $deployment
+  kubectl delete service $nodeport
   kubectl delete statefulservice $statefulservice
   kubectl delete statefulstore $statefulstore
 fi
