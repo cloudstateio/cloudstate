@@ -1,11 +1,9 @@
 = Setting up a production cluster
-:toc:
-:toc-title: ON THIS PAGE
-:toclevels: 2
+
+include::ROOT:partial$attributes.adoc[]
 include::ROOT:partial$include.adoc[]
 
-Installing the Cloudstate operator requires cluster admin, so that the necessary Custom Resource Definitions (CRD) can be installed, and the necessary roles and role bindings can be created. Before you install the Cloudstate operator, make sure that you have Kubernetes {minimum_kubernetes_version} or later, and optionally, Istio {minimum_istio_version} or later.
-
+Installing the Cloudstate operator requires cluster admin, so that the necessary Custom Resource Definitions (CRD) can be installed, and the necessary roles and role bindings can be created. Before you install the Cloudstate operator, make sure that you have Kubernetes {minimum-kubernetes-version} or later, and optionally, Istio {minimum-istio-version} or later.
 
 == Operator requirements
 
@@ -41,9 +39,8 @@ Cloudstate selects a proxy image based on what type of store is being used, if a
 
 [source,hocon,subs="attributes+"]
 ----
-cloudstate.operator.proxy.image.cassandra = "cloudstateio/cloudstate-proxy-cassandra:{cloudstate_version}"
+cloudstate.operator.proxy.image.cassandra = "cloudstateio/cloudstate-proxy-cassandra:{cloudstate-version}"
 ----
-
 
 == Installing the operator
 
@@ -58,9 +55,7 @@ Now install Cloudstate into that namespace:
 
 [subs="attributes+"]
 ----
-kubectl apply -n cloudstate -f https://github.com/cloudstateio/cloudstate/releases/download/v{cloudstate_version}/cloudstate-{cloudstate_version}.yaml
+kubectl apply -n cloudstate -f https://github.com/cloudstateio/cloudstate/releases/download/v{cloudstate-version}/cloudstate-{cloudstate-version}.yaml
 ----
-
-
 
 You should now be ready to deploy stateful services to Cloudstate.

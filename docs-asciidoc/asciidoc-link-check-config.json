@@ -1,9 +1,0 @@
-{
-  "ignorePatterns": [
-    { "pattern": "^https?://localhost" },
-    { "pattern": "^https?://\\d+\\." },
-    { "pattern": "^http://maven\\.apache\\.org/POM" },
-    { "pattern": "^https://github\\.com/cloudstateio/cloudstate/releases/download" },
-    { "pattern": "^https://raw\\.githubusercontent\\.com/cloudstateio/cloudstate" }
-  ]
-}

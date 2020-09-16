@@ -1,10 +1,4 @@
 = The Cloudstate solution
-:toc:
-:toc-title: ON THIS PAGE
-:toclevels: 2
 
-include::partial$include.adoc[]
-
-//The source of this file is in the ../shared-content folder so that it can be shared with other Cloudstate doc repos
-include::cloudstateio-shared:ROOT:page$cloudstate-solution.adoc[]
+include::ROOT:partial$cloudstate-solution.adoc[]
 

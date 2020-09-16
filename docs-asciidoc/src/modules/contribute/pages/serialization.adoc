@@ -1,9 +1,4 @@
 = Serialization convention
-:toc:
-:toc-title: ON THIS PAGE
-:toclevels: 2
-
-include::ROOT:partial$include.adoc[]
 
 There are several cases in Cloudstate where user provided values need to be serialized. Given Cloudstate's dependence on gRPC, protobuf is an obvious serialization format, however, it's not always convenient. For example, if protobufs were the only supported format, it would not be possible to use strings as keys in an ORMap, instead users would have to create a protobuf message that wrapped a string, and use that instead.
 

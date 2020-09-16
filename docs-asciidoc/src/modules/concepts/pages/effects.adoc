@@ -1,9 +1,4 @@
 = Forwarding and effects
-:toc:
-:toc-title: ON THIS PAGE
-:toclevels: 2
-
-include::ROOT:partial$include.adoc[]
 
 A command may only act on one entity at a time. Sometimes however, you would like to update multiple entities in a single command. An example of this might be wanting to publish a message to a topic entity after an event sourced entity processes a command, to inform any watchers of that entity.
 

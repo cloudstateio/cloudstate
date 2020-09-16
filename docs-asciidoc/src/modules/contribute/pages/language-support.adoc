@@ -1,9 +1,4 @@
 = Language support
-:toc:
-:toc-title: ON THIS PAGE
-:toclevels: 2
-
-include::ROOT:partial$include.adoc[]
 
 Cloudstate is a polyglot platform for developers.
 This is achieved by having a gRPC based protocol between the Proxy and the User function. Since every language wants to be able to offer a language-idiomatic Application Programming Interface (API) Cloudstate offers Support Libraries for the following languages:
@@ -71,10 +66,10 @@ rpc SeenPing(PingSent) returns (google.protobuf.Empty) {
 ----
 ****
 
-* `protocol` is the protocol between the xref:concepts:glossary.adoc#_proxy[proxy] and what we call language support, i.e. a bridge library which speaks with the proxy and exposes a native API for some programming language.
-* `proxy` contains the protocols which the xref:concepts:glossary.adoc#_proxy[proxy] itself speaks with the outside world.
+* `protocol` is the protocol between the xref:concepts:glossary.adoc#proxy[proxy] and what we call language support, i.e. a bridge library which speaks with the proxy and exposes a native API for some programming language.
+* `proxy` contains the protocols which the xref:concepts:glossary.adoc#proxy[proxy] itself speaks with the outside world.
 
-When implementing a xref:concepts:glossary.adoc#_support_library[Support Library], the implementation can be verified using the TCK. In order to run the TCK, one must create an implementation of the Shopping Cart application using the newly created support library to be verified.
+When implementing a xref:concepts:glossary.adoc#support-library[Support Library], the implementation can be verified using the TCK. In order to run the TCK, one must create an implementation of the Shopping Cart application using the newly created support library to be verified.
 
 After that, the TCK https://github.com/cloudstateio/cloudstate/blob/master/tck/src/it/resources/application.conf[application.conf] needs to be modified with a new section to instruct what combination of Proxy implementation will be verified against which implementation of the Shopping Cart application.
 
