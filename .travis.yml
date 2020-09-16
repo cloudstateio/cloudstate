@@ -51,7 +51,7 @@ jobs:
 
   - name: docs validation
     script:
-    - make -C docs-asciidoc
+    - make -C docs
     - make -C java-support/docs
     - make -C node-support/docs
 
@@ -73,7 +73,7 @@ jobs:
     - sbt proxy/publish proxy/bintrayRelease proxy/bintraySyncMavenCentral
     - sbt -Duse.native.builds=false operator/compileK8sDescriptors
     - travis/upload-release-assets.sh
-    - make -C docs-asciidoc deploy
+    - make -C docs deploy
 
   - stage: Deploy
     name: Publish latest builds
