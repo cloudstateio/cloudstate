@@ -8,12 +8,12 @@ package example.shoppingcart;
 option java_package = "com.example";
 
 service HotItemsService {
-    rpc ItemAddedToCart(Item) returns (google.protobuf.Empty);
+  rpc ItemAddedToCart(Item) returns (google.protobuf.Empty);
 }
 
 message Item {
-    string product_id = 1;
-    string name = 2;
-    int32 quantity = 3;
+  string product_id = 1;
+  string name = 2;
+  int32 quantity = 3;
 }
 

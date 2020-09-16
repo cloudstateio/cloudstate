@@ -110,6 +110,7 @@ lazy val root = (project in file("."))
     `protocols`,
     `proxy`,
     `java-support`,
+    `java-support-docs`,
     `java-support-tck`,
     `java-shopping-cart`,
     `java-pingpong`,
@@ -117,8 +118,7 @@ lazy val root = (project in file("."))
     operator,
     testkit,
     `tck`,
-    `graal-tools`,
-    docs
+    `graal-tools`
   )
   .settings(common)
 
@@ -156,55 +156,6 @@ lazy val protocols = (project in file("protocols"))
         baseDirectory.value / s"$cloudstateProtocolsName.zip",
         baseDirectory.value / s"$cloudstateTCKProtocolsName.zip"
       )
-  )
-
-lazy val docs = (project in file("docs"))
-  .enablePlugins(CloudstateParadoxPlugin, ProtocPlugin, NoPublish)
-  .dependsOn(`java-support` % Test)
-  .settings(
-    common,
-    name := "Cloudstate Documentation",
-    deployModule := "core",
-    mappings in (Compile, paradox) ++= {
-      val javaApiDocs = (doc in (`java-support`, Compile)).value
-
-      // Run the npm docs build
-      val nodeSupportDir = (baseDirectory in ThisBuild).value / "node-support"
-      import sys.process._
-      val rc = Process("npm run jsdoc", nodeSupportDir).run(streams.value.log).exitValue()
-      if (rc != 0) sys.error(s"jsdoc failed with return code $rc")
-      val javaScriptApiDocs = nodeSupportDir / "apidocs"
-
-      ((javaApiDocs ** "*") pair Path.relativeTo(javaApiDocs)).map {
-        case (file, path) => file -> s"user/lang/java/api/$path"
-      } ++
-      ((javaScriptApiDocs ** "*") pair Path.relativeTo(javaScriptApiDocs)).map {
-        case (file, path) => file -> s"user/lang/javascript/api/$path"
-      }
-    },
-    paradoxProperties in Compile ++= Map(
-        "documentation.title" -> "Cloudstate Documentation",
-        "canonical.base_url" -> "https://cloudstate.io/docs/core/current/",
-        "javadoc.io.cloudstate.javasupport.base_url" -> ".../user/lang/java/api/",
-        "javadoc.link_style" -> "direct",
-        "extref.jsdoc.base_url" -> ".../user/lang/javascript/api/module-cloudstate.%s",
-        "extref.godoc.base_url" -> "https://cloudstate.io/docs/go/current/%s",
-        "extref.dartdoc.base_url" -> "https://cloudstate.io/docs/dart/snapshot/%s",
-        "extref.dotnetdoc.base_url" -> "https://cloudstate.io/docs/dotnet/current/%s",
-        "extref.springbootdoc.base_url" -> "https://cloudstate.io/docs/springboot/current/%s",
-        "cloudstate.version" -> {
-          if (isSnapshot.value) previousStableVersion.value.getOrElse("0.0.0") else version.value
-        },
-        "cloudstate.java-support.version" -> "0.4.3",
-        "cloudstate.node-support.version" -> "0.0.1",
-        "cloudstate.kotlin-support.version" -> "0.5.1"
-      ),
-    inConfig(Test)(
-      sbtprotoc.ProtocPlugin.protobufConfigSettings ++ Seq(
-        PB.protoSources += sourceDirectory.value / "proto",
-        PB.targets += PB.gens.java -> sourceManaged.value
-      )
-    )
   )
 
 lazy val proxyDockerBuild = settingKey[Option[(String, Option[String])]](
@@ -667,6 +618,19 @@ lazy val `java-support` = (project in file("java-support"))
         PB.targets += PB.gens.java -> crossTarget.value / "akka-grpc" / "test"
       )
     )
+  )
+
+lazy val `java-support-docs` = (project in file("java-support/docs"))
+  .dependsOn(`java-support` % Test)
+  .enablePlugins(AkkaGrpcPlugin, AutomateHeaderPlugin, NoPublish)
+  .settings(
+    name := "cloudstate-java-docs",
+    akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
+    Test / unmanagedSourceDirectories += sourceDirectory.value / "modules" / "java" / "examples",
+    Test / PB.protoSources += (baseDirectory in ThisBuild).value / "protocols" / "frontend",
+    Test / PB.protoSources += sourceDirectory.value / "modules" / "java" / "examples" / "proto",
+    Test / PB.targets := Seq(PB.gens.java -> (Test / sourceManaged).value),
+    Compile / javacOptions ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8")
   )
 
 lazy val `java-support-tck` = (project in file("java-support/tck"))

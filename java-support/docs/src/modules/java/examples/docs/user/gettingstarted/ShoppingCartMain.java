@@ -16,7 +16,7 @@
 
 package docs.user.gettingstarted;
 
-// #shopping-cart-main tag::shopping-cart-main[]
+// tag::shopping-cart-main[]
 import com.example.Shoppingcart;
 import io.cloudstate.javasupport.CloudState;
 
@@ -30,6 +30,6 @@ public class ShoppingCartMain {
         .start();
   }
 }
-// #shopping-cart-main end::shopping-cart-main[]
+// end::shopping-cart-main[]
 
 class ShoppingCartEntity {}

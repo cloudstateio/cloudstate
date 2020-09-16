@@ -33,9 +33,11 @@ jobs:
     before_script:
     - cd node-support && nvm install && nvm use && npm install && cd -
     - cd samples/js-shopping-cart && nvm install && nvm use && npm install && cd -
+    - cd node-support/docs/src/modules/javascript/examples && nvm install && nvm use && npm install && cd -
     script:
     - cd node-support && npm test && cd -
     - cd samples/js-shopping-cart && npm test && cd -
+    - cd node-support/docs/src/modules/javascript/examples && npm test && cd -
 
   - name: sbt tests
     before_script:
@@ -47,13 +49,11 @@ jobs:
     after_script:
       - docker stop googlepubsub
 
-  - name: docs tests
-    before_script:
-    - cd node-support && nvm install && nvm use && npm install && cd -
-    - cd docs/src/test/js && nvm install && nvm use && npm install && cd -
+  - name: docs validation
     script:
-    - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' docs/paradox docs/test
-    - cd docs/src/test/js && npm test && cd -
+    - make -C docs-asciidoc
+    - make -C java-support/docs
+    - make -C node-support/docs
 
   - stage: Integration tests
     name: TCK
@@ -65,18 +65,6 @@ jobs:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
 
   - stage: Deploy
-    name: Deploy documentation to cloudstate.io
-    if: tag =~ ^v
-    before_script: cd node-support && nvm install && nvm use && npm install && cd -
-    script: sbt docs/deploy
-
-  - stage: Deploy
-    name: Deploy snapshot documentation to cloudstate.io
-    if: branch = master AND type = push
-    before_script: cd node-support && nvm install && nvm use && npm install && cd -
-    script: sbt docs/deploy
-
-  - stage: Deploy
     name: Publish release
     if: tag =~ ^v
     script:
@@ -85,6 +73,7 @@ jobs:
     - sbt proxy/publish proxy/bintrayRelease proxy/bintraySyncMavenCentral
     - sbt -Duse.native.builds=false operator/compileK8sDescriptors
     - travis/upload-release-assets.sh
+    - make -C docs-asciidoc deploy
 
   - stage: Deploy
     name: Publish latest builds
@@ -97,7 +86,15 @@ jobs:
   - stage: Deploy
     name: Publish Java Support release
     if: tag =~ ^java-support-
-    script: sbt java-support/publish java-support/bintrayRelease java-support/bintraySyncMavenCentral
+    script:
+    - sbt java-support/publish java-support/bintrayRelease java-support/bintraySyncMavenCentral
+    - make -C java-support/docs deploy
+
+  - stage: Deploy
+    name: Publish Node Support release
+    if: tag =~ ^node-support-
+    script:
+    - make -C node-support/docs deploy
 
 cache:
   directories:

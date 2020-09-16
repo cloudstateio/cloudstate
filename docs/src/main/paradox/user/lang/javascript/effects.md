@@ -1,4 +1,0 @@
-# Forwarding and effects
-
-* Explain how to forward replies to another service.
-* Explain how to emit effects.
