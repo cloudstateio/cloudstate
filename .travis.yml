@@ -50,6 +50,8 @@ jobs:
       - docker stop googlepubsub
 
   - name: docs validation
+    before_script:
+    - cd node-support && nvm install && nvm use && cd -
     script:
     - make -C docs
     - make -C java-support/docs
