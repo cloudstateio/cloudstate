@@ -27,31 +27,31 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-// #entity-class tag::entity-class[]
+// tag::entity-class[]
 @EventSourcedEntity(persistenceId = "shopping-cart", snapshotEvery = 20)
 public class ShoppingCartEntity {
-  // #entity-class end::entity-class[]
+  // end::entity-class[]
 
-  // #entity-state tag::entity-state[]
+  // tag::entity-state[]
   private final Map<String, Shoppingcart.LineItem> cart = new LinkedHashMap<>();
-  // #entity-state end::entity-state[]
+  // end::entity-state[]
 
-  // #constructing tag::constructing[]
+  // tag::constructing[]
   private final String entityId;
 
   public ShoppingCartEntity(@EntityId String entityId) {
     this.entityId = entityId;
   }
-  // #constructing end::constructing[]
+  // end::constructing[]
 
-  // #get-cart tag::get-cart[]
+  // tag::get-cart[]
   @CommandHandler
   public Shoppingcart.Cart getCart() {
     return Shoppingcart.Cart.newBuilder().addAllItems(cart.values()).build();
   }
-  // #get-cart end::get-cart[]
+  // end::get-cart[]
 
-  // #add-item tag::add-item[]
+  // tag::add-item[]
   @CommandHandler
   public Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
     if (item.getQuantity() <= 0) {
@@ -68,9 +68,9 @@ public class ShoppingCartEntity {
             .build());
     return Empty.getDefaultInstance();
   }
-  // #add-item end::add-item[]
+  // end::add-item[]
 
-  // #item-added tag::item-added[]
+  // tag::item-added[]
   @EventHandler
   public void itemAdded(Domain.ItemAdded itemAdded) {
     Shoppingcart.LineItem item = cart.get(itemAdded.getItem().getProductId());
@@ -92,9 +92,9 @@ public class ShoppingCartEntity {
         .setQuantity(item.getQuantity())
         .build();
   }
-  // #item-added end::item-added[]
+  // end::item-added[]
 
-  // #snapshot tag::snapshot[]
+  // tag::snapshot[]
   @Snapshot
   public Domain.Cart snapshot() {
     return Domain.Cart.newBuilder()
@@ -109,9 +109,9 @@ public class ShoppingCartEntity {
         .setQuantity(item.getQuantity())
         .build();
   }
-  // #snapshot end::snapshot[]
+  // end::snapshot[]
 
-  // #handle-snapshot tag::handle-snapshot[]
+  // tag::handle-snapshot[]
   @SnapshotHandler
   public void handleSnapshot(Domain.Cart cart) {
     this.cart.clear();
@@ -119,9 +119,9 @@ public class ShoppingCartEntity {
       this.cart.put(item.getProductId(), convert(item));
     }
   }
-  // #handle-snapshot end::handle-snapshot[]
+  // end::handle-snapshot[]
 
-  // #register tag::register[]
+  // tag::register[]
   public static void main(String... args) {
     new CloudState()
         .registerEventSourcedEntity(
@@ -130,6 +130,6 @@ public class ShoppingCartEntity {
             Domain.getDescriptor())
         .start();
   }
-  // #register end::register[]
+  // end::register[]
 
 }

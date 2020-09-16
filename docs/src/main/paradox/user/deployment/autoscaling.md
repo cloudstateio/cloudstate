@@ -1,5 +1,0 @@
-# Autoscaling
-
-* Explain how to integrate with the Kubernetes HPA
-* Explain how to use Cloudstate's own autoscaler
-* Talk about scaling to zero (not currently possible)

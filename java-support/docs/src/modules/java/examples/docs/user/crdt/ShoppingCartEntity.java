@@ -23,27 +23,27 @@ import io.cloudstate.javasupport.crdt.*;
 
 import java.util.Optional;
 
-// #entity-class tag::entity-class[]
+// tag::entity-class[]
 @CrdtEntity
 public class ShoppingCartEntity {
-  // #entity-class end::entity-class[]
+  // end::entity-class[]
 
-  // #creation tag::creation[]
+  // tag::creation[]
   private final LWWRegisterMap<String, Shoppingcart.LineItem> items;
 
   public ShoppingCartEntity(LWWRegisterMap<String, Shoppingcart.LineItem> items) {
     this.items = items;
   }
-  // #creation end::creation[]
+  // end::creation[]
 
-  // #get-cart tag::get-cart[]
+  // tag::get-cart[]
   @CommandHandler
   public Shoppingcart.Cart getCart() {
     return Shoppingcart.Cart.newBuilder().addAllItems(items.values()).build();
   }
-  // #get-cart end::get-cart[]
+  // end::get-cart[]
 
-  // #add-item tag::add-item[]
+  // tag::add-item[]
   @CommandHandler
   public Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
     if (item.getQuantity() <= 0) {
@@ -64,9 +64,9 @@ public class ShoppingCartEntity {
     }
     return Empty.getDefaultInstance();
   }
-  // #add-item end::add-item[]
+  // end::add-item[]
 
-  // #watch-cart tag::WATCH-CART[]
+  // tag::watch-cart[]
   @CommandHandler
   public Shoppingcart.Cart watchCart(StreamedCommandContext<Shoppingcart.Cart> ctx) {
 
@@ -74,9 +74,9 @@ public class ShoppingCartEntity {
 
     return getCart();
   }
-  // #watch-cart end::WATCH-CART[]
+  // end::watch-cart[]
 
-  // #register tag::register[]
+  // tag::register[]
   public static void main(String... args) {
     new CloudState()
         .registerCrdtEntity(
@@ -84,6 +84,6 @@ public class ShoppingCartEntity {
             Shoppingcart.getDescriptor().findServiceByName("ShoppingCartService"))
         .start();
   }
-  // #register end::register[]
+  // end::register[]
 
 }

@@ -1,4 +1,4 @@
 url: https://github.com/cloudstateio/cloudstate
 branches: [docs/current]
-start_paths: [docs-asciidoc/src, docs-asciidoc/src/shared, docs-asciidoc/build/src/managed]
+start_paths: [docs/src, docs/src/shared, docs/build/src/managed]
 edit_url: https://github.com/cloudstateio/cloudstate/edit/master/{path}

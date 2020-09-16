@@ -24,6 +24,8 @@ update: clean-cache install
 
 clean: install
 	${cloudstate_antora} clean
+	# avoid node_modules being indexed by antora
+	rm -rf src/modules/javascript/examples/node_modules
 
 managed: attributes apidocs
 	mkdir -p build/src/managed
