@@ -225,52 +225,38 @@ final class CrudImpl(_system: ActorSystem,
       with AbstractContext
       with AbstractClientActionContext
       with AbstractEffectContext
-      with ActivatableContext
-      with CrudActionInvocationChecker {
+      with ActivatableContext {
 
-    final var stateDeleted = false
     final var action: Option[CrudAction] = None
-    private var _currentState: Option[ScalaPbAny] = state
+    private var _state: Option[ScalaPbAny] = state
 
     override def getState(): Optional[JavaPbAny] = {
       checkActive()
-      checkStateDeleted(CrudActionInvocationChecker.CrudActionInvocationContext(entityId, commandId, commandName))
-
-      _currentState.map(ScalaPbAny.toJavaProto(_)).asJava
+      _state.map(ScalaPbAny.toJavaProto(_)).asJava
     }
 
     override def updateState(state: JavaPbAny): Unit = {
       checkActive()
       if (state == null)
         throw EntityException("CRUD entity cannot update a 'null' state")
-      checkInvocation(
-        CrudActionInvocationChecker.CrudActionInvocationContext(entityId, commandId, commandName),
-        CrudAction(Update(CrudUpdate(None)))
-      )
 
       val encoded = anySupport.encodeScala(state)
-      _currentState = Some(encoded)
-      action = Some(CrudAction(Update(CrudUpdate(Some(encoded)))))
-      stateDeleted = false
+      _state = Some(encoded)
+      action = Some(CrudAction(Update(CrudUpdate(_state))))
     }
 
     override def deleteState(): Unit = {
       checkActive()
-      checkInvocation(
-        CrudActionInvocationChecker.CrudActionInvocationContext(entityId, commandId, commandName),
-        CrudAction(Delete(CrudDelete()))
-      )
 
-      _currentState = None
+      _state = None
       action = Some(CrudAction(Delete(CrudDelete())))
-      stateDeleted = true
     }
 
     override protected def logError(message: String): Unit =
       log.error("Fail invoked for command [{}] for CRUD entity [{}]: {}", commandName, entityId, message)
 
     def currentState(): Option[ScalaPbAny] =
-      _currentState
+      _state
 
   }
 

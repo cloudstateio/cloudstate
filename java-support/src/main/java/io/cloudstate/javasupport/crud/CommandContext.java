@@ -51,7 +51,7 @@ public interface CommandContext<T> extends CrudContext, ClientActionContext, Eff
    * @throws IllegalStateException If the current entity state have been deleted in the command
    *     invocation.
    */
-  Optional<T> getState() throws IllegalStateException;
+  Optional<T> getState();
 
   /**
    * Update the entity with the new state. The state will be persisted.
