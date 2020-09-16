@@ -303,6 +303,11 @@ func (p *PodInjector) injectSidecar(ctx context.Context, log logr.Logger, namesp
 				Name:          "grpc-http-proxy",
 				Protocol:      corev1.ProtocolTCP,
 			},
+			{
+				ContainerPort: 9090,
+				Name:          "metrics",
+				Protocol:      corev1.ProtocolTCP,
+			},
 		},
 		ReadinessProbe: readinessProbe,
 		LivenessProbe:  livenessProbe,
@@ -311,6 +316,10 @@ func (p *PodInjector) injectSidecar(ctx context.Context, log logr.Logger, namesp
 			{
 				Name:  "USER_FUNCTION_PORT",
 				Value: strconv.Itoa(int(userFunctionPort)),
+			},
+			{
+				Name:  "METRICS_PORT",
+				Value: strconv.Itoa(9090),
 			},
 			{
 				Name:  "REMOTING_PORT",
