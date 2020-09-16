@@ -299,7 +299,6 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
       val orig = service.spec.containers.head
 
       val userPort = orig.ports.headOption.fold(DefaultUserPort)(_.containerPort)
-      val metricsPort = orig.ports.headOption.fold(DefaultMetricPort)(_.containerPort)
 
       // This is primarily copied from the Knative revision operator
       val userContainer = orig.copy(
@@ -311,13 +310,13 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
             containerPort = userPort
           ),
           Container.Port(
-            name = MetricPortName,
-            containerPort = metricsPort
+            name = MetricsPortName,
+            containerPort = MetricsPort
           )
         ),
         env = orig.env ++ List(
             EnvVar(UserPortEnvVar, userPort.toString),
-            EnvVar(MetricPortEnvVar, metricsPort.toString)
+            EnvVar(MetricsPortEnvVar, MetricsPort.toString)
           ),
         stdin = Some(false),
         tty = Some(false),
