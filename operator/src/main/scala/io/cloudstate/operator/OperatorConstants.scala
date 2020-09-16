@@ -84,5 +84,5 @@ object OperatorConstants {
   final val AkkaRemotingPort = 2552
   final val MetricsPort = 9090
   final val MetricsPortName = "metrics"
-  final val MetricsPortEnvVar = "METRICS"
+  final val MetricsPortEnvVar = "METRICS_PORT"
 }

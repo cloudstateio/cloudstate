@@ -343,6 +343,12 @@ func (r *StatefulServiceReconciler) reconcileService(
 					Port:       80,
 					TargetPort: intstr.FromInt(8013),
 				},
+				{
+					Name:       "metrics",
+					Protocol:   "TCP",
+					Port:       9090,
+					TargetPort: intstr.FromInt(9090),
+				},
 			},
 		},
 	}
