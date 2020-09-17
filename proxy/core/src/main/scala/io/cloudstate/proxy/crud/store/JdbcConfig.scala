@@ -35,8 +35,10 @@ class JdbcCrudStateTableConfiguration(config: Config) {
   private val cfg = config.getConfig("tables.state")
 
   val tableName: String = cfg.getString("tableName")
-  //TODO: handle the empty schemaName!!!
-  val schemaName: Option[String] = Option(cfg.getString("schemaName")).map(_.trim)
+  val schemaName: Option[String] = Option(cfg.getString("schemaName")).flatMap {
+    case schema if schema.trim.isEmpty => None
+    case nonEmptySchema => Some(nonEmptySchema.trim)
+  }
   val columnNames: JdbcCrudStateTableColumnNames = new JdbcCrudStateTableColumnNames(config)
 
   override def toString: String = s"JdbcCrudStateTableConfiguration($tableName,$schemaName,$columnNames)"
