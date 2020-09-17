@@ -168,8 +168,8 @@ object CrudEntity {
 
   private case object LoadInitStateSuccess
   private case class LoadInitStateFailure(cause: Throwable)
-
   private case object SaveStateSuccess
+  private case object AlreadyInitialized
 
   final def props(configuration: Configuration,
                   entityId: String,
@@ -234,8 +234,10 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
             )
           )
           inited = true
+          CrudEntity.LoadInitStateSuccess
+        } else {
+          CrudEntity.AlreadyInitialized
         }
-        CrudEntity.LoadInitStateSuccess
       }
       .recover {
         case error => CrudEntity.LoadInitStateFailure(error)
@@ -311,12 +313,12 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
   override final def receive: PartialFunction[Any, Unit] = waitingForInitState
 
   private def waitingForInitState: PartialFunction[Any, Unit] = {
-    case CrudEntity.LoadInitStateSuccess if inited == true =>
-    // ignore entity already initialized
-
     case CrudEntity.LoadInitStateSuccess =>
       context.become(initialized)
       unstashAll()
+
+    case CrudEntity.AlreadyInitialized =>
+      // ignore entity already initialized
 
     case CrudEntity.LoadInitStateFailure(error) =>
       log.error(error, s"CRUD Entity cannot load the initial state due to unexpected failure ${error.getMessage}")
