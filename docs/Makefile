@@ -27,7 +27,7 @@ clean: install
 
 managed: attributes
 	mkdir -p build/src/managed
-	cp src/antora.yml build/src/managed/antora.yml
+	cp src/shared/antora.yml build/src/managed/antora.yml
 
 attributes: install
 	mkdir -p build/src/managed/modules/ROOT/partials
@@ -35,14 +35,16 @@ attributes: install
 		> build/src/managed/modules/ROOT/partials/attributes.adoc
 
 descriptor: install
-	mkdir -p build
-	${cloudstate_antora} source --preview --upstream ${upstream} ${sources} > build/source.yml
+	[ -f "build/site.yml" ] || ( \
+		mkdir -p build ;\
+		${cloudstate_antora} source --preview --upstream ${upstream} ${sources} > build/source.yml ;\
+		${cloudstate_antora} site --preview --exclude ${module} build/source.yml > build/site.yml )
 
 validate: descriptor
-	${cloudstate_antora} validate --site-from build/source.yml
+	${cloudstate_antora} validate build/site.yml
 
 html: descriptor
-	${cloudstate_antora} build --site-from build/source.yml
+	${cloudstate_antora} build build/site.yml
 
 preview: build
 	${cloudstate_antora} preview
@@ -50,7 +52,7 @@ preview: build
 build-author-mode: clean managed validate html-author-mode
 
 html-author-mode: descriptor
-	${cloudstate_antora} build --author-mode --site-from build/source.yml
+	${cloudstate_antora} build --author-mode build/site.yml
 
 preview-author-mode: build-author-mode
 	${cloudstate_antora} preview

@@ -42,14 +42,16 @@ apidocs:
 	rsync -a ../apidocs/ build/src/managed/modules/javascript/attachments/api/
 
 descriptor: install
-	mkdir -p build
-	${cloudstate_antora} source --preview --upstream ${upstream} ${sources} > build/source.yml
+	[ -f "build/site.yml" ] || ( \
+		mkdir -p build ;\
+		${cloudstate_antora} source --preview --upstream ${upstream} ${sources} > build/source.yml ;\
+		${cloudstate_antora} site --preview --exclude ${module} build/source.yml > build/site.yml )
 
 validate: descriptor
-	${cloudstate_antora} validate --site-from config/core.yml build/source.yml
+	${cloudstate_antora} validate build/site.yml
 
 html: descriptor
-	${cloudstate_antora} build --site-from config/core.yml build/source.yml
+	${cloudstate_antora} build build/site.yml
 
 preview: build
 	${cloudstate_antora} preview
@@ -57,7 +59,7 @@ preview: build
 build-author-mode: clean managed validate html-author-mode
 
 html-author-mode: descriptor
-	${cloudstate_antora} build --author-mode --site-from config/core.yml build/source.yml
+	${cloudstate_antora} build --author-mode build/site.yml
 
 preview-author-mode: build-author-mode
 	${cloudstate_antora} preview
