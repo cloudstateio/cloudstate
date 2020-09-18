@@ -52,6 +52,7 @@ val GraalVersion = "20.1.0"
 val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debianslim-jre"
 val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
 val SlickVersion = "3.3.2"
+val SlickHikariVersion = "3.3.2"
 
 val excludeTheseDependencies: Seq[ExclusionRule] = Seq(
   ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
@@ -457,9 +458,8 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "io.prometheus" % "simpleclient_common" % PrometheusClientVersion,
         "org.slf4j" % "slf4j-simple" % Slf4jSimpleVersion,
         //"ch.qos.logback"                 % "logback-classic"                   % "1.2.3", // Doesn't work well with SubstrateVM: https://github.com/vmencik/akka-graal-native/blob/master/README.md#logging
-        "com.typesafe.slick" %% "slick" % SlickVersion, //TODO: not sure here!!!
-        "com.typesafe.slick" %% "slick-hikaricp" % SlickVersion, //TODO: not sure here!!!
-        //"org.postgresql" % "postgresql" % "42.2.6"
+        "com.typesafe.slick" %% "slick" % SlickVersion,
+        "com.typesafe.slick" %% "slick-hikaricp" % SlickHikariVersion,
       ),
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
@@ -530,6 +530,8 @@ lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
     name := "cloudstate-proxy-jdbc",
     dependencyOverrides += "io.grpc" % "grpc-netty-shaded" % GrpcNettyShadedVersion,
     libraryDependencies ++= Seq(
+        //"com.typesafe.slick" %% "slick" % SlickVersion, // should be here for CRUD native support!!
+        //"com.typesafe.slick" %% "slick-hikaricp" % SlickHikariVersion, // should be here for CRUD native support!!
         "com.github.dnvriend" %% "akka-persistence-jdbc" % "3.5.2"
       ),
     fork in run := true,

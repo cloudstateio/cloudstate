@@ -35,9 +35,9 @@ class JdbcCrudStateTableConfiguration(config: Config) {
   private val cfg = config.getConfig("tables.state")
 
   val tableName: String = cfg.getString("tableName")
-  val schemaName: Option[String] = Option(cfg.getString("schemaName")).flatMap {
-    case schema if schema.trim.isEmpty => None
-    case nonEmptySchema => Some(nonEmptySchema.trim)
+  val schemaName: Option[String] = cfg.getString("schemaName") match {
+    case "" => None
+    case schema => Some(schema.trim)
   }
   val columnNames: JdbcCrudStateTableColumnNames = new JdbcCrudStateTableColumnNames(config)
 
