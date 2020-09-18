@@ -42,9 +42,14 @@ This documentation contains information for developers who want to use Cloudstat
 
 | Develop Cloudstate services
 | Developers
-// note: links rather than xrefs for building without these modules
-| * link:java/index.html[Implementing Cloudstate services in Java]
-  * link:javascript/index.html[Implementing Cloudstate services in Javascript]
+| * xref:dart:index.adoc[Implementing in Dart]
+  * xref:go:index.adoc[Implementing in Go]
+  * xref:java:index.adoc[Implementing in Java]
+  * xref:javascript:index.adoc[Implementing in JavaScript]
+  * xref:kotlin:index.adoc[Implementing in Kotlin]
+  * xref:python:index.adoc[Implementing in Python]
+  * xref:springboot:index.adoc[Implementing in Spring Boot]
+  * xref:dotnet:index.adoc[Implementing in .Net]
 
 | Deploy in production
 | Developers, administrators
