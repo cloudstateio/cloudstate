@@ -304,6 +304,26 @@ jobs:
           name: Run shopping cart test (<< parameters.proxy-store >>)
           command: bin/run-java-shopping-cart-test.sh << parameters.proxy-store >> --no-build
 
+  publish-native-images:
+    machine: true
+    steps:
+      - attach_workspace:
+          at: /tmp/workspace
+      - run:
+          name: Load docker images
+          command: |
+            docker image load < /tmp/workspace/cloudstate-proxy-native-core.tar
+            docker image load < /tmp/workspace/cloudstate-proxy-native-postgres.tar
+            docker image load < /tmp/workspace/cloudstate-proxy-native-cassandra.tar
+      - run:
+          name: Push docker images
+          command: |
+            echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
+            docker push cloudstateio/cloudstate-proxy-native-dev-mode:latest
+            docker push cloudstateio/cloudstate-proxy-native-in-memory:latest
+            docker push cloudstateio/cloudstate-proxy-native-postgres:latest
+            docker push cloudstateio/cloudstate-proxy-native-cassandra:latest
+
 workflows:
   Integration tests:
     jobs:
@@ -342,3 +362,13 @@ workflows:
           - build-operator
           - build-sbt-images
           - build-cassandra-native-image
+      - publish-native-images:
+          name: Publish native images to docker hub
+          requires:
+            - build-core-native-images
+            - build-postgres-native-image
+            - build-cassandra-native-image
+          filters:
+            branches:
+              only:
+                - master
