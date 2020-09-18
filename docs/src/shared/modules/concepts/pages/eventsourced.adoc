@@ -57,11 +57,3 @@ Persistence id::
 The _persistence id_ is an identifier that is prepended to each entity id when persisted.
 If you are sharing databases between multiple stateful services, it is important that you select unique persistence ids for each entity,
 so that their entity instances don't conflict.
-
-== Language support
-
-For detailed documentation on implementing event sourced entities in your favourite language, follow the links below:
-
-// note: links rather than xrefs for building without these modules
-* link:../java/eventsourced.html[Implementing event sourced entities] in Java
-* link:../javascript/eventsourced.html[Implementing event sourced entities] in Javascript
