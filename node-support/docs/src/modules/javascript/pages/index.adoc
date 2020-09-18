@@ -1,4 +1,4 @@
-= Cloudstate JavaScript
+= Implementing in JavaScript
 
 Cloudstate offers a straightforward JavaScript API for implementing Cloudstate services.
 
