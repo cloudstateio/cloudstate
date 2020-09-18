@@ -318,7 +318,7 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       unstashAll()
 
     case CrudEntity.AlreadyInitialized =>
-      // ignore entity already initialized
+    // ignore entity already initialized
 
     case CrudEntity.LoadInitStateFailure(error) =>
       log.error(error, s"CRUD Entity cannot load the initial state due to unexpected failure ${error.getMessage}")
