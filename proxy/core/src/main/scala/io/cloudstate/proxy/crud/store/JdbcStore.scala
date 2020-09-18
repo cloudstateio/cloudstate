@@ -74,7 +74,7 @@ final class JdbcStoreImpl(slickDatabase: JdbcSlickDatabase, queries: JdbcCrudSta
     db.run(queries.selectByKey(key).result.headOption.map(mayBeState => mayBeState.map(s => ByteString(s.state))))
 
   override def update(key: Key, value: ByteString): Future[Unit] =
-    db.run(queries.insertOrUpdate(CrudStateRow(key, value.utf8String))).map(_ => ())
+    db.run(queries.insertOrUpdate(CrudStateRow(key, value.asByteBuffer.array()))).map(_ => ())
 
   override def delete(key: Key): Future[Unit] =
     db.run(queries.deleteByKey(key)).map(_ => ())

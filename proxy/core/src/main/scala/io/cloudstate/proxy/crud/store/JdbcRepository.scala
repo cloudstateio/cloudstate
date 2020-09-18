@@ -58,12 +58,12 @@ class JdbcRepositoryImpl(val store: JdbcStore[Key, ByteString])(implicit ec: Exe
     store
       .get(key)
       .map {
-        case Some(value) => Some(ScalaPbAny.parseFrom(value.toByteBuffer.array()))
+        case Some(value) => Some(ScalaPbAny.parseFrom(value.asByteBuffer.array())) //TODO not sure!!!
         case None => None
       }
 
   def update(key: Key, entity: ScalaPbAny): Future[Unit] =
-    store.update(key, ByteString(entity.toByteArray))
+    store.update(key, ByteString.fromArrayUnsafe(entity.toByteArray))
 
   def delete(key: Key): Future[Unit] = store.delete(key)
 }

@@ -22,7 +22,7 @@ import slick.lifted.{MappedProjection, ProvenShape}
 
 object JdbcCrudStateTable {
 
-  case class CrudStateRow(key: Key, state: String)
+  case class CrudStateRow(key: Key, state: Array[Byte])
 }
 
 trait JdbcCrudStateTable {
@@ -42,8 +42,7 @@ trait JdbcCrudStateTable {
     val persistentId: Rep[String] =
       column[String](crudStateTableCfg.columnNames.persistentId, O.Length(255, varying = true))
     val entityId: Rep[String] = column[String](crudStateTableCfg.columnNames.entityId, O.Length(255, varying = true))
-    //TODO change state from Rep[String] to Rep[Array[Byte]]
-    val state: Rep[String] = column[String](crudStateTableCfg.columnNames.state, O.Length(255, varying = true))
+    val state: Rep[Array[Byte]] = column[Array[Byte]](crudStateTableCfg.columnNames.state)
     val key: MappedProjection[Key, (String, String)] = (persistentId, entityId) <> (Key.tupled, Key.unapply)
     val pk = primaryKey(s"${tableName}_pk", (persistentId, entityId))
   }
