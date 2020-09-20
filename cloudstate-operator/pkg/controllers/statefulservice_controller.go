@@ -97,9 +97,12 @@ func (r *StatefulServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	actual, ok := obj.(*appsv1.Deployment)
-	if !ok {
-		return ctrl.Result{}, fmt.Errorf("controlled structured: %+v is no appsv1.Deployment: %w", obj, err)
+	var actual *appsv1.Deployment
+	if obj != nil {
+		var ok bool
+		if actual, ok = obj.(*appsv1.Deployment); !ok {
+			return ctrl.Result{}, fmt.Errorf("controlled structured: %+v is no appsv1.Deployment: %w", obj, err)
+		}
 	}
 	// Tweak statefulservice if need be.
 	if err := r.checkStatefulService(ctx, &service); err != nil {
