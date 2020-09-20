@@ -49,13 +49,13 @@ class SlickEnsureCrudTablesExistReadyCheck(system: ActorSystem) extends (() => F
       BackoffSupervisor.props(
         BackoffOpts.onFailure(
           childProps = Props(new EnsureCrudTablesExistsActor(db)),
-          childName = "crud-jdbc-table-creator",
+          childName = "crud-table-creator",
           minBackoff = 3.seconds,
           maxBackoff = 30.seconds,
           randomFactor = 0.2
         )
       ),
-      "crud-jdbc-table-creator-supervisor"
+      "crud-table-creator-supervisor"
     )
 
     implicit val timeout = Timeout(10.seconds) // TODO make configurable?
