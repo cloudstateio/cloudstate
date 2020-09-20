@@ -1,11 +1,26 @@
+/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package stores
 
 import (
+	"context"
 	"fmt"
+
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/apis/v1alpha1"
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/config"
 	"github.com/go-logr/logr"
-	"golang.org/x/net/context"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,22 +45,12 @@ type Stores interface {
 	// At a minimum, the image that the container uses should be set. Additional environment variables specific to the
 	// store may also be set, and volumes and mounts may be added if necessary. May also do some reconciliation of
 	// other resources.
-	InjectPodStoreConfig(ctx context.Context, name string, namespace string, pod *corev1.Pod,
-		cloudstateSidecarContainer *corev1.Container) error
+	InjectPodStoreConfig(ctx context.Context, name string, namespace string, pod *corev1.Pod, cloudstateSidecarContainer *corev1.Container) error
 
-	ReconcileStatefulService(
-		ctx context.Context,
-		statefulService *v1alpha1.StatefulService,
-		deployment *appsv1.Deployment,
-	) ([]v1alpha1.CloudstateCondition, error)
-
+	ReconcileStatefulService(ctx context.Context, service *v1alpha1.StatefulService, deployment *appsv1.Deployment) ([]v1alpha1.CloudstateCondition, error)
 	SetupWithStatefulServiceController(builder *builder.Builder) error
 
-	ReconcileStatefulStore(
-		ctx context.Context,
-		store *v1alpha1.StatefulStore,
-	) ([]v1alpha1.CloudstateCondition, bool, error)
-
+	ReconcileStatefulStore(ctx context.Context, store *v1alpha1.StatefulStore) (condition []v1alpha1.CloudstateCondition, updated bool, err error)
 	SetupWithStatefulStoreController(builder *builder.Builder) error
 }
 
@@ -85,7 +90,7 @@ func DefaultMultiStores(client client.Client, scheme *runtime.Scheme, log logr.L
 			Scheme: scheme,
 			Log:    log.WithValues("store", "postgres"),
 			Config: &cfg.Postgres,
-			Gcp:    &cfg.Gcp,
+			GCP:    &cfg.GCP,
 		}
 	}
 	return NewMultiStores(client, stores, cfg)
@@ -99,44 +104,37 @@ type MultiStores struct {
 
 var _ Stores = (*MultiStores)(nil)
 
-func (m *MultiStores) ReconcileStatefulService(
-	ctx context.Context,
-	statefulService *v1alpha1.StatefulService,
-	deployment *appsv1.Deployment,
-) ([]v1alpha1.CloudstateCondition, error) {
-
+func (m *MultiStores) ReconcileStatefulService(ctx context.Context, service *v1alpha1.StatefulService, deployment *appsv1.Deployment) ([]v1alpha1.CloudstateCondition, error) {
 	var storeType StoreType
 	var storeName string
-	store := &v1alpha1.StatefulStore{}
+	var store v1alpha1.StatefulStore
 
-	if statefulService.Spec.StoreConfig == nil {
+	if service.Spec.StoreConfig == nil {
 		storeType = NoStoreType
 	} else {
-		storeName = statefulService.Spec.StoreConfig.StatefulStore.Name
+		storeName = service.Spec.StoreConfig.StatefulStore.Name
 		if err := m.client.Get(ctx, client.ObjectKey{
-			Namespace: statefulService.Namespace,
+			Namespace: service.Namespace,
 			Name:      storeName,
-		}, store); err != nil {
-			return nil, fmt.Errorf("error loading store %s from namespace %s: %w", storeName, statefulService.Namespace, err)
+		}, &store); err != nil {
+			return nil, fmt.Errorf("error loading store %s from namespace %s: %w", storeName, service.Namespace, err)
 		}
-		storeType = m.storeTypeFromSpec(store)
+		storeType = m.storeTypeFromSpec(&store)
 	}
-
 	if storeType == "" {
 		return []v1alpha1.CloudstateCondition{
 			{
 				Type:    v1alpha1.CloudstateNotReady,
 				Status:  corev1.ConditionTrue,
 				Reason:  "StoreNotDetermined",
-				Message: fmt.Sprintf("Cannot determine type of store"),
+				Message: "Cannot determine type of store",
 			},
 		}, nil
 	}
-	if m.stores[storeType] != nil {
-		storeSupport := m.stores[storeType]
-		conditions, err := storeSupport.ReconcileStatefulService(ctx, statefulService, deployment, store)
+	if s, ok := m.stores[storeType]; ok {
+		conditions, err := s.ReconcileStatefulService(ctx, service, deployment, &store)
 		if err != nil {
-			return nil, fmt.Errorf("error injecting config for %s store named %s: %w", storeType, storeName, err)
+			return nil, fmt.Errorf("error reconcile service for %s store named %s: %w", storeType, storeName, err)
 		}
 		return conditions, nil
 	}
@@ -162,7 +160,7 @@ func (m *MultiStores) SetupWithStatefulServiceController(builder *builder.Builde
 
 func (m *MultiStores) InjectPodStoreConfig(ctx context.Context, name string, namespace string, pod *corev1.Pod, cloudstateSidecarContainer *corev1.Container) error {
 	var storeType StoreType
-	store := &v1alpha1.StatefulStore{}
+	var store v1alpha1.StatefulStore
 
 	storeName := pod.Annotations[CloudstateStatefulStoreAnnotation]
 	if storeName == "" {
@@ -171,40 +169,31 @@ func (m *MultiStores) InjectPodStoreConfig(ctx context.Context, name string, nam
 		if err := m.client.Get(ctx, client.ObjectKey{
 			Namespace: namespace,
 			Name:      storeName,
-		}, store); err != nil {
+		}, &store); err != nil {
 			return fmt.Errorf("error loading store %s from namespace %s: %w", storeName, namespace, err)
 		}
-		storeType = m.storeTypeFromSpec(store)
+		storeType = m.storeTypeFromSpec(&store)
 	}
-
 	if storeType == "" {
 		return fmt.Errorf("unable to determine type for store %s in namespace %s", storeName, namespace)
 	}
-	if m.stores[storeType] != nil {
-		storeSupport := m.stores[storeType]
-		if err := storeSupport.InjectPodStoreConfig(ctx, name, namespace, pod, cloudstateSidecarContainer, store); err != nil {
-			return fmt.Errorf("error injecting config for %s store named %s: %w", storeType, storeName, err)
-		}
-	} else {
+	s := m.stores[storeType]
+	if s == nil {
 		return fmt.Errorf("don't know how to handle %s store", storeType)
 	}
-
+	if err := s.InjectPodStoreConfig(ctx, name, namespace, pod, cloudstateSidecarContainer, &store); err != nil {
+		return fmt.Errorf("error injecting config for %s store named %s: %w", storeType, storeName, err)
+	}
 	return nil
 }
 
-func (m *MultiStores) ReconcileStatefulStore(
-	ctx context.Context,
-	store *v1alpha1.StatefulStore,
-) ([]v1alpha1.CloudstateCondition, bool, error) {
-
+func (m *MultiStores) ReconcileStatefulStore(ctx context.Context, store *v1alpha1.StatefulStore) ([]v1alpha1.CloudstateCondition, bool, error) {
 	storeType := m.storeTypeFromSpec(store)
-
 	if storeType == "" {
 		return nil, false, fmt.Errorf("unable to determine type for store %s in namespace %s", store.Name, store.Namespace)
 	}
-	if m.stores[storeType] != nil {
-		storeSupport := m.stores[storeType]
-		return storeSupport.ReconcileStatefulStore(ctx, store)
+	if s := m.stores[storeType]; s != nil {
+		return s.ReconcileStatefulStore(ctx, store)
 	}
 	return []v1alpha1.CloudstateCondition{
 		{
@@ -234,6 +223,7 @@ func (m *MultiStores) storeTypeFromSpec(store *v1alpha1.StatefulStore) StoreType
 		return PostgresStoreType
 	} else if store.Spec.Spanner != nil {
 		return SpannerStoreType
+	} else {
+		return ""
 	}
-	return ""
 }

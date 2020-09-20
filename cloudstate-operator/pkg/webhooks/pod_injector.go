@@ -1,21 +1,37 @@
+/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+// TODO: describe package here.
 package webhooks
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/config"
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/controllers"
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/stores"
 	"github.com/go-logr/logr"
-	"golang.org/x/net/context"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"net/http"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -52,34 +68,31 @@ func NewPodInjector(client client.Client, log logr.Logger, store stores.Stores) 
 	}
 }
 
-// This marker seems to be ignored, so I wrote the manifest manually
+// This marker seems to be ignored, so I wrote the manifest manually.
 
 // +kubebuilder:rbac:groups=apps,resources=deployments;replicasets,verbs=get;list;watch
 
 // +kubebuilder:webhook:path=/inject-v1-pod,mutating=true,failurePolicy=fail,groups="",resources=pods,verbs=create;update,versions=v1,name=pod-injector.cloudstate.io
-func (p *PodInjector) Handle(ctx context.Context, req admission.Request) admission.Response {
-	pod := &corev1.Pod{}
-	err := p.decoder.Decode(req, pod)
-	if err != nil {
+func (i *PodInjector) Handle(ctx context.Context, req admission.Request) admission.Response {
+	var pod corev1.Pod
+	if err := i.decoder.Decode(req, &pod); err != nil {
 		return admission.Errored(http.StatusBadRequest, err)
 	}
+	log := i.log.WithValues("pod", req.Name, "namespace", req.Namespace)
 
-	log := p.log.WithValues("pod", req.Name, "namespace", req.Namespace)
-
-	// First check if this has the Cloudstate enabled label
+	// First check if this has the Cloudstate enabled label.
 	if pod.Annotations[controllers.CloudstateEnabledAnnotation] != "true" {
 		return admission.Allowed("not a stateful service, not injecting")
 	}
 
-	// Check whether it's already injected
+	// Check whether it's already injected.
 	for _, container := range pod.Spec.Containers {
 		if container.Name == CloudstateSidecarName {
 			return admission.Allowed("already injected")
 		}
 	}
 
-	err = p.injectSidecar(ctx, log, req.Namespace, pod)
-	if err != nil {
+	if err := i.injectSidecar(ctx, log, req.Namespace, &pod); err != nil {
 		log.Error(err, "Error injecting sidecar into pod")
 		return admission.Errored(http.StatusInternalServerError, err)
 	}
@@ -92,10 +105,10 @@ func (p *PodInjector) Handle(ctx context.Context, req admission.Request) admissi
 	return admission.PatchResponseFromRaw(req.Object.Raw, marshaledPod)
 }
 
-func (p *PodInjector) loadConfig(ctx context.Context, namespace string, pod *corev1.Pod) (*config.StatefulServiceConfig, error) {
+func (i *PodInjector) loadConfig(ctx context.Context, namespace string, pod *corev1.Pod) (*config.StatefulServiceConfig, error) {
 	if pod.Annotations[controllers.CloudstateStatefulServiceConfigAnnotation] != "" {
 		configMap := &corev1.ConfigMap{}
-		if err := p.client.Get(ctx, client.ObjectKey{
+		if err := i.client.Get(ctx, client.ObjectKey{
 			Namespace: namespace,
 			Name:      pod.Annotations[controllers.CloudstateStatefulServiceConfigAnnotation],
 		}, configMap); err != nil {
@@ -108,14 +121,14 @@ func (p *PodInjector) loadConfig(ctx context.Context, namespace string, pod *cor
 }
 
 // Determine the selector to use for the pod.
-func (p *PodInjector) determineSelector(ctx context.Context, log logr.Logger, namespace string, pod *corev1.Pod) (string, string, error) {
+func (i *PodInjector) determineSelector(ctx context.Context, log logr.Logger, namespace string, pod *corev1.Pod) (string, string, error) {
 	// First, check if it has a stateful service label, if it does, use that
-	if pod.Labels[controllers.CloudstateStatefulServiceLabel] != "" {
-		return controllers.CloudstateStatefulServiceLabel, pod.Labels[controllers.CloudstateStatefulServiceLabel], nil
+	if label := pod.Labels[controllers.CloudstateStatefulServiceLabel]; label != "" {
+		return controllers.CloudstateStatefulServiceLabel, label, nil
 	}
 	// Support for Knative services - if there's a Knative service label, use that
-	if pod.Labels[KnativeServiceLabel] != "" {
-		return KnativeServiceLabel, pod.Labels[KnativeServiceLabel], nil
+	if label := pod.Labels[KnativeServiceLabel]; label != "" {
+		return KnativeServiceLabel, label, nil
 	}
 
 	// Otherwise, fall back to walking up the tree to the owning deployment to determine the label selector
@@ -123,8 +136,8 @@ func (p *PodInjector) determineSelector(ctx context.Context, log logr.Logger, na
 	for _, owner := range pod.OwnerReferences {
 		if strings.HasPrefix(owner.APIVersion, "apps/") && owner.Kind == "ReplicaSet" {
 			replicaSet = &appsv1.ReplicaSet{}
-			log.Info(fmt.Sprintf("Attempting to load replicaset '%s':'%s'", pod.Namespace, owner.Name))
-			if err := p.client.Get(ctx, client.ObjectKey{
+			log.Info(fmt.Sprintf("Attempting to load replicaset %q:%q", pod.Namespace, owner.Name))
+			if err := i.client.Get(ctx, client.ObjectKey{
 				Namespace: namespace,
 				Name:      owner.Name,
 			}, replicaSet); err != nil {
@@ -139,7 +152,7 @@ func (p *PodInjector) determineSelector(ctx context.Context, log logr.Logger, na
 		for _, owner := range replicaSet.OwnerReferences {
 			if strings.HasPrefix(owner.APIVersion, "apps/") && owner.Kind == "Deployment" {
 				deployment = &appsv1.Deployment{}
-				if err := p.client.Get(ctx, client.ObjectKey{
+				if err := i.client.Get(ctx, client.ObjectKey{
 					Namespace: namespace,
 					Name:      owner.Name,
 				}, deployment); err != nil {
@@ -152,10 +165,7 @@ func (p *PodInjector) determineSelector(ctx context.Context, log logr.Logger, na
 	}
 
 	// First we check if it's a deployment with a simple, single label match, and no match expressions
-	if deployment != nil &&
-		deployment.Spec.Selector.MatchExpressions == nil &&
-		len(deployment.Spec.Selector.MatchLabels) == 1 {
-
+	if deployment != nil && deployment.Spec.Selector.MatchExpressions == nil && len(deployment.Spec.Selector.MatchLabels) == 1 {
 		for label, value := range deployment.Spec.Selector.MatchLabels {
 			log.Info("Located single match label selector", "Label", label, "Value", value)
 			return label, value, nil
@@ -164,10 +174,9 @@ func (p *PodInjector) determineSelector(ctx context.Context, log logr.Logger, na
 
 	// No simple selector found, fail
 	return "", "", fmt.Errorf("cloudstate injected pods must either define a %s label, or a single match label selector", controllers.CloudstateStatefulServiceLabel)
-
 }
 
-func (p *PodInjector) determineAndRewritePorts(pod *corev1.Pod) (int32, int32) {
+func (i *PodInjector) determineAndRewritePorts(pod *corev1.Pod) (int32, int32) {
 	// See if there's a user port declared
 	var userContainer *corev1.Container
 	var userPort *corev1.ContainerPort
@@ -249,16 +258,16 @@ func isContainerPortInUse(pod *corev1.Pod, portToCheck int32) bool {
 	return false
 }
 
-func (p *PodInjector) injectSidecar(ctx context.Context, log logr.Logger, namespace string, pod *corev1.Pod) error {
-	// If the sidecar is already added, do nothing
+func (i *PodInjector) injectSidecar(ctx context.Context, log logr.Logger, namespace string, pod *corev1.Pod) error {
+	// If the sidecar is already added, do nothing.
 	for _, container := range pod.Spec.Containers {
 		if container.Name == CloudstateSidecarName {
 			return nil
 		}
 	}
 
-	// Load the config for it, if it exists
-	ssConfig, err := p.loadConfig(ctx, namespace, pod)
+	// Load the config for it, if it exists.
+	config, err := i.loadConfig(ctx, namespace, pod)
 	if err != nil {
 		return err
 	}
@@ -266,7 +275,7 @@ func (p *PodInjector) injectSidecar(ctx context.Context, log logr.Logger, namesp
 	pod.Annotations["traffic.sidecar.istio.io/excludeOutboundPorts"] = "2552,8558"
 	pod.Annotations["traffic.sidecar.istio.io/excludeInboundPorts"] = "2552,8558"
 
-	sidecarPort, userFunctionPort := p.determineAndRewritePorts(pod)
+	sidecarPort, userFunctionPort := i.determineAndRewritePorts(pod)
 
 	readinessProbe := &corev1.Probe{
 		Handler: corev1.Handler{
@@ -284,19 +293,17 @@ func (p *PodInjector) injectSidecar(ctx context.Context, log logr.Logger, namesp
 	livenessProbe := readinessProbe.DeepCopy()
 	livenessProbe.Handler.HTTPGet.Path = "/alive"
 
-	proxyResources, err := ssConfig.Proxy.Resources.ToResourceRequirements()
+	proxyResources, err := config.Proxy.Resources.ToResourceRequirements()
 	if err != nil {
 		return fmt.Errorf("error creating proxy resource requirements: %w", err)
 	}
-
-	selectorLabel, selectorLabelValue, err := p.determineSelector(ctx, log, namespace, pod)
+	selectorLabel, selectorLabelValue, err := i.determineSelector(ctx, log, namespace, pod)
 	if err != nil {
 		return err
 	}
-
 	pod.Spec.Containers = append(pod.Spec.Containers, corev1.Container{
 		Name:            CloudstateSidecarName,
-		ImagePullPolicy: ssConfig.Proxy.ImagePullPolicy,
+		ImagePullPolicy: config.Proxy.ImagePullPolicy,
 		Ports: []corev1.ContainerPort{
 			{
 				ContainerPort: sidecarPort,
@@ -348,22 +355,21 @@ func (p *PodInjector) injectSidecar(ctx context.Context, log logr.Logger, namesp
 		},
 	})
 
-	// Now get a pointer to the container we just added, it's the last one
-	containerPtr := &pod.Spec.Containers[len(pod.Spec.Containers)-1]
-
-	if err := p.store.InjectPodStoreConfig(ctx, selectorLabelValue, namespace, pod, containerPtr); err != nil {
+	// Now get the container we just added, it's the last one
+	container := &pod.Spec.Containers[len(pod.Spec.Containers)-1]
+	if err := i.store.InjectPodStoreConfig(ctx, selectorLabelValue, namespace, pod, container); err != nil {
 		return err
 	}
 
 	// If the config has a proxy image override in it, set it
-	if ssConfig.Proxy.Image != nil {
-		containerPtr.Image = *ssConfig.Proxy.Image
+	if config.Proxy.Image != nil {
+		container.Image = *config.Proxy.Image
 	}
 
 	return nil
 }
 
-func (a *PodInjector) InjectDecoder(d *admission.Decoder) error {
-	a.decoder = d
+func (i *PodInjector) InjectDecoder(d *admission.Decoder) error {
+	i.decoder = d
 	return nil
 }

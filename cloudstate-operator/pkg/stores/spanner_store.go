@@ -1,14 +1,30 @@
+/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package stores
 
 import (
+	"context"
+	"errors"
 	"fmt"
+
+	cloudstate "github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/apis/v1alpha1"
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/config"
-	"golang.org/x/net/context"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 )
-import corev1 "k8s.io/api/core/v1"
-import cloudstate "github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/apis/v1alpha1"
 
 type SpannerStore struct {
 	Config *config.SpannerConfig
@@ -31,10 +47,7 @@ const (
 	GoogleApplicationCredentialsPath       = "/var/run/secrets/cloudstate.io/google-application-credentials"
 )
 
-func (s *SpannerStore) ReconcileStatefulStore(
-	ctx context.Context,
-	store *cloudstate.StatefulStore,
-) ([]cloudstate.CloudstateCondition, bool, error) {
+func (s *SpannerStore) ReconcileStatefulStore(ctx context.Context, store *cloudstate.StatefulStore) ([]cloudstate.CloudstateCondition, bool, error) {
 	return nil, false, nil
 }
 
@@ -42,47 +55,36 @@ func (s *SpannerStore) SetupWithStatefulStoreController(builder *builder.Builder
 	return nil
 }
 
-func (s *SpannerStore) InjectPodStoreConfig(
-	ctx context.Context,
-	name string,
-	namespace string,
-	pod *corev1.Pod,
-	cloudstateSidecarContainer *corev1.Container,
-	store *cloudstate.StatefulStore,
-) error {
-
-	cloudstateSidecarContainer.Image = s.Config.Image
-
+func (s *SpannerStore) InjectPodStoreConfig(ctx context.Context, name string, namespace string, pod *corev1.Pod,
+	container *corev1.Container, store *cloudstate.StatefulStore) error {
+	container.Image = s.Config.Image
 	spec := store.Spec.Spanner
-
 	if spec == nil {
-		return fmt.Errorf("nil Spanner store")
+		return errors.New("nil Spanner store")
 	}
-
 	instance := spec.Instance
 	if instance == "" {
-		return fmt.Errorf("spanner instance must not be empty")
+		return errors.New("spanner instance must not be empty")
 	}
-	appendEnvVar(cloudstateSidecarContainer, SpannerInstanceEnvVar, instance)
+	appendEnvVar(container, SpannerInstanceEnvVar, instance)
 
 	project := spec.Project
 	if project == "" {
 		return fmt.Errorf("spanner project must not be empty")
 	}
 	// TODO ensure if there's already a GCP_PROJECT environment variable, that it matches what we are setting
-	appendEnvVar(cloudstateSidecarContainer, GcpProjectEnvVar, project)
+	appendEnvVar(container, GcpProjectEnvVar, project)
 
 	database := pod.Annotations[CloudstateSpannerDatabaseAnnotation]
 	if database == "" {
 		database = spec.Database
 	}
 	if database != "" {
-		appendEnvVar(cloudstateSidecarContainer, SpannerDatabaseEnvVar, database)
+		appendEnvVar(container, SpannerDatabaseEnvVar, database)
 	}
 
-	suffix := pod.Annotations[CloudstateSpannerTableSuffixAnnotation]
-	if suffix != "" {
-		appendEnvVar(cloudstateSidecarContainer, SpannerTableSuffixEnvVar, suffix)
+	if suffix := pod.Annotations[CloudstateSpannerTableSuffixAnnotation]; suffix != "" {
+		appendEnvVar(container, SpannerTableSuffixEnvVar, suffix)
 	}
 
 	secretName := pod.Annotations[CloudstateGcpSecretAnnotation]
@@ -102,29 +104,24 @@ func (s *SpannerStore) InjectPodStoreConfig(
 			},
 		},
 	})
-	cloudstateSidecarContainer.VolumeMounts = append(cloudstateSidecarContainer.VolumeMounts, corev1.VolumeMount{
+	container.VolumeMounts = append(container.VolumeMounts, corev1.VolumeMount{
 		Name:      GoogleApplicationCredentialsVolumeName,
 		MountPath: GoogleApplicationCredentialsPath,
 	})
-	appendEnvVar(cloudstateSidecarContainer, GoogleApplicationCredentialsEnvVar, GoogleApplicationCredentialsPath+"/key.json")
+	appendEnvVar(container, GoogleApplicationCredentialsEnvVar, GoogleApplicationCredentialsPath+"/key.json")
 
 	return nil
 }
 
-func (s *SpannerStore) ReconcileStatefulService(
-	ctx context.Context,
-	statefulService *cloudstate.StatefulService,
-	deployment *appsv1.Deployment,
-	store *cloudstate.StatefulStore,
+func (s *SpannerStore) ReconcileStatefulService(ctx context.Context, service *cloudstate.StatefulService,
+	deployment *appsv1.Deployment, store *cloudstate.StatefulStore,
 ) ([]cloudstate.CloudstateCondition, error) {
-
-	if statefulService.Spec.StoreConfig.Database != "" {
-		deployment.Spec.Template.Annotations[CloudstateSpannerDatabaseAnnotation] = statefulService.Spec.StoreConfig.Database
+	if db := service.Spec.StoreConfig.Database; db != "" {
+		deployment.Spec.Template.Annotations[CloudstateSpannerDatabaseAnnotation] = db
 	}
-	if statefulService.Spec.StoreConfig.Secret != nil {
-		deployment.Spec.Template.Annotations[CloudstateGcpSecretAnnotation] = statefulService.Spec.StoreConfig.Secret.Name
+	if secret := service.Spec.StoreConfig.Secret; s != nil {
+		deployment.Spec.Template.Annotations[CloudstateGcpSecretAnnotation] = secret.Name
 	}
-
 	return nil, nil
 }
 

@@ -1,3 +1,17 @@
+/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package config
 
 import (
@@ -9,12 +23,13 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-// This is what goes into the ConfigMap by default. It is not the default configuration
-// for a stateful service (though ideally we should maintain it so the values below match
-// the defaults), rather, every config setting is commented out. This serves as an example
-// of what can be configured so that when we want to override the defaults, we can edit
-// the configmap using kubectl edit, this big comment will be in there, allowing us find
-// the setting we want to override, uncomment it, and update its value.
+// exampleStatefulServiceConfig is what goes into the ConfigMap by default.
+// It is not the default configuration for a stateful service (though ideally we should
+// maintain it so the values below match the defaults), rather, every config setting is
+// commented out. This serves as an example of what can be configured so that when we
+// want to override the defaults, we can edit the configmap using kubectl edit, this
+// big comment will be in there, allowing us find the setting we want to override,
+// uncomment it, and update its value.
 // VERY IMPORTANT: There must be no trailing spaces on any lines below. When kubectl outputs
 // the config map as YAML, it will only represent the string below as a block chomp if this
 // is true, otherwise, it gets put into a string with newlines encoded as \n and so on.
@@ -91,16 +106,16 @@ func NewStatefulServiceConfigWithDefaults() *StatefulServiceConfig {
 	config.Autoscaler.Enabled = true
 	config.Autoscaler.MinReplicas = 1
 	config.Autoscaler.MaxReplicas = 10
-	config.Autoscaler.CpuUtilizationThreshold = 80
+	config.Autoscaler.CPUUtilizationThreshold = 80
 
 	config.Proxy.ImagePullPolicy = corev1.PullIfNotPresent
 	config.Proxy.MaxHeapSize = "256m"
 	config.Proxy.InitialHeapSize = "256m"
-	config.Proxy.Resources.CpuRequest = "400m"
+	config.Proxy.Resources.CPURequest = "400m"
 	config.Proxy.Resources.MemoryRequest = "512Mi"
 	config.Proxy.Resources.MemoryLimit = "512Mi"
 
-	config.UserFunction.Resources.CpuRequest = "400m"
+	config.UserFunction.Resources.CPURequest = "400m"
 	config.UserFunction.Resources.MemoryRequest = "512Mi"
 	config.UserFunction.Resources.MemoryLimit = "512Mi"
 
@@ -112,18 +127,16 @@ func SetExampleStatefulServiceConfigMap(configMap *corev1.ConfigMap) {
 	configMap.Data["config.yaml"] = exampleStatefulServiceConfig
 }
 
+// TODO REVIEW: this is a very long function name.
 func ParseStatefulServiceFromConfigMapWithDefaults(configMap *corev1.ConfigMap) (*StatefulServiceConfig, error) {
 	config := NewStatefulServiceConfigWithDefaults()
-
-	err := yaml.Unmarshal([]byte(configMap.Data["config.yaml"]), config)
-	if err != nil {
+	if err := yaml.Unmarshal([]byte(configMap.Data["config.yaml"]), config); err != nil {
 		return nil, err
 	}
-
 	return config, nil
 }
 
-// This config is defined per service in a configmap
+// StatefulServiceConfig is defined per service in a ConfigMap.
 type StatefulServiceConfig struct {
 	Autoscaler   StatefulServiceAutoscalerConfig   `yaml:"autoscaler"`
 	Proxy        StatefulServiceProxyConfig        `yaml:"proxy"`
@@ -134,11 +147,11 @@ type StatefulServiceAutoscalerConfig struct {
 	Enabled                 bool  `yaml:"enabled"`
 	MinReplicas             int32 `yaml:"minReplicas"`
 	MaxReplicas             int32 `yaml:"maxReplicas"`
-	CpuUtilizationThreshold int32 `yaml:"cpuUtilizationThreshold"`
+	CPUUtilizationThreshold int32 `yaml:"cpuUtilizationThreshold"`
 }
 
 type StatefulServiceProxyConfig struct {
-	// Pointer so that it can be left unset
+	// Pointer so that it can be left unset.
 	Image           *string                       `yaml:"image"`
 	ImagePullPolicy corev1.PullPolicy             `yaml:"imagePullPolicy"`
 	Resources       StatefulServiceResourceConfig `yaml:"resources"`
@@ -151,25 +164,25 @@ type StatefulServiceUserFunctionConfig struct {
 }
 
 type StatefulServiceResourceConfig struct {
-	CpuRequest string `yaml:"cpuRequest"`
-	// Pointer so that it can be left unset
-	CpuLimit      *string `yaml:"cpuLimit"`
+	CPURequest string `yaml:"cpuRequest"`
+	// Pointer so that it can be left unset.
+	CPULimit      *string `yaml:"cpuLimit"`
 	MemoryRequest string  `yaml:"memoryRequest"`
 	MemoryLimit   string  `yaml:"memoryLimit"`
 }
 
-func (r *StatefulServiceResourceConfig) ToResourceRequirements() (*corev1.ResourceRequirements, error) {
-	cpuRequest, err := resource.ParseQuantity(r.CpuRequest)
+func (rc *StatefulServiceResourceConfig) ToResourceRequirements() (*corev1.ResourceRequirements, error) {
+	cpuRequest, err := resource.ParseQuantity(rc.CPURequest)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing CPU request '%s': %w", r.CpuRequest, err)
+		return nil, fmt.Errorf("error parsing CPU request %q: %w", rc.CPURequest, err)
 	}
-	memoryRequest, err := resource.ParseQuantity(r.MemoryRequest)
+	memoryRequest, err := resource.ParseQuantity(rc.MemoryRequest)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing memory request '%s': %w", r.MemoryRequest, err)
+		return nil, fmt.Errorf("error parsing memory request %q: %w", rc.MemoryRequest, err)
 	}
-	memoryLimit, err := resource.ParseQuantity(r.MemoryLimit)
+	memoryLimit, err := resource.ParseQuantity(rc.MemoryLimit)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing memory limit '%s': %w", r.MemoryLimit, err)
+		return nil, fmt.Errorf("error parsing memory limit %q: %w", rc.MemoryLimit, err)
 	}
 
 	requirements := &corev1.ResourceRequirements{
@@ -181,10 +194,10 @@ func (r *StatefulServiceResourceConfig) ToResourceRequirements() (*corev1.Resour
 			corev1.ResourceMemory: memoryLimit,
 		},
 	}
-	if r.CpuLimit != nil {
-		cpuLimit, err := resource.ParseQuantity(*r.CpuLimit)
+	if rc.CPULimit != nil {
+		cpuLimit, err := resource.ParseQuantity(*rc.CPULimit)
 		if err != nil {
-			return nil, fmt.Errorf("error parsing CPU limit '%s': %w", *r.CpuLimit, err)
+			return nil, fmt.Errorf("error parsing CPU limit %q: %w", *rc.CPULimit, err)
 		}
 		requirements.Limits[corev1.ResourceCPU] = cpuLimit
 	}

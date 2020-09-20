@@ -1,3 +1,17 @@
+/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package config
 
 import (
@@ -12,7 +26,7 @@ type OperatorConfig struct {
 	Cassandra CassandraConfig       `yaml:"cassandra"`
 	Postgres  PostgresConfig        `yaml:"postgres"`
 	Spanner   SpannerConfig         `yaml:"spanner"`
-	Gcp       GcpConfig             `yaml:"gcp"`
+	GCP       GCPConfig             `yaml:"gcp"`
 }
 
 type NoStoreConfig struct {
@@ -30,10 +44,10 @@ type CassandraConfig struct {
 type PostgresConfig struct {
 	Image string `yaml:"image" env:"POSTGRES_IMAGE"`
 
-	GoogleCloudSql PostgresGoogleCloudSqlConfig `yaml:"googleCloudSql"`
+	GoogleCloudSQL PostgresGoogleCloudSQLConfig `yaml:"googleCloudSql"`
 }
 
-type PostgresGoogleCloudSqlConfig struct {
+type PostgresGoogleCloudSQLConfig struct {
 	Enabled bool `yaml:"enabled" env:"POSTGRES_GOOGLE_CLOUD_SQL_ENABLED"`
 
 	// This is the DB type and version as used by GCP.  Must start with "POSTGRES_" to ensure we get a Postgres DB.
@@ -47,33 +61,33 @@ type SpannerConfig struct {
 	Image string `yaml:"image" env:"SPANNER_IMAGE"`
 }
 
-type GcpConfig struct {
+type GCPConfig struct {
 	Project string `yaml:"project" env:"GCP_PROJECT"`
 	Network string `yaml:"network" env:"GCP_NETWORK"`
 }
 
-func (o *OperatorConfig) Get(key string, obj interface{}) error {
-	if o.Configs[key] != nil {
-		if err := o.Configs[key].Decode(obj); err != nil {
-			return err
-		}
-		return cleanenv.ReadEnv(obj)
+func (c *OperatorConfig) Get(key string, obj interface{}) error {
+	if _, ok := c.Configs[key]; !ok {
+		return nil
 	}
-	return nil
+	if err := c.Configs[key].Decode(obj); err != nil {
+		return err
+	}
+	return cleanenv.ReadEnv(obj)
 }
 
 func ReadConfig(path string) (*OperatorConfig, error) {
-	config := &OperatorConfig{}
-	SetDefaults(config)
-	if err := cleanenv.ReadConfig(path, config); err != nil {
+	var config OperatorConfig
+	SetDefaults(&config)
+	if err := cleanenv.ReadConfig(path, &config); err != nil {
 		return nil, err
 	}
-	return config, nil
+	return &config, nil
 }
 
 func SetDefaults(config *OperatorConfig) {
-	config.Postgres.GoogleCloudSql.TypeVersion = "POSTGRES_11"
-	config.Postgres.GoogleCloudSql.Region = "us-east1"
-	config.Postgres.GoogleCloudSql.DefaultCores = 1
-	config.Postgres.GoogleCloudSql.DefaultMemory = "3840"
+	config.Postgres.GoogleCloudSQL.TypeVersion = "POSTGRES_11"
+	config.Postgres.GoogleCloudSQL.Region = "us-east1"
+	config.Postgres.GoogleCloudSQL.DefaultCores = 1
+	config.Postgres.GoogleCloudSQL.DefaultMemory = "3840"
 }

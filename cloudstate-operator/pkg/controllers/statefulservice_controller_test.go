@@ -1,8 +1,23 @@
+/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package controllers
 
 import (
 	"context"
 	"fmt"
+
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/stores"
 
 	gcloud "github.com/cloudstateio/cloudstate/cloudstate-operator/internal/google/api/sql.cnrm.cloud/v1beta1"
@@ -290,10 +305,10 @@ autoscaler:
 			Expect(actual.Status.Conditions).To(Or(HaveLen(3), HaveLen(4)), "should have 3 or 4 status conditions")
 			cs := len(actual.Status.Conditions)
 			databaseCondition := actual.Status.Conditions[cs-3]
-			Expect(databaseCondition.Type).To(Equal(stores.PostgresGoogleCloudSqlDatabaseNotReady))
+			Expect(databaseCondition.Type).To(Equal(stores.PostgresGoogleCloudSQLDatabaseNotReady))
 			Expect(databaseCondition.Status).To(Equal(corev1.ConditionTrue))
 			userCondition := actual.Status.Conditions[cs-2]
-			Expect(userCondition.Type).To(Equal(stores.PostgresGoogleCloudSqlUserNotReady))
+			Expect(userCondition.Type).To(Equal(stores.PostgresGoogleCloudSQLUserNotReady))
 			Expect(userCondition.Status).To(Equal(corev1.ConditionTrue))
 			notReadyCondition := actual.Status.Conditions[cs-1]
 			Expect(notReadyCondition.Type).To(Equal(cloudstate.CloudstateNotReady))
@@ -301,7 +316,7 @@ autoscaler:
 
 			Expect(actual.Status.Summary).To(Or(Equal("CloudSqlDatabaseUnknownStatus"), Equal("CloudSqlInstanceNotCreated")))
 
-			// Todo: In order for the status to progress further we'll need the test
+			// TODO: In order for the status to progress further we'll need the test
 			// environment actually wired to GCP or have mocks in place.
 		})
 
@@ -315,15 +330,15 @@ func beOwnedBy(owner interface{}) types.GomegaMatcher {
 
 	var actualOwnerKind string
 	var actualOwnerName string
-	switch owner.(type) {
-	default:
-		// Don't know what to put here...
+	switch t := owner.(type) {
 	case *cloudstate.StatefulService:
 		actualOwnerKind = "StatefulService"
-		actualOwnerName = owner.(*cloudstate.StatefulService).Name
+		actualOwnerName = t.Name
 	case *cloudstate.StatefulStore:
 		actualOwnerKind = "StatefulStore"
-		actualOwnerName = owner.(*cloudstate.StatefulStore).Name
+		actualOwnerName = t.Name
+	default:
+		// Don't know what to put here...
 	}
 
 	return SatisfyAll(
