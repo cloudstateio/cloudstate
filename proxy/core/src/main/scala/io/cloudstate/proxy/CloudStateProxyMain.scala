@@ -41,7 +41,6 @@ final class HealthCheckReady(system: ActorSystem) extends (() => Future[Boolean]
     system.settings.config.getConfig("cloudstate.proxy").getDuration("ready-timeout").toMillis.millis
   private[this] final implicit val ec = system.dispatcher
   private[this] final val serverManager = system.actorSelection("/user/server-manager-supervisor/server-manager")
-  private[this] final val warmup = system.actorSelection("/user/state-manager-warm-up")
   private[this] final implicit val timeout = Timeout(timeoutMs)
 
   private[this] final def check(name: String, selection: ActorSelection, msg: Any) =
@@ -59,7 +58,6 @@ final class HealthCheckReady(system: ActorSystem) extends (() => Future[Boolean]
     Future
       .sequence(
         Seq(
-          check("warmup", warmup, Warmup.Ready),
           check("server manager", serverManager, EntityDiscoveryManager.Ready)
         )
       )

@@ -35,7 +35,6 @@ import scala.collection.JavaConverters._
 class StatelessFunctionSupportFactory(system: ActorSystem,
                                       config: EntityDiscoveryManager.Configuration,
                                       grpcClientSettings: GrpcClientSettings,
-                                      concurrencyEnforcer: ActorRef,
                                       statsCollector: ActorRef)(implicit ec: ExecutionContext, mat: Materializer)
     extends UserFunctionTypeSupportFactory {
 
