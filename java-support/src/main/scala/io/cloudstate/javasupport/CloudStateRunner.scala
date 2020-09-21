@@ -25,7 +25,7 @@ import akka.http.scaladsl._
 import akka.http.scaladsl.model._
 import akka.stream.{ActorMaterializer, Materializer}
 import com.google.protobuf.Descriptors
-import io.cloudstate.javasupport.impl.controller.{ControllerService, StatelessFunctionImpl}
+import io.cloudstate.javasupport.impl.action.{ActionService, StatelessFunctionImpl}
 import io.cloudstate.javasupport.impl.eventsourced.{EventSourcedImpl, EventSourcedStatefulService}
 import io.cloudstate.javasupport.impl.{EntityDiscoveryImpl, ResolvedServiceCallFactory, ResolvedServiceMethod}
 import io.cloudstate.javasupport.impl.crdt.{CrdtImpl, CrdtStatefulService}
@@ -109,10 +109,10 @@ final class CloudStateRunner private[this] (
           val crdtImpl = new CrdtImpl(system, crdtServices, rootContext)
           route orElse CrdtHandler.partial(crdtImpl)
 
-        case (route, (serviceClass, controllerServices: Map[String, ControllerService] @unchecked))
-            if serviceClass == classOf[ControllerService] =>
-          val controllerImpl = new StatelessFunctionImpl(system, controllerServices, rootContext)
-          route orElse StatelessFunctionHandler.partial(controllerImpl)
+        case (route, (serviceClass, actionServices: Map[String, ActionService] @unchecked))
+            if serviceClass == classOf[ActionService] =>
+          val actionImpl = new StatelessFunctionImpl(system, actionServices, rootContext)
+          route orElse StatelessFunctionHandler.partial(actionImpl)
 
         case (_, (serviceClass, _)) =>
           sys.error(s"Unknown StatefulService: $serviceClass")

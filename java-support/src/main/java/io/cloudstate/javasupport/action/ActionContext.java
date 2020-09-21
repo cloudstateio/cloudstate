@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.controller;
+package io.cloudstate.javasupport.action;
 
 import io.cloudstate.javasupport.Metadata;
 import io.cloudstate.javasupport.MetadataContext;
 
-/** Context for controller calls. */
-public interface ControllerContext extends MetadataContext {
+/** Context for action calls. */
+public interface ActionContext extends MetadataContext {
   /**
    * Get the metadata associated with this call.
    *

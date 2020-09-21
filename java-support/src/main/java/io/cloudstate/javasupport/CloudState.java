@@ -20,15 +20,15 @@ import akka.actor.ActorSystem;
 import akka.stream.Materializer;
 import com.typesafe.config.Config;
 import com.google.protobuf.Descriptors;
-import io.cloudstate.javasupport.controller.Controller;
-import io.cloudstate.javasupport.controller.ControllerHandler;
+import io.cloudstate.javasupport.action.Action;
+import io.cloudstate.javasupport.action.ActionHandler;
 import io.cloudstate.javasupport.crdt.CrdtEntity;
 import io.cloudstate.javasupport.crdt.CrdtEntityFactory;
 import io.cloudstate.javasupport.eventsourced.EventSourcedEntity;
 import io.cloudstate.javasupport.eventsourced.EventSourcedEntityFactory;
 import io.cloudstate.javasupport.impl.AnySupport;
-import io.cloudstate.javasupport.impl.controller.AnnotationBasedControllerSupport;
-import io.cloudstate.javasupport.impl.controller.ControllerService;
+import io.cloudstate.javasupport.impl.action.AnnotationBasedActionSupport;
+import io.cloudstate.javasupport.impl.action.ActionService;
 import io.cloudstate.javasupport.impl.crdt.AnnotationBasedCrdtSupport;
 import io.cloudstate.javasupport.impl.crdt.CrdtStatefulService;
 import io.cloudstate.javasupport.impl.eventsourced.AnnotationBasedEventSourcedSupport;
@@ -239,26 +239,25 @@ public final class CloudState {
   }
 
   /**
-   * Register an annotated Controller service.
+   * Register an annotated Action service.
    *
-   * <p>The controller class must be annotated with {@link
-   * io.cloudstate.javasupport.controller.Controller}.
+   * <p>The action class must be annotated with {@link Action}.
    *
-   * @param controller The controller object.
-   * @param descriptor The descriptor for the service that this controller implements.
+   * @param action The action object.
+   * @param descriptor The descriptor for the service that this action implements.
    * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
    *     types when needed.
    * @return This Cloudstate builder.
    */
-  public CloudState registerController(
-      Object controller,
+  public CloudState registerAction(
+      Object action,
       Descriptors.ServiceDescriptor descriptor,
       Descriptors.FileDescriptor... additionalDescriptors) {
 
-    Controller controllerAnnotation = controller.getClass().getAnnotation(Controller.class);
-    if (controllerAnnotation == null) {
+    Action actionAnnotation = action.getClass().getAnnotation(Action.class);
+    if (actionAnnotation == null) {
       throw new IllegalArgumentException(
-          controller.getClass() + " does not declare an " + Controller.class + " annotation!");
+          action.getClass() + " does not declare an " + Action.class + " annotation!");
     }
 
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
@@ -266,9 +265,9 @@ public final class CloudState {
     services.put(
         descriptor.getFullName(),
         system ->
-            new ControllerService(
-                new AnnotationBasedControllerSupport(
-                    controller, anySupport, descriptor, Materializer.createMaterializer(system)),
+            new ActionService(
+                new AnnotationBasedActionSupport(
+                    action, anySupport, descriptor, Materializer.createMaterializer(system)),
                 descriptor,
                 anySupport));
 
@@ -276,31 +275,31 @@ public final class CloudState {
   }
 
   /**
-   * Register a Controller handler.
+   * Register an Action handler.
    *
    * <p>This is a low level API intended for custom (eg, non reflection based) mechanisms for
-   * implementing the controller.
+   * implementing the action.
    *
-   * @param controller The controller handler.
-   * @param descriptor The descriptor for the service that this controller implements.
+   * @param action The action handler.
+   * @param descriptor The descriptor for the service that this action implements.
    * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
    *     types when needed.
    * @return This Cloudstate builder.
    */
-  public CloudState registerController(
-      ControllerHandler controller,
+  public CloudState registerAction(
+      ActionHandler action,
       Descriptors.ServiceDescriptor descriptor,
       Descriptors.FileDescriptor... additionalDescriptors) {
 
-    Controller controllerAnnotation = controller.getClass().getAnnotation(Controller.class);
-    if (controllerAnnotation == null) {
+    Action actionAnnotation = action.getClass().getAnnotation(Action.class);
+    if (actionAnnotation == null) {
       throw new IllegalArgumentException(
-          controller.getClass() + " does not declare an " + Controller.class + " annotation!");
+          action.getClass() + " does not declare an " + Action.class + " annotation!");
     }
 
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
 
-    ControllerService service = new ControllerService(controller, descriptor, anySupport);
+    ActionService service = new ActionService(action, descriptor, anySupport);
 
     services.put(descriptor.getFullName(), system -> service);
 

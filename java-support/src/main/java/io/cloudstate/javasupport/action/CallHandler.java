@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.controller;
+package io.cloudstate.javasupport.action;
 
 import io.cloudstate.javasupport.impl.CloudStateAnnotation;
 
@@ -24,9 +24,9 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * A controller call handler.
+ * An action call handler.
  *
- * <p>This annotation should be placed on methods that handle Controller service calls.
+ * <p>This annotation should be placed on methods that handle Action service calls.
  *
  * <p>The types of the input and output parameters for these methods depend on whether the call is a
  * unary or streamed call.
@@ -41,12 +41,12 @@ import java.lang.annotation.Target;
  *
  * <p>Calls with a unary out argument may either return synchronously, or return a {@link
  * java.util.concurrent.CompletionStage}. The argument return type may either be the raw protobuf
- * output type of the call, or wrapped in {@link MessageEnvelope} or {@link ControllerReply}.
+ * output type of the call, or wrapped in {@link MessageEnvelope} or {@link ActionReply}.
  *
  * <p>Calls with a streamed out argument may either return a {@link akka.stream.javadsl.Source},
  * {@link org.reactivestreams.Publisher} or a {@link java.util.concurrent.Flow.Publisher}. The
  * element type of these may either be the raw protobuf output type of the call, or wrapped in
- * {@link MessageEnvelope} or {@link ControllerReply}.
+ * {@link MessageEnvelope} or {@link ActionReply}.
  */
 @CloudStateAnnotation
 @Target(ElementType.METHOD)

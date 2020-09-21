@@ -14,24 +14,24 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.controller;
+package io.cloudstate.javasupport.action;
 
 import io.cloudstate.javasupport.Metadata;
 import io.cloudstate.javasupport.ServiceCall;
-import io.cloudstate.javasupport.impl.controller.ForwardReplyImpl;
-import io.cloudstate.javasupport.impl.controller.MessageReplyImpl;
-import io.cloudstate.javasupport.impl.controller.NoReply;
+import io.cloudstate.javasupport.impl.action.ForwardReplyImpl;
+import io.cloudstate.javasupport.impl.action.MessageReplyImpl;
+import io.cloudstate.javasupport.impl.action.NoReply;
 
 import java.util.Collection;
 
 /**
- * A controller reply.
+ * An action reply.
  *
- * <p>Controller replies allow returning forwards and attaching effects to messages.
+ * <p>Action replies allow returning forwards and attaching effects to messages.
  *
- * @param <T> The type of the message that must be returned by this controller call.
+ * @param <T> The type of the message that must be returned by this action call.
  */
-public interface ControllerReply<T> {
+public interface ActionReply<T> {
   /**
    * The effects attached to this reply.
    *
@@ -45,7 +45,7 @@ public interface ControllerReply<T> {
    * @param effects The effects to attach.
    * @return A new reply with the attached effects.
    */
-  ControllerReply<T> withEffects(Effect... effects);
+  ActionReply<T> withEffects(Effect... effects);
 
   /**
    * Create a message reply.
@@ -85,7 +85,7 @@ public interface ControllerReply<T> {
    *
    * @return The reply.
    */
-  static <T> ControllerReply<T> noReply() {
+  static <T> ActionReply<T> noReply() {
     return NoReply.apply();
   }
 }

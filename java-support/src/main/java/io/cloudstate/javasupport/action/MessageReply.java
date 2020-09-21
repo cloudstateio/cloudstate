@@ -14,17 +14,26 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.controller;
+package io.cloudstate.javasupport.action;
 
-import io.cloudstate.javasupport.impl.CloudStateAnnotation;
+import io.cloudstate.javasupport.Metadata;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+/** A message reply. */
+public interface MessageReply<T> extends ActionReply<T> {
 
-/** A controller. */
-@CloudStateAnnotation
-@Target(ElementType.TYPE)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface Controller {}
+  /**
+   * The payload of the message reply.
+   *
+   * @return The payload.
+   */
+  T payload();
+
+  /**
+   * The metadata associated with the message.
+   *
+   * @return The metadata.
+   */
+  Metadata metadata();
+
+  MessageReply<T> withEffects(Effect... effect);
+}
