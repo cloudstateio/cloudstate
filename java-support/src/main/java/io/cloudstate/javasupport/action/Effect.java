@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.controller;
+package io.cloudstate.javasupport.action;
 
 import io.cloudstate.javasupport.ServiceCall;
-import io.cloudstate.javasupport.impl.controller.EffectImpl;
+import io.cloudstate.javasupport.impl.action.EffectImpl;
 
 /** An effect. */
 public interface Effect {

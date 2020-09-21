@@ -14,19 +14,17 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.controller;
+package io.cloudstate.javasupport.action;
 
-import io.cloudstate.javasupport.ServiceCall;
+import io.cloudstate.javasupport.impl.CloudStateAnnotation;
 
-/** A forward reply. */
-public interface ForwardReply<T> extends ControllerReply<T> {
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
 
-  /**
-   * The service call that is being forwarded to.
-   *
-   * @return The service call.
-   */
-  ServiceCall serviceCall();
-
-  ForwardReply<T> withEffects(Effect... effect);
-}
+/** An action. */
+@CloudStateAnnotation
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface Action {}

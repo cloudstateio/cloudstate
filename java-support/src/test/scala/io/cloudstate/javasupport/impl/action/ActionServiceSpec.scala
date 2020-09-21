@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.impl.controller
+package io.cloudstate.javasupport.impl.action
 
 import java.util.concurrent.{CompletableFuture, CompletionStage}
 
@@ -22,18 +22,12 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.javadsl.Source
 import akka.stream.scaladsl.Sink
-import cloudstate.javasupport.Controllerspec
-import cloudstate.javasupport.Controllerspec.{In, Out}
+import cloudstate.javasupport.Actionspec
+import cloudstate.javasupport.Actionspec.{In, Out}
 import com.google.protobuf
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import io.cloudstate.javasupport.{Context, ServiceCallFactory}
-import io.cloudstate.javasupport.controller.{
-  ControllerContext,
-  ControllerHandler,
-  ControllerReply,
-  Effect,
-  MessageEnvelope
-}
+import io.cloudstate.javasupport.action.{ActionContext, ActionHandler, ActionReply, Effect, MessageEnvelope}
 import io.cloudstate.javasupport.impl.{AnySupport, ResolvedServiceCallFactory}
 import io.cloudstate.protocol.entity.{Forward, Reply}
 import io.cloudstate.protocol.function.{FunctionCommand, FunctionReply, StatelessFunction}
@@ -43,14 +37,14 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.compat.java8.FutureConverters._
 
-class ControllerServiceSpec extends WordSpec with Matchers with BeforeAndAfterAll with Inside with OptionValues {
+class ActionServiceSpec extends WordSpec with Matchers with BeforeAndAfterAll with Inside with OptionValues {
 
-  private implicit val system = ActorSystem("ControllerServiceSpec")
+  private implicit val system = ActorSystem("ActionServiceSpec")
 
   import system.dispatcher
 
   private val serviceDescriptor =
-    cloudstate.javasupport.Controllerspec.getDescriptor.findServiceByName("ControllerSpec")
+    cloudstate.javasupport.Actionspec.getDescriptor.findServiceByName("ActionSpec")
   private val serviceName = serviceDescriptor.getFullName
 
   override protected def afterAll(): Unit = {
@@ -58,11 +52,11 @@ class ControllerServiceSpec extends WordSpec with Matchers with BeforeAndAfterAl
     system.terminate()
   }
 
-  def create(handler: ControllerHandler): StatelessFunction = {
-    val service = new ControllerService(
+  def create(handler: ActionHandler): StatelessFunction = {
+    val service = new ActionService(
       handler,
       serviceDescriptor,
-      new AnySupport(Array(Controllerspec.getDescriptor), this.getClass.getClassLoader)
+      new AnySupport(Array(Actionspec.getDescriptor), this.getClass.getClassLoader)
     )
 
     val services = Map(serviceName -> service)
@@ -73,12 +67,12 @@ class ControllerServiceSpec extends WordSpec with Matchers with BeforeAndAfterAl
     })
   }
 
-  "The controller service" should {
+  "The action service" should {
     "invoke unary commands" in {
       val service = create(new AbstractHandler {
         override def handleUnary(commandName: String,
                                  message: MessageEnvelope[protobuf.Any],
-                                 context: ControllerContext): CompletionStage[ControllerReply[protobuf.Any]] =
+                                 context: ActionContext): CompletionStage[ActionReply[protobuf.Any]] =
           CompletableFuture.completedFuture(createOutReply("out: " + extractInField(message)))
       })
 
@@ -97,7 +91,7 @@ class ControllerServiceSpec extends WordSpec with Matchers with BeforeAndAfterAl
       val service = create(new AbstractHandler {
         override def handleStreamedIn(commandName: String,
                                       stream: Source[MessageEnvelope[protobuf.Any], NotUsed],
-                                      context: ControllerContext): CompletionStage[ControllerReply[protobuf.Any]] =
+                                      context: ActionContext): CompletionStage[ActionReply[protobuf.Any]] =
           stream.asScala
             .map(extractInField)
             .runWith(Sink.seq)
@@ -126,7 +120,7 @@ class ControllerServiceSpec extends WordSpec with Matchers with BeforeAndAfterAl
       val service = create(new AbstractHandler {
         override def handleStreamedOut(commandName: String,
                                        message: MessageEnvelope[protobuf.Any],
-                                       context: ControllerContext): Source[ControllerReply[protobuf.Any], NotUsed] = {
+                                       context: ActionContext): Source[ActionReply[protobuf.Any], NotUsed] = {
           val in = extractInField(message)
           akka.stream.scaladsl.Source(1 to 3).map(idx => createOutReply(s"out $idx: $in")).asJava
         }
@@ -152,7 +146,7 @@ class ControllerServiceSpec extends WordSpec with Matchers with BeforeAndAfterAl
       val service = create(new AbstractHandler {
         override def handleStreamed(commandName: String,
                                     stream: Source[MessageEnvelope[protobuf.Any], NotUsed],
-                                    context: ControllerContext): Source[ControllerReply[protobuf.Any], NotUsed] =
+                                    context: ActionContext): Source[ActionReply[protobuf.Any], NotUsed] =
           stream.asScala
             .map(extractInField)
             .map(in => createOutReply(s"out: $in"))
@@ -186,8 +180,8 @@ class ControllerServiceSpec extends WordSpec with Matchers with BeforeAndAfterAl
   private def createOutAny(field: String) =
     protobuf.Any.pack(Out.newBuilder().setField(field).build())
 
-  private def createOutReply(field: String): ControllerReply[protobuf.Any] =
-    ControllerReply.message(createOutAny(field))
+  private def createOutReply(field: String): ActionReply[protobuf.Any] =
+    ActionReply.message(createOutAny(field))
 
   private def extractInField(message: MessageEnvelope[protobuf.Any]) =
     message.payload().unpack(classOf[In]).getField
@@ -198,22 +192,22 @@ class ControllerServiceSpec extends WordSpec with Matchers with BeforeAndAfterAl
   private def extractOutField(payload: Option[ScalaPbAny]) =
     ScalaPbAny.toJavaProto(payload.value).unpack(classOf[Out]).getField
 
-  private trait AbstractHandler extends ControllerHandler {
+  private trait AbstractHandler extends ActionHandler {
     override def handleUnary(commandName: String,
                              message: MessageEnvelope[protobuf.Any],
-                             context: ControllerContext): CompletionStage[ControllerReply[protobuf.Any]] = ???
+                             context: ActionContext): CompletionStage[ActionReply[protobuf.Any]] = ???
 
     override def handleStreamedOut(commandName: String,
                                    message: MessageEnvelope[protobuf.Any],
-                                   context: ControllerContext): Source[ControllerReply[protobuf.Any], NotUsed] = ???
+                                   context: ActionContext): Source[ActionReply[protobuf.Any], NotUsed] = ???
 
     override def handleStreamedIn(commandName: String,
                                   stream: Source[MessageEnvelope[protobuf.Any], NotUsed],
-                                  context: ControllerContext): CompletionStage[ControllerReply[protobuf.Any]] = ???
+                                  context: ActionContext): CompletionStage[ActionReply[protobuf.Any]] = ???
 
     override def handleStreamed(commandName: String,
                                 stream: Source[MessageEnvelope[protobuf.Any], NotUsed],
-                                context: ControllerContext): Source[ControllerReply[protobuf.Any], NotUsed] = ???
+                                context: ActionContext): Source[ActionReply[protobuf.Any], NotUsed] = ???
   }
 
 }

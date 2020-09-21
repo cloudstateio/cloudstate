@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.controller;
+package io.cloudstate.javasupport.action;
 
 import akka.NotUsed;
 import akka.stream.javadsl.Source;
@@ -22,50 +22,50 @@ import com.google.protobuf.Any;
 
 import java.util.concurrent.CompletionStage;
 
-/** Low level interface for handling for controller calls. */
-public interface ControllerHandler {
+/** Low level interface for handling for action calls. */
+public interface ActionHandler {
 
   /**
    * Handle a unary call.
    *
    * @param commandName The name of the command this call is for.
    * @param message The message envelope of the message.
-   * @param context The controller context.
+   * @param context The action context.
    * @return A future of the message to return.
    */
-  CompletionStage<ControllerReply<Any>> handleUnary(
-      String commandName, MessageEnvelope<Any> message, ControllerContext context);
+  CompletionStage<ActionReply<Any>> handleUnary(
+      String commandName, MessageEnvelope<Any> message, ActionContext context);
 
   /**
    * Handle a streamed out call call.
    *
    * @param commandName The name of the command this call is for.
    * @param message The message envelope of the message.
-   * @param context The controller context.
+   * @param context The action context.
    * @return The stream of messages to return.
    */
-  Source<ControllerReply<Any>, NotUsed> handleStreamedOut(
-      String commandName, MessageEnvelope<Any> message, ControllerContext context);
+  Source<ActionReply<Any>, NotUsed> handleStreamedOut(
+      String commandName, MessageEnvelope<Any> message, ActionContext context);
 
   /**
    * Handle a streamed in call.
    *
    * @param commandName The name of the command this call is for.
    * @param stream The stream of messages to handle.
-   * @param context The controller context.
+   * @param context The action context.
    * @return A future of the message to return.
    */
-  CompletionStage<ControllerReply<Any>> handleStreamedIn(
-      String commandName, Source<MessageEnvelope<Any>, NotUsed> stream, ControllerContext context);
+  CompletionStage<ActionReply<Any>> handleStreamedIn(
+      String commandName, Source<MessageEnvelope<Any>, NotUsed> stream, ActionContext context);
 
   /**
    * Handle a full duplex streamed in call.
    *
    * @param commandName The name of the command this call is for.
    * @param stream The stream of messages to handle.
-   * @param context The controller context.
+   * @param context The action context.
    * @return The stream of messages to return.
    */
-  Source<ControllerReply<Any>, NotUsed> handleStreamed(
-      String commandName, Source<MessageEnvelope<Any>, NotUsed> stream, ControllerContext context);
+  Source<ActionReply<Any>, NotUsed> handleStreamed(
+      String commandName, Source<MessageEnvelope<Any>, NotUsed> stream, ActionContext context);
 }

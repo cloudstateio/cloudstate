@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.impl.controller
+package io.cloudstate.javasupport.impl.action
 
 import java.util
 
@@ -23,8 +23,7 @@ import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
-import io.cloudstate.javasupport.CloudStateRunner.Configuration
-import io.cloudstate.javasupport.controller._
+import io.cloudstate.javasupport.action._
 import io.cloudstate.javasupport.impl._
 import io.cloudstate.javasupport.{Context, Metadata, Service, ServiceCall, ServiceCallFactory}
 import io.cloudstate.protocol.entity.{Failure, Forward, Reply, SideEffect, Metadata => PbMetadata}
@@ -34,13 +33,13 @@ import scala.concurrent.Future
 import scala.compat.java8.FutureConverters._
 import scala.collection.JavaConverters._
 
-final class ControllerService(val controllerHandler: ControllerHandler,
-                              override val descriptor: Descriptors.ServiceDescriptor,
-                              val anySupport: AnySupport)
+final class ActionService(val actionHandler: ActionHandler,
+                          override val descriptor: Descriptors.ServiceDescriptor,
+                          val anySupport: AnySupport)
     extends Service {
 
   override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] =
-    controllerHandler match {
+    actionHandler match {
       case resolved: ResolvedEntityFactory => Some(resolved.resolvedMethods)
       case _ => None
     }
@@ -48,7 +47,7 @@ final class ControllerService(val controllerHandler: ControllerHandler,
   override final val entityType = StatelessFunction.name
 }
 
-final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, ControllerService], rootContext: Context)
+final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, ActionService], rootContext: Context)
     extends StatelessFunction {
 
   import _system.dispatcher
@@ -65,7 +64,7 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Co
       case other => throw new RuntimeException(s"Unknown metadata implementation: ${other.getClass}, cannot send")
     }
 
-  private def controllerMessageToReply(msg: ControllerReply[JavaPbAny]) = {
+  private def actionMessageToReply(msg: ActionReply[JavaPbAny]) = {
     val response = msg match {
       case message: MessageReply[JavaPbAny] =>
         FunctionReply.Response.Reply(
@@ -88,7 +87,7 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Co
     }
 
     val effects = msg match {
-      case impl: ControllerReplyImpl[_] =>
+      case impl: ActionReplyImpl[_] =>
         impl._effects
       case other =>
         other.effects().asScala.toList
@@ -116,10 +115,10 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Co
     services.get(in.serviceName) match {
       case Some(service) =>
         val context = createContext(in)
-        service.controllerHandler
+        service.actionHandler
           .handleUnary(in.name, MessageEnvelope.of(toJavaPbAny(in.payload), context.metadata()), context)
           .toScala
-          .map(controllerMessageToReply)
+          .map(actionMessageToReply)
       case None =>
         Future.successful(
           FunctionReply(FunctionReply.Response.Failure(Failure(0, "Unknown service: " + in.serviceName)))
@@ -158,7 +157,7 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Co
         case (Seq(call), messages) =>
           services.get(call.serviceName) match {
             case Some(service) =>
-              service.controllerHandler
+              service.actionHandler
                 .handleStreamedIn(
                   call.name,
                   messages.map { message =>
@@ -168,7 +167,7 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Co
                   createContext(call)
                 )
                 .toScala
-                .map(controllerMessageToReply)
+                .map(actionMessageToReply)
             case None =>
               Future.successful(
                 FunctionReply(FunctionReply.Response.Failure(Failure(0, "Unknown service: " + call.serviceName)))
@@ -189,10 +188,10 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Co
     services.get(in.serviceName) match {
       case Some(service) =>
         val context = createContext(in)
-        service.controllerHandler
+        service.actionHandler
           .handleStreamedOut(in.name, MessageEnvelope.of(toJavaPbAny(in.payload), context.metadata()), context)
           .asScala
-          .map(controllerMessageToReply)
+          .map(actionMessageToReply)
       case None =>
         Source.single(FunctionReply(FunctionReply.Response.Failure(Failure(0, "Unknown service: " + in.serviceName))))
     }
@@ -231,7 +230,7 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Co
         case (Seq(call), messages) =>
           services.get(call.serviceName) match {
             case Some(service) =>
-              service.controllerHandler
+              service.actionHandler
                 .handleStreamed(
                   call.name,
                   messages.map { message =>
@@ -241,7 +240,7 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Co
                   createContext(call)
                 )
                 .asScala
-                .map(controllerMessageToReply)
+                .map(actionMessageToReply)
             case None =>
               Source.single(
                 FunctionReply(FunctionReply.Response.Failure(Failure(0, "Unknown service: " + call.serviceName)))
@@ -249,38 +248,38 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Co
           }
       }
 
-  private def createContext(in: FunctionCommand): ControllerContext = {
+  private def createContext(in: FunctionCommand): ActionContext = {
     val metadata = new MetadataImpl(in.metadata.map(_.entries.toVector).getOrElse(Nil))
-    new ControllerContextImpl(metadata)
+    new ActionContextImpl(metadata)
   }
 
-  class ControllerContextImpl(override val metadata: Metadata) extends ControllerContext {
+  class ActionContextImpl(override val metadata: Metadata) extends ActionContext {
     override val serviceCallFactory: ServiceCallFactory = rootContext.serviceCallFactory()
   }
 }
 
-trait ControllerReplyImpl[T] extends ControllerReply[T] {
+trait ActionReplyImpl[T] extends ActionReply[T] {
   def _effects: List[Effect]
   override def effects(): util.Collection[Effect] = _effects.asJava
 }
 case class MessageEnvelopeImpl[T](payload: T, metadata: Metadata) extends MessageEnvelope[T]
 case class MessageReplyImpl[T](payload: T, metadata: Metadata, _effects: List[Effect])
     extends MessageReply[T]
-    with ControllerReplyImpl[T] {
+    with ActionReplyImpl[T] {
   def this(payload: T, metadata: Metadata) = this(payload, metadata, Nil)
   override def withEffects(effect: Effect*): MessageReply[T] = MessageReplyImpl(payload, metadata, _effects ++ effect)
 }
 case class ForwardReplyImpl[T](serviceCall: ServiceCall, _effects: List[Effect])
     extends ForwardReply[T]
-    with ControllerReplyImpl[T] {
+    with ActionReplyImpl[T] {
   def this(serviceCall: ServiceCall) = this(serviceCall, Nil)
   override def withEffects(effect: Effect*): ForwardReply[T] = ForwardReplyImpl(serviceCall, _effects ++ effect)
 }
-case class NoReply[T](_effects: List[Effect]) extends ControllerReplyImpl[T] {
-  override def withEffects(effect: Effect*): ControllerReply[T] = NoReply(_effects ++ effect)
+case class NoReply[T](_effects: List[Effect]) extends ActionReplyImpl[T] {
+  override def withEffects(effect: Effect*): ActionReply[T] = NoReply(_effects ++ effect)
 }
 object NoReply {
   private val instance = NoReply[Any](Nil)
-  def apply[T]: ControllerReply[T] = instance.asInstanceOf[NoReply[T]]
+  def apply[T]: ActionReply[T] = instance.asInstanceOf[NoReply[T]]
 }
 case class EffectImpl(serviceCall: ServiceCall, synchronous: Boolean) extends Effect

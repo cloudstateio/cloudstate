@@ -14,26 +14,19 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.controller;
+package io.cloudstate.javasupport.action;
 
-import io.cloudstate.javasupport.Metadata;
+import io.cloudstate.javasupport.ServiceCall;
 
-/** A message reply. */
-public interface MessageReply<T> extends ControllerReply<T> {
-
-  /**
-   * The payload of the message reply.
-   *
-   * @return The payload.
-   */
-  T payload();
+/** A forward reply. */
+public interface ForwardReply<T> extends ActionReply<T> {
 
   /**
-   * The metadata associated with the message.
+   * The service call that is being forwarded to.
    *
-   * @return The metadata.
+   * @return The service call.
    */
-  Metadata metadata();
+  ServiceCall serviceCall();
 
-  MessageReply<T> withEffects(Effect... effect);
+  ForwardReply<T> withEffects(Effect... effect);
 }

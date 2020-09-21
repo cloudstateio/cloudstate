@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.controller;
+package io.cloudstate.javasupport.action;
 
 import io.cloudstate.javasupport.Metadata;
-import io.cloudstate.javasupport.impl.controller.MessageEnvelopeImpl;
+import io.cloudstate.javasupport.impl.action.MessageEnvelopeImpl;
 
 /** A message envelope. */
 public interface MessageEnvelope<T> {

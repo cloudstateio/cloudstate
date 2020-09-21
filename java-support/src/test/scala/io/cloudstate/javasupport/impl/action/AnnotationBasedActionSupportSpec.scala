@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.impl.controller
+package io.cloudstate.javasupport.impl.action
 
 import java.util.Optional
 import java.util.concurrent.{CompletableFuture, CompletionStage, TimeUnit}
@@ -23,16 +23,16 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.javadsl.Source
 import akka.stream.scaladsl.{JavaFlowSupport, Sink}
-import cloudstate.javasupport.Controllerspec
-import cloudstate.javasupport.Controllerspec.{In, Out}
+import cloudstate.javasupport.Actionspec
+import cloudstate.javasupport.Actionspec.{In, Out}
 import com.google.protobuf
 import io.cloudstate.javasupport.{Metadata, ServiceCallFactory}
-import io.cloudstate.javasupport.controller.{
+import io.cloudstate.javasupport.action.{
+  Action,
+  ActionContext,
+  ActionHandler,
+  ActionReply,
   CallHandler,
-  Controller,
-  ControllerContext,
-  ControllerHandler,
-  ControllerReply,
   MessageEnvelope,
   MessageReply
 }
@@ -43,9 +43,9 @@ import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.compat.java8.FutureConverters._
 
-class AnnotationBasedControllerSupportSpec extends WordSpec with Matchers with BeforeAndAfterAll {
+class AnnotationBasedActionSupportSpec extends WordSpec with Matchers with BeforeAndAfterAll {
 
-  private implicit val sys = ActorSystem("AnnotationBasedControllerSupportSpec")
+  private implicit val sys = ActorSystem("AnnotationBasedActionSupportSpec")
 
   import sys.dispatcher
 
@@ -54,20 +54,18 @@ class AnnotationBasedControllerSupportSpec extends WordSpec with Matchers with B
     sys.terminate()
   }
 
-  private val anySupport = new AnySupport(Array(Controllerspec.getDescriptor), this.getClass.getClassLoader)
+  private val anySupport = new AnySupport(Array(Actionspec.getDescriptor), this.getClass.getClassLoader)
 
-  private object ctx extends ControllerContext {
+  private object ctx extends ActionContext {
     override def metadata(): Metadata = Metadata.EMPTY.add("scope", "call")
 
     override def serviceCallFactory(): ServiceCallFactory = ???
   }
 
-  private def create(handler: AnyRef): ControllerHandler =
-    new AnnotationBasedControllerSupport(handler,
-                                         anySupport,
-                                         Controllerspec.getDescriptor.findServiceByName("ControllerSpec"))
+  private def create(handler: AnyRef): ActionHandler =
+    new AnnotationBasedActionSupport(handler, anySupport, Actionspec.getDescriptor.findServiceByName("ActionSpec"))
 
-  "Annotation based controller support" should {
+  "Annotation based action support" should {
 
     "support invoking unary commands" when {
       def test(handler: AnyRef) = {
@@ -112,13 +110,13 @@ class AnnotationBasedControllerSupportSpec extends WordSpec with Matchers with B
 
       "synchronous out wrapped in reply" in test(new {
         @CallHandler
-        def unary(in: In): ControllerReply[Out] = ControllerReply.message(inToOut(in))
+        def unary(in: In): ActionReply[Out] = ActionReply.message(inToOut(in))
       })
 
       "asynchronous out wrapped in reply" in test(new {
         @CallHandler
-        def unary(in: In): CompletionStage[ControllerReply[Out]] =
-          CompletableFuture.completedFuture(ControllerReply.message(inToOut(in)))
+        def unary(in: In): CompletionStage[ActionReply[Out]] =
+          CompletableFuture.completedFuture(ActionReply.message(inToOut(in)))
       })
 
       "with metadata parameter" in test(new {
@@ -131,7 +129,7 @@ class AnnotationBasedControllerSupportSpec extends WordSpec with Matchers with B
 
       "with context parameter" in test(new {
         @CallHandler
-        def unary(in: In, context: ControllerContext): Out = inToOut(in)
+        def unary(in: In, context: ActionContext): Out = inToOut(in)
       })
 
     }
@@ -189,8 +187,8 @@ class AnnotationBasedControllerSupportSpec extends WordSpec with Matchers with B
 
       "source wrapped in reply" in test(new {
         @CallHandler
-        def streamedOut(in: In): Source[ControllerReply[Out], NotUsed] =
-          inToOut(in).map[ControllerReply[Out]](ControllerReply.message(_)).asJava
+        def streamedOut(in: In): Source[ActionReply[Out], NotUsed] =
+          inToOut(in).map[ActionReply[Out]](ActionReply.message(_)).asJava
       })
 
       "with metadata parameter" in test(new {
@@ -261,8 +259,8 @@ class AnnotationBasedControllerSupportSpec extends WordSpec with Matchers with B
 
       "returns reply" in test(new {
         @CallHandler
-        def streamedIn(in: Source[In, NotUsed]): CompletionStage[ControllerReply[Out]] =
-          inToOut(in.asScala).map[ControllerReply[Out]](ControllerReply.message(_)).toJava
+        def streamedIn(in: Source[In, NotUsed]): CompletionStage[ActionReply[Out]] =
+          inToOut(in.asScala).map[ActionReply[Out]](ActionReply.message(_)).toJava
       })
 
       "with metadata parameter" in test(new {
@@ -275,7 +273,7 @@ class AnnotationBasedControllerSupportSpec extends WordSpec with Matchers with B
 
       "with context parameter" in test(new {
         @CallHandler
-        def streamedIn(in: Source[In, NotUsed], context: ControllerContext): CompletionStage[Out] =
+        def streamedIn(in: Source[In, NotUsed], context: ActionContext): CompletionStage[Out] =
           inToOut(in.asScala).toJava
       })
 
@@ -371,14 +369,14 @@ class AnnotationBasedControllerSupportSpec extends WordSpec with Matchers with B
 
       "out wrapped in reply" in test(new {
         @CallHandler
-        def streamed(in: Source[In, NotUsed]): Source[ControllerReply[Out], NotUsed] =
-          inToOut(in.asScala).map[ControllerReply[Out]](ControllerReply.message(_)).asJava
+        def streamed(in: Source[In, NotUsed]): Source[ActionReply[Out], NotUsed] =
+          inToOut(in.asScala).map[ActionReply[Out]](ActionReply.message(_)).asJava
       })
 
       "in wrapped in envelope out wrapped in reply" in test(new {
         @CallHandler
-        def streamed(in: Source[MessageEnvelope[In], NotUsed]): Source[ControllerReply[Out], NotUsed] =
-          inToOut(in.asScala.map(_.payload())).map[ControllerReply[Out]](ControllerReply.message(_)).asJava
+        def streamed(in: Source[MessageEnvelope[In], NotUsed]): Source[ActionReply[Out], NotUsed] =
+          inToOut(in.asScala.map(_.payload())).map[ActionReply[Out]](ActionReply.message(_)).asJava
       })
 
       "with metadata parameter" in test(new {
@@ -391,7 +389,7 @@ class AnnotationBasedControllerSupportSpec extends WordSpec with Matchers with B
 
       "with context parameter" in test(new {
         @CallHandler
-        def streamed(in: Source[In, NotUsed], context: ControllerContext): Source[Out, NotUsed] =
+        def streamed(in: Source[In, NotUsed], context: ActionContext): Source[Out, NotUsed] =
           inToOut(in.asScala).asJava
       })
 
@@ -405,7 +403,7 @@ class AnnotationBasedControllerSupportSpec extends WordSpec with Matchers with B
       Metadata.EMPTY.add("scope", "message")
     )
 
-  private def assertIsOutReplyWithField(reply: ControllerReply[protobuf.Any], field: String) =
+  private def assertIsOutReplyWithField(reply: ActionReply[protobuf.Any], field: String) =
     reply match {
       case message: MessageReply[protobuf.Any] =>
         val out = message.payload().unpack(classOf[Out])
