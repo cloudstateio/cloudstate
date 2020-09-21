@@ -42,7 +42,6 @@ class CrdtSupportFactory(system: ActorSystem,
                          config: EntityDiscoveryManager.Configuration,
                          discovery: EntityDiscovery,
                          grpcClientSettings: GrpcClientSettings,
-                         concurrencyEnforcer: ActorRef,
                          statsCollector: ActorRef)(implicit ec: ExecutionContext, mat: Materializer)
     extends EntityTypeSupportFactory {
 

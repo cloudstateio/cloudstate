@@ -29,7 +29,6 @@ import akka.util.Timeout
 import com.google.protobuf.any.{Any => pbAny}
 import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.event_sourced._
-import io.cloudstate.proxy.ConcurrencyEnforcer.{Action, ActionCompleted}
 import io.cloudstate.proxy.StatsCollector
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.telemetry.CloudstateTelemetry
@@ -40,11 +39,10 @@ object EventSourcedEntitySupervisor {
 
   private final case class Relay(actorRef: ActorRef)
 
-  def props(client: EventSourcedClient,
-            configuration: EventSourcedEntity.Configuration,
-            concurrencyEnforcer: ActorRef,
-            statsCollector: ActorRef)(implicit mat: Materializer): Props =
-    Props(new EventSourcedEntitySupervisor(client, configuration, concurrencyEnforcer, statsCollector))
+  def props(client: EventSourcedClient, configuration: EventSourcedEntity.Configuration, statsCollector: ActorRef)(
+      implicit mat: Materializer
+  ): Props =
+    Props(new EventSourcedEntitySupervisor(client, configuration, statsCollector))
 }
 
 /**
@@ -59,7 +57,6 @@ object EventSourcedEntitySupervisor {
  */
 final class EventSourcedEntitySupervisor(client: EventSourcedClient,
                                          configuration: EventSourcedEntity.Configuration,
-                                         concurrencyEnforcer: ActorRef,
                                          statsCollector: ActorRef)(implicit mat: Materializer)
     extends Actor
     with Stash {
@@ -90,8 +87,7 @@ final class EventSourcedEntitySupervisor(client: EventSourcedClient,
       val entityId = URLDecoder.decode(self.path.name, "utf-8")
       val manager = context.watch(
         context
-          .actorOf(EventSourcedEntity.props(configuration, entityId, relayRef, concurrencyEnforcer, statsCollector),
-                   "entity")
+          .actorOf(EventSourcedEntity.props(configuration, entityId, relayRef, statsCollector), "entity")
       )
       context.become(forwarding(manager, relayRef))
       unstashAll()
@@ -148,12 +144,8 @@ object EventSourcedEntity {
       replyTo: ActorRef
   )
 
-  final def props(configuration: Configuration,
-                  entityId: String,
-                  relay: ActorRef,
-                  concurrencyEnforcer: ActorRef,
-                  statsCollector: ActorRef): Props =
-    Props(new EventSourcedEntity(configuration, entityId, relay, concurrencyEnforcer, statsCollector))
+  final def props(configuration: Configuration, entityId: String, relay: ActorRef, statsCollector: ActorRef): Props =
+    Props(new EventSourcedEntity(configuration, entityId, relay, statsCollector))
 
   /**
    * Used to ensure the action ids sent to the concurrency enforcer are indeed unique.
@@ -164,7 +156,6 @@ object EventSourcedEntity {
 final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
                                entityId: String,
                                relay: ActorRef,
-                               concurrencyEnforcer: ActorRef,
                                statsCollector: ActorRef)
     extends PersistentActor
     with ActorLogging {
@@ -239,7 +230,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
   }
 
   private[this] final def reportActionComplete() =
-    concurrencyEnforcer ! ActionCompleted(currentCommand.actionId, System.nanoTime() - commandStartTime)
+    statsCollector ! StatsCollector.ReplyReceived(System.nanoTime() - commandStartTime)
 
   private[this] final def handleCommand(entityCommand: EntityCommand, sender: ActorRef): Unit = {
     instrumentation.commandStarted()
@@ -253,9 +244,8 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
     currentCommand =
       EventSourcedEntity.OutstandingCommand(idCounter, actorId + ":" + entityId + ":" + idCounter, sender)
     commandStartTime = System.nanoTime()
-    concurrencyEnforcer ! Action(currentCommand.actionId, () => {
-      relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Command(command))
-    })
+    relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Command(command))
+    statsCollector ! StatsCollector.CommandSent
   }
 
   private final def esReplyToUfReply(reply: EventSourcedReply) =
