@@ -140,7 +140,6 @@ object Serve {
 
   def createRoute(entities: Seq[ServableEntity],
                   router: UserFunctionRouter,
-                  statsCollector: ActorRef,
                   entityDiscoveryClient: EntityDiscoveryClient,
                   fileDescriptors: Seq[FileDescriptor],
                   emitters: Map[String, Emitter])(
@@ -149,7 +148,7 @@ object Serve {
       ec: ExecutionContext
   ): PartialFunction[HttpRequest, Future[HttpResponse]] = {
     val log = Logging(sys.eventStream, Serve.getClass)
-    val grpcProxy = createGrpcApi(entities, router, statsCollector, entityDiscoveryClient, emitters)
+    val grpcProxy = createGrpcApi(entities, router, entityDiscoveryClient, emitters)
     val grpcHandler = Function.unlift { request: HttpRequest =>
       val asResponse = grpcProxy.andThen { futureResult =>
         Some(futureResult.map {
@@ -201,7 +200,6 @@ object Serve {
 
   private[this] final def createGrpcApi(entities: Seq[ServableEntity],
                                         router: UserFunctionRouter,
-                                        statsCollector: ActorRef,
                                         entityDiscoveryClient: EntityDiscoveryClient,
                                         emitters: Map[String, Emitter])(
       implicit sys: ActorSystem,

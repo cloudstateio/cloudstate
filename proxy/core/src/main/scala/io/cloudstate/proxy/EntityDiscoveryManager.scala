@@ -39,7 +39,6 @@ import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.crdt.Crdt
 import io.cloudstate.protocol.event_sourced.EventSourced
 import io.cloudstate.protocol.function.StatelessFunction
-import io.cloudstate.proxy.StatsCollector.StatsCollectorSettings
 import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
 import io.cloudstate.proxy.autoscaler.{
   Autoscaler,
@@ -70,7 +69,6 @@ object EntityDiscoveryManager {
       passivationTimeout: Timeout,
       numberOfShards: Int,
       proxyParallelism: Int,
-      statsCollectorSettings: StatsCollectorSettings,
       journalEnabled: Boolean,
       config: Config
   ) {
@@ -88,7 +86,6 @@ object EntityDiscoveryManager {
            passivationTimeout = Timeout(config.getDuration("passivation-timeout").toMillis.millis),
            numberOfShards = config.getInt("number-of-shards"),
            proxyParallelism = config.getInt("proxy-parallelism"),
-           statsCollectorSettings = new StatsCollectorSettings(config.getConfig("stats")),
            journalEnabled = config.getBoolean("journal-enabled"),
            config = config)
     }
@@ -166,16 +163,14 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
       context.actorOf(Props(new NoAutoscaler), "noAutoscaler")
     }
   }
-  private[this] final val statsCollector =
-    context.actorOf(StatsCollector.props(config.statsCollectorSettings, autoscaler), "statsCollector")
 
   private final val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
-      Crdt.name -> new CrdtSupportFactory(system, config, entityDiscoveryClient, clientSettings, statsCollector),
-      StatelessFunction.name -> new StatelessFunctionSupportFactory(system, config, clientSettings, statsCollector)
+      Crdt.name -> new CrdtSupportFactory(system, config, entityDiscoveryClient, clientSettings),
+      StatelessFunction.name -> new StatelessFunctionSupportFactory(system, config, clientSettings)
     ) ++ {
       if (config.journalEnabled)
         Map(
-          EventSourced.name -> new EventSourcedSupportFactory(system, config, clientSettings, statsCollector)
+          EventSourced.name -> new EventSourcedSupportFactory(system, config, clientSettings)
         )
       else Map.empty
     }
@@ -221,7 +216,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
         /*
         val eventSupport = EventingManager.createSupport(config.getConfig("eventing"))
          */
-        val route = Serve.createRoute(entities, router, statsCollector, entityDiscoveryClient, descriptors, Map.empty)
+        val route = Serve.createRoute(entities, router, entityDiscoveryClient, descriptors, Map.empty)
 
         log.debug("Starting gRPC proxy")
 
