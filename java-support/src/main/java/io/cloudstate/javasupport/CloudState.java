@@ -280,26 +280,20 @@ public final class CloudState {
    * <p>This is a low level API intended for custom (eg, non reflection based) mechanisms for
    * implementing the action.
    *
-   * @param action The action handler.
+   * @param actionHandler The action handler.
    * @param descriptor The descriptor for the service that this action implements.
    * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
    *     types when needed.
    * @return This Cloudstate builder.
    */
   public CloudState registerAction(
-      ActionHandler action,
+      ActionHandler actionHandler,
       Descriptors.ServiceDescriptor descriptor,
       Descriptors.FileDescriptor... additionalDescriptors) {
 
-    Action actionAnnotation = action.getClass().getAnnotation(Action.class);
-    if (actionAnnotation == null) {
-      throw new IllegalArgumentException(
-          action.getClass() + " does not declare an " + Action.class + " annotation!");
-    }
-
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
 
-    ActionService service = new ActionService(action, descriptor, anySupport);
+    ActionService service = new ActionService(actionHandler, descriptor, anySupport);
 
     services.put(descriptor.getFullName(), system -> service);
 
