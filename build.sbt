@@ -410,7 +410,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "org.slf4j" % "slf4j-simple" % Slf4jSimpleVersion,
         //"ch.qos.logback"                 % "logback-classic"                   % "1.2.3", // Doesn't work well with SubstrateVM: https://github.com/vmencik/akka-graal-native/blob/master/README.md#logging
         "com.typesafe.slick" %% "slick" % SlickVersion,
-        "com.typesafe.slick" %% "slick-hikaricp" % SlickHikariVersion,
+        "com.typesafe.slick" %% "slick-hikaricp" % SlickHikariVersion
       ),
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
