@@ -1,0 +1,63 @@
+= Glossary
+
+ifdef::todo[TODO: The following need to be arranged so they can be digested more easily. Maybe alphabetically with a list with links above them?]
+
+== Stateful service
+
+A stateful service is a deployable unit. It is represented in Kubernetes as a `StatefulService` resource. It contains a <<User function>>, and may reference a <<Stateful store>>. The Cloudstate operator transforms a stateful service into a Kubernetes Deployment resource. The Cloudstate operator then defines a Kubernetes Service to expose the stateful service to the outside world. The deployment will be augmented by the injection of a Cloudstate <<Proxy>>.
+
+== Stateful store
+
+A stateful store is an abstraction over a datastore, typically a database. It is represented in Kubernetes as a `StatefulStore` resource. A single store may be used by multiple <<Stateful service>>s to store their data, but a stateful service may not necessarily have any store configured - if the stateful service does not have any durable state then it doesn't need a stateful store.
+
+== User function
+
+A user function is the code that the user writes, packaged as a Docker image, and deployed as a <<Stateful service>>. The user function exposes a gRPC interface that speaks the Cloudstate <<Protocol>>. The injected Cloudstate <<Proxy>> speaks to the user function using this protocol. The end-user developer, generally, doesn't need to provide the code implementation of this protocol along with the user function. This burden is delegated to a Cloudstate <<Support library>>, specific to the programming language used to write the user function.
+
+== Protocol
+
+The Cloudstate protocol is an open specification for Cloudstate state management proxies to speak to Cloudstate user functions. The Cloudstate project itself provides a <<Reference implementation>> of this protocol. The protocol is built upon gRPC, and provides support for multiple different <<Entity type>>s. Cloudstate provides a Technology Compatibility Kit (TCK) that can be used to verify any permutation of <<Proxy>> and <<Support library>> available. More technical details in xref:contribute:language-support.adoc#creating[Creating language support libraries].
+
+== Proxy
+
+The Cloudstate proxy is injected as a sidecar into the deployment of each <<Stateful service>>. It is responsible for state management, and exposing the <<Entity service>> implemented by the <<User function>> as both gRPC and REST services to the rest of the system, translating the incoming calls to <<Command>>s that are sent to the user function using the Cloudstate <<Protocol>>. The proxy will typically form a cluster with other nodes in the same stateful service, allowing advanced distributed state management features such as sharding, replication and addressed communication between nodes of a single stateful service.
+
+== Reference implementation
+
+The Cloudstate reference implementation implements the Cloudstate <<Protocol>>. It is implemented using https://akka.io[Akka], taking advantage of Akka's cluster features to provide scalable and resilient implementations of Cloudstate's stateful features.
+
+== Support library
+
+While a <<User function>> can be implemented simply by implementing the gRPC interfaces in the Cloudstate <<Protocol>>, this protocol is somewhat low level, and not particularly well suited for expressing the business logic that typically will reside in a user function. Instead, developers are encouraged to use a Cloudstate support library for their language of choice, if available.
+
+== Command
+
+A command is used to express the intention to alter the state of an <<Entity>>. A command is materialized by a message received by a user function. Commands may come from outside of the <<Stateful service>>, perhaps from other stateful services, other non Cloudstate services, or the outside world, or they may come from within the service, invoked as a side effect or to forward command handling from another command.
+
+== Entity
+
+A <<User function>> implements one or more entities. An entity is conceptually equivalent to a class, or a type of state. An entity will have multiple <<Entity instance>>s of it which can handle commands. For example, a user function may implement a chat room entity, encompassing the logic associated with chat rooms, and a particular chat room may be an instance of that entity, containing a list of the users currently in the room and a history of the messages sent to it. Each entity has a particular <<Entity type>>, which defines how the entity's state is persisted, shared, and what its capabilities are.
+
+=== Entity instance
+
+An instance of an <<Entity>>. Entity instances are identified by an <<Entity key>>, which is unique to a given entity. An entity holds state in the <<User function>>, and depending on the <<Entity type>> this state is held within the context of a gRPC stream. When a command for a particular entity instance is received, the <<Proxy>> will make a new streamed gRPC call for that entity instance to the <<User function>>. All subsequent commands received for that entity instance will be sent through that streamed call.
+
+=== Entity service
+
+An entity service is a gRPC service that allows interacting with an <<Entity>>. The <<Proxy>> makes this service available for other Kubernetes services and ingresses to consume, while the <<User function>> provides the implementation of the entity business logic. Note that the service is not implemented directly, by the user function like a normal gRPC service. Rather, it is implemented through the Cloudstate <<Protocol>>, which enriches the incoming and outgoing gRPC messages with state management capabilities, such as the ability to receive and update state.
+
+=== Entity type
+
+The type of state management that an <<Entity>> uses. Available types include <<Event sourced>> and <<Conflict-free replicated data type>>. Each type has its own sub protocol as part of the Cloudstate <<Protocol>> that it uses for state management, to convey state and updates specific to that type.
+
+=== Entity key
+
+A key used to identify instances of an <<Entity>>. All <<Command>>s must contain the entity key so that the command can be routed to the right instance of the entity that the command is for. The gRPC descriptor for the <<Entity service>> annotates the incoming message types for the entity to indicate which field(s) contain the entity key.
+
+== Event sourced
+
+A type of <<Entity>> that stores its state using a journal of events, and restores its state by replaying that journal. These are discussed in more detail in xref:eventsourced.adoc[Event sourcing].
+
+=== Conflict-free replicated data type
+
+A type of <<Entity>> that stores its state using a Conflict-free Replicated Data Type (CRDT), which is replicated across different nodes of the service. These are discussed in more detail in xref:crdts.adoc[Conflict-free Replicated Data Types].

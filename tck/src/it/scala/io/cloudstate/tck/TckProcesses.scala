@@ -17,61 +17,48 @@
 package io.cloudstate.tck
 
 import java.net.InetAddress
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentLinkedQueue
+import scala.sys.process._
 
 object TckProcesses {
 
   def create(config: TckConfiguration): TckProcesses = {
-    val frontend = if (config.frontend.dockerImage.nonEmpty) {
-      createDockerFrontend(config)
-    } else createCommandProcess(config.frontend)
+    val service = if (config.service.dockerImage.nonEmpty) {
+      createDockerService(config)
+    } else createCommandProcess(config.service)
     val proxy = if (config.proxy.dockerImage.nonEmpty) {
       createDockerProxy(config)
     } else createCommandProcess(config.proxy)
 
-    TckProcesses(proxy, frontend)
+    TckProcesses(proxy, service)
   }
 
   private def createCommandProcess(spec: TckProcessConfig): TckProcess =
     new TckProcess {
       private var process: Option[Process] = None
+      private val logger = new TckProcessLogger
 
       override def start(): Unit = {
         require(process.isEmpty, "Process already started")
         val localhost = InetAddress.getLocalHost.getHostAddress
-        val pb =
-          new ProcessBuilder(spec.command.map(_.replace("%LOCALHOST%", localhost)): _*)
-            .inheritIO()
-            .directory(spec.directory)
-
-        val env = pb.environment
-
-        spec.envVars.foreach {
-          case (key, value) =>
-            env.put(key, value)
-        }
-        process = Some(pb.start())
+        val command = spec.command.map(_.replace("%LOCALHOST%", localhost))
+        val pb = Process(command, spec.directory, spec.envVars.toSeq: _*)
+        process = Some(pb.run(logger))
       }
 
       override def stop(): Unit =
         process match {
           case Some(p) =>
             spec.stopCommand match {
-              case Some(stopCommand) =>
-                new ProcessBuilder(stopCommand: _*)
-                  .inheritIO()
-                  .directory(spec.directory)
-                  .start()
-              case None => p.destroy()
-            }
-            p.waitFor(5, TimeUnit.SECONDS) || {
-              p.destroyForcibly()
-              true
+              case Some(stopCommand) => Process(stopCommand, spec.directory).run(logger)
+              case None => p.destroy(); p.exitValue() // waits for process to terminate
             }
             process = None
           case None =>
             sys.error("Process not started")
         }
+
+      override def logs(name: String): Unit = logger.printBufferedLogs(name)
     }
 
   private def createDockerProxy(config: TckConfiguration) = {
@@ -96,11 +83,11 @@ object TckProcesses {
     )
   }
 
-  private def createDockerFrontend(config: TckConfiguration) =
-    createDocker(config.frontend,
-                 "cloudstate-tck-frontend",
+  private def createDockerService(config: TckConfiguration) =
+    createDocker(config.service,
+                 "cloudstate-tck-service",
                  Map(
-                   "PORT" -> config.frontend.port.toString
+                   "PORT" -> config.service.port.toString
                  ),
                  Nil)
 
@@ -109,6 +96,8 @@ object TckProcesses {
                            extraEnv: Map[String, String],
                            extraArgs: Seq[String]): TckProcess =
     new TckProcess {
+      private val logger = new TckProcessLogger
+
       override def start(): Unit = {
         val env = extraEnv ++ spec.envVars
 
@@ -119,23 +108,31 @@ object TckProcesses {
           } :+
           spec.dockerImage
 
-        new ProcessBuilder(command: _*)
-          .inheritIO()
-          .start()
+        Process(command).run(logger)
       }
 
       override def stop(): Unit =
-        new ProcessBuilder("docker", "stop", name)
-          .inheritIO()
-          .start()
+        Process(Seq("docker", "stop", name)).run(logger).exitValue() // waits for process to terminate
+
+      override def logs(name: String): Unit = logger.printBufferedLogs(name)
     }
 
 }
 
-case class TckProcesses(proxy: TckProcess, frontend: TckProcess)
+case class TckProcesses(proxy: TckProcess, service: TckProcess)
 
 trait TckProcess {
   def start(): Unit
-
   def stop(): Unit
+  def logs(name: String): Unit
+}
+
+final class TckProcessLogger extends ProcessLogger {
+  private val buffer = new ConcurrentLinkedQueue[String]
+
+  override def out(s: => String): Unit = buffer.add(s)
+  override def err(s: => String): Unit = buffer.add(s)
+  override def buffer[T](f: => T): T = f
+
+  def printBufferedLogs(name: String): Unit = buffer.forEach(line => println(s"[$name] $line"))
 }

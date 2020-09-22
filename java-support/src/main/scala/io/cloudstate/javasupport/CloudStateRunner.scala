@@ -25,6 +25,7 @@ import akka.http.scaladsl._
 import akka.http.scaladsl.model._
 import akka.stream.{ActorMaterializer, Materializer}
 import com.google.protobuf.Descriptors
+import io.cloudstate.javasupport.impl.action.{ActionService, StatelessFunctionImpl}
 import io.cloudstate.javasupport.impl.eventsourced.{EventSourcedImpl, EventSourcedStatefulService}
 import io.cloudstate.javasupport.impl.{EntityDiscoveryImpl, ResolvedServiceCallFactory, ResolvedServiceMethod}
 import io.cloudstate.javasupport.impl.crdt.{CrdtImpl, CrdtStatefulService}
@@ -33,6 +34,7 @@ import io.cloudstate.protocol.crdt.CrdtHandler
 import io.cloudstate.protocol.crud.CrudHandler
 import io.cloudstate.protocol.entity.EntityDiscoveryHandler
 import io.cloudstate.protocol.event_sourced.EventSourcedHandler
+import io.cloudstate.protocol.function.StatelessFunctionHandler
 
 import scala.compat.java8.FutureConverters
 import scala.concurrent.Future
@@ -63,15 +65,22 @@ object CloudStateRunner {
  *
  * CloudStateRunner can be seen as a low-level API for cases where [[io.cloudstate.javasupport.CloudState#start()]] isn't enough.
  */
-final class CloudStateRunner private[this] (_system: ActorSystem, services: Map[String, StatefulService]) {
+final class CloudStateRunner private[this] (
+    _system: ActorSystem,
+    serviceFactories: Map[String, java.util.function.Function[ActorSystem, Service]]
+) {
   private[javasupport] implicit final val system = _system
   private[this] implicit final val materializer: Materializer = ActorMaterializer()
 
   private[this] final val configuration =
     new CloudStateRunner.Configuration(system.settings.config.getConfig("cloudstate"))
 
+  private val services = serviceFactories.toSeq.map {
+    case (serviceName, factory) => serviceName -> factory(system)
+  }.toMap
+
   // TODO JavaDoc
-  def this(services: java.util.Map[String, StatefulService]) {
+  def this(services: java.util.Map[String, java.util.function.Function[ActorSystem, Service]]) {
     this(ActorSystem("StatefulService", {
       val conf = ConfigFactory.load()
       conf.getConfig("cloudstate.system").withFallback(conf)
@@ -79,7 +88,7 @@ final class CloudStateRunner private[this] (_system: ActorSystem, services: Map[
   }
 
   // TODO JavaDoc
-  def this(services: java.util.Map[String, StatefulService], config: Config) {
+  def this(services: java.util.Map[String, java.util.function.Function[ActorSystem, Service]], config: Config) {
     this(ActorSystem("StatefulService", config), services.asScala.toMap)
   }
 
@@ -102,8 +111,13 @@ final class CloudStateRunner private[this] (_system: ActorSystem, services: Map[
           val crdtImpl = new CrdtImpl(system, crdtServices, rootContext)
           route orElse CrdtHandler.partial(crdtImpl)
 
+        case (route, (serviceClass, actionServices: Map[String, ActionService] @unchecked))
+            if serviceClass == classOf[ActionService] =>
+          val actionImpl = new StatelessFunctionImpl(system, actionServices, rootContext)
+          route orElse StatelessFunctionHandler.partial(actionImpl)
+
         case (route, (serviceClass, crudServices: Map[String, CrudStatefulService] @unchecked))
-            if serviceClass == classOf[CrudStatefulService] =>
+          if serviceClass == classOf[CrudStatefulService] =>
           val crudImpl = new CrudImpl(system, crudServices, rootContext, configuration)
           route orElse CrudHandler.partial(crudImpl)
 
@@ -151,7 +165,7 @@ final class CloudStateRunner private[this] (_system: ActorSystem, services: Map[
  * StatefulService describes an entitiy type in a way which makes it possible
  * to deploy.
  */
-trait StatefulService {
+trait Service {
 
   /**
    * @return a Protobuf ServiceDescriptor of its externally accessible gRPC API

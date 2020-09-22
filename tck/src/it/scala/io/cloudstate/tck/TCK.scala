@@ -18,8 +18,8 @@ package io.cloudstate.tck
 
 import org.scalatest._
 import com.typesafe.config.ConfigFactory
-
-import scala.collection.JavaConverters._
+import io.cloudstate.testkit.ServiceAddress
+import scala.jdk.CollectionConverters._
 
 class TCK extends Suites({
   val config = ConfigFactory.load()
@@ -44,9 +44,9 @@ class TCK extends Suites({
 object ManagedCloudStateTCK {
   def settings(config: TckConfiguration): CloudStateTCK.Settings = {
     CloudStateTCK.Settings(
-      CloudStateTCK.Address(config.tckHostname, config.tckPort),
-      CloudStateTCK.Address(config.proxy.hostname, config.proxy.port),
-      CloudStateTCK.Address(config.frontend.hostname, config.frontend.port)
+      ServiceAddress(config.tckHostname, config.tckPort),
+      ServiceAddress(config.proxy.hostname, config.proxy.port),
+      ServiceAddress(config.service.hostname, config.service.port)
     )
   }
 }
@@ -54,17 +54,29 @@ object ManagedCloudStateTCK {
 class ManagedCloudStateTCK(config: TckConfiguration) extends CloudStateTCK("for " + config.name, ManagedCloudStateTCK.settings(config)) {
   config.validate()
 
-  val processes: TckProcesses =  TckProcesses.create(config)
+  val processes: TckProcesses = TckProcesses.create(config)
 
   override def beforeAll(): Unit = {
-    processes.frontend.start()
+    processes.service.start()
     super.beforeAll()
     processes.proxy.start()
   }
 
   override def afterAll(): Unit = {
-    try Option(processes).foreach(_.proxy.stop())
-    finally try Option(processes).foreach(_.frontend.stop())
+    try processes.proxy.stop()
+    finally try processes.service.stop()
     finally super.afterAll()
+  }
+
+  // only print the process logs on failures
+  override protected def withFixture(test: NoArgTest): Outcome = {
+    super.withFixture(test) match {
+      case failed: Failed =>
+        alert("Playing buffered logs for failed test:")
+        processes.proxy.logs("proxy")
+        processes.service.logs("service")
+        failed
+      case other => other
+    }
   }
 }

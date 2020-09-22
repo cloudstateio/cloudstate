@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: cloudstate-system
+  name: cloudstate-config
+data:
+  config.yaml: |
+    noStore:
+      image: cloudstateio/cloudstate-proxy-native-no-store:latest
+    inMemory:
+      image: cloudstateio/cloudstate-proxy-native-in-memory:latest
+    postgres:
+      image: cloudstateio/cloudstate-proxy-native-postgres:latest
+    cassandra:
+      image: cloudstateio/cloudstate-proxy-native-cassandra:latest

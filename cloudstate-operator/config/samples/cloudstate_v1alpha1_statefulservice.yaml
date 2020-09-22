@@ -1,0 +1,8 @@
+apiVersion: cloudstate.io/v1alpha1
+kind: StatefulService
+metadata:
+  name: statefulservice-sample
+spec:
+  containers:
+  - image: cloudstateio/samples-js-chat-presence:latest
+    name: "presence-app"

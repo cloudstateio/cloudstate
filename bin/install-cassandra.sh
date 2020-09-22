@@ -34,9 +34,6 @@ if ! kubectl wait --for=condition=ready --timeout=10m pod/cassandra-0 ; then
 fi
 kubectl get statefulset cassandra
 
-# write env exports to file for the installed cassandra
-cat << EOF > cassandra-env.sh
-export CASSANDRA_SERVICE=cassandra.default.svc.cluster.local
-export CASSANDRA_USERNAME=cassandra
-export CASSANDRA_PASSWORD=$(kubectl get secret --namespace default cassandra -o jsonpath="{.data.cassandra-password}" | base64 --decode)
-EOF
+CASSANDRA_PASSWORD=$(kubectl get secret --namespace default cassandra -o jsonpath="{.data.cassandra-password}" | base64 --decode)
+kubectl create secret generic cassandra-credentials \
+  --from-literal=username=cassandra --from-literal=password="$CASSANDRA_PASSWORD"

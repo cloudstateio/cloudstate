@@ -1,0 +1,23 @@
+= Contributing to the project
+
+Are you interested in helping make this vision a reality? We would love to have you!
+All contributions are welcome: ideas, criticism, praise, code, bug fixes, docs, buzz, etc. The following communication channels are available:
+
+* Our https://groups.google.com/forum/#!forum/cloudstate[Mailing List] is a good place to start with open ended discussions about Cloudstate
+* Join the discussion on our https://gitter.im/Cloudstate-IO/community[Gitter Channel].
+* The https://github.com/cloudstateio/cloudstate/issues[GitHub Issue Tracker] is a good place to raise issues, including bug reports and feature requests.
+* You can also https://twitter.com/CloudstateIO[follow us on Twitter].
+* There are two weekly Cloudstate contributors' calls, which are scheduled so that people from around the world can attend. The schedule of calls can be found in https://calendar.google.com/calendar/embed?src=lightbend.com_3is0shfmmqgh4q57eo0n8m6bfc%40group.calendar.google.com[this Google calandar].
+ ** Add this calendar to your Google calendar by clicking https://calendar.google.com/calendar/b/1?cid=bGlnaHRiZW5kLmNvbV8zaXMwc2hmbW1xZ2g0cTU3ZW8wbjhtNmJmY0Bncm91cC5jYWxlbmRhci5nb29nbGUuY29t[here].
+ ** Import into calendar apps that support iCal using https://calendar.google.com/calendar/ical/lightbend.com_3is0shfmmqgh4q57eo0n8m6bfc%40group.calendar.google.com/public/basic.ics[this link].
+
+The remainder of this section describes how to get started with your own build of Cloudstate and rationale around implementation choices:
+
+* xref:architecture.adoc[Architecture]
+* xref:getting-started.adoc[Getting started]
+* xref:serialization.adoc[Serialization conventions]
+* xref:language-support.adoc[Language support]
+* xref:build-native.adoc[Building native images]
+* xref:knative-integration.adoc[Knative integration]
+* xref:graalvm-integration.adoc[GraalVM integration]
+* xref:testing.adoc[Testing]

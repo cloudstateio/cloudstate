@@ -25,6 +25,7 @@ import akka.http.scaladsl.unmarshalling.Unmarshal
 import akka.testkit.TestKit
 import io.cloudstate.proxy.TestProxy
 import io.cloudstate.proxy.test.thing.{Key, Thing, ThingClient}
+import io.cloudstate.testkit.TestService
 import io.cloudstate.testkit.eventsourced.{EventSourcedMessages, TestEventSourcedService}
 import io.grpc.{Status, StatusRuntimeException}
 import org.scalatest.concurrent.ScalaFutures
@@ -35,12 +36,12 @@ class ExceptionHandlingSpec extends WordSpec with Matchers with BeforeAndAfterAl
 
   implicit val system = ActorSystem("ExceptionHandlingSpec")
 
-  val service = TestEventSourcedService()
+  val service = TestService()
   val proxy = TestProxy(service.port)
   val client = ThingClient(GrpcClientSettings.connectToServiceAt("localhost", proxy.port).withTls(false))
   val spec = TestEventSourcedService.entitySpec(Thing)
 
-  val discovery = service.expectDiscovery()
+  val discovery = service.entityDiscovery.expectDiscovery()
   discovery.expect(proxy.info)
   discovery.send(spec)
   proxy.expectOnline()
@@ -56,7 +57,7 @@ class ExceptionHandlingSpec extends WordSpec with Matchers with BeforeAndAfterAl
 
     "respond with gRPC error for action failure in entity" in {
       val call = client.get(Key("one"))
-      val connection = service.expectConnection()
+      val connection = service.eventSourced.expectConnection()
       connection.expect(init(Thing.name, "one"))
       connection.expect(command(1, "one", "Get", Key("one")))
       proxy.expectLogError("User Function responded with a failure: description goes here") {
@@ -70,7 +71,7 @@ class ExceptionHandlingSpec extends WordSpec with Matchers with BeforeAndAfterAl
 
     "respond with gRPC error for unexpected failure in entity" in {
       val call = client.get(Key("two"))
-      val connection = service.expectConnection()
+      val connection = service.eventSourced.expectConnection()
       connection.expect(init(Thing.name, "two"))
       connection.expect(command(1, "two", "Get", Key("two")))
       proxy.expectLogError("User Function responded with a failure: Unexpected entity failure") {
@@ -86,7 +87,7 @@ class ExceptionHandlingSpec extends WordSpec with Matchers with BeforeAndAfterAl
 
     "respond with gRPC error for stream error in entity" in {
       val call = client.get(Key("three"))
-      val connection = service.expectConnection()
+      val connection = service.eventSourced.expectConnection()
       connection.expect(init(Thing.name, "three"))
       connection.expect(command(1, "three", "Get", Key("three")))
       proxy.expectLogError("User Function responded with a failure: Unexpected entity termination") {
@@ -101,7 +102,7 @@ class ExceptionHandlingSpec extends WordSpec with Matchers with BeforeAndAfterAl
 
     "respond with HTTP error for action failure in entity" in {
       val call = Http().singleRequest(HttpRequest(uri = Uri(s"http://localhost:${proxy.port}/thing/four")))
-      val connection = service.expectConnection()
+      val connection = service.eventSourced.expectConnection()
       connection.expect(init(Thing.name, "four"))
       connection.expect(command(1, "four", "Get", Key("four")))
       proxy.expectLogError("User Function responded with a failure: description goes here") {
@@ -115,7 +116,7 @@ class ExceptionHandlingSpec extends WordSpec with Matchers with BeforeAndAfterAl
 
     "respond with HTTP error for unexpected failure in entity" in {
       val call = Http().singleRequest(HttpRequest(uri = Uri(s"http://localhost:${proxy.port}/thing/five")))
-      val connection = service.expectConnection()
+      val connection = service.eventSourced.expectConnection()
       connection.expect(init(Thing.name, "five"))
       connection.expect(command(1, "five", "Get", Key("five")))
       proxy.expectLogError("User Function responded with a failure: Unexpected entity failure") {
@@ -131,7 +132,7 @@ class ExceptionHandlingSpec extends WordSpec with Matchers with BeforeAndAfterAl
 
     "respond with HTTP error for stream error in entity" in {
       val call = Http().singleRequest(HttpRequest(uri = Uri(s"http://localhost:${proxy.port}/thing/six")))
-      val connection = service.expectConnection()
+      val connection = service.eventSourced.expectConnection()
       connection.expect(init(Thing.name, "six"))
       connection.expect(command(1, "six", "Get", Key("six")))
       proxy.expectLogError("User Function responded with a failure: Unexpected entity termination") {

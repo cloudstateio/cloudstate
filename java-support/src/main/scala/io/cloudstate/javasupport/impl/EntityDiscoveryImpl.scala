@@ -21,9 +21,9 @@ import io.cloudstate.protocol.entity._
 import scala.concurrent.Future
 import akka.actor.ActorSystem
 import com.google.protobuf.DescriptorProtos
-import io.cloudstate.javasupport.{BuildInfo, StatefulService}
+import io.cloudstate.javasupport.{BuildInfo, Service}
 
-class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, StatefulService]) extends EntityDiscovery {
+class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, Service]) extends EntityDiscovery {
 
   private def configuredOrElse(key: String, default: String): String =
     if (system.settings.config.hasPath(key)) system.settings.config.getString(key) else default

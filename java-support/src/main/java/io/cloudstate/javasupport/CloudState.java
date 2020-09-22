@@ -16,15 +16,21 @@
 
 package io.cloudstate.javasupport;
 
+import akka.actor.ActorSystem;
+import akka.stream.Materializer;
 import com.typesafe.config.Config;
 import com.google.protobuf.Descriptors;
 import io.cloudstate.javasupport.crud.CrudEntity;
+import io.cloudstate.javasupport.action.Action;
+import io.cloudstate.javasupport.action.ActionHandler;
 import io.cloudstate.javasupport.crdt.CrdtEntity;
 import io.cloudstate.javasupport.crdt.CrdtEntityFactory;
 import io.cloudstate.javasupport.crud.CrudEntityFactory;
 import io.cloudstate.javasupport.eventsourced.EventSourcedEntity;
 import io.cloudstate.javasupport.eventsourced.EventSourcedEntityFactory;
 import io.cloudstate.javasupport.impl.AnySupport;
+import io.cloudstate.javasupport.impl.action.AnnotationBasedActionSupport;
+import io.cloudstate.javasupport.impl.action.ActionService;
 import io.cloudstate.javasupport.impl.crdt.AnnotationBasedCrdtSupport;
 import io.cloudstate.javasupport.impl.crdt.CrdtStatefulService;
 import io.cloudstate.javasupport.impl.crud.AnnotationBasedCrudSupport;
@@ -36,13 +42,14 @@ import akka.Done;
 import java.util.concurrent.CompletionStage;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * The CloudState class is the main interface to configuring entities to deploy, and subsequently
  * starting a local server which will expose these entities to the CloudState Proxy Sidecar.
  */
 public final class CloudState {
-  private final Map<String, StatefulService> services = new HashMap<>();
+  private final Map<String, Function<ActorSystem, Service>> services = new HashMap<>();
   private ClassLoader classLoader = getClass().getClassLoader();
   private String typeUrlPrefix = AnySupport.DefaultTypeUrlPrefix();
   private AnySupport.Prefer prefer = AnySupport.PREFER_JAVA();
@@ -128,14 +135,15 @@ public final class CloudState {
 
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
 
-    services.put(
-        descriptor.getFullName(),
+    EventSourcedStatefulService service =
         new EventSourcedStatefulService(
             new AnnotationBasedEventSourcedSupport(entityClass, anySupport, descriptor),
             descriptor,
             anySupport,
             persistenceId,
-            snapshotEvery));
+            snapshotEvery);
+
+    services.put(descriptor.getFullName(), system -> service);
 
     return this;
   }
@@ -164,12 +172,13 @@ public final class CloudState {
       Descriptors.FileDescriptor... additionalDescriptors) {
     services.put(
         descriptor.getFullName(),
-        new EventSourcedStatefulService(
-            factory,
-            descriptor,
-            newAnySupport(additionalDescriptors),
-            persistenceId,
-            snapshotEvery));
+        system ->
+            new EventSourcedStatefulService(
+                factory,
+                descriptor,
+                newAnySupport(additionalDescriptors),
+                persistenceId,
+                snapshotEvery));
 
     return this;
   }
@@ -198,18 +207,19 @@ public final class CloudState {
 
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
 
-    services.put(
-        descriptor.getFullName(),
+    CrdtStatefulService service =
         new CrdtStatefulService(
             new AnnotationBasedCrdtSupport(entityClass, anySupport, descriptor),
             descriptor,
-            anySupport));
+            anySupport);
+
+    services.put(descriptor.getFullName(), system -> service);
 
     return this;
   }
 
   /**
-   * Register an CRDT entity factory.
+   * Register a CRDT entity factory.
    *
    * <p>This is a low level API intended for custom (eg, non reflection based) mechanisms for
    * implementing the entity.
@@ -226,7 +236,76 @@ public final class CloudState {
       Descriptors.FileDescriptor... additionalDescriptors) {
     services.put(
         descriptor.getFullName(),
-        new CrdtStatefulService(factory, descriptor, newAnySupport(additionalDescriptors)));
+        system ->
+            new CrdtStatefulService(factory, descriptor, newAnySupport(additionalDescriptors)));
+
+    return this;
+  }
+
+  /**
+   * Register an annotated Action service.
+   *
+   * <p>The action class must be annotated with {@link Action}.
+   *
+   * @param action The action object.
+   * @param descriptor The descriptor for the service that this action implements.
+   * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
+   *     types when needed.
+   * @return This Cloudstate builder.
+   */
+  public CloudState registerAction(
+      Object action,
+      Descriptors.ServiceDescriptor descriptor,
+      Descriptors.FileDescriptor... additionalDescriptors) {
+
+    Action actionAnnotation = action.getClass().getAnnotation(Action.class);
+    if (actionAnnotation == null) {
+      throw new IllegalArgumentException(
+          action.getClass() + " does not declare an " + Action.class + " annotation!");
+    }
+
+    final AnySupport anySupport = newAnySupport(additionalDescriptors);
+
+    services.put(
+        descriptor.getFullName(),
+        system ->
+            new ActionService(
+                new AnnotationBasedActionSupport(
+                    action, anySupport, descriptor, Materializer.createMaterializer(system)),
+                descriptor,
+                anySupport));
+
+    return this;
+  }
+
+  /**
+   * Register an Action handler.
+   *
+   * <p>This is a low level API intended for custom (eg, non reflection based) mechanisms for
+   * implementing the action.
+   *
+   * @param action The action handler.
+   * @param descriptor The descriptor for the service that this action implements.
+   * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
+   *     types when needed.
+   * @return This Cloudstate builder.
+   */
+  public CloudState registerAction(
+      ActionHandler action,
+      Descriptors.ServiceDescriptor descriptor,
+      Descriptors.FileDescriptor... additionalDescriptors) {
+
+    Action actionAnnotation = action.getClass().getAnnotation(Action.class);
+    if (actionAnnotation == null) {
+      throw new IllegalArgumentException(
+          action.getClass() + " does not declare an " + Action.class + " annotation!");
+    }
+
+    final AnySupport anySupport = newAnySupport(additionalDescriptors);
+
+    ActionService service = new ActionService(action, descriptor, anySupport);
+
+    services.put(descriptor.getFullName(), system -> service);
 
     return this;
   }
@@ -243,14 +322,14 @@ public final class CloudState {
    * @return This stateful service builder.
    */
   public CloudState registerCrudEntity(
-      Class<?> entityClass,
-      Descriptors.ServiceDescriptor descriptor,
-      Descriptors.FileDescriptor... additionalDescriptors) {
+          Class<?> entityClass,
+          Descriptors.ServiceDescriptor descriptor,
+          Descriptors.FileDescriptor... additionalDescriptors) {
 
     CrudEntity entity = entityClass.getAnnotation(CrudEntity.class);
     if (entity == null) {
       throw new IllegalArgumentException(
-          entityClass + " does not declare an " + CrudEntity.class + " annotation!");
+              entityClass + " does not declare an " + CrudEntity.class + " annotation!");
     }
 
     final String persistenceId;
@@ -263,12 +342,12 @@ public final class CloudState {
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
 
     services.put(
-        descriptor.getFullName(),
-        new CrudStatefulService(
-            new AnnotationBasedCrudSupport(entityClass, anySupport, descriptor),
-            descriptor,
-            anySupport,
-            persistenceId));
+            descriptor.getFullName(),
+            new CrudStatefulService(
+                    new AnnotationBasedCrudSupport(entityClass, anySupport, descriptor),
+                    descriptor,
+                    anySupport,
+                    persistenceId));
 
     return this;
   }
@@ -287,14 +366,14 @@ public final class CloudState {
    * @return This stateful service builder.
    */
   public CloudState registerCrudEntity(
-      CrudEntityFactory factory,
-      Descriptors.ServiceDescriptor descriptor,
-      String persistenceId,
-      Descriptors.FileDescriptor... additionalDescriptors) {
+          CrudEntityFactory factory,
+          Descriptors.ServiceDescriptor descriptor,
+          String persistenceId,
+          Descriptors.FileDescriptor... additionalDescriptors) {
     services.put(
-        descriptor.getFullName(),
-        new CrudStatefulService(
-            factory, descriptor, newAnySupport(additionalDescriptors), persistenceId));
+            descriptor.getFullName(),
+            new CrudStatefulService(
+                    factory, descriptor, newAnySupport(additionalDescriptors), persistenceId));
 
     return this;
   }

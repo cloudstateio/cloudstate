@@ -38,5 +38,17 @@ public interface ServiceCallRef<T> {
    * @param message The message to pass to the method.
    * @return A service call that can be used as a forward or effect.
    */
-  ServiceCall createCall(T message);
+  default ServiceCall createCall(T message) {
+    return createCall(message, Metadata.EMPTY);
+  }
+
+  /**
+   * Create a call from this reference, using the given message as the message to pass to it when
+   * it's invoked.
+   *
+   * @param message The message to pass to the method.
+   * @param metadata The Metadata to send.
+   * @return A service call that can be used as a forward or effect.
+   */
+  ServiceCall createCall(T message, Metadata metadata);
 }

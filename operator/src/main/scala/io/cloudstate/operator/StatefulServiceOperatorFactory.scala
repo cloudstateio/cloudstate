@@ -254,10 +254,12 @@ class StatefulServiceOperatorFactory(implicit mat: Materializer, ec: ExecutionCo
         imagePullPolicy =
           if (image.endsWith(":latest")) Container.PullPolicy.Always else Container.PullPolicy.IfNotPresent,
         ports = List(
-          Container.Port(containerPort = KnativeSidecarH2cPort, name = "grpc-proxy")
+          Container.Port(containerPort = KnativeSidecarH2cPort, name = "grpc-proxy"),
+          Container.Port(containerPort = MetricsPort, name = MetricsPortName)
         ),
         env = store.proxyContainerEnvVars ::: autoscalingEnvVars ::: List(
             EnvVar("HTTP_PORT", KnativeSidecarH2cPort.toString),
+            EnvVar("METRICS_PORT", MetricsPort.toString),
             EnvVar("USER_FUNCTION_PORT", userPort.toString),
             EnvVar("REMOTING_PORT", AkkaRemotingPort.toString),
             EnvVar("MANAGEMENT_PORT", AkkaManagementPort.toString),

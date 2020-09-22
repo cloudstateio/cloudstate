@@ -39,20 +39,21 @@ else
   done
 fi
 
-
-# Use a custom, non-existant docker hub username so that we don't pull down the wrong thing accidentally.
-# Build the operator, required proxies, and compile the K8s descriptors.
 [ -f docker-env.sh ] && source docker-env.sh
-sbt -Ddocker.username=cloudstatedev -Ddocker.tag=dev -Duse.native.builds=$native operator/docker:publishLocal operator/compileK8sDescriptors "${build_commands[@]}"
 
-# Deploy Cloudstate operator
-kubectl create namespace cloudstate
-kubectl apply -n cloudstate -f operator/cloudstate-dev.yaml
-echo
-echo "Waiting for operator deployment to be ready..."
-if ! kubectl wait --for=condition=available --timeout=2m -n cloudstate deployment/cloudstate-operator
+if [ -n "$build_commands" ]
 then
-    kubectl describe -n cloudstate deployment/cloudstate-operator
-    kubectl logs -l app=cloudstate-operator -n cloudstate
+  sbt "$build_commands"
+fi
+
+kubectl apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v0.16.1/cert-manager.yaml
+kubectl wait --for=condition=available --timeout=2m -n cert-manager deployment/cert-manager-webhook
+make -C cloudstate-operator deploy
+echo "Waiting for operator deployment to be ready..."
+if ! kubectl wait --for=condition=available --timeout=2m -n cloudstate-system deployment/cloudstate-controller-manager
+then
+    kubectl describe -n cloudstate-system deployment/cloudstate-controller-manager
+    kubectl describe -n cloudstate-system pods -l control-plane=controller-manager
+    kubectl logs -l control-plane=controller-manager -n cloudstate-system -c manager
     exit 1
 fi

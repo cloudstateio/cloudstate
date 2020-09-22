@@ -1,0 +1,86 @@
+= Getting started with Cloudstate services in JavaScript
+
+include::partial$attributes.adoc[]
+
+== Prerequisites
+
+The following are required to start writing Cloudstate services in JavaScript:
+
+Node version::
+Cloudstate uses the https://github.com/grpc/grpc-node[grpc node package], which compiles a native gRPC implementation using node-gyp. It requires a minimum of node 4.0.
+
+Build tool::
+Cloudstate doesn't require any particular build tool, though npm install scripts do need to be run.
+
+protoc::
+Cloudstate requires using the protoc compiler to serialize your protobuf definitions into the protobuf binary descriptor format. Helper scripts are provided to automatically download the protoc compiler for your platform and do this compilation.
+
+docker::
+Cloudstate runs in Kubernetes with [Docker], hence you will need Docker to build a container that you can deploy to Kubernetes.
+
+Once you have the above, you need to add the `cloudstate` package to your project, which can be done by running:
+
+[source,sh]
+----
+npm install cloudstate --save
+----
+
+== Generating the protobuf descriptor set
+
+A Cloudstate user function needs to report to the Cloudstate proxy the gRPC descriptor that its serving, serialized to binary using the Protobuf https://developers.google.com/protocol-buffers/docs/techniques#self-description[`FileDescriptorSet` message type]. While there is some support for this in the https://www.npmjs.com/package/protobufjs[protobufjs] library that is used by Cloudstate to load descriptors, it is somewhat incomplete and buggy. Hence, Cloudstate requires that you precompile this descriptor using `protoc` instead.
+
+Cloudstate provides a utility that does this for you, downloading the `protoc` binary for your platform, and running it with the necessary arguments and include paths. This can be run manually by running `node_modules/cloudstate/bin/compile-descriptor.js`, or we recommend adding it as a `prestart` script to your npm build:
+
+[source,json]
+----
+{
+  "scripts": {
+    "prestart": "compile-descriptor my-descriptor.proto"
+  }
+}
+----
+
+Multiple protobuf files can be passed, in addition, any arguments accepted by `protoc` can be passed, for example, if you are importing files from other directories, you can add those directories as an include path by adding `-Ipath/to/protobuf/dir`.
+
+By default, the descriptor is written to `user-function.desc`, if you wish to change this, you can set `--descriptor_set_out=my-descriptor.desc`. Note that if you output the descriptor to a different path, you will also need to pass that custom path to the constructor of the `CloudState` class when you got to instantiate it.
+
+== package.json example
+
+A minimal `package.json` for a shopping cart example is shown below:
+
+[source,json,subs="attributes+"]
+----
+{
+  "name": "shopping-cart",
+  "version": "0.1.0",
+  "dependencies": {
+    "cloudstate": "^{cloudstate-node-support-version}"
+  },
+  "scripts": {
+    "prestart": "compile-descriptor shoppingcart.proto",
+    "start": "node index.js"
+  }
+}
+----
+
+== Protobuf files
+
+You can place protobuf files in your project wherever you like, for example, in the root directory, or in a directory named `protos`. In the `package.json` above we've placed the shopping cart application example shown earlier in xref:concepts:grpc.adoc[gRPC descriptors] in a file in the root folder called `shoppingcart.proto`.
+
+== Creating and starting a server
+
+There are two ways to create and start a Cloudstate gRPC server. The first is to create an link:{attachmentsdir}/api/module-cloudstate.Entity.html[`Entity`], and invoke link:{attachmentsdir}/api/module-cloudstate.Entity.html#start[`start`] on it. This allows creating a server that serves a single entity, with the default options. We'll look at this more in the subsequent pages. Alternatively, you can use the link:{attachmentsdir}/api/module-cloudstate.CloudState.html[`CloudState`] class, add one or more entities to it, and then invoke link:{attachmentsdir}/api/module-cloudstate.CloudState.html#start[`start`], like so:
+
+[source,js,indent=0]
+----
+include::example$test/gettingstarted/index.js[tag=start]
+----
+
+If you created your protobuf file descriptor set at a different location to the default of `user-function.desc`, you can configure that here:
+
+[source,js,indent=0]
+----
+include::example$test/gettingstarted/index.js[tag=custom-desc]
+----
+
+For the full range of options available on the `CloudState` class, see link:{attachmentsdir}++/api/module-cloudstate.CloudState.html#~options++[`CloudState~options`].

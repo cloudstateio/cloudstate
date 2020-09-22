@@ -16,6 +16,8 @@
 
 package io.cloudstate.javasupport.crdt;
 
+import io.cloudstate.javasupport.MetadataContext;
+
 import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -26,7 +28,7 @@ import java.util.function.Function;
  * <p>This may be passed to any {@link CommandHandler} annotated element that corresponds to a
  * command whose output is streamed.
  */
-public interface StreamedCommandContext<Output> extends CommandContext {
+public interface StreamedCommandContext<Output> extends CommandContext, MetadataContext {
   /**
    * Whether the call is actually streamed.
    *

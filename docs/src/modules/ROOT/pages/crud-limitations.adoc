@@ -1,0 +1,4 @@
+= Rethinking CRUD
+
+include::ROOT:partial$crud-limitations.adoc[]
+

@@ -1,0 +1,3 @@
+= Example applications
+
+include::ROOT:partial$examples.adoc[]

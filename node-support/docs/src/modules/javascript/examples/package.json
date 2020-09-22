@@ -1,0 +1,26 @@
+{
+  "name": "cloudstate-documentation-samples",
+  "version": "0.0.1",
+  "description": "Code samples for the CloudState documentation",
+  "homepage": "https://cloudstate.io",
+  "license": "Apache-2.0",
+  "engineStrict": true,
+  "engines": {
+    "node": "~12"
+  },
+  "//": "https://npm.community/t/npm-install-does-not-install-transitive-dependencies-of-local-dependency/2264",
+  "dependencies": {
+    "@grpc/proto-loader": "^0.1.0",
+    "google-protobuf": "^3.0.0",
+    "grpc": "^1.20.2",
+    "cloudstate": "file:../../../../.."
+  },
+  "devDependencies": {
+    "chai": "4.2.0",
+    "mocha": "^6.1.4"
+  },
+  "scripts": {
+    "test": "mocha --recursive",
+    "pretest": "compile-descriptor shoppingcart.proto && compile-descriptor shoppingcart.proto --descriptor_set_out=my-descriptor.desc"
+  }
+}

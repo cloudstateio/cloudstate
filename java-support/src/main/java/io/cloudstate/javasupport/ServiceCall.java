@@ -35,4 +35,11 @@ public interface ServiceCall {
    * @return The message to pass to the call, serialized as an {@link Any}.
    */
   Any message();
+
+  /**
+   * The metadata to pass with the message when the call is invoked.
+   *
+   * @return The metadata.
+   */
+  Metadata metadata();
 }

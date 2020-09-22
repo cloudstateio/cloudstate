@@ -1,0 +1,4 @@
+= The Cloudstate solution
+
+include::ROOT:partial$cloudstate-solution.adoc[]
+

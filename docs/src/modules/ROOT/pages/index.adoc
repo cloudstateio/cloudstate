@@ -1,0 +1,62 @@
+= Introduction
+
+ifdef::todo[TODO: The information in this section was pulled out of the README and the main topics organized in a logical flow. However, the content still needs to be edited to support this flow.]
+
+Cloudstate offers a serverless platform for general-purpose application development with _stateful_ services, fast data/streaming, and the power of reactive technologies. With Cloudstate you can build cloud native applications for the Kubernetes ecosystem with true elastic scalability, high resilience, and global deployment.
+
+The Serverless movement today often focuses on automating the underlying infrastructure. However, there are equally complicated requirements at the application layer. The move toward fast data, streaming, and event-driven stateful architectures creates new challenges for operating systems in production.
+
+Stateless functions are a great tool that already have their place in the cloud computing toolkit. However, for Serverless to reach the grand vision of a Serverless world of modern data-centric real-time applications, we must address the hardest problem in distributed systems: managing state—your data.
+
+The https://cloudstate.io[Cloudstate] project takes on this challenge and paves the way for Serverless 2.0. It consists of two things:
+
+. **A standards effort** — defining a specification, a protocol between the user functions and the backend, and a Technology Compatibility Kit (TCK).
+. **A reference implementation** — implementing the backend and a set of client API libraries in different languages.
+
+Cloudstate's reference implementation leverages https://cloud.google.com/knative/[Knative], https://grpc.io/[gRPC], https://doc.akka.io/docs/akka/current/index-cluster.html[Akka Cluster], and https://www.graalvm.org/[GraalVM] running on https://kubernetes.io/[Kubernetes]. This combination results in applications that not only scale efficiently, but  manage distributed state reliably at scale while maintaining a global or a local level of data consistency, opening up for a whole range of new addressable use-cases.
+
+Join us in making this vision a reality!
+
+== How to get started
+
+This documentation contains information for developers who want to use Cloudstate to create and deploy stateful services; for administrators who want to configure Kubernetes clusters to run Cloudstate, either for development or in production; and for those who would like to contribute to the Cloudstate open source project. The following table suggests reading paths for these roles for typical use cases.
+
+[cols="a,a,a"]
+|===
+|Use case | Audience | Topics
+
+| Understand what type of applications require a stateful serverless platform
+| All
+| * xref:stateless-limitations.adoc[Current limitations of Serverless platforms]
+  * xref:crud-limitations.adoc[Rethinking CRUD]
+  * xref:cloudstate-solution.adoc[The Cloudstate solution]
+
+| Set up development environment
+| Developers, contributors, administrators
+| * xref:develop:prerequisites.adoc[Prerequisites]
+  * xref:develop:install.adoc[Installing Cloudstate]
+
+| Learn about service development
+| Developers, contributors
+| * xref:develop:tutorial.adoc[The shopping cart tutorial]
+
+| Develop Cloudstate services
+| Developers
+| * xref:old-dart:index.adoc[Implementing in Dart]
+  * xref:old-go:index.adoc[Implementing in Go]
+  * xref:java:index.adoc[Implementing in Java]
+  * xref:javascript:index.adoc[Implementing in JavaScript]
+  * xref:old-kotlin:index.adoc[Implementing in Kotlin]
+  * xref:old-python:index.adoc[Implementing in Python]
+  * xref:old-springboot:index.adoc[Implementing in Spring Boot]
+  * xref:old-dotnet:index.adoc[Implementing in .Net]
+
+| Deploy in production
+| Developers, administrators
+| * xref:deploy:index.adoc[Deploying in production systems]
+
+| Contribute to the Cloudstate project
+| Contributors
+| * xref:contribute:index.adoc[Contributing to the Cloudstate project]
+
+|===

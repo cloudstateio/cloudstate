@@ -22,10 +22,10 @@ import com.google.protobuf.{
   Descriptors,
   Parser,
   UnsafeByteOperations,
-  Message => JavaMessage,
-  Any => JavaPbAny
+  Any => JavaPbAny,
+  Message => JavaMessage
 }
-import io.cloudstate.javasupport.{ServiceCall, ServiceCallRef}
+import io.cloudstate.javasupport.{Metadata, ServiceCall, ServiceCallRef}
 
 /**
  * A resolved service method.
@@ -40,16 +40,17 @@ final case class ResolvedServiceMethod[I, O](descriptor: Descriptors.MethodDescr
 
   override def method(): Descriptors.MethodDescriptor = descriptor
 
-  override def createCall(message: I): ServiceCall =
+  override def createCall(message: I, metadata: Metadata): ServiceCall =
     ResolvedServiceCall(this,
                         JavaPbAny
                           .newBuilder()
                           .setTypeUrl(inputType.typeUrl)
                           .setValue(inputType.toByteString(message))
-                          .build())
+                          .build(),
+                        metadata)
 }
 
-final case class ResolvedServiceCall(ref: ServiceCallRef[_], message: JavaPbAny) extends ServiceCall
+final case class ResolvedServiceCall(ref: ServiceCallRef[_], message: JavaPbAny, metadata: Metadata) extends ServiceCall
 
 /**
  * A resolved type

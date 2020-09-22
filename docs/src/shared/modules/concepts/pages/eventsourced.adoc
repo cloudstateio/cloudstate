@@ -1,0 +1,59 @@
+= Event sourcing
+
+Event sourcing is a method of persistence that offers ACID semantics, with horizontal scaling across entities and failure isolation.
+
+Rather than persisting the current state of an entity, an event-sourced entity persists all of the events that led to the entity reaching its current state.
+These events are stored in a journal. When the current state of the entity is loaded into memory, the journal is read, and each event is replayed,
+to compute the current state of the entity.
+
+One of the biggest advantages of event-sourcing in a distributed system is that the state of the entity can be reliably replicated to other services and views.
+Unlike a CRUD-based entity, where there's no inherent way to know whether a particular update has been replicated elsewhere, event-sourced entities can take
+advantage of the fact that their events are persisted to a journal, and use offset tracking in that journal to track which portions of the system have
+replicated which events.
+This is a fundamental building block necessary to implement the Command Query Responsibility Segregation (CQRS) pattern, as it allows read-side views to be kept up-to-date
+by consuming the event log.
+
+Event-sourced entities also allow _temporal querying_, where the state of an entity can be recreated at any point in history. This is useful both for audit purposes, as the event log can serve as an audit log, as well as for debugging purposes.
+
+== Consistency guarantees
+
+Event-sourced entities offer strong consistency guarantees. Event sourced entities are sharded across every node in a stateful service deployment -
+at any given time, each entity will live on exactly one node. If a command arrives on a particular node for an entity that lives on a different node,
+that command is forwarded by the proxy to the node that contains that particular entity. This forwarding is done transparently,
+the user function has no knowledge of it occurring.
+
+Because each entity lives on exactly one node, that node can handle messages for each entity sequentially. Hence, there are no concurrency
+concerns relating to event-sourced entities, each entity handles one message at a time.
+
+== Terminology
+
+Cloudstate uses the following terminology in relation to event-sourcing:
+
+State::
+The _state_ is the current set of values of an event-sourced entity instance. It is held in memory by an event-sourced entity.
+
+Command::
+A _command_ is a message addressed to a particular entity to perform a specific operation. A command comes from a _sender_, and a reply may be sent to the sender.
+A command may be differentiated from an _event_ in that it is a request to perform an operation - it refers to something that should happen in the future. A command
+might fail. An event, on the other hand, refers to something which has already occurred in the past. The event is how the current service finds out about it - we can't change
+the event, it's already happened. An event emitted by one service might be interpreted as a command by another, however. Commands are not persisted, only events are.
+
+Command handler::
+A _command handler_ is the code that handles a command. It may validate the command using the current state, and may emit events as part of its processing.
+A command handler **must not** update the state of the entity directly, only _indirectly_ by emitting events. If a command handler _does_ update the state,
+then when the entity is passivated (removed from memory), _those updates will be lost_.
+
+Event::
+An _event_ is a piece of data that gets persisted and that indicates a change has occurred to an entity.
+Events are stored in a _journal_, and are read and replayed each time the entity is reloaded by the state management system.
+
+Event handler::
+An _event handler_ is the only piece of code that is allowed to _update_ the state of the entity. It receives events, and, according to the event, updates the state.
+
+Snapshot::
+A snapshot is a recording of the entire current state of an entity, persisted periodically (eg, every 100 events), as an optimization. With snapshots, when the entity is reloaded from the journal, the entire journal doesn't need to be replayed, just the changes since the last snapshot.
+
+Persistence id::
+The _persistence id_ is an identifier that is prepended to each entity id when persisted.
+If you are sharing databases between multiple stateful services, it is important that you select unique persistence ids for each entity,
+so that their entity instances don't conflict.

@@ -1,0 +1,290 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.3.0
+  creationTimestamp: null
+  name: statefulstores.cloudstate.io
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  - JSONPath: .status.summary
+    name: Status
+    type: string
+  group: cloudstate.io
+  names:
+    kind: StatefulStore
+    listKind: StatefulStoreList
+    plural: statefulstores
+    singular: statefulstore
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      description: StatefulStore is the Schema for the statefulstores API
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          description: StatefulStoreSpec defines the desired state of StatefulStore
+          properties:
+            cassandra:
+              description: Cassandra
+              properties:
+                credentials:
+                  description: Credentials is a reference to a secret in the same
+                    namespace to use for the username and password of the Cassandra
+                    database.
+                  properties:
+                    keyspaceKey:
+                      description: KeyspaceKey is the key of the keyspace in the secret.
+                        Defaults to keyspace.
+                      type: string
+                    passwordKey:
+                      description: PasswordKey is the key of the password in the secret.
+                        Defaults to password.
+                      type: string
+                    secret:
+                      description: Secret is the name of a secret in the local namespace
+                        to load the credentials from.
+                      properties:
+                        name:
+                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            TODO: Add other useful fields. apiVersion, kind, uid?'
+                          type: string
+                      type: object
+                    usernameKey:
+                      description: UsernameKey is the key of the username in the secret.
+                        Defaults to username.
+                      type: string
+                  type: object
+                host:
+                  description: Host to connect to.
+                  minLength: 1
+                  type: string
+                port:
+                  description: Port to connect to. Defaults to 9042.
+                  format: int32
+                  type: integer
+              type: object
+            inMemory:
+              description: InMemory store will keep everything in memory. This is
+                the simplest option to get started, but must not be used in production.
+              type: boolean
+            postgres:
+              description: Postgres will store state in Postgres.
+              properties:
+                credentials:
+                  description: Credentials for the postgres instance.
+                  properties:
+                    databaseKey:
+                      description: DatabaseKey is the key of the database in the secret.
+                        Defaults to database.
+                      type: string
+                    passwordKey:
+                      description: PasswordKey is the key of the password in the secret.
+                        Defaults to password.
+                      type: string
+                    secret:
+                      description: Secret is the name of a secret in the local namespace
+                        to load the credentials from.
+                      properties:
+                        name:
+                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            TODO: Add other useful fields. apiVersion, kind, uid?'
+                          type: string
+                      type: object
+                    usernameKey:
+                      description: UsernameKey is the key of the username in the secret.
+                        Defaults to username.
+                      type: string
+                  type: object
+                googleCloudSql:
+                  description: GoogleCloudSQL may used to automatically provision
+                    a Google CloudSQL instance. Do not specify a host, port or credentials
+                    if this is used.
+                  properties:
+                    cores:
+                      description: The number of cores the postgres instance should
+                        use. Must be 1, or an even number between 2 and 64. Defaults
+                        to 1. Modifiable after creation but will take store offline
+                        for several minutes.
+                      format: int32
+                      maximum: 64
+                      minimum: 1
+                      type: integer
+                    highAvailability:
+                      description: Whether high availability is enabled. High availability
+                        instances run a second slave postgres instance that can be
+                        failed over to should the first fail. High availability instances
+                        roughly double costs. Defaults to false. Modifiable after
+                        creation but will take store offline for several minutes.
+                      type: boolean
+                    memory:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: The amount of memory the postgres instance should
+                        have. Must be between 0.9 GiB and 6.5 GiB per vCPU, and must
+                        be a multiple of 256 MiB, and at least 3.75 GiB. Defaults
+                        to 3.75 GiB. Modifiable after creation but will take store
+                        offline for several minutes.
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    name:
+                      description: The name of the Cloud SQL instance. If not specified,
+                        the name of the stateful store resource will be used.
+                      type: string
+                    storage:
+                      description: The storage configuration.
+                      properties:
+                        automaticIncrease:
+                          description: Whether the storage capacity may be automatically
+                            increased as needed. Defaults to true. Modifiable after
+                            creation.
+                          type: boolean
+                        automaticIncreaseLimit:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          description: A limit to how high the capacity may be automatically
+                            increased. A value of 0 means no limit. The default is
+                            0. Modifiable after creation.
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        capacity:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          description: The capacity for the storage. Can be any value
+                            up to 30,720 GB. Defaults to 1GB. After creation, can
+                            only be increased.
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        type:
+                          description: The type of disks for the storage to use, either
+                            SSD or HDD. Cannot be changed after creation. Defaults
+                            to SSD.
+                          enum:
+                          - SSD
+                          - HDD
+                          type: string
+                      type: object
+                  type: object
+                host:
+                  description: Host to connect to.
+                  minLength: 1
+                  type: string
+                port:
+                  description: Port to connect to. Defaults to 5432.
+                  format: int32
+                  type: integer
+              type: object
+            spanner:
+              description: SpannerStore uses a Spanner store managed by the Cloudstate
+                infrastructure.
+              properties:
+                database:
+                  description: Database is the Spanner database id. Defaults to cloudstate,
+                    and can be overridden on a per deployment basis.
+                  type: string
+                instance:
+                  description: Instance is the Spanner instance id.
+                  type: string
+                secret:
+                  description: Secret the secret to read Spanner credentials from.
+                    Must have a key.json file in it.
+                  properties:
+                    name:
+                      description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        TODO: Add other useful fields. apiVersion, kind, uid?'
+                      type: string
+                  type: object
+                string:
+                  description: Project is the GCP project to use.
+                  type: string
+              required:
+              - instance
+              - string
+              type: object
+          type: object
+        status:
+          description: StatefulStoreStatus defines the observed state of StatefulStore
+          properties:
+            conditions:
+              items:
+                description: CloudstateCondition defines the possible conditions of
+                  stateful services.
+                properties:
+                  lastTransitionTime:
+                    description: Last time the condition transitioned from one status
+                      to another.
+                    format: date-time
+                    type: string
+                  message:
+                    description: A human readable message indicating details about
+                      the transition.
+                    type: string
+                  reason:
+                    description: The reason for the condition's last transition.
+                    type: string
+                  status:
+                    description: Status of the condition, one of True, False, Unknown.
+                    type: string
+                  type:
+                    description: Type of deployment condition.
+                    type: string
+                required:
+                - lastTransitionTime
+                - message
+                - reason
+                - status
+                - type
+                type: object
+              type: array
+            postgres:
+              description: Postgres if this is a postgres store, the status of that
+                store.
+              properties:
+                googleCloudSql:
+                  description: GoogleCloudSQL is the status of the managed Google
+                    Cloud SQL Postgres instance.
+                  properties:
+                    instanceName:
+                      description: InstanceName is the name of the instance.
+                      type: string
+                  required:
+                  - instanceName
+                  type: object
+              type: object
+            summary:
+              description: Summary of the current status.
+              type: string
+          type: object
+      type: object
+  version: v1alpha1
+  versions:
+  - name: v1alpha1
+    served: true
+    storage: true
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

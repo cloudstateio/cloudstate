@@ -1,0 +1,4 @@
+= Installing Cloudstate
+
+include::develop:partial$install.adoc[]
+

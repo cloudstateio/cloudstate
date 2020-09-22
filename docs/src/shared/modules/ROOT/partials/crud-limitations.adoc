@@ -1,0 +1,46 @@
+We need to rethink the use of CRUD in Serverless. CRUD, in the general sense, means unconstrained database access, and is too broad and open-ended to be used effectively in Serverless environments (or any general Cloud development for that matter).
+
+//Fully qualify image references in shared content with the component and module name.
+
+image::ROOT:faas-crud.png[FAAS with CRUD]
+
+Unconstrained database access means that the user function itself needs to manage the nitty-gritty details about data access and storage, and you are thereby moving all the operational concerns from the Serverless framework into the user function. Now it's hard for the framework to know the intention of each access. For example:
+
+* Is the operation a read, or a write?
+* Can it be cached?
+* Can consistency be relaxed, or is strong consistency needed?
+* Can operations proceed during partial failure?
+
+Instead, if we understand these properties then we can make better decisions automatically. For example:
+
+* Write ops are fast and read ops are slow: add more memory to DB
+* Reading immutable values: add caching
+* Writes must be serializable: add sharding, single writers per entity.
+
+== Abstracting over state
+
+We all know that constraints can be liberating and this holds true for Serverless as much as anything else. As a fact, one of the reasons for the success of Serverless is that it has such a constrained developer experience, which allows you as a developer to focus on the essence: the business logic for the function. For example, Serverless has a great model for abstracting over communication where all communication is translated to receiving and emitting events.
+
+The question we asked ourselves was: can we abstract over state in the same way? Provide a clean and uniform abstraction of _state in_ and _state out_ for the function.
+
+image::ROOT:abstract_over_state.png[Abstracting over state]
+
+This would allow the framework to manage durable state on behalf of the function, to monitor and manage it holistically across the whole system, and make more intelligent decisions.
+
+Unconstrained CRUD does not work in this model since we can't pass the entire data set in and out of the function. What we need are data storage patterns that have constrained input/output protocols. Patterns that fall into this category are Key-Value, Event Sourcing, and CRDTs.
+
+In https://martinfowler.com/eaaDev/EventSourcing.html[Event Sourcing], _state in_ is the event log while _state out_ is any newly persisted events as a result of handling a command.
+
+image::ROOT:data_model_event_sourcing.png[Event Sourcing as data model]
+
+In https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type[CRDTs], _state in_ is a stream of deltas and/or state updates, and _state out_ is a stream of deltas and/or state updates.
+
+image::ROOT:data_model_crdts.png[CRDTs as data model]
+
+In Key-Value, the _state out_ is the key and _state in_ the value.
+
+While most developers have worked with Key-Value stores, Event Sourcing and CRDTs might be a bit unfamiliar. What's interesting is that they fit an event-driven model very well while being on opposite sides of the state consistency spectrum, with the former providing strong (ACID) consistency (through event logging) and the latter providing eventual/causal consistency. Taken together, they give us a truly wide range of options for managing distributed state in a consistent fashion by allowing you to choose the optimal model for your specific use-case and data set. Akka Multi-DC log replication is a great example of combining the two techniques to do amazing things.
+
+== What's next
+
+Next, let's see how Cloudstate addresses the needs of a stateful Serverless platform: xref:cloudstate-solution.adoc[The Cloudstate solution].

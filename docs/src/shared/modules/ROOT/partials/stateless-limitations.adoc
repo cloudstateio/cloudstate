@@ -1,0 +1,68 @@
+Serverless today provides a great platform for stateless services. It does an amazing job at scaling from 1-10000 requests and down to zero in a very cost-efficient manner (no events == no cost). It also offers simplicity in operations.
+
+However, Serverless means different things to different people. Many equate it with Function-as-a-Service (FaaS). We see it as much more than that: a new category of PaaS itself, where the focal point is the Developer Experience, as well as supporting the full life-cycle of the application, and not merely the programming API of its latest incarnation. The paper https://www.doc.ic.ac.uk/~rbc/papers/fse-serverless-17.pdf[Serverless computing: economic and architectural impact], by Adzic et al. agrees with this broader picture:
+
+[sidebar]
+ _'Serverless' refers to a new generation of platform-as-a-service offerings where the infrastructure provider takes responsibility for receiving client requests and responding to them, capacity planning, task scheduling, and operational monitoring. Developers need to worry only about the logic for processing client requests._
+
+The current incarnation of Serverless, focusing on Function-as-as Service (FaaS), is a classic data-shipping architecture—developers move data to the code, not the other way round. We, however, believe that FaaS is only the first step along the journey. It's not about a specific implementation. Instead, it's all about the Developer Experience, a new way of building and running applications. And, it is time to expand on its scope and supported use-cases to create a better experience. What are the limitations of FaaS that we can address to start this journey?
+
+== Limitations of FaaS
+
+One limitation of FaaS is that its functions are ephemeral, stateless, and short-lived. For example, Amazon Lambda caps their lifespan to 15 minutes. This makes it problematic to build general-purpose data-centric cloud-native applications. It is simply too costly—in terms of performance, latency, and throughput—to lose the computational context (locality of reference) and be forced to load and store the state from the backend storage over and over again.
+
+Another limitation of FaaS is that, quite often, functions simply have no direct addressability, which means that they can't communicate directly with each other using point-to-point communication. This forces developers to resort to publish-subscribe, passing all data over some slow and expensive storage medium. Publish-subscribe provides a model that can work well for event-driven use-cases but yields too high latency for addressing general-purpose distributed computing problems.
+
+[sidebar]
+For a detailed discussion on this, and other limitations of FaaS read the paper https://arxiv.org/abs/1812.03651["Serverless Computing: One Step Forward, Two Steps Back"] by Joe Hellerstein, et al.
+
+== Strengths of FaaS
+
+However, this does not mean that Serverless 1.0 (FaaS) is not ready for use. As is, it is well suited for parallelizable processing-centric use-cases, where incoming data is pushed downstream through a pipeline of stateless functions doing data enrichment and transformations before pushing it downstream.
+
+Examples of use-cases of this are:
+
+*   **https://en.wikipedia.org/wiki/Embarrassingly_parallel[Embarrassingly parallel tasks]**—often invoked on-demand and intermittently. For example, resizing images, performing object recognition, and running integer-programming-based optimizations.
+*   **Orchestration functions**, used to coordinate calls to proprietary auto-scaling services, where the back-end services themselves do the real heavy lifting.
+*   Applications that **compose chains of functions**—for example, workflows connected via data dependencies. These use cases often show high end-to-end latencies though.
+
+As Adzic et al. write in their paper http://www.doc.ic.ac.uk/~rbc/papers/fse-serverless-17.pdf[Serverless computing: economic and architectural impact]:
+
+[sidebar]
+_… serverless platforms today are useful for important (but not five-nines mission critical) tasks, where high-throughput is key, rather than very low latency, and where individual requests can be completed in a relatively short time window. The economics of hosting such tasks in a serverless environment make it a compelling way to reduce hosting costs significantly, and to speed up time to market for delivery of new features._
+
+== The need for Stateful Serverless Computing
+
+If Serverless is conceptually about how to remove humans from the equation and solve developers' hardest problems with reasoning about systems in production, then it needs declarative APIs and high-level abstractions with rich and easily understood semantics (beyond low-level primitives like functions) for working with never-ending streams of data, manage complex distributed data workflows, and managing distributed state in a reliable, resilient, scalable, and performant way.
+
+Serverless needs to provide   _Stateful long-lived virtual addressable_ components. All these terms are important:
+
+* Stateful: in-memory, yet durable and resilient state.
+* Long-lived: life-cycle is not bound to a specific session, the context available until explicitly destroyed.
+* Virtual: location transparent and mobile, not bound to a physical location
+* Addressable: referenced through a stable address, one example of a component with these traits would be Actors.
+
+As discussed by https://blog.acolyer.org/2019/01/14/serverless-computing-one-step-forward-two-steps-back/[Hellerstein et al]:
+
+[sidebar]
+ _If the platform pays a cost to create an affinity (e.g. moving data), it should recoup that cost across multiple requests. This motivates the ability for programmers to establish software agents— call them functions, actors, services, etc.— that persist over time in the cloud, with known identities._
+
+To achieve stateful long-lived virtual addressable components, we need:
+
+*   A wider range of options for _coordination_ and _communication_ patterns (beyond event-based pub-sub over a broker), including _fine-grained sharing of state_ using common patterns like point-to-point, broadcast, aggregation, merging, shuffling, etc. As concluded by https://arxiv.org/pdf/1902.03383.pdf[Jonas et al]:
+
+[sidebar]
+ _This limitation also suggests that new variants of serverless computing may be worth exploring, for example naming function instances and allowing direct addressability for access to their internal state (e.g., Actors as a Service)_.
+
+*   Tools for managing _distributed state_ reliably at scale—in a durable or ephemeral fashion—with _options for consistency_ ranging from _strong_ to _eventual_ and _causal_ consistency, and ways to physically co-locate code and data while remaining logically separate. For example, disorderly programming constructs like https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type[CRDTs]. As discussed by https://blog.acolyer.org/2019/01/14/serverless-computing-one-step-forward-two-steps-back/[Hellerstein et al]:
+
+[sidebar]
+_The sequential metaphor of procedural programming will not scale to the cloud. Developers need languages that encourage code that works correctly in small, granular units— of both data and computation— that can be easily moved around across time and space._
+
+*   Intelligent adaptive placement of stateful functions—ways to physically co-locate code and data while remaining logically separate. As discussed in https://medium.com/riselab/two-missing-links-in-serverless-computing-stateful-computation-and-placement-control-964c3236d18[this article] by Stoica and Petersohn.
+*   End-to-end correctness and consistency—be able to reason about streaming pipelines and the properties (Such as backpressure, windowing, completeness vs correctness, etc.) and guarantees it has as a whole. End-to-end correctness, consistency, and safety mean different things for different services. It's totally dependent on the use-case, and can't be outsourced completely to the infrastructure. The next-generation serverless implementations need to provide programming models and a holistic Developer Experience working in concert with the underlying infrastructure maintaining these properties, without continuing to ignore the hardest, and most important problem: how to manage your data in the cloud—reliably at scale.
+*   Predictable performance, latency, and throughput—in startup time, communication, coordination, and durable storage/access of data.
+
+== What's next
+
+Now that we have established general requirements for a stateful serverless platform, let's consider why it also important to xref:crud-limitations.adoc[rethink the use of CRUD] in Serverless.
