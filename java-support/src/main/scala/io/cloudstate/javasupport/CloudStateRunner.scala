@@ -117,7 +117,7 @@ final class CloudStateRunner private[this] (
           route orElse StatelessFunctionHandler.partial(actionImpl)
 
         case (route, (serviceClass, crudServices: Map[String, CrudStatefulService] @unchecked))
-          if serviceClass == classOf[CrudStatefulService] =>
+            if serviceClass == classOf[CrudStatefulService] =>
           val crudImpl = new CrudImpl(system, crudServices, rootContext, configuration)
           route orElse CrudHandler.partial(crudImpl)
 

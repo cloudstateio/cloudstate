@@ -641,7 +641,7 @@ lazy val `java-support-docs` = (project in file("java-support/docs"))
   )
 
 lazy val `java-support-tck` = (project in file("java-support/tck"))
-  .dependsOn(`java-support`, `java-shopping-cart`)
+  .dependsOn(`java-support`, `java-shopping-cart`, `java-crud-shopping-cart`)
   .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
   .settings(
     name := "cloudstate-java-tck",

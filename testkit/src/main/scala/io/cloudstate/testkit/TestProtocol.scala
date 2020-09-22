@@ -20,6 +20,7 @@ import akka.actor.ActorSystem
 import akka.grpc.GrpcClientSettings
 import akka.testkit.TestKit
 import com.typesafe.config.{Config, ConfigFactory}
+import io.cloudstate.testkit.crud.TestCrudProtocol
 import io.cloudstate.testkit.eventsourced.TestEventSourcedProtocol
 
 final class TestProtocol(host: String, port: Int) {
@@ -28,11 +29,13 @@ final class TestProtocol(host: String, port: Int) {
   val context = new TestProtocolContext(host, port)
 
   val eventSourced = new TestEventSourcedProtocol(context)
+  val crud = new TestCrudProtocol(context)
 
   def settings: GrpcClientSettings = context.clientSettings
 
   def terminate(): Unit = {
     eventSourced.terminate()
+    crud.terminate()
     context.terminate()
   }
 }

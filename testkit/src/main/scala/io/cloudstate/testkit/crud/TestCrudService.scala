@@ -23,38 +23,34 @@ import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.TestProbe
 import com.google.protobuf.Descriptors.ServiceDescriptor
 import io.cloudstate.protocol.crud.{Crud, CrudHandler, CrudStreamIn, CrudStreamOut}
 import io.cloudstate.protocol.entity.EntitySpec
-import io.cloudstate.testkit.TestService
+import io.cloudstate.testkit.TestService.TestServiceContext
+import io.cloudstate.testkit.discovery.TestEntityDiscoveryService
 
 import scala.concurrent.Future
 
-class TestCrudService extends TestService {
-  private val crud = new TestCrudService.TestCrud(system, probe)
+class TestCrudService(context: TestServiceContext) {
+  private val testCrud = new TestCrudService.TestCrud(context)
 
-  override protected def handler: PartialFunction[HttpRequest, Future[HttpResponse]] =
-    super.handler orElse CrudHandler.partial(crud)
+  def expectConnection(): TestCrudService.Connection = context.probe.expectMsgType[TestCrudService.Connection]
 
-  def expectConnection(): TestCrudService.Connection = probe.expectMsgType[TestCrudService.Connection]
-
-  start()
+  def handler: PartialFunction[HttpRequest, Future[HttpResponse]] =
+    CrudHandler.partial(testCrud)(context.system)
 }
 
 object TestCrudService {
-  def apply(): TestCrudService = new TestCrudService
-
   def entitySpec(service: ServiceDescription): EntitySpec =
-    TestService.entitySpec(Crud.name, service)
+    TestEntityDiscoveryService.entitySpec(Crud.name, service)
 
   def entitySpec(descriptors: Seq[ServiceDescriptor]): EntitySpec =
-    TestService.entitySpec(Crud.name, descriptors)
+    TestEntityDiscoveryService.entitySpec(Crud.name, descriptors)
 
-  final class TestCrud(system: ActorSystem, probe: TestProbe) extends Crud {
+  final class TestCrud(context: TestServiceContext) extends Crud {
     override def handle(source: Source[CrudStreamIn, NotUsed]): Source[CrudStreamOut, NotUsed] = {
-      val connection = new Connection(system, source)
-      probe.ref ! connection
+      val connection = new Connection(context.system, source)
+      context.probe.ref ! connection
       connection.outSource
     }
   }

@@ -28,7 +28,7 @@ import com.google.protobuf.any.{Any => ScalaPbAny}
 import io.cloudstate.javasupport.crud._
 import io.cloudstate.javasupport.impl._
 import io.cloudstate.javasupport.impl.crud.CrudImpl.{failure, failureMessage, EntityException, ProtocolException}
-import io.cloudstate.javasupport.{Context, ServiceCallFactory, StatefulService}
+import io.cloudstate.javasupport.{Context, Service, ServiceCallFactory}
 import io.cloudstate.protocol.crud.CrudAction.Action.{Delete, Update}
 import io.cloudstate.protocol.crud._
 import io.cloudstate.protocol.crud.CrudStreamIn.Message.{Command => InCommand, Empty => InEmpty, Init => InInit}
@@ -42,7 +42,7 @@ final class CrudStatefulService(val factory: CrudEntityFactory,
                                 override val descriptor: Descriptors.ServiceDescriptor,
                                 val anySupport: AnySupport,
                                 override val persistenceId: String)
-    extends StatefulService {
+    extends Service {
 
   override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] =
     factory match {

@@ -20,8 +20,10 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
 import akka.testkit.{SocketUtil, TestKit, TestProbe}
 import com.typesafe.config.{Config, ConfigFactory}
+import io.cloudstate.testkit.crud.TestCrudService
 import io.cloudstate.testkit.discovery.TestEntityDiscoveryService
 import io.cloudstate.testkit.eventsourced.TestEventSourcedService
+
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -36,11 +38,13 @@ final class TestService {
 
   val eventSourced = new TestEventSourcedService(context)
 
+  val crud = new TestCrudService(context)
+
   import context.system
 
   Await.result(
     Http().bindAndHandleAsync(
-      handler = entityDiscovery.handler orElse eventSourced.handler,
+      handler = entityDiscovery.handler orElse eventSourced.handler orElse crud.handler,
       interface = "localhost",
       port = port
     ),

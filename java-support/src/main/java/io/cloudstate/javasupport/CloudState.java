@@ -322,14 +322,14 @@ public final class CloudState {
    * @return This stateful service builder.
    */
   public CloudState registerCrudEntity(
-          Class<?> entityClass,
-          Descriptors.ServiceDescriptor descriptor,
-          Descriptors.FileDescriptor... additionalDescriptors) {
+      Class<?> entityClass,
+      Descriptors.ServiceDescriptor descriptor,
+      Descriptors.FileDescriptor... additionalDescriptors) {
 
     CrudEntity entity = entityClass.getAnnotation(CrudEntity.class);
     if (entity == null) {
       throw new IllegalArgumentException(
-              entityClass + " does not declare an " + CrudEntity.class + " annotation!");
+          entityClass + " does not declare an " + CrudEntity.class + " annotation!");
     }
 
     final String persistenceId;
@@ -340,20 +340,20 @@ public final class CloudState {
     }
 
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
+    CrudStatefulService service =
+        new CrudStatefulService(
+            new AnnotationBasedCrudSupport(entityClass, anySupport, descriptor),
+            descriptor,
+            anySupport,
+            persistenceId);
 
-    services.put(
-            descriptor.getFullName(),
-            new CrudStatefulService(
-                    new AnnotationBasedCrudSupport(entityClass, anySupport, descriptor),
-                    descriptor,
-                    anySupport,
-                    persistenceId));
+    services.put(descriptor.getFullName(), system -> service);
 
     return this;
   }
 
   /**
-   * Register an CRUD entity factory.
+   * Register a CRUD entity factory.
    *
    * <p>This is a low level API intended for custom (eg, non reflection based) mechanisms for
    * implementing the entity.
@@ -366,14 +366,15 @@ public final class CloudState {
    * @return This stateful service builder.
    */
   public CloudState registerCrudEntity(
-          CrudEntityFactory factory,
-          Descriptors.ServiceDescriptor descriptor,
-          String persistenceId,
-          Descriptors.FileDescriptor... additionalDescriptors) {
+      CrudEntityFactory factory,
+      Descriptors.ServiceDescriptor descriptor,
+      String persistenceId,
+      Descriptors.FileDescriptor... additionalDescriptors) {
     services.put(
-            descriptor.getFullName(),
+        descriptor.getFullName(),
+        system ->
             new CrudStatefulService(
-                    factory, descriptor, newAnySupport(additionalDescriptors), persistenceId));
+                factory, descriptor, newAnySupport(additionalDescriptors), persistenceId));
 
     return this;
   }

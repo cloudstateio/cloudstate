@@ -144,7 +144,7 @@ private object CrudBehaviorReflection {
 }
 
 private class EntityConstructorInvoker(constructor: Constructor[_]) extends (CrudEntityCreationContext => AnyRef) {
-  private val parameters = ReflectionHelper.getParameterHandlers[CrudEntityCreationContext](constructor)()
+  private val parameters = ReflectionHelper.getParameterHandlers[AnyRef, CrudEntityCreationContext](constructor)()
   parameters.foreach {
     case MainArgumentParameterHandler(clazz) =>
       throw new RuntimeException(s"Don't know how to handle argument of type $clazz in constructor")
@@ -152,7 +152,7 @@ private class EntityConstructorInvoker(constructor: Constructor[_]) extends (Cru
   }
 
   def apply(context: CrudEntityCreationContext): AnyRef = {
-    val ctx = InvocationContext("", context)
+    val ctx = InvocationContext(null.asInstanceOf[AnyRef], context)
     constructor.newInstance(parameters.map(_.apply(ctx)): _*).asInstanceOf[AnyRef]
   }
 }
