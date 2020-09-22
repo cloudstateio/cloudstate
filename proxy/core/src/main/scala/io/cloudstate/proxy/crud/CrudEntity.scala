@@ -276,9 +276,10 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
     }
   }
 
-  private[this] final def crash(msg: String): Unit = {
+  // only the msg is returned to the user, while the details are also part of the exception
+  private[this] final def crash(msg: String, details: String): Unit = {
     notifyOutstandingRequests(msg)
-    throw new Exception(msg)
+    throw new Exception(s"$msg - $details")
   }
 
   private[this] final def reportActionComplete() =
@@ -321,8 +322,8 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
     // ignore entity already initialized
 
     case CrudEntity.LoadInitStateFailure(error) =>
-      log.error(error, s"CRUD Entity cannot load the initial state due to unexpected failure ${error.getMessage}")
-      throw error
+      crash("Unexpected CRUD entity failure",
+            s"(cannot load the initial state due to unexpected failure) - ${error.getMessage}")
 
     case _ => stash()
   }
@@ -340,10 +341,11 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       m match {
 
         case CrudSOMsg.Reply(r) if currentCommand == null =>
-          crash(s"Unexpected reply, had no current command: $r")
+          crash("Unexpected CRUD entity reply", s"(no current command) - $r")
 
         case CrudSOMsg.Reply(r) if currentCommand.commandId != r.commandId =>
-          crash(s"Incorrect command id in reply, expecting ${currentCommand.commandId} but got ${r.commandId}")
+          crash("Unexpected CRUD entity reply",
+                s"(expected id ${currentCommand.commandId} but got ${r.commandId}) - $r")
 
         case CrudSOMsg.Reply(r) =>
           reportActionComplete()
@@ -359,7 +361,7 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
                   reportDatabaseOperationFinished()
                   // Make sure that the current request is still ours
                   if (currentCommand == null || currentCommand.commandId != commandId) {
-                    crash("Internal error - currentRequest changed before all events were persisted")
+                    crash("Unexpected CRUD entity behavior", "currentRequest changed before the state were persisted")
                   }
                   currentCommand.replyTo ! esReplyToUfReply(r)
                   commandHandled()
@@ -370,23 +372,24 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
           }
 
         case CrudSOMsg.Failure(f) if f.commandId == 0 =>
-          crash(s"Non command specific error from entity: ${f.description}")
+          crash("Unexpected CRUD entity failure", s"(not command specific) - ${f.description}")
 
         case CrudSOMsg.Failure(f) if currentCommand == null =>
-          crash(s"Unexpected failure, had no current command: $f")
+          crash("Unexpected CRUD entity failure", s"(no current command) - ${f.description}")
 
         case CrudSOMsg.Failure(f) if currentCommand.commandId != f.commandId =>
-          crash(s"Incorrect command id in failure, expecting ${currentCommand.commandId} but got ${f.commandId}")
+          crash("Unexpected CRUD entity failure",
+                s"(expected id ${currentCommand.commandId} but got ${f.commandId}) - ${f.description}")
 
         case CrudSOMsg.Failure(f) =>
           reportActionComplete()
-          currentCommand.replyTo ! createFailure(f.description)
-          commandHandled()
+          try crash("Unexpected CRUD entity failure", f.description)
+          finally currentCommand = null // clear command after notifications
 
         case CrudSOMsg.Empty =>
           // Either the reply/failure wasn't set, or its set to something unknown.
           // todo see if scalapb can give us unknown fields so we can possibly log more intelligently
-          crash("Empty or unknown message from entity output stream")
+          crash("Unexpected CRUD entity failure", "empty or unknown message from entity output stream")
       }
 
     case CrudEntity.StreamClosed =>
