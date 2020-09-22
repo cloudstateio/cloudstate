@@ -64,8 +64,6 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
       val service = TestService()
       val client = EventSourcedClient(GrpcClientSettings.connectToServiceAt("localhost", service.port).withTls(false))
 
-      val statsCollector = TestProbe() // ignored
-
       val entityConfiguration = EventSourcedEntity.Configuration(
         serviceName = "service",
         userFunctionName = "test",
@@ -74,7 +72,7 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
       )
 
       val entity = system.actorOf(
-        EventSourcedEntitySupervisor.props(client, entityConfiguration, statsCollector.ref),
+        EventSourcedEntitySupervisor.props(client, entityConfiguration),
         "entity"
       )
 
@@ -195,7 +193,7 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
       // reactivate the entity
 
       val reactivatedEntity = system.actorOf(
-        EventSourcedEntitySupervisor.props(client, entityConfiguration, statsCollector.ref),
+        EventSourcedEntitySupervisor.props(client, entityConfiguration),
         "entity"
       )
 
