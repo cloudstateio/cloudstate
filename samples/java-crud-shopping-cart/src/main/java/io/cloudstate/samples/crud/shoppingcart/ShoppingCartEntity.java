@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.cloudstate.samples.shoppingcart;
+package io.cloudstate.samples.crud.shoppingcart;
 
 import com.example.crud.shoppingcart.Shoppingcart;
 import com.example.crud.shoppingcart.persistence.Domain;
@@ -117,5 +117,4 @@ public class ShoppingCartEntity {
         .setQuantity(item.getQuantity())
         .build();
   }
-
 }

@@ -680,7 +680,7 @@ lazy val `java-crud-shopping-cart` = (project in file("samples/java-crud-shoppin
   .settings(
     name := "java-crud-shopping-cart",
     dockerSettings,
-    mainClass in Compile := Some("io.cloudstate.samples.shoppingcart.Main"),
+    mainClass in Compile := Some("io.cloudstate.samples.crud.shoppingcart.Main"),
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
     PB.protoSources in Compile ++= {
@@ -690,7 +690,7 @@ lazy val `java-crud-shopping-cart` = (project in file("samples/java-crud-shoppin
     PB.targets in Compile := Seq(
         PB.gens.java -> (sourceManaged in Compile).value
       ),
-    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.8", "-target", "1.8"),
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "11", "-target", "11"),
     assemblySettings("java-crud-shopping-cart.jar")
   )
 
