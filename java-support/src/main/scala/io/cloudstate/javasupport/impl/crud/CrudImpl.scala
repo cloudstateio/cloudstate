@@ -97,7 +97,7 @@ final class CrudImpl(_system: ActorSystem,
                      _services: Map[String, CrudStatefulService],
                      rootContext: Context,
                      configuration: Configuration)
-    extends io.cloudstate.protocol.crud.Crud {
+    extends Crud {
 
   private final val system = _system
   private final implicit val ec = system.dispatcher
@@ -133,20 +133,20 @@ final class CrudImpl(_system: ActorSystem,
 
   private def runEntity(init: CrudInit): Flow[CrudStreamIn, CrudStreamOut, NotUsed] = {
     val service =
-      services.getOrElse(init.serviceName, throw new RuntimeException(s"Service not found: ${init.serviceName}"))
+      services.getOrElse(init.serviceName, throw ProtocolException(init, s"Service not found: ${init.serviceName}"))
     val handler = service.factory.create(new CrudContextImpl(init.entityId))
     val thisEntityId = init.entityId
 
     val initState = init.state match {
       case Some(CrudInitState(state, _)) => state
-      case _ => None
+      case _ => None // should not happen!!!
     }
 
     Flow[CrudStreamIn]
       .map(_.message)
       .scan[(Option[ScalaPbAny], Option[CrudStreamOut.Message])]((initState, None)) {
         case (_, InCommand(command)) if thisEntityId != command.entityId =>
-          throw ProtocolException(command, "Receiving entity is not the intended recipient for CRUD entity")
+          throw ProtocolException(command, "Receiving CRUD entity is not the intended recipient of command")
 
         case (_, InCommand(command)) if command.payload.isEmpty =>
           throw ProtocolException(command, "No command payload for CRUD entity")
@@ -167,7 +167,7 @@ final class CrudImpl(_system: ActorSystem,
             case FailInvoked => Option.empty[JavaPbAny].asJava
             case e: EntityException => throw e
             case NonFatal(error) =>
-              throw EntityException(command, s"CRUD entity Unexpected failure: ${error.getMessage}")
+              throw EntityException(command, s"CRUD entity unexpected failure: ${error.getMessage}")
           } finally {
             context.deactivate() // Very important!
           }
@@ -192,8 +192,7 @@ final class CrudImpl(_system: ActorSystem,
                OutReply(
                  CrudReply(
                    commandId = command.id,
-                   clientAction = clientAction,
-                   crudAction = context.action
+                   clientAction = clientAction
                  )
                )
              ))

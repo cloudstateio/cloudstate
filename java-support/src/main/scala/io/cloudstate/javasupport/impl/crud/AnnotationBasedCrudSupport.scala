@@ -76,6 +76,7 @@ private[impl] class AnnotationBasedCrudSupport(
         handler.invoke(entity, command, adaptedContext)
       } getOrElse {
         throw EntityException(
+          context,
           s"No command handler found for command [${context.commandName()}] on $behaviorsString"
         )
       }

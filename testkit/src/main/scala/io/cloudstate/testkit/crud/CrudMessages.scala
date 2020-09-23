@@ -18,6 +18,8 @@ package io.cloudstate.testkit.crud
 
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.google.protobuf.{Empty => JavaPbEmpty, Message => JavaPbMessage}
+import io.cloudstate.protocol.crud.CrudAction.Action.Update
+import io.cloudstate.protocol.crud.CrudAction.Action.Delete
 import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.crud._
 import scalapb.{GeneratedMessage => ScalaPbMessage}
@@ -26,12 +28,28 @@ object CrudMessages {
   import CrudStreamIn.{Message => InMessage}
   import CrudStreamOut.{Message => OutMessage}
 
-  val EmptyMessage: InMessage = InMessage.Empty
-  val EmptyPayload: JavaPbMessage = JavaPbEmpty.getDefaultInstance
-  val EmptyAny: ScalaPbAny = protobufAny(EmptyPayload)
+  case class Effects(sideEffects: Seq[SideEffect] = Seq.empty, crudAction: Option[CrudAction] = None) {
+
+    def withUpdateAction(message: JavaPbMessage): Effects =
+      copy(crudAction = Some(CrudAction(Update(CrudUpdate(messagePayload(message))))))
+
+    def withUpdateAction(message: ScalaPbMessage): Effects =
+      copy(crudAction = Some(CrudAction(Update(CrudUpdate(messagePayload(message))))))
+
+    def withDeleteAction(): Effects =
+      copy(crudAction = Some(CrudAction(Delete(CrudDelete()))))
+  }
+
+  object Effects {
+    val empty: Effects = Effects()
+  }
+
+  val EmptyInMessage: InMessage = InMessage.Empty
+  val EmptyJavaMessage: JavaPbMessage = JavaPbEmpty.getDefaultInstance
+  val EmptyScalaMessage: ScalaPbAny = protobufAny(EmptyJavaMessage)
 
   def init(serviceName: String, entityId: String): InMessage =
-    init(serviceName, entityId, CrudInitState())
+    init(serviceName, entityId, Some(CrudInitState()))
 
   def init(serviceName: String, entityId: String, state: CrudInitState): InMessage =
     init(serviceName, entityId, Some(state))
@@ -39,14 +57,14 @@ object CrudMessages {
   def init(serviceName: String, entityId: String, state: Option[CrudInitState]): InMessage =
     InMessage.Init(CrudInit(serviceName, entityId, state))
 
-  def state(payload: JavaPbMessage): Option[ScalaPbAny] =
-    messagePayload(payload)
+  def state(payload: JavaPbMessage): CrudInitState =
+    CrudInitState(messagePayload(payload))
 
-  def state(payload: ScalaPbMessage): Option[ScalaPbAny] =
-    messagePayload(payload)
+  def state(payload: ScalaPbMessage): CrudInitState =
+    CrudInitState(messagePayload(payload))
 
   def command(id: Long, entityId: String, name: String): InMessage =
-    command(id, entityId, name, EmptyPayload)
+    command(id, entityId, name, EmptyJavaMessage)
 
   def command(id: Long, entityId: String, name: String, payload: JavaPbMessage): InMessage =
     command(id, entityId, name, messagePayload(payload))
@@ -57,14 +75,23 @@ object CrudMessages {
   def command(id: Long, entityId: String, name: String, payload: Option[ScalaPbAny]): InMessage =
     InMessage.Command(Command(entityId, id, name, payload))
 
-  def reply(id: Long, payload: JavaPbMessage, action: CrudAction): OutMessage =
-    reply(id, messagePayload(payload), Some(action))
+  def reply(id: Long, payload: JavaPbMessage): OutMessage =
+    reply(id, messagePayload(payload), None)
 
-  def reply(id: Long, payload: ScalaPbMessage, action: CrudAction): OutMessage =
-    reply(id, messagePayload(payload), Some(action))
+  def reply(id: Long, payload: JavaPbMessage, effects: Effects): OutMessage =
+    reply(id, messagePayload(payload), effects)
 
-  def reply(id: Long, payload: Option[ScalaPbAny], action: Option[CrudAction]): OutMessage =
-    OutMessage.Reply(CrudReply(id, clientActionReply(payload), Seq.empty, action))
+  def reply(id: Long, payload: ScalaPbMessage): OutMessage =
+    reply(id, messagePayload(payload), None)
+
+  def reply(id: Long, payload: ScalaPbMessage, effects: Effects): OutMessage =
+    reply(id, messagePayload(payload), effects)
+
+  def reply(id: Long, payload: Option[ScalaPbAny], crudAction: Option[CrudAction]): OutMessage =
+    OutMessage.Reply(CrudReply(id, clientActionReply(payload), Seq.empty, crudAction))
+
+  def reply(id: Long, payload: Option[ScalaPbAny], effects: Effects): OutMessage =
+    OutMessage.Reply(CrudReply(id, clientActionReply(payload), effects.sideEffects, effects.crudAction))
 
   def actionFailure(id: Long, description: String): OutMessage =
     OutMessage.Reply(CrudReply(id, clientActionFailure(id, description)))
@@ -83,6 +110,15 @@ object CrudMessages {
 
   def clientActionFailure(id: Long, description: String): Option[ClientAction] =
     Some(ClientAction(ClientAction.Action.Failure(Failure(id, description))))
+
+  def update(state: JavaPbMessage): Effects =
+    Effects.empty.withUpdateAction(state)
+
+  def update(state: ScalaPbMessage): Effects =
+    Effects.empty.withUpdateAction(state)
+
+  def delete(): Effects =
+    Effects.empty.withDeleteAction()
 
   def messagePayload(message: JavaPbMessage): Option[ScalaPbAny] =
     Option(message).map(protobufAny)
