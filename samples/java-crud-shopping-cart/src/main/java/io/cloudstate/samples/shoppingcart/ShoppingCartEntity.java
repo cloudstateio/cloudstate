@@ -23,8 +23,6 @@ import io.cloudstate.javasupport.EntityId;
 import io.cloudstate.javasupport.crud.CommandContext;
 import io.cloudstate.javasupport.crud.CommandHandler;
 import io.cloudstate.javasupport.crud.CrudEntity;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Optional;
@@ -35,7 +33,6 @@ import java.util.stream.Collectors;
 @CrudEntity
 public class ShoppingCartEntity {
 
-  private final Logger logger = LoggerFactory.getLogger(ShoppingCartEntity.class);
   private final String entityId;
 
   public ShoppingCartEntity(@EntityId String entityId) {
@@ -44,20 +41,6 @@ public class ShoppingCartEntity {
 
   @CommandHandler
   public Shoppingcart.Cart getCart(CommandContext<Domain.Cart> ctx) {
-    logger.info("getCart called");
-    ctx.getState()
-        .ifPresent(
-            c -> {
-              c.getItemsList()
-                  .forEach(
-                      lineItem ->
-                          logger.info(
-                              "getCart called cart line item name - "
-                                  + lineItem.getName()
-                                  + ", id - "
-                                  + lineItem.getProductId()));
-            });
-    // access the state by calling ctx.getState()
     Domain.Cart cart = ctx.getState().orElse(Domain.Cart.newBuilder().build());
     List<Shoppingcart.LineItem> allItems =
         cart.getItemsList().stream().map(this::convert).collect(Collectors.toList());
@@ -66,53 +49,19 @@ public class ShoppingCartEntity {
 
   @CommandHandler
   public Empty addItem(Shoppingcart.AddLineItem item, CommandContext<Domain.Cart> ctx) {
-    logger.info(
-        "addItem called cart AddLineItem name - "
-            + item.getName()
-            + ", id - "
-            + item.getProductId());
     if (item.getQuantity() <= 0) {
       ctx.fail("Cannot add negative quantity of to item " + item.getProductId());
     }
 
-    // access the state by calling ctx.getState()
     Domain.Cart cart = ctx.getState().orElse(Domain.Cart.newBuilder().build());
-    ctx.getState()
-        .ifPresent(
-            c -> {
-              c.getItemsList()
-                  .forEach(
-                      lineItem ->
-                          logger.info(
-                              "addItem called cart line item name - "
-                                  + lineItem.getName()
-                                  + ", id - "
-                                  + lineItem.getProductId()));
-            });
-    logger.info("addItem called lineItemStream");
     Domain.LineItem lineItem = updateItem(item, cart);
-
-    logger.info(
-        "addItem called lineItem name - "
-            + lineItem.getName()
-            + " id - "
-            + lineItem.getProductId()
-            + " quantity - "
-            + lineItem.getQuantity());
     List<Domain.LineItem> lineItems = removeItemByProductId(cart, item.getProductId());
-
-    logger.info("addItem called updateEntity");
-    // update the state by calling ctx.updateState(...)
-    // multiple invocations of ctx.updateState(...) and ctx.deleteState() are not allowed
     ctx.updateState(Domain.Cart.newBuilder().addAllItems(lineItems).addItems(lineItem).build());
-    ctx.updateState(Domain.Cart.newBuilder().addAllItems(lineItems).addItems(lineItem).build());
-    logger.info("addItem called after updateEntity");
     return Empty.getDefaultInstance();
   }
 
   @CommandHandler
   public Empty removeItem(Shoppingcart.RemoveLineItem item, CommandContext<Domain.Cart> ctx) {
-    // access the state by calling ctx.getState()
     Domain.Cart cart = ctx.getState().orElse(Domain.Cart.newBuilder().build());
     Optional<Domain.LineItem> lineItem = findItemByProductId(cart, item.getProductId());
 
@@ -121,9 +70,6 @@ public class ShoppingCartEntity {
     }
 
     List<Domain.LineItem> items = removeItemByProductId(cart, item.getProductId());
-
-    // update the state by calling ctx.updateState(...)
-    // multiple invocations of ctx.updateState(...) and ctx.deleteState() are not allowed
     ctx.updateState(Domain.Cart.newBuilder().addAllItems(items).build());
     return Empty.getDefaultInstance();
   }
@@ -134,9 +80,6 @@ public class ShoppingCartEntity {
     if (!entityId.equals(cartItem.getUserId())) {
       ctx.fail("Cannot remove unknown cart " + cartItem.getUserId());
     }
-
-    // delete the state by calling ctx.deleteState()
-    // multiple invocations of ctx.updateState(...) and ctx.deleteState() are not allowed
     ctx.deleteState();
     return Empty.getDefaultInstance();
   }
@@ -175,11 +118,4 @@ public class ShoppingCartEntity {
         .build();
   }
 
-  private Domain.LineItem convert(Shoppingcart.LineItem item) {
-    return Domain.LineItem.newBuilder()
-        .setProductId(item.getProductId())
-        .setName(item.getName())
-        .setQuantity(item.getQuantity())
-        .build();
-  }
 }
