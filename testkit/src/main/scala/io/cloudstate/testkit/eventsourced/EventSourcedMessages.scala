@@ -144,7 +144,10 @@ object EventSourcedMessages {
     replyAction(id, clientActionForward(service, command, payload), effects)
 
   def actionFailure(id: Long, description: String): OutMessage =
-    OutMessage.Reply(EventSourcedReply(id, clientActionFailure(id, description)))
+    OutMessage.Reply(EventSourcedReply(id, clientActionFailure(id, description, restart = false)))
+
+  def actionFailure(id: Long, description: String, restart: Boolean): OutMessage =
+    OutMessage.Reply(EventSourcedReply(id, clientActionFailure(id, description, restart)))
 
   def failure(description: String): OutMessage =
     failure(id = 0, description)
@@ -162,7 +165,10 @@ object EventSourcedMessages {
     clientActionFailure(id = 0, description)
 
   def clientActionFailure(id: Long, description: String): Option[ClientAction] =
-    Some(ClientAction(ClientAction.Action.Failure(Failure(id, description))))
+    clientActionFailure(id, description, restart = false)
+
+  def clientActionFailure(id: Long, description: String, restart: Boolean): Option[ClientAction] =
+    Some(ClientAction(ClientAction.Action.Failure(Failure(id, description, restart))))
 
   def persist(event: JavaPbMessage, events: JavaPbMessage*): Effects =
     Effects.empty.withEvents(event, events: _*)

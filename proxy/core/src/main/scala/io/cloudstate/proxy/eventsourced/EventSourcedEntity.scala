@@ -20,7 +20,9 @@ import java.net.URLDecoder
 import java.util.concurrent.atomic.AtomicLong
 
 import akka.NotUsed
+import akka.actor.SupervisorStrategy.{Decider, Restart, Stop}
 import akka.actor._
+import akka.cloudstate.EntityStash
 import akka.cluster.sharding.ShardRegion
 import akka.persistence._
 import akka.stream.scaladsl._
@@ -33,14 +35,11 @@ import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.telemetry.CloudstateTelemetry
 
 import scala.collection.immutable.Queue
+import scala.util.control.NoStackTrace
 
 object EventSourcedEntitySupervisor {
-
-  private final case class Relay(actorRef: ActorRef)
-
-  def props(client: EventSourcedClient, configuration: EventSourcedEntity.Configuration)(
-      implicit mat: Materializer
-  ): Props =
+  def props(client: EventSourcedClient,
+            configuration: EventSourcedEntity.Configuration)(implicit mat: Materializer): Props =
     Props(new EventSourcedEntitySupervisor(client, configuration))
 }
 
@@ -59,67 +58,121 @@ final class EventSourcedEntitySupervisor(client: EventSourcedClient, configurati
 ) extends Actor
     with Stash {
 
-  import EventSourcedEntitySupervisor._
+  val entityId = URLDecoder.decode(self.path.name, "utf-8")
 
-  private var streamTerminated: Boolean = false
+  val relay = context.watch(context.actorOf(EventSourcedEntityRelay.props(client, configuration), "relay"))
+  val entity = context.watch(context.actorOf(EventSourcedEntity.props(configuration, entityId, relay), "entity"))
 
-  override final def receive: Receive = PartialFunction.empty
+  relay ! EventSourcedEntityRelay.Connect(entity)
 
-  override final def preStart(): Unit = {
+  var relayTerminated: Boolean = false
+  var entityTerminated: Boolean = false
+
+  override def receive: Receive = {
+    case Terminated(`relay`) =>
+      relayTerminated = true
+      if (entityTerminated) context.stop(self)
+    case Terminated(`entity`) =>
+      entityTerminated = true
+      if (relayTerminated) context.stop(self)
+      else relay ! EventSourcedEntityRelay.Disconnect
+    case toParent if sender() == entity =>
+      context.parent ! toParent
+    case msg =>
+      entity forward msg
+  }
+
+  val failureDecider: Decider = {
+    case _: EventSourcedEntity.RestartFailure => Restart
+    case _: Exception => Stop
+  }
+
+  override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy()(failureDecider)
+}
+
+object EventSourcedEntityRelay {
+  final case class Connect(entity: ActorRef)
+  final case class Connected(stream: ActorRef)
+  final case object Disconnect
+  final case object Reconnect
+  final case class Fail(cause: Throwable)
+
+  def props(client: EventSourcedClient,
+            configuration: EventSourcedEntity.Configuration)(implicit mat: Materializer): Props =
+    Props(new EventSourcedEntityRelay(client, configuration))
+}
+
+final class EventSourcedEntityRelay(client: EventSourcedClient, configuration: EventSourcedEntity.Configuration)(
+    implicit mat: Materializer
+) extends Actor
+    with Stash {
+  import EventSourcedEntityRelay._
+
+  override def receive: Receive = starting
+
+  def starting: Receive = {
+    case Connect(entity) => connect(entity)
+    case _ => stash()
+  }
+
+  def connect(entity: ActorRef): Unit = {
     client
       .handle(
         Source
-          .actorRef[EventSourcedStreamIn](configuration.sendQueueSize, OverflowStrategy.fail)
+          .actorRef[EventSourcedStreamIn](
+            { case Disconnect => CompletionStrategy.draining }: PartialFunction[Any, CompletionStrategy],
+            { case Fail(cause) => cause }: PartialFunction[Any, Throwable],
+            configuration.sendQueueSize,
+            OverflowStrategy.fail
+          )
           .mapMaterializedValue { ref =>
-            self ! Relay(ref)
+            self ! Connected(ref)
             NotUsed
           }
       )
       .runWith(Sink.actorRef(self, EventSourcedEntity.StreamClosed, EventSourcedEntity.StreamFailed.apply))
-    context.become(waitingForRelay)
+    context.become(connecting(entity))
   }
 
-  private[this] final def waitingForRelay: Receive = {
-    case Relay(relayRef) =>
-      // Cluster sharding URL encodes entity ids, so to extract it we need to decode.
-      val entityId = URLDecoder.decode(self.path.name, "utf-8")
-      val manager = context.watch(
-        context
-          .actorOf(EventSourcedEntity.props(configuration, entityId, relayRef), "entity")
-      )
-      context.become(forwarding(manager, relayRef))
+  def connecting(entity: ActorRef): Receive = {
+    case Connected(stream) =>
+      context.become(relaying(entity, stream))
       unstashAll()
     case _ => stash()
   }
 
-  private[this] final def forwarding(manager: ActorRef, relay: ActorRef): Receive = {
-    case Terminated(`manager`) =>
-      if (streamTerminated) {
-        context.stop(self)
-      } else {
-        relay ! Status.Success(CompletionStrategy.draining)
-        context.become(stopping)
-      }
-    case toParent if sender() == manager =>
-      context.parent ! toParent
-    case EventSourcedEntity.StreamClosed =>
-      streamTerminated = true
-      manager forward EventSourcedEntity.StreamClosed
-    case failed: EventSourcedEntity.StreamFailed =>
-      streamTerminated = true
-      manager forward failed
-    case msg =>
-      manager forward msg
+  def relaying(entity: ActorRef, stream: ActorRef): Receive = {
+    case Disconnect =>
+      stream ! Disconnect
+      context.become(disconnecting)
+    case Reconnect =>
+      stream ! Disconnect
+      context.become(reconnecting(entity))
+    case fail: Fail =>
+      stream ! fail
+      context.become(disconnecting)
+    case message if sender() == entity =>
+      stream ! message
+    case message =>
+      entity ! message
+      if (streamTerminated(message)) context.stop(self)
   }
 
-  private def stopping: Receive = {
-    case EventSourcedEntity.StreamClosed =>
-      context.stop(self)
-    case _: EventSourcedEntity.StreamFailed =>
-      context.stop(self)
+  def disconnecting: Receive = {
+    case message if streamTerminated(message) => context.stop(self)
+    case _ => // ignore
   }
 
-  override def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
+  def reconnecting(entity: ActorRef): Receive = {
+    case message if streamTerminated(message) => connect(entity)
+    case _ => stash()
+  }
+
+  def streamTerminated(message: Any): Boolean = message match {
+    case EventSourcedEntity.StreamClosed => true
+    case _: EventSourcedEntity.StreamFailed => true
+    case _ => false
+  }
 }
 
 object EventSourcedEntity {
@@ -141,6 +194,8 @@ object EventSourcedEntity {
       actionId: String,
       replyTo: ActorRef
   )
+
+  final class RestartFailure(message: String) extends RuntimeException(message) with NoStackTrace
 
   final def props(configuration: Configuration, entityId: String, relay: ActorRef): Props =
     Props(new EventSourcedEntity(configuration, entityId, relay))
@@ -241,6 +296,17 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
       clientAction = Some(ClientAction(ClientAction.Action.Failure(Failure(description = message))))
     )
 
+  def restartFailure(description: String): Unit = {
+    instrumentation.commandCompleted()
+    stashedCommands.reverseIterator foreach {
+      case (command, replyTo, context) =>
+        instrumentation.commandUnstashed(context)
+        EntityStash.unstash(this, command, replyTo) // prepend to mailbox again
+    }
+    relay ! EventSourcedEntityRelay.Reconnect
+    throw new EventSourcedEntity.RestartFailure(s"Restarting entity [$entityId] after failure: $description")
+  }
+
   override final def receiveCommand: PartialFunction[Any, Unit] = {
 
     case command: EntityCommand if currentCommand != null =>
@@ -262,8 +328,16 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, 
           crash("Unexpected entity reply", s"(expected id ${currentCommand.commandId} but got ${r.commandId}) - $r")
 
         case ESOMsg.Reply(r) =>
-          if (r.clientAction.exists(_.action.isFailure)) instrumentation.commandFailed()
           instrumentation.commandProcessed()
+          r.clientAction match {
+            case Some(ClientAction(ClientAction.Action.Failure(Failure(_, description, restart, _)), _)) =>
+              instrumentation.commandFailed()
+              if (restart) {
+                currentCommand.replyTo ! esReplyToUfReply(r)
+                restartFailure(description)
+              }
+            case _ =>
+          }
           val commandId = currentCommand.commandId
           val events = r.events.toVector
           if (events.isEmpty) {
