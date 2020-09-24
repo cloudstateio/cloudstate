@@ -35,6 +35,9 @@ install: manifests
 deploy: install docker-build
 	kubectl apply -f manifests/cloudstate-operator.yaml
 
+deploy-native: install docker-build
+	kubectl apply -f manifests/cloudstate-operator-native.yaml
+
 kind-deploy: install docker-build
 	kind load docker-image $IMG
 	kubectl apply -f manifests/cloudstate-operator.yaml
@@ -45,6 +48,7 @@ manifests:
 	controller-gen $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:webhook:artifacts:config=config/webhook output:crd:artifacts:config=config/crd/bases
 	kustomize build config/crd > manifests/crds.yaml
 	kustomize build config/default > manifests/cloudstate-operator.yaml
+	kustomize build config/native-image > manifests/cloudstate-operator-native.yaml
 
 # Run go fmt against code
 fmt:

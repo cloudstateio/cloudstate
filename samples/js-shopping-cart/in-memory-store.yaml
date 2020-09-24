@@ -8,5 +8,5 @@ metadata:
   labels:
       foo: bar
 spec:
-  inMemory: {}
+  inMemory: true
 

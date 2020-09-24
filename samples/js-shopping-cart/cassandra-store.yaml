@@ -7,20 +7,8 @@ metadata:
   name: cassandra
 spec:
 
-  # The type of store - valid values would come from an enum of supported databases.
-  type: Cassandra
+  # This is a Cassandra deployment, so supply configuration for Cassandra.
+  cassandra:
 
-  # The deployment type, ie, how this store is deployed. Valid values would depend on
-  # the store type, but all types would support "Unmanaged", which indicates that the
-  # operator doesn't manage/deploy the database itself, ie, the user has to deploy
-  # the database themselves. For Cassandra, future supported values might include
-  # "GoogleCloudMarketplace", which would deploy Cassandra using Google's Application
-  # CRD, or "InstaclustrOperator", which would deploy Cassandra using Instaclustr's
-  # Cassandra operator.
-  deployment: Unmanaged
-
-  # Type and deployment specific configuration for the store.
-  config:
-
-    # The name of the unmanaged Cassandra service to connect to.
+    # The host name of the Cassandra service to connect to.
     service: cassandra-cassandra-0.cassandra-cassandra-svc.cassandra.svc.cluster.local
