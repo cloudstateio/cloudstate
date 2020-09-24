@@ -12,7 +12,6 @@ nav:
 - modules/java/nav.adoc
 - modules/javascript/nav.adoc
 - modules/kotlin/nav.adoc
-- modules/old-kotlin/nav.adoc
 - modules/python/nav.adoc
 - modules/old-python/nav.adoc
 - modules/springboot/nav.adoc
