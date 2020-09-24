@@ -199,7 +199,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
         ctx.deactivate()
       }
 
-      val clientAction = ctx.createClientAction(reply, allowNoReply = true)
+      val clientAction = ctx.createClientAction(reply, allowNoReply = true, restartOnFailure = false)
 
       if (ctx.hasError) {
         verifyNoDelta("failed command handling")
@@ -292,7 +292,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
               context.deactivate()
             }
 
-            val clientAction = context.createClientAction(reply, allowNoReply = true)
+            val clientAction = context.createClientAction(reply, allowNoReply = true, restartOnFailure = false)
 
             if (context.hasError) {
               subscribers -= id

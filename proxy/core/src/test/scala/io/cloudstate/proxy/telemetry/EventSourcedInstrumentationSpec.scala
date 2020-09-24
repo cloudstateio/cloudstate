@@ -19,7 +19,7 @@ package io.cloudstate.proxy.telemetry
 import akka.actor.ActorRef
 import akka.grpc.GrpcClientSettings
 import akka.testkit.TestEvent.Mute
-import akka.testkit.{EventFilter, TestProbe}
+import akka.testkit.EventFilter
 import com.google.protobuf.ByteString
 import com.google.protobuf.any.{Any => ProtoAny}
 import io.cloudstate.protocol.entity.{ClientAction, Failure}

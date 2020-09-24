@@ -202,6 +202,9 @@ message Failure {
 
     // A description of the error.
     string description = 2;
+
+    // Whether this failure should trigger an entity restart.
+    bool restart = 3;
 }
 
 message EntitySpec {

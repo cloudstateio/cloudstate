@@ -182,8 +182,6 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
       def sideEffects(ids: String*): Effects =
         ids.foldLeft(Effects.empty) { case (e, id) => e.withSideEffect(ServiceTwo, "Call", Request(id)) }
 
-      // FIXME #375: events applied immediately to state - https://github.com/cloudstateio/cloudstate/issues/375
-
       "verify initial empty state" in eventSourcedTest { id =>
         protocol.eventSourced
           .connect()
@@ -198,7 +196,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .connect()
           .send(init(EventSourcedTckModel.name, id))
           .send(command(1, id, "Process", Request(id, emitEvents("A"))))
-          .expect(reply(1, Response(), events("A"))) // FIXME #375: response = "A"
+          .expect(reply(1, Response("A"), events("A")))
           .send(command(2, id, "Process", Request(id)))
           .expect(reply(2, Response("A")))
           .passivate()
@@ -209,7 +207,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .connect()
           .send(init(EventSourcedTckModel.name, id))
           .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
-          .expect(reply(1, Response(), events("A", "B", "C"))) // FIXME #375: response = "ABC"
+          .expect(reply(1, Response("ABC"), events("A", "B", "C")))
           .send(command(2, id, "Process", Request(id)))
           .expect(reply(2, Response("ABC")))
           .passivate()
@@ -220,21 +218,21 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .connect()
           .send(init(EventSourcedTckModel.name, id))
           .send(command(1, id, "Process", Request(id, emitEvents("A"))))
-          .expect(reply(1, Response(), events("A"))) // FIXME #375: response = "A"
+          .expect(reply(1, Response("A"), events("A")))
           .send(command(2, id, "Process", Request(id, emitEvents("B"))))
-          .expect(reply(2, Response("A"), events("B"))) // FIXME #375: response = "AB"
+          .expect(reply(2, Response("AB"), events("B")))
           .send(command(3, id, "Process", Request(id, emitEvents("C"))))
-          .expect(reply(3, Response("AB"), events("C"))) // FIXME #375: response = "ABC"
+          .expect(reply(3, Response("ABC"), events("C")))
           .send(command(4, id, "Process", Request(id, emitEvents("D"))))
-          .expect(reply(4, Response("ABC"), events("D"))) // FIXME #375: response = "ABCD"
+          .expect(reply(4, Response("ABCD"), events("D")))
           .send(command(5, id, "Process", Request(id, emitEvents("E"))))
-          .expect(reply(5, Response("ABCD"), snapshotAndEvents("ABCDE", "E"))) // FIXME #375: response = "ABCDE"
+          .expect(reply(5, Response("ABCDE"), snapshotAndEvents("ABCDE", "E")))
           .send(command(6, id, "Process", Request(id, emitEvents("F", "G", "H"))))
-          .expect(reply(6, Response("ABCDE"), events("F", "G", "H"))) // FIXME #375: response = "ABCDEFGH"
+          .expect(reply(6, Response("ABCDEFGH"), events("F", "G", "H")))
           .send(command(7, id, "Process", Request(id, emitEvents("I", "J"))))
-          .expect(reply(7, Response("ABCDEFGH"), snapshotAndEvents("ABCDEFGHIJ", "I", "J"))) // FIXME #375: response = "ABCDEFGHIJ"
+          .expect(reply(7, Response("ABCDEFGHIJ"), snapshotAndEvents("ABCDEFGHIJ", "I", "J")))
           .send(command(8, id, "Process", Request(id, emitEvents("K"))))
-          .expect(reply(8, Response("ABCDEFGHIJ"), events("K"))) // FIXME #375: response = "ABCDEFGHIJK"
+          .expect(reply(8, Response("ABCDEFGHIJK"), events("K")))
           .send(command(9, id, "Process", Request(id)))
           .expect(reply(9, Response("ABCDEFGHIJK")))
           .passivate()
@@ -265,13 +263,13 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .connect()
           .send(init(EventSourcedTckModel.name, id))
           .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
-          .expect(reply(1, Response(), events("A", "B", "C"))) // FIXME #375: response = "ABC"
+          .expect(reply(1, Response("ABC"), events("A", "B", "C")))
           .send(command(2, id, "Process", Request(id, emitEvents("D", "E"))))
-          .expect(reply(2, Response("ABC"), snapshotAndEvents("ABCDE", "D", "E"))) // FIXME #375: response = "ABCDE"
+          .expect(reply(2, Response("ABCDE"), snapshotAndEvents("ABCDE", "D", "E")))
           .send(command(3, id, "Process", Request(id, emitEvents("F"))))
-          .expect(reply(3, Response("ABCDE"), events("F"))) // FIXME #375: response = "ABCDEF"
+          .expect(reply(3, Response("ABCDEF"), events("F")))
           .send(command(4, id, "Process", Request(id, emitEvents("G"))))
-          .expect(reply(4, Response("ABCDEF"), events("G"))) // FIXME #375: response = "ABCDEFG"
+          .expect(reply(4, Response("ABCDEFG"), events("G")))
           .passivate()
         protocol.eventSourced
           .connect()
@@ -306,7 +304,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .connect()
           .send(init(EventSourcedTckModel.name, id))
           .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
-          .expect(reply(1, Response(), events("A", "B", "C"))) // FIXME #375: response = "ABC"
+          .expect(reply(1, Response("ABC"), events("A", "B", "C")))
           .send(command(2, id, "Process", Request(id, Seq(emitEvent("D"), emitEvent("E"), forwardTo(id)))))
           .expect(forward(2, EventSourcedTwo.name, "Call", Request(id), snapshotAndEvents("ABCDE", "D", "E")))
           .passivate()
@@ -355,7 +353,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .connect()
           .send(init(EventSourcedTckModel.name, id))
           .send(command(1, id, "Process", Request(id, actions)))
-          .expect(reply(1, Response(), effects)) // FIXME #375: response = "ABCDE"
+          .expect(reply(1, Response("ABCDE"), effects))
           .passivate()
       }
 
@@ -373,7 +371,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .connect()
           .send(init(EventSourcedTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(emitEvent("A")))))
-          .expect(reply(1, Response(), events("A"))) // FIXME #375: response = "A"
+          .expect(reply(1, Response("A"), events("A")))
           .send(command(2, id, "Process", Request(id, Seq(failWith("expected failure")))))
           .expect(actionFailure(2, "expected failure"))
           .send(command(3, id, "Process", Request(id)))
@@ -381,20 +379,35 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .passivate()
       }
 
-      "verify failure actions do not persist events or snapshots" in eventSourcedTest { id =>
+      "verify failure actions do not retain emitted events, by requesting entity restart" in eventSourcedTest { id =>
         protocol.eventSourced
           .connect()
           .send(init(EventSourcedTckModel.name, id))
           .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
-          .expect(reply(1, Response(), events("A", "B", "C"))) // FIXME #375: response = "ABC"
+          .expect(reply(1, Response("ABC"), events("A", "B", "C")))
           .send(command(2, id, "Process", Request(id, Seq(emitEvent("4"), emitEvent("5"), failWith("failure 1")))))
-          .expect(actionFailure(2, "failure 1"))
-          .send(command(3, id, "Process", Request(id, emitEvents("D"))))
-          .expect(reply(3, Response("ABC"), events("D"))) // FIXME #375: response = "ABCD"
-          .send(command(4, id, "Process", Request(id, Seq(emitEvent("6"), failWith("failure 2"), emitEvent("7")))))
-          .expect(actionFailure(4, "failure 2"))
-          .send(command(5, id, "Process", Request(id, emitEvents("E"))))
-          .expect(reply(5, Response("ABCD"), snapshotAndEvents("ABCDE", "E"))) // FIXME #375: response = "ABCDE"
+          .expect(actionFailure(2, "failure 1", restart = true))
+          .passivate()
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(event(1, persisted("A")))
+          .send(event(2, persisted("B")))
+          .send(event(3, persisted("C")))
+          .send(command(1, id, "Process", Request(id, emitEvents("D"))))
+          .expect(reply(1, Response("ABCD"), events("D")))
+          .send(command(2, id, "Process", Request(id, Seq(emitEvent("6"), failWith("failure 2"), emitEvent("7")))))
+          .expect(actionFailure(2, "failure 2", restart = true))
+          .passivate()
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(event(1, persisted("A")))
+          .send(event(2, persisted("B")))
+          .send(event(3, persisted("C")))
+          .send(event(4, persisted("D")))
+          .send(command(1, id, "Process", Request(id, emitEvents("E"))))
+          .expect(reply(1, Response("ABCDE"), snapshotAndEvents("ABCDE", "E")))
           .passivate()
       }
 
