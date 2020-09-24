@@ -1,6 +1,6 @@
 = Getting started
 
-This page describes how to setup a development environment for contributing to and developing Cloudstate itself. If you are after documentation on how to develop Cloudstate services, see xref:../develop/index.adoc[Developing Cloudstate services].
+This page describes how to setup a development environment for contributing to and developing Cloudstate itself. If you are after documentation on how to develop Cloudstate services, see xref:develop:index.adoc[Developing Cloudstate services].
 
 The Cloudstate Build uses `sbt` for building the Cloudstate proxy, and Go for building the Cloudstate operator.
 
