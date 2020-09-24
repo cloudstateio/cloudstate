@@ -1,5 +1,0 @@
-= Implementing in Kotlin
-
-Information on implementing Cloudstate services in Kotlin is published at:
-
-https://cloudstate.io/old/docs/core/current/user/lang/kotlin/
