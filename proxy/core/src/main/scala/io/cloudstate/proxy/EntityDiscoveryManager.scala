@@ -35,10 +35,10 @@ import akka.stream.Materializer
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.typesafe.config.Config
+import io.cloudstate.protocol.action.ActionProtocol
 import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.crdt.Crdt
 import io.cloudstate.protocol.event_sourced.EventSourced
-import io.cloudstate.protocol.function.StatelessFunction
 import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
 import io.cloudstate.proxy.autoscaler.{
   Autoscaler,
@@ -48,9 +48,9 @@ import io.cloudstate.proxy.autoscaler.{
   NoAutoscaler,
   NoScaler
 }
+import io.cloudstate.proxy.action.ActionProtocolSupportFactory
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
-import io.cloudstate.proxy.function.StatelessFunctionSupportFactory
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -166,7 +166,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
 
   private final val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
       Crdt.name -> new CrdtSupportFactory(system, config, entityDiscoveryClient, clientSettings),
-      StatelessFunction.name -> new StatelessFunctionSupportFactory(system, config, clientSettings)
+      ActionProtocol.name -> new ActionProtocolSupportFactory(system, config, clientSettings)
     ) ++ {
       if (config.journalEnabled)
         Map(

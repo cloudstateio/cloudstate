@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.cloudstate.proxy.function
+package io.cloudstate.proxy.action
 
 import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
@@ -24,15 +24,15 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.{MethodDescriptor, ServiceDescriptor}
+import io.cloudstate.protocol.action._
 import io.cloudstate.protocol.entity.{ClientAction, Entity, Metadata}
 import io.cloudstate.proxy._
-import io.cloudstate.protocol.function._
 import io.cloudstate.proxy.entity.UserFunctionReply
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.collection.JavaConverters._
 
-class StatelessFunctionSupportFactory(
+class ActionProtocolSupportFactory(
     system: ActorSystem,
     config: EntityDiscoveryManager.Configuration,
     grpcClientSettings: GrpcClientSettings
@@ -41,30 +41,30 @@ class StatelessFunctionSupportFactory(
 
   private final val log = Logging.getLogger(system, this.getClass)
 
-  private final val statelessFunctionClient = StatelessFunctionClient(grpcClientSettings)(system)
+  private final val actionProtocolClient = ActionProtocolClient(grpcClientSettings)(system)
 
   override def build(entity: Entity, serviceDescriptor: ServiceDescriptor): UserFunctionTypeSupport = {
-    log.debug("Starting StatelessFunction entity for {}", entity.persistenceId)
+    log.debug("Starting Action for {}", entity.persistenceId)
 
     val methodDescriptors = serviceDescriptor.getMethods.asScala.map { method =>
       method.getName -> method
     }.toMap
 
-    new StatelessFunctionSupport(entity.serviceName,
-                                 methodDescriptors,
-                                 statelessFunctionClient,
-                                 config.proxyParallelism,
-                                 config.relayTimeout,
-                                 ec)
+    new ActionProtocolSupport(entity.serviceName,
+                              methodDescriptors,
+                              actionProtocolClient,
+                              config.proxyParallelism,
+                              config.relayTimeout,
+                              ec)
   }
 }
 
-private final class StatelessFunctionSupport(serviceName: String,
-                                             methodDescriptors: Map[String, MethodDescriptor],
-                                             statelessFunctionClient: StatelessFunctionClient,
-                                             parallelism: Int,
-                                             private implicit val relayTimeout: Timeout,
-                                             private implicit val ec: ExecutionContext)
+private final class ActionProtocolSupport(serviceName: String,
+                                          methodDescriptors: Map[String, MethodDescriptor],
+                                          actionProtocolClient: ActionProtocolClient,
+                                          parallelism: Int,
+                                          private implicit val relayTimeout: Timeout,
+                                          private implicit val ec: ExecutionContext)
     extends UserFunctionTypeSupport {
 
   private def methodDescriptor(name: String): MethodDescriptor =
@@ -80,7 +80,7 @@ private final class StatelessFunctionSupport(serviceName: String,
     Flow[UserFunctionRouter.Message]
       .flatMapConcat(
         message =>
-          statelessFunctionClient
+          actionProtocolClient
             .handleStreamedOut(
               convertUnaryIn(commandName, UserFunctionTypeSupport.mergeStreamLevelMetadata(metadata, message))
             )
@@ -89,21 +89,21 @@ private final class StatelessFunctionSupport(serviceName: String,
 
   private def streamInFlow(commandName: String, metadata: Metadata) =
     sourceToSourceToFlow((in: Source[UserFunctionRouter.Message, NotUsed]) => {
-      Source.future(statelessFunctionClient.handleStreamedIn(convertStreamIn(commandName, metadata, in)))
+      Source.future(actionProtocolClient.handleStreamedIn(convertStreamIn(commandName, metadata, in)))
     }).map(functionReplyToUserFunctionReply)
 
   private def streamedFlow(commandName: String, metadata: Metadata) =
     sourceToSourceToFlow(
       (in: Source[UserFunctionRouter.Message, NotUsed]) =>
-        statelessFunctionClient.handleStreamed(convertStreamIn(commandName, metadata, in))
+        actionProtocolClient.handleStreamed(convertStreamIn(commandName, metadata, in))
     ).map(functionReplyToUserFunctionReply)
 
   private def convertStreamIn(commandName: String,
                               metadata: Metadata,
-                              in: Source[UserFunctionRouter.Message, NotUsed]): Source[FunctionCommand, NotUsed] =
+                              in: Source[UserFunctionRouter.Message, NotUsed]): Source[ActionCommand, NotUsed] =
     Source
       .single(
-        FunctionCommand(
+        ActionCommand(
           serviceName = serviceName,
           name = commandName,
           metadata = Some(metadata)
@@ -111,7 +111,7 @@ private final class StatelessFunctionSupport(serviceName: String,
       )
       .concat(
         in.map { message =>
-          FunctionCommand(
+          ActionCommand(
             payload = Some(message.payload),
             metadata = Some(message.metadata)
           )
@@ -129,8 +129,8 @@ private final class StatelessFunctionSupport(serviceName: String,
     else unaryFlow(commandName, metadata)
   }
 
-  private def functionReplyToUserFunctionReply(reply: FunctionReply): UserFunctionReply = {
-    import FunctionReply.Response
+  private def functionReplyToUserFunctionReply(reply: ActionResponse): UserFunctionReply = {
+    import ActionResponse.Response
     import ClientAction.Action
     UserFunctionReply(
       clientAction = Some(ClientAction(reply.response match {
@@ -143,8 +143,8 @@ private final class StatelessFunctionSupport(serviceName: String,
     )
   }
 
-  private def convertUnaryIn(commandName: String, message: UserFunctionRouter.Message): FunctionCommand =
-    FunctionCommand(
+  private def convertUnaryIn(commandName: String, message: UserFunctionRouter.Message): ActionCommand =
+    ActionCommand(
       serviceName = serviceName,
       name = commandName,
       payload = Some(message.payload),
@@ -152,7 +152,7 @@ private final class StatelessFunctionSupport(serviceName: String,
     )
 
   override def handleUnary(commandName: String, message: UserFunctionRouter.Message): Future[UserFunctionReply] =
-    statelessFunctionClient
+    actionProtocolClient
       .handleUnary(convertUnaryIn(commandName, message))
       .map(functionReplyToUserFunctionReply)
 
