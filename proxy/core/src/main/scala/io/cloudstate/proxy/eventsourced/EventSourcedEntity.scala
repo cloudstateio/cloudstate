@@ -29,8 +29,6 @@ import akka.util.Timeout
 import com.google.protobuf.any.{Any => pbAny}
 import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.event_sourced._
-import io.cloudstate.proxy.ConcurrencyEnforcer.{Action, ActionCompleted}
-import io.cloudstate.proxy.StatsCollector
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.telemetry.CloudstateTelemetry
 
@@ -40,11 +38,10 @@ object EventSourcedEntitySupervisor {
 
   private final case class Relay(actorRef: ActorRef)
 
-  def props(client: EventSourcedClient,
-            configuration: EventSourcedEntity.Configuration,
-            concurrencyEnforcer: ActorRef,
-            statsCollector: ActorRef)(implicit mat: Materializer): Props =
-    Props(new EventSourcedEntitySupervisor(client, configuration, concurrencyEnforcer, statsCollector))
+  def props(client: EventSourcedClient, configuration: EventSourcedEntity.Configuration)(
+      implicit mat: Materializer
+  ): Props =
+    Props(new EventSourcedEntitySupervisor(client, configuration))
 }
 
 /**
@@ -57,11 +54,9 @@ object EventSourcedEntitySupervisor {
  * persistence starts feeding us events. There's a race condition if we do this in the same persistent actor. This
  * establishes that connection first.
  */
-final class EventSourcedEntitySupervisor(client: EventSourcedClient,
-                                         configuration: EventSourcedEntity.Configuration,
-                                         concurrencyEnforcer: ActorRef,
-                                         statsCollector: ActorRef)(implicit mat: Materializer)
-    extends Actor
+final class EventSourcedEntitySupervisor(client: EventSourcedClient, configuration: EventSourcedEntity.Configuration)(
+    implicit mat: Materializer
+) extends Actor
     with Stash {
 
   import EventSourcedEntitySupervisor._
@@ -90,8 +85,7 @@ final class EventSourcedEntitySupervisor(client: EventSourcedClient,
       val entityId = URLDecoder.decode(self.path.name, "utf-8")
       val manager = context.watch(
         context
-          .actorOf(EventSourcedEntity.props(configuration, entityId, relayRef, concurrencyEnforcer, statsCollector),
-                   "entity")
+          .actorOf(EventSourcedEntity.props(configuration, entityId, relayRef), "entity")
       )
       context.become(forwarding(manager, relayRef))
       unstashAll()
@@ -148,12 +142,8 @@ object EventSourcedEntity {
       replyTo: ActorRef
   )
 
-  final def props(configuration: Configuration,
-                  entityId: String,
-                  relay: ActorRef,
-                  concurrencyEnforcer: ActorRef,
-                  statsCollector: ActorRef): Props =
-    Props(new EventSourcedEntity(configuration, entityId, relay, concurrencyEnforcer, statsCollector))
+  final def props(configuration: Configuration, entityId: String, relay: ActorRef): Props =
+    Props(new EventSourcedEntity(configuration, entityId, relay))
 
   /**
    * Used to ensure the action ids sent to the concurrency enforcer are indeed unique.
@@ -161,11 +151,7 @@ object EventSourcedEntity {
   private val actorCounter = new AtomicLong(0)
 }
 
-final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
-                               entityId: String,
-                               relay: ActorRef,
-                               concurrencyEnforcer: ActorRef,
-                               statsCollector: ActorRef)
+final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, entityId: String, relay: ActorRef)
     extends PersistentActor
     with ActorLogging {
 
@@ -180,8 +166,6 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
   private[this] final var stopped = false
   private[this] final var idCounter = 0L
   private[this] final var inited = false
-  private[this] final var reportedDatabaseOperationStarted = false
-  private[this] final var databaseOperationStartTime = 0L
   private[this] final var commandStartTime = 0L
 
   private[this] val instrumentation =
@@ -193,16 +177,9 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
   // Set up passivation timer
   context.setReceiveTimeout(configuration.passivationTimeout.duration)
 
-  // First thing actor will do is access database
-  reportDatabaseOperationStarted()
-
   override final def postStop(): Unit = {
     if (currentCommand != null) {
       log.warning("Stopped but we have a current action id {}", currentCommand.actionId)
-      reportActionComplete()
-    }
-    if (reportedDatabaseOperationStarted) {
-      reportDatabaseOperationFinished()
     }
     instrumentation.entityPassivated()
   }
@@ -238,9 +215,6 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
     throw new Exception(s"$msg - $details")
   }
 
-  private[this] final def reportActionComplete() =
-    concurrencyEnforcer ! ActionCompleted(currentCommand.actionId, System.nanoTime() - commandStartTime)
-
   private[this] final def handleCommand(entityCommand: EntityCommand, sender: ActorRef): Unit = {
     instrumentation.commandStarted()
     idCounter += 1
@@ -253,9 +227,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
     currentCommand =
       EventSourcedEntity.OutstandingCommand(idCounter, actorId + ":" + entityId + ":" + idCounter, sender)
     commandStartTime = System.nanoTime()
-    concurrencyEnforcer ! Action(currentCommand.actionId, () => {
-      relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Command(command))
-    })
+    relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Command(command))
   }
 
   private final def esReplyToUfReply(reply: EventSourcedReply) =
@@ -292,7 +264,6 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
         case ESOMsg.Reply(r) =>
           if (r.clientAction.exists(_.action.isFailure)) instrumentation.commandFailed()
           instrumentation.commandProcessed()
-          reportActionComplete()
           val commandId = currentCommand.commandId
           val events = r.events.toVector
           if (events.isEmpty) {
@@ -300,14 +271,12 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
             commandHandled()
           } else {
             instrumentation.persistStarted()
-            reportDatabaseOperationStarted()
             var eventsLeft = events.size
             persistAll(events) { event =>
               eventsLeft -= 1
               instrumentation.eventPersisted(event.serializedSize)
               if (eventsLeft <= 0) { // Remove this hack when switching to Akka Persistence Typed
                 instrumentation.persistCompleted() // note: this doesn't include saving snapshots
-                reportDatabaseOperationFinished()
                 r.snapshot.foreach { snapshot =>
                   saveSnapshot(snapshot)
                   // snapshot has not yet been successfully saved, but we need the size
@@ -337,7 +306,6 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
           instrumentation.commandFailed()
           instrumentation.commandProcessed()
           instrumentation.commandCompleted()
-          reportActionComplete()
           try crash("Unexpected entity failure", f.description)
           finally currentCommand = null // clear command after notifications
 
@@ -399,7 +367,6 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
 
     case RecoveryCompleted =>
       instrumentation.recoveryCompleted()
-      reportDatabaseOperationFinished()
       maybeInit(None)
 
     case event: pbAny =>
@@ -407,21 +374,4 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
       maybeInit(None)
       relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Event(EventSourcedEvent(lastSequenceNr, Some(event))))
   }
-
-  private def reportDatabaseOperationStarted(): Unit =
-    if (reportedDatabaseOperationStarted) {
-      log.warning("Already reported database operation started")
-    } else {
-      databaseOperationStartTime = System.nanoTime()
-      reportedDatabaseOperationStarted = true
-      statsCollector ! StatsCollector.DatabaseOperationStarted
-    }
-
-  private def reportDatabaseOperationFinished(): Unit =
-    if (!reportedDatabaseOperationStarted) {
-      log.warning("Hadn't reported database operation started")
-    } else {
-      reportedDatabaseOperationStarted = false
-      statsCollector ! StatsCollector.DatabaseOperationFinished(System.nanoTime() - databaseOperationStartTime)
-    }
 }

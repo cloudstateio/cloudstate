@@ -32,11 +32,11 @@ import io.cloudstate.proxy.entity.UserFunctionReply
 import scala.concurrent.{ExecutionContext, Future}
 import scala.collection.JavaConverters._
 
-class StatelessFunctionSupportFactory(system: ActorSystem,
-                                      config: EntityDiscoveryManager.Configuration,
-                                      grpcClientSettings: GrpcClientSettings,
-                                      concurrencyEnforcer: ActorRef,
-                                      statsCollector: ActorRef)(implicit ec: ExecutionContext, mat: Materializer)
+class StatelessFunctionSupportFactory(
+    system: ActorSystem,
+    config: EntityDiscoveryManager.Configuration,
+    grpcClientSettings: GrpcClientSettings
+)(implicit ec: ExecutionContext, mat: Materializer)
     extends UserFunctionTypeSupportFactory {
 
   private final val log = Logging.getLogger(system, this.getClass)

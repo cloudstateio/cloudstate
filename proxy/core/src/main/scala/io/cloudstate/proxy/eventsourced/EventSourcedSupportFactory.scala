@@ -34,11 +34,11 @@ import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.collection.JavaConverters._
 
-class EventSourcedSupportFactory(system: ActorSystem,
-                                 config: EntityDiscoveryManager.Configuration,
-                                 grpcClientSettings: GrpcClientSettings,
-                                 concurrencyEnforcer: ActorRef,
-                                 statsCollector: ActorRef)(implicit ec: ExecutionContext, mat: Materializer)
+class EventSourcedSupportFactory(
+    system: ActorSystem,
+    config: EntityDiscoveryManager.Configuration,
+    grpcClientSettings: GrpcClientSettings
+)(implicit ec: ExecutionContext, mat: Materializer)
     extends EntityTypeSupportFactory {
 
   private final val log = Logging.getLogger(system, this.getClass)
@@ -60,8 +60,7 @@ class EventSourcedSupportFactory(system: ActorSystem,
     val clusterShardingSettings = ClusterShardingSettings(system)
     val eventSourcedEntity = clusterSharding.start(
       typeName = entity.persistenceId,
-      entityProps =
-        EventSourcedEntitySupervisor.props(eventSourcedClient, stateManagerConfig, concurrencyEnforcer, statsCollector),
+      entityProps = EventSourcedEntitySupervisor.props(eventSourcedClient, stateManagerConfig),
       settings = clusterShardingSettings,
       messageExtractor = new EntityIdExtractor(config.numberOfShards),
       allocationStrategy = new DynamicLeastShardAllocationStrategy(1, 10, 2, 0.0),
