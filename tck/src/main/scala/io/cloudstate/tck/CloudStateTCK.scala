@@ -24,9 +24,9 @@ import com.example.shoppingcart.shoppingcart._
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.typesafe.config.{Config, ConfigFactory}
+import io.cloudstate.protocol.action.ActionProtocol
 import io.cloudstate.protocol.crdt.Crdt
 import io.cloudstate.protocol.event_sourced._
-import io.cloudstate.protocol.function.StatelessFunction
 import io.cloudstate.testkit.InterceptService.InterceptorSettings
 import io.cloudstate.testkit.eventsourced.{EventSourcedMessages, InterceptEventSourcedService}
 import io.cloudstate.testkit.{InterceptService, ServiceAddress, TestClient, TestProtocol}
@@ -109,7 +109,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         info.supportedEntityTypes must contain theSameElementsAs Seq(
           EventSourced.name,
           Crdt.name,
-          StatelessFunction.name
+          ActionProtocol.name
         )
 
         val spec = discovery.expectEntitySpec()

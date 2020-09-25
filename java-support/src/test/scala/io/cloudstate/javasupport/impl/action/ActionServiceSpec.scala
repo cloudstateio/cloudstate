@@ -29,8 +29,8 @@ import com.google.protobuf.any.{Any => ScalaPbAny}
 import io.cloudstate.javasupport.{Context, ServiceCallFactory}
 import io.cloudstate.javasupport.action.{ActionContext, ActionHandler, ActionReply, Effect, MessageEnvelope}
 import io.cloudstate.javasupport.impl.{AnySupport, ResolvedServiceCallFactory}
+import io.cloudstate.protocol.action.{ActionCommand, ActionProtocol, ActionResponse}
 import io.cloudstate.protocol.entity.{Forward, Reply}
-import io.cloudstate.protocol.function.{FunctionCommand, FunctionReply, StatelessFunction}
 import org.scalatest.{BeforeAndAfterAll, Inside, Matchers, OptionValues, WordSpec}
 
 import scala.concurrent.Await
@@ -52,7 +52,7 @@ class ActionServiceSpec extends WordSpec with Matchers with BeforeAndAfterAll wi
     system.terminate()
   }
 
-  def create(handler: ActionHandler): StatelessFunction = {
+  def create(handler: ActionHandler): ActionProtocol = {
     val service = new ActionService(
       handler,
       serviceDescriptor,
@@ -62,7 +62,7 @@ class ActionServiceSpec extends WordSpec with Matchers with BeforeAndAfterAll wi
     val services = Map(serviceName -> service)
     val scf = new ResolvedServiceCallFactory(services)
 
-    new StatelessFunctionImpl(system, services, new Context() {
+    new ActionProtocolImpl(system, services, new Context() {
       override def serviceCallFactory(): ServiceCallFactory = scf
     })
   }
@@ -77,12 +77,12 @@ class ActionServiceSpec extends WordSpec with Matchers with BeforeAndAfterAll wi
       })
 
       val reply = Await.result(service.handleUnary(
-                                 FunctionCommand(serviceName, "Unary", createInPayload("in"))
+                                 ActionCommand(serviceName, "Unary", createInPayload("in"))
                                ),
                                10.seconds)
 
       inside(reply.response) {
-        case FunctionReply.Response.Reply(Reply(payload, _, _)) =>
+        case ActionResponse.Response.Reply(Reply(payload, _, _)) =>
           extractOutField(payload) should ===("out: in")
       }
     }
@@ -102,16 +102,16 @@ class ActionServiceSpec extends WordSpec with Matchers with BeforeAndAfterAll wi
       val reply = Await.result(
         service.handleStreamedIn(
           akka.stream.scaladsl.Source
-            .single(FunctionCommand(serviceName, "StreamedIn"))
+            .single(ActionCommand(serviceName, "StreamedIn"))
             .concat(
-              akka.stream.scaladsl.Source(1 to 3).map(idx => FunctionCommand(payload = createInPayload(s"in $idx")))
+              akka.stream.scaladsl.Source(1 to 3).map(idx => ActionCommand(payload = createInPayload(s"in $idx")))
             )
         ),
         10.seconds
       )
 
       inside(reply.response) {
-        case FunctionReply.Response.Reply(Reply(payload, _, _)) =>
+        case ActionResponse.Response.Reply(Reply(payload, _, _)) =>
           extractOutField(payload) should ===("out: in 1, in 2, in 3")
       }
     }
@@ -128,7 +128,7 @@ class ActionServiceSpec extends WordSpec with Matchers with BeforeAndAfterAll wi
 
       val replies = Await.result(service
                                    .handleStreamedOut(
-                                     FunctionCommand(serviceName, "Unary", createInPayload("in"))
+                                     ActionCommand(serviceName, "Unary", createInPayload("in"))
                                    )
                                    .runWith(Sink.seq),
                                  10.seconds)
@@ -136,7 +136,7 @@ class ActionServiceSpec extends WordSpec with Matchers with BeforeAndAfterAll wi
       replies.zipWithIndex.foreach {
         case (reply, idx) =>
           inside(reply.response) {
-            case FunctionReply.Response.Reply(Reply(payload, _, _)) =>
+            case ActionResponse.Response.Reply(Reply(payload, _, _)) =>
               extractOutField(payload) should ===(s"out ${idx + 1}: in")
           }
       }
@@ -157,9 +157,9 @@ class ActionServiceSpec extends WordSpec with Matchers with BeforeAndAfterAll wi
         service
           .handleStreamed(
             akka.stream.scaladsl.Source
-              .single(FunctionCommand(serviceName, "StreamedIn"))
+              .single(ActionCommand(serviceName, "StreamedIn"))
               .concat(
-                akka.stream.scaladsl.Source(1 to 3).map(idx => FunctionCommand(payload = createInPayload(s"in $idx")))
+                akka.stream.scaladsl.Source(1 to 3).map(idx => ActionCommand(payload = createInPayload(s"in $idx")))
               )
           )
           .runWith(Sink.seq),
@@ -169,7 +169,7 @@ class ActionServiceSpec extends WordSpec with Matchers with BeforeAndAfterAll wi
       replies.zipWithIndex.foreach {
         case (reply, idx) =>
           inside(reply.response) {
-            case FunctionReply.Response.Reply(Reply(payload, _, _)) =>
+            case ActionResponse.Response.Reply(Reply(payload, _, _)) =>
               extractOutField(payload) should ===(s"out: in ${idx + 1}")
           }
       }

@@ -37,15 +37,16 @@
   ],
   "dependencies": {
     "@grpc/proto-loader": "^0.1.0",
-    "google-protobuf": "^3.0.0",
-    "minimist": ">=0.2.1",
-    "grpc": "^1.11.0",
     "debug": "^4.1.1",
-    "unzipper": "^0.9.15",
-    "request": "^2.88.0",
-    "mkdirp": "^0.5.1",
+    "google-protobuf": "^3.0.0",
+    "grpc": "^1.11.0",
     "json-stable-stringify": "^1.0.1",
-    "rimraf": "^2.6.3"
+    "minimist": ">=0.2.1",
+    "mkdirp": "^0.5.1",
+    "request": "^2.88.0",
+    "rimraf": "^2.6.3",
+    "test": "^0.6.0",
+    "unzipper": "^0.9.15"
   },
   "devDependencies": {
     "chai": "4.2.0",
