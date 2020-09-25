@@ -110,8 +110,8 @@ object EntityDiscoveryManager {
   final case object Ready // Responds with true / false
 
   final def proxyInfo(supportedEntityTypes: Seq[String]) = ProxyInfo(
-    protocolMajorVersion = 0,
-    protocolMinorVersion = 1,
+    protocolMajorVersion = BuildInfo.protocolMajorVersion,
+    protocolMinorVersion = BuildInfo.protocolMinorVersion,
     proxyName = BuildInfo.name,
     proxyVersion = BuildInfo.version,
     supportedEntityTypes = supportedEntityTypes
@@ -177,11 +177,26 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
 
   entityDiscoveryClient.discover(EntityDiscoveryManager.proxyInfo(supportFactories.keys.toSeq)) pipeTo self
 
+  val supportedProtocolMajorVersion: Int = BuildInfo.protocolMajorVersion
+  val supportedProtocolMinorVersion: Int = BuildInfo.protocolMinorVersion
+  val supportedProtocolVersionString: String = s"${supportedProtocolMajorVersion}.${supportedProtocolMinorVersion}"
+
+  def compatibleProtocol(majorVersion: Int, minorVersion: Int): Boolean =
+    // allow empty protocol version to be compatible, until all library supports report their protocol version
+    ((majorVersion == 0) && (minorVersion == 0)) ||
+    // otherwise it's currently strict matching of protocol versions
+    ((majorVersion == supportedProtocolMajorVersion) && (minorVersion == supportedProtocolMinorVersion))
+
   override def receive: Receive = {
     case spec: EntitySpec =>
       log.info("Received EntitySpec from user function with info: {}", spec.getServiceInfo)
 
       try {
+        if (!compatibleProtocol(spec.getServiceInfo.protocolMajorVersion, spec.getServiceInfo.protocolMinorVersion))
+          throw EntityDiscoveryException(
+            s"Incompatible protocol version ${spec.getServiceInfo.protocolMajorVersion}.${spec.getServiceInfo.protocolMinorVersion}, only $supportedProtocolVersionString is supported"
+          )
+
         val descriptorSet = DescriptorProtos.FileDescriptorSet.parseFrom(spec.proto)
         val descriptors = FileDescriptorBuilder.build(descriptorSet)
 

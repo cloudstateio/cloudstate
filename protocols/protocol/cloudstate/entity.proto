@@ -239,6 +239,12 @@ message ServiceInfo {
 
     // The version of the support library being used.
     string support_library_version = 5;
+
+    // Cloudstate protocol major version accepted by the support library.
+    int32 protocol_major_version = 6;
+
+    // Cloudstate protocol minor version accepted by the support library.
+    int32 protocol_minor_version = 7;
 }
 
 message Entity {

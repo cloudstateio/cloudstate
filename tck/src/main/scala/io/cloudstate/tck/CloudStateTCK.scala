@@ -104,7 +104,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         val info = discovery.expectProxyInfo()
 
         info.protocolMajorVersion mustBe 0
-        info.protocolMinorVersion mustBe 1
+        info.protocolMinorVersion mustBe 2
 
         info.supportedEntityTypes must contain theSameElementsAs Seq(
           EventSourced.name,

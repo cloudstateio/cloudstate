@@ -32,6 +32,9 @@ inThisBuild(
 
 name := "cloudstate"
 
+val ProtocolMajorVersion = 0
+val ProtocolMinorVersion = 2
+
 val GrpcJavaVersion = "1.30.2" // Note: sync with gRPC version in Akka gRPC
 // Unfortunately we need to downgrade grpc-netty-shaded
 // in the proxy until we have a fix to make it work with
@@ -372,7 +375,12 @@ lazy val `proxy-core` = (project in file("proxy/core"))
   .settings(
     common,
     name := "cloudstate-proxy-core",
-    buildInfoKeys := Seq[BuildInfoKey](name, version),
+    buildInfoKeys := Seq[BuildInfoKey](
+        name,
+        version,
+        "protocolMajorVersion" -> ProtocolMajorVersion,
+        "protocolMinorVersion" -> ProtocolMinorVersion
+      ),
     buildInfoPackage := "io.cloudstate.proxy",
     dependencyOverrides += "io.grpc" % "grpc-netty-shaded" % GrpcNettyShadedVersion,
     libraryDependencies ++= Seq(
@@ -564,7 +572,12 @@ lazy val `java-support` = (project in file("java-support"))
     crossPaths := false,
     publishMavenStyle := true,
     bintrayPackage := name.value,
-    buildInfoKeys := Seq[BuildInfoKey](name, version),
+    buildInfoKeys := Seq[BuildInfoKey](
+        name,
+        version,
+        "protocolMajorVersion" -> ProtocolMajorVersion,
+        "protocolMinorVersion" -> ProtocolMinorVersion
+      ),
     buildInfoPackage := "io.cloudstate.javasupport",
     // Generate javadocs by just including non generated Java sources
     sourceDirectories in (Compile, doc) := Seq((javaSource in Compile).value),
@@ -721,10 +734,17 @@ lazy val `load-generator` = (project in file("samples/js-shopping-cart-load-gene
   )
 
 lazy val `testkit` = (project in file("testkit"))
-  .enablePlugins(AkkaGrpcPlugin)
+  .enablePlugins(AkkaGrpcPlugin, BuildInfoPlugin)
   .settings(
     common,
     name := "cloudstate-testkit",
+    buildInfoKeys := Seq[BuildInfoKey](
+        name,
+        version,
+        "protocolMajorVersion" -> ProtocolMajorVersion,
+        "protocolMinorVersion" -> ProtocolMinorVersion
+      ),
+    buildInfoPackage := "io.cloudstate.testkit",
     libraryDependencies ++= Seq(
         akkaDependency("akka-stream-testkit"),
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
