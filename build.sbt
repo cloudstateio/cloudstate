@@ -106,8 +106,8 @@ headerSources in Compile ++= {
 
 lazy val root = (project in file("."))
   .enablePlugins(NoPublish)
-// Don't forget to add your sbt module here!
-// A missing module here can lead to failing Travis test results
+  // Don't forget to add your sbt module here!
+  // A missing module here can lead to failing Travis test results
   .aggregate(
     `protocols`,
     `proxy`,

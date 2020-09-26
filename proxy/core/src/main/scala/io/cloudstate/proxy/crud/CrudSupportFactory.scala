@@ -36,9 +36,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 class CrudSupportFactory(system: ActorSystem,
                          config: EntityDiscoveryManager.Configuration,
-                         grpcClientSettings: GrpcClientSettings,
-                         concurrencyEnforcer: ActorRef,
-                         statsCollector: ActorRef)(implicit ec: ExecutionContext, mat: Materializer)
+                         grpcClientSettings: GrpcClientSettings)(implicit ec: ExecutionContext, mat: Materializer)
     extends EntityTypeSupportFactory {
 
   private final val log = Logging.getLogger(system, this.getClass)
@@ -63,8 +61,7 @@ class CrudSupportFactory(system: ActorSystem,
     val clusterShardingSettings = ClusterShardingSettings(system)
     val crudEntity = clusterSharding.start(
       typeName = entity.persistenceId,
-      entityProps =
-        CrudEntitySupervisor.props(crudClient, stateManagerConfig, concurrencyEnforcer, statsCollector, repository),
+      entityProps = CrudEntitySupervisor.props(crudClient, stateManagerConfig, repository),
       settings = clusterShardingSettings,
       messageExtractor = new CrudEntityIdExtractor(config.numberOfShards),
       allocationStrategy = new DynamicLeastShardAllocationStrategy(1, 10, 2, 0.0),

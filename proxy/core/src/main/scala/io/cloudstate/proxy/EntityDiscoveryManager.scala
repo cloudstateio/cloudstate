@@ -180,11 +180,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
     } ++ {
       if (config.crudEnabled)
         Map(
-          Crud.name -> new CrudSupportFactory(system,
-                                              config,
-                                              clientSettings,
-                                              concurrencyEnforcer = concurrencyEnforcer,
-                                              statsCollector = statsCollector)
+          Crud.name -> new CrudSupportFactory(system, config, clientSettings)
         )
       else Map.empty
     }

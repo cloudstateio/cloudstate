@@ -39,8 +39,6 @@ import io.cloudstate.protocol.crud.{
   CrudUpdate
 }
 import io.cloudstate.protocol.entity._
-import io.cloudstate.proxy.ConcurrencyEnforcer.{Action, ActionCompleted}
-import io.cloudstate.proxy.StatsCollector
 import io.cloudstate.proxy.crud.store.JdbcRepository
 import io.cloudstate.proxy.crud.store.JdbcStore.Key
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
@@ -52,12 +50,10 @@ object CrudEntitySupervisor {
 
   private final case class Relay(actorRef: ActorRef)
 
-  def props(client: CrudClient,
-            configuration: CrudEntity.Configuration,
-            concurrencyEnforcer: ActorRef,
-            statsCollector: ActorRef,
-            repository: JdbcRepository)(implicit mat: Materializer): Props =
-    Props(new CrudEntitySupervisor(client, configuration, concurrencyEnforcer, statsCollector, repository))
+  def props(client: CrudClient, configuration: CrudEntity.Configuration, repository: JdbcRepository)(
+      implicit mat: Materializer
+  ): Props =
+    Props(new CrudEntitySupervisor(client, configuration, repository))
 }
 
 /**
@@ -72,8 +68,6 @@ object CrudEntitySupervisor {
  */
 final class CrudEntitySupervisor(client: CrudClient,
                                  configuration: CrudEntity.Configuration,
-                                 concurrencyEnforcer: ActorRef,
-                                 statsCollector: ActorRef,
                                  repository: JdbcRepository)(implicit mat: Materializer)
     extends Actor
     with Stash {
@@ -104,8 +98,7 @@ final class CrudEntitySupervisor(client: CrudClient,
       val entityId = URLDecoder.decode(self.path.name, "utf-8")
       val manager = context.watch(
         context
-          .actorOf(CrudEntity.props(configuration, entityId, relayRef, concurrencyEnforcer, statsCollector, repository),
-                   "entity")
+          .actorOf(CrudEntity.props(configuration, entityId, relayRef, repository), "entity")
       )
       context.become(forwarding(manager, relayRef))
       unstashAll()
@@ -171,13 +164,8 @@ object CrudEntity {
   private case object SaveStateSuccess
   private case object AlreadyInitialized
 
-  final def props(configuration: Configuration,
-                  entityId: String,
-                  relay: ActorRef,
-                  concurrencyEnforcer: ActorRef,
-                  statsCollector: ActorRef,
-                  repository: JdbcRepository): Props =
-    Props(new CrudEntity(configuration, entityId, relay, concurrencyEnforcer, statsCollector, repository))
+  final def props(configuration: Configuration, entityId: String, relay: ActorRef, repository: JdbcRepository): Props =
+    Props(new CrudEntity(configuration, entityId, relay, repository))
 
   /**
    * Used to ensure the action ids sent to the concurrency enforcer are indeed unique.
@@ -189,8 +177,6 @@ object CrudEntity {
 final class CrudEntity(configuration: CrudEntity.Configuration,
                        entityId: String,
                        relay: ActorRef,
-                       concurrencyEnforcer: ActorRef,
-                       statsCollector: ActorRef,
                        repository: JdbcRepository)
     extends Actor
     with Stash
@@ -207,22 +193,16 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
   private[this] final var stopped = false
   private[this] final var idCounter = 0L
   private[this] final var inited = false
-  private[this] final var reportedDatabaseOperationStarted = false
-  private[this] final var databaseOperationStartTime = 0L
   private[this] final var commandStartTime = 0L
 
   // Set up passivation timer
   context.setReceiveTimeout(configuration.passivationTimeout.duration)
-
-  // First thing actor will do is access database
-  reportDatabaseOperationStarted()
 
   override final def preStart(): Unit =
     repository
       .get(Key(persistenceId, entityId))
       .map { state =>
         // related to the first access to the database when the actor starts
-        reportDatabaseOperationFinished()
         if (!inited) {
           relay ! CrudStreamIn(
             CrudStreamIn.Message.Init(
@@ -244,15 +224,10 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       }
       .pipeTo(self)
 
-  override final def postStop(): Unit = {
+  override final def postStop(): Unit =
     if (currentCommand != null) {
       log.warning("Stopped but we have a current action id {}", currentCommand.actionId)
-      reportActionComplete()
     }
-    if (reportedDatabaseOperationStarted) {
-      reportDatabaseOperationFinished()
-    }
-  }
 
   private[this] final def commandHandled(): Unit = {
     currentCommand = null
@@ -282,9 +257,6 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
     throw new Exception(s"$msg - $details")
   }
 
-  private[this] final def reportActionComplete() =
-    concurrencyEnforcer ! ActionCompleted(currentCommand.actionId, System.nanoTime() - commandStartTime)
-
   private[this] final def handleCommand(entityCommand: EntityCommand, sender: ActorRef): Unit = {
     idCounter += 1
     val command = Command(
@@ -295,9 +267,7 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
     )
     currentCommand = CrudEntity.OutstandingCommand(idCounter, actorId + ":" + entityId + ":" + idCounter, sender)
     commandStartTime = System.nanoTime()
-    concurrencyEnforcer ! Action(currentCommand.actionId, () => {
-      relay ! CrudStreamIn(CrudStreamIn.Message.Command(command))
-    })
+    relay ! CrudStreamIn(CrudStreamIn.Message.Command(command))
   }
 
   private final def esReplyToUfReply(reply: CrudReply) =
@@ -348,17 +318,14 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
                 s"(expected id ${currentCommand.commandId} but got ${r.commandId}) - $r")
 
         case CrudSOMsg.Reply(r) =>
-          reportActionComplete()
           val commandId = currentCommand.commandId
           if (r.crudAction.isEmpty) {
             currentCommand.replyTo ! esReplyToUfReply(r)
             commandHandled()
           } else {
-            reportDatabaseOperationStarted()
             r.crudAction map { a =>
               performCrudAction(a)
                 .map { _ =>
-                  reportDatabaseOperationFinished()
                   // Make sure that the current request is still ours
                   if (currentCommand == null || currentCommand.commandId != commandId) {
                     crash("Unexpected CRUD entity behavior", "currentRequest changed before the state were persisted")
@@ -382,7 +349,6 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
                 s"(expected id ${currentCommand.commandId} but got ${f.commandId}) - ${f.description}")
 
         case CrudSOMsg.Failure(f) =>
-          reportActionComplete()
           try crash("Unexpected CRUD entity failure", f.description)
           finally currentCommand = null // clear command after notifications
 
@@ -420,22 +386,5 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
 
       case Delete(_) =>
         repository.delete(Key(persistenceId, entityId))
-    }
-
-  private def reportDatabaseOperationStarted(): Unit =
-    if (reportedDatabaseOperationStarted) {
-      log.warning("Already reported database operation started")
-    } else {
-      databaseOperationStartTime = System.nanoTime()
-      reportedDatabaseOperationStarted = true
-      statsCollector ! StatsCollector.DatabaseOperationStarted
-    }
-
-  private def reportDatabaseOperationFinished(): Unit =
-    if (!reportedDatabaseOperationStarted) {
-      log.warning("Hadn't reported database operation started")
-    } else {
-      reportedDatabaseOperationStarted = false
-      statsCollector ! StatsCollector.DatabaseOperationFinished(System.nanoTime() - databaseOperationStartTime)
     }
 }
