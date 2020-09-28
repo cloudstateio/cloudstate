@@ -287,7 +287,7 @@ kubectl delete pods --all
 
 === Development loops for the operator
 
-The easiest way to iterate on the operator is to run it locally, from an IDE or from sbt, rather than deploying it to Minikube/Kubernetes. The only advantage to deploying to Kubernetes is that it will verify that the RBAC permissions that the operator has are correct. The Cloudstate operator uses https://github.com/doriordan/skuber[Skuber], and when it runs outside of a Kubernetes container, it will use the credentials configured for `kubectl`. In the case of using Minikube, this will be the default cluster admin account.
+The easiest way to iterate on the operator is to run it locally, from an IDE or from the command line, rather than deploying it to Minikube/Kubernetes. The only advantage to deploying to Kubernetes is that it will verify that the RBAC permissions that the operator has are correct. The Cloudstate operator uses Kubebuilder, and when it runs outside of a Kubernetes container, it will use the credentials configured for `kubectl`. In the case of using Minikube, this will be the default cluster admin account.
 
 To use a locally running operator, first shutdown the operator running in Kubernetes, by scaling its deployment down to zero:
 
