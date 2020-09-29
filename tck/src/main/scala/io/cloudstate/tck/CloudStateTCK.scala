@@ -25,6 +25,7 @@ import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.protocol.crdt.Crdt
+import io.cloudstate.protocol.crud.Crud
 import io.cloudstate.protocol.event_sourced._
 import io.cloudstate.protocol.function.StatelessFunction
 import io.cloudstate.testkit.InterceptService.InterceptorSettings
@@ -109,6 +110,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         info.supportedEntityTypes must contain theSameElementsAs Seq(
           EventSourced.name,
           Crdt.name,
+          Crud.name,
           StatelessFunction.name
         )
 
