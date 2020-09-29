@@ -25,7 +25,7 @@ patchesStrategicMerge:
 patchesJson6902:
 - target:
     group: apiextensions.k8s.io
-    version: v1beta1
+    version: v1
     kind: CustomResourceDefinition
     name: statefulservices.cloudstate.io
   path: patches/fix-container-port-protocol-patch.yaml

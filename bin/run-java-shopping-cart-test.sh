@@ -151,7 +151,7 @@ function fail_with_details {
   echo
   echo "=== Operator logs ==="
   echo
-  kubectl logs -l control-plane=controller-manager -n cloudstate-system --tail=-1
+  kubectl logs -l control-plane=controller-manager -n cloudstate-system -c manager --tail=-1
   echo
   echo "=== Deployment description ==="
   echo
