@@ -39,7 +39,7 @@ deploy-native: install docker-build
 	kubectl apply -f manifests/cloudstate-operator-native.yaml
 
 kind-deploy: install docker-build
-	kind load docker-image $IMG
+	kind load docker-image ${IMG}
 	kubectl apply -f manifests/cloudstate-operator.yaml
 
 # Generate manifests e.g. CRD, RBAC etc.
