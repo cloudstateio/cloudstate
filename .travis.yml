@@ -6,6 +6,7 @@ before_install:
   - sudo apt-get -qq -y install conntrack jq
 env:
   global:
+  - CACHE_NAME=cloudstate-cache-01
   # Docs deploy token; encrypted with: travis encrypt --pro -r cloudstateio/cloudstate DEPLOY_DOCS_TOKEN=<cloudstate-bot.github.token>
   - secure: "DCmB7Mq1Dl+/rDl46RVQplSoyC5nS1jkGf8OYoRG7lfc0fDj4ZPDSy6nEQX9BGUY0uJmmr77ojQWvnx0tHeXs6Ci4lHftJ7nmC1pttRmezbhjj5YRdYB7xfe1I2vT7qOhcv+qAHjAteXNxoLqqomp49ov2hzwsfesCbyKlJ3EtLyyWldUgOGad66VBgsVJjkXkarXngM1VEty/GINheSwNVaeF9aiX4eY/GksHKUNFn3N4vvubU9VlGHVjBAbPDXUp81L1rlkOHgSgKtehHy/FpcsHeStAoZMNNDCfnK0CKHCtKEJ8FhYKAwQR8WIEYU8cMjSYQVP0UQaC7mH//RwMECPEXZi8uB1mryIwfHu3l6AlIMh9tz9mgrZxSsX4Qba/v5IiM7hD4/IZCi83qCru1DPYBmd37LvUPWRB3m9tApxlDE+gspBFrqIc2u4524lLkWzu/gvsJam/VUDnrdmiJZblJi/XM+6FEo32o/aEiXi6l/cxDAu2kHJIO4MblSXvMu4hl69XTG/q9vc3rtkfVrzTtHJt2LWFNsHzN0odUH4FYmQz0bcqjBc6gI0elnM2gD+7EpxyAMNNBnAZ/oV7ktpfpmbc0/W7kw0t9f4kiYYR3ebO/efmuuIlFC1nJs2ouXVvuzP1GcMkq6lExpD4Fqulf1RXmDHcruj3Cr5a4="
   # DockerHub password for cloudstatebot
