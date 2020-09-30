@@ -188,7 +188,19 @@ class EventSourcedImplSpec extends WordSpec with Matchers with BeforeAndAfterAll
         entity.send(command(1, "cart", "AddItem", addItem("foo", "bar", -1)))
         entity.expect(actionFailure(1, "Cannot add negative quantity of item [foo]"))
         entity.send(command(2, "cart", "GetCart"))
-        entity.expect(reply(2, EmptyCart)) // check emit-then-fail doesn't change entity state
+        entity.expect(reply(2, EmptyCart)) // check entity state hasn't changed
+        entity.passivate()
+      }
+    }
+
+    "fail action when command handler uses context fail with restart for emitted events" in {
+      service.expectLogError(
+        "Fail invoked for command [AddItem] for entity [cart]: Cannot add negative quantity of item [foo]"
+      ) {
+        val entity = protocol.eventSourced.connect()
+        entity.send(init(ShoppingCart.Name, "cart"))
+        entity.send(command(1, "cart", "AddItem", addItem("foo", "bar", -42)))
+        entity.expect(actionFailure(1, "Cannot add negative quantity of item [foo]", restart = true))
         entity.passivate()
         val reactivated = protocol.eventSourced.connect()
         reactivated.send(init(ShoppingCart.Name, "cart"))
@@ -271,9 +283,12 @@ object EventSourcedImplSpec {
 
       @CommandHandler
       def addItem(item: Shoppingcart.AddLineItem, ctx: CommandContext): Empty = {
-        // emit and then fail on negative quantities, for testing atomicity
-        ctx.emit(Protocol.itemAdded(item.getProductId, item.getName, item.getQuantity))
+        if (item.getQuantity == -42) {
+          // emit and then fail on magic negative quantity, for testing atomicity
+          ctx.emit(Protocol.itemAdded(item.getProductId, item.getName, item.getQuantity))
+        }
         if (item.getQuantity <= 0) ctx.fail(s"Cannot add negative quantity of item [${item.getProductId}]")
+        ctx.emit(Protocol.itemAdded(item.getProductId, item.getName, item.getQuantity))
         Empty.getDefaultInstance
       }
 

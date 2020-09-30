@@ -41,9 +41,7 @@ import scala.concurrent.duration._
 class CrdtSupportFactory(system: ActorSystem,
                          config: EntityDiscoveryManager.Configuration,
                          discovery: EntityDiscovery,
-                         grpcClientSettings: GrpcClientSettings,
-                         concurrencyEnforcer: ActorRef,
-                         statsCollector: ActorRef)(implicit ec: ExecutionContext, mat: Materializer)
+                         grpcClientSettings: GrpcClientSettings)(implicit ec: ExecutionContext, mat: Materializer)
     extends EntityTypeSupportFactory {
 
   private[this] final val log = Logging.getLogger(system, this.getClass)

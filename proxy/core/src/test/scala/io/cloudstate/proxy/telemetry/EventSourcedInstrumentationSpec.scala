@@ -19,12 +19,11 @@ package io.cloudstate.proxy.telemetry
 import akka.actor.ActorRef
 import akka.grpc.GrpcClientSettings
 import akka.testkit.TestEvent.Mute
-import akka.testkit.{EventFilter, TestProbe}
+import akka.testkit.EventFilter
 import com.google.protobuf.ByteString
 import com.google.protobuf.any.{Any => ProtoAny}
 import io.cloudstate.protocol.entity.{ClientAction, Failure}
 import io.cloudstate.protocol.event_sourced._
-import io.cloudstate.proxy.ConcurrencyEnforcer
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.eventsourced.{EventSourcedEntity, EventSourcedEntitySupervisor}
 import io.cloudstate.testkit.TestService
@@ -65,20 +64,6 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
       val service = TestService()
       val client = EventSourcedClient(GrpcClientSettings.connectToServiceAt("localhost", service.port).withTls(false))
 
-      val statsCollector = TestProbe() // ignored
-
-      val concurrencyEnforcer = system.actorOf(
-        ConcurrencyEnforcer.props(
-          ConcurrencyEnforcer.ConcurrencyEnforcerSettings(
-            concurrency = 1,
-            actionTimeout = 10.seconds,
-            cleanupPeriod = 5.seconds
-          ),
-          statsCollector.ref
-        ),
-        "concurrency-enforcer"
-      )
-
       val entityConfiguration = EventSourcedEntity.Configuration(
         serviceName = "service",
         userFunctionName = "test",
@@ -87,7 +72,7 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
       )
 
       val entity = system.actorOf(
-        EventSourcedEntitySupervisor.props(client, entityConfiguration, concurrencyEnforcer, statsCollector.ref),
+        EventSourcedEntitySupervisor.props(client, entityConfiguration),
         "entity"
       )
 
@@ -208,7 +193,7 @@ class EventSourcedInstrumentationSpec extends AbstractTelemetrySpec {
       // reactivate the entity
 
       val reactivatedEntity = system.actorOf(
-        EventSourcedEntitySupervisor.props(client, entityConfiguration, concurrencyEnforcer, statsCollector.ref),
+        EventSourcedEntitySupervisor.props(client, entityConfiguration),
         "entity"
       )
 

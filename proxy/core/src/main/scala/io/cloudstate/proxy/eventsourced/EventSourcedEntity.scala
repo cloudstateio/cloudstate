@@ -20,7 +20,9 @@ import java.net.URLDecoder
 import java.util.concurrent.atomic.AtomicLong
 
 import akka.NotUsed
+import akka.actor.SupervisorStrategy.{Decider, Restart, Stop}
 import akka.actor._
+import akka.cloudstate.EntityStash
 import akka.cluster.sharding.ShardRegion
 import akka.persistence._
 import akka.stream.scaladsl._
@@ -29,22 +31,16 @@ import akka.util.Timeout
 import com.google.protobuf.any.{Any => pbAny}
 import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.event_sourced._
-import io.cloudstate.proxy.ConcurrencyEnforcer.{Action, ActionCompleted}
-import io.cloudstate.proxy.StatsCollector
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.telemetry.CloudstateTelemetry
 
 import scala.collection.immutable.Queue
+import scala.util.control.NoStackTrace
 
 object EventSourcedEntitySupervisor {
-
-  private final case class Relay(actorRef: ActorRef)
-
   def props(client: EventSourcedClient,
-            configuration: EventSourcedEntity.Configuration,
-            concurrencyEnforcer: ActorRef,
-            statsCollector: ActorRef)(implicit mat: Materializer): Props =
-    Props(new EventSourcedEntitySupervisor(client, configuration, concurrencyEnforcer, statsCollector))
+            configuration: EventSourcedEntity.Configuration)(implicit mat: Materializer): Props =
+    Props(new EventSourcedEntitySupervisor(client, configuration))
 }
 
 /**
@@ -57,75 +53,126 @@ object EventSourcedEntitySupervisor {
  * persistence starts feeding us events. There's a race condition if we do this in the same persistent actor. This
  * establishes that connection first.
  */
-final class EventSourcedEntitySupervisor(client: EventSourcedClient,
-                                         configuration: EventSourcedEntity.Configuration,
-                                         concurrencyEnforcer: ActorRef,
-                                         statsCollector: ActorRef)(implicit mat: Materializer)
-    extends Actor
+final class EventSourcedEntitySupervisor(client: EventSourcedClient, configuration: EventSourcedEntity.Configuration)(
+    implicit mat: Materializer
+) extends Actor
     with Stash {
 
-  import EventSourcedEntitySupervisor._
+  val entityId = URLDecoder.decode(self.path.name, "utf-8")
 
-  private var streamTerminated: Boolean = false
+  val relay = context.watch(context.actorOf(EventSourcedEntityRelay.props(client, configuration), "relay"))
+  val entity = context.watch(context.actorOf(EventSourcedEntity.props(configuration, entityId, relay), "entity"))
 
-  override final def receive: Receive = PartialFunction.empty
+  relay ! EventSourcedEntityRelay.Connect(entity)
 
-  override final def preStart(): Unit = {
+  var relayTerminated: Boolean = false
+  var entityTerminated: Boolean = false
+
+  override def receive: Receive = {
+    case Terminated(`relay`) =>
+      relayTerminated = true
+      if (entityTerminated) context.stop(self)
+    case Terminated(`entity`) =>
+      entityTerminated = true
+      if (relayTerminated) context.stop(self)
+      else relay ! EventSourcedEntityRelay.Disconnect
+    case toParent if sender() == entity =>
+      context.parent ! toParent
+    case msg =>
+      entity forward msg
+  }
+
+  val failureDecider: Decider = {
+    case _: EventSourcedEntity.RestartFailure => Restart
+    case _: Exception => Stop
+  }
+
+  override def supervisorStrategy: SupervisorStrategy = OneForOneStrategy()(failureDecider)
+}
+
+object EventSourcedEntityRelay {
+  final case class Connect(entity: ActorRef)
+  final case class Connected(stream: ActorRef)
+  final case object Disconnect
+  final case object Reconnect
+  final case class Fail(cause: Throwable)
+
+  def props(client: EventSourcedClient,
+            configuration: EventSourcedEntity.Configuration)(implicit mat: Materializer): Props =
+    Props(new EventSourcedEntityRelay(client, configuration))
+}
+
+final class EventSourcedEntityRelay(client: EventSourcedClient, configuration: EventSourcedEntity.Configuration)(
+    implicit mat: Materializer
+) extends Actor
+    with Stash {
+  import EventSourcedEntityRelay._
+
+  override def receive: Receive = starting
+
+  def starting: Receive = {
+    case Connect(entity) => connect(entity)
+    case _ => stash()
+  }
+
+  def connect(entity: ActorRef): Unit = {
     client
       .handle(
         Source
-          .actorRef[EventSourcedStreamIn](configuration.sendQueueSize, OverflowStrategy.fail)
+          .actorRef[EventSourcedStreamIn](
+            { case Disconnect => CompletionStrategy.draining }: PartialFunction[Any, CompletionStrategy],
+            { case Fail(cause) => cause }: PartialFunction[Any, Throwable],
+            configuration.sendQueueSize,
+            OverflowStrategy.fail
+          )
           .mapMaterializedValue { ref =>
-            self ! Relay(ref)
+            self ! Connected(ref)
             NotUsed
           }
       )
       .runWith(Sink.actorRef(self, EventSourcedEntity.StreamClosed, EventSourcedEntity.StreamFailed.apply))
-    context.become(waitingForRelay)
+    context.become(connecting(entity))
   }
 
-  private[this] final def waitingForRelay: Receive = {
-    case Relay(relayRef) =>
-      // Cluster sharding URL encodes entity ids, so to extract it we need to decode.
-      val entityId = URLDecoder.decode(self.path.name, "utf-8")
-      val manager = context.watch(
-        context
-          .actorOf(EventSourcedEntity.props(configuration, entityId, relayRef, concurrencyEnforcer, statsCollector),
-                   "entity")
-      )
-      context.become(forwarding(manager, relayRef))
+  def connecting(entity: ActorRef): Receive = {
+    case Connected(stream) =>
+      context.become(relaying(entity, stream))
       unstashAll()
     case _ => stash()
   }
 
-  private[this] final def forwarding(manager: ActorRef, relay: ActorRef): Receive = {
-    case Terminated(`manager`) =>
-      if (streamTerminated) {
-        context.stop(self)
-      } else {
-        relay ! Status.Success(CompletionStrategy.draining)
-        context.become(stopping)
-      }
-    case toParent if sender() == manager =>
-      context.parent ! toParent
-    case EventSourcedEntity.StreamClosed =>
-      streamTerminated = true
-      manager forward EventSourcedEntity.StreamClosed
-    case failed: EventSourcedEntity.StreamFailed =>
-      streamTerminated = true
-      manager forward failed
-    case msg =>
-      manager forward msg
+  def relaying(entity: ActorRef, stream: ActorRef): Receive = {
+    case Disconnect =>
+      stream ! Disconnect
+      context.become(disconnecting)
+    case Reconnect =>
+      stream ! Disconnect
+      context.become(reconnecting(entity))
+    case fail: Fail =>
+      stream ! fail
+      context.become(disconnecting)
+    case message if sender() == entity =>
+      stream ! message
+    case message =>
+      entity ! message
+      if (streamTerminated(message)) context.stop(self)
   }
 
-  private def stopping: Receive = {
-    case EventSourcedEntity.StreamClosed =>
-      context.stop(self)
-    case _: EventSourcedEntity.StreamFailed =>
-      context.stop(self)
+  def disconnecting: Receive = {
+    case message if streamTerminated(message) => context.stop(self)
+    case _ => // ignore
   }
 
-  override def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
+  def reconnecting(entity: ActorRef): Receive = {
+    case message if streamTerminated(message) => connect(entity)
+    case _ => stash()
+  }
+
+  def streamTerminated(message: Any): Boolean = message match {
+    case EventSourcedEntity.StreamClosed => true
+    case _: EventSourcedEntity.StreamFailed => true
+    case _ => false
+  }
 }
 
 object EventSourcedEntity {
@@ -148,12 +195,10 @@ object EventSourcedEntity {
       replyTo: ActorRef
   )
 
-  final def props(configuration: Configuration,
-                  entityId: String,
-                  relay: ActorRef,
-                  concurrencyEnforcer: ActorRef,
-                  statsCollector: ActorRef): Props =
-    Props(new EventSourcedEntity(configuration, entityId, relay, concurrencyEnforcer, statsCollector))
+  final class RestartFailure(message: String) extends RuntimeException(message) with NoStackTrace
+
+  final def props(configuration: Configuration, entityId: String, relay: ActorRef): Props =
+    Props(new EventSourcedEntity(configuration, entityId, relay))
 
   /**
    * Used to ensure the action ids sent to the concurrency enforcer are indeed unique.
@@ -161,11 +206,7 @@ object EventSourcedEntity {
   private val actorCounter = new AtomicLong(0)
 }
 
-final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
-                               entityId: String,
-                               relay: ActorRef,
-                               concurrencyEnforcer: ActorRef,
-                               statsCollector: ActorRef)
+final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration, entityId: String, relay: ActorRef)
     extends PersistentActor
     with ActorLogging {
 
@@ -180,8 +221,6 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
   private[this] final var stopped = false
   private[this] final var idCounter = 0L
   private[this] final var inited = false
-  private[this] final var reportedDatabaseOperationStarted = false
-  private[this] final var databaseOperationStartTime = 0L
   private[this] final var commandStartTime = 0L
 
   private[this] val instrumentation =
@@ -193,16 +232,9 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
   // Set up passivation timer
   context.setReceiveTimeout(configuration.passivationTimeout.duration)
 
-  // First thing actor will do is access database
-  reportDatabaseOperationStarted()
-
   override final def postStop(): Unit = {
     if (currentCommand != null) {
       log.warning("Stopped but we have a current action id {}", currentCommand.actionId)
-      reportActionComplete()
-    }
-    if (reportedDatabaseOperationStarted) {
-      reportDatabaseOperationFinished()
     }
     instrumentation.entityPassivated()
   }
@@ -238,9 +270,6 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
     throw new Exception(s"$msg - $details")
   }
 
-  private[this] final def reportActionComplete() =
-    concurrencyEnforcer ! ActionCompleted(currentCommand.actionId, System.nanoTime() - commandStartTime)
-
   private[this] final def handleCommand(entityCommand: EntityCommand, sender: ActorRef): Unit = {
     instrumentation.commandStarted()
     idCounter += 1
@@ -253,9 +282,7 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
     currentCommand =
       EventSourcedEntity.OutstandingCommand(idCounter, actorId + ":" + entityId + ":" + idCounter, sender)
     commandStartTime = System.nanoTime()
-    concurrencyEnforcer ! Action(currentCommand.actionId, () => {
-      relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Command(command))
-    })
+    relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Command(command))
   }
 
   private final def esReplyToUfReply(reply: EventSourcedReply) =
@@ -268,6 +295,17 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
     UserFunctionReply(
       clientAction = Some(ClientAction(ClientAction.Action.Failure(Failure(description = message))))
     )
+
+  def restartFailure(description: String): Unit = {
+    instrumentation.commandCompleted()
+    stashedCommands.reverseIterator foreach {
+      case (command, replyTo, context) =>
+        instrumentation.commandUnstashed(context)
+        EntityStash.unstash(this, command, replyTo) // prepend to mailbox again
+    }
+    relay ! EventSourcedEntityRelay.Reconnect
+    throw new EventSourcedEntity.RestartFailure(s"Restarting entity [$entityId] after failure: $description")
+  }
 
   override final def receiveCommand: PartialFunction[Any, Unit] = {
 
@@ -290,9 +328,16 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
           crash("Unexpected entity reply", s"(expected id ${currentCommand.commandId} but got ${r.commandId}) - $r")
 
         case ESOMsg.Reply(r) =>
-          if (r.clientAction.exists(_.action.isFailure)) instrumentation.commandFailed()
           instrumentation.commandProcessed()
-          reportActionComplete()
+          r.clientAction match {
+            case Some(ClientAction(ClientAction.Action.Failure(Failure(_, description, restart, _)), _)) =>
+              instrumentation.commandFailed()
+              if (restart) {
+                currentCommand.replyTo ! esReplyToUfReply(r)
+                restartFailure(description)
+              }
+            case _ =>
+          }
           val commandId = currentCommand.commandId
           val events = r.events.toVector
           if (events.isEmpty) {
@@ -300,14 +345,12 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
             commandHandled()
           } else {
             instrumentation.persistStarted()
-            reportDatabaseOperationStarted()
             var eventsLeft = events.size
             persistAll(events) { event =>
               eventsLeft -= 1
               instrumentation.eventPersisted(event.serializedSize)
               if (eventsLeft <= 0) { // Remove this hack when switching to Akka Persistence Typed
                 instrumentation.persistCompleted() // note: this doesn't include saving snapshots
-                reportDatabaseOperationFinished()
                 r.snapshot.foreach { snapshot =>
                   saveSnapshot(snapshot)
                   // snapshot has not yet been successfully saved, but we need the size
@@ -337,7 +380,6 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
           instrumentation.commandFailed()
           instrumentation.commandProcessed()
           instrumentation.commandCompleted()
-          reportActionComplete()
           try crash("Unexpected entity failure", f.description)
           finally currentCommand = null // clear command after notifications
 
@@ -399,7 +441,6 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
 
     case RecoveryCompleted =>
       instrumentation.recoveryCompleted()
-      reportDatabaseOperationFinished()
       maybeInit(None)
 
     case event: pbAny =>
@@ -407,21 +448,4 @@ final class EventSourcedEntity(configuration: EventSourcedEntity.Configuration,
       maybeInit(None)
       relay ! EventSourcedStreamIn(EventSourcedStreamIn.Message.Event(EventSourcedEvent(lastSequenceNr, Some(event))))
   }
-
-  private def reportDatabaseOperationStarted(): Unit =
-    if (reportedDatabaseOperationStarted) {
-      log.warning("Already reported database operation started")
-    } else {
-      databaseOperationStartTime = System.nanoTime()
-      reportedDatabaseOperationStarted = true
-      statsCollector ! StatsCollector.DatabaseOperationStarted
-    }
-
-  private def reportDatabaseOperationFinished(): Unit =
-    if (!reportedDatabaseOperationStarted) {
-      log.warning("Hadn't reported database operation started")
-    } else {
-      reportedDatabaseOperationStarted = false
-      statsCollector ! StatsCollector.DatabaseOperationFinished(System.nanoTime() - databaseOperationStartTime)
-    }
 }

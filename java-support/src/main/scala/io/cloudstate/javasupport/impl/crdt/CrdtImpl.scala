@@ -23,7 +23,7 @@ import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Flow, Source}
 import com.google.protobuf.Descriptors
-import io.cloudstate.javasupport.{Context, ServiceCallFactory, StatefulService}
+import io.cloudstate.javasupport.{Context, Metadata, Service, ServiceCallFactory}
 import io.cloudstate.javasupport.crdt.{
   CommandContext,
   CrdtContext,
@@ -39,6 +39,7 @@ import io.cloudstate.javasupport.impl.{
   ActivatableContext,
   AnySupport,
   FailInvoked,
+  MetadataImpl,
   ResolvedEntityFactory,
   ResolvedServiceMethod
 }
@@ -48,13 +49,12 @@ import io.cloudstate.protocol.entity.{Command, Failure, StreamCancelled}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.google.protobuf.{Any => JavaPbAny}
 
-import scala.compat.java8.OptionConverters._
 import scala.collection.JavaConverters._
 
 final class CrdtStatefulService(val factory: CrdtEntityFactory,
                                 override val descriptor: Descriptors.ServiceDescriptor,
                                 val anySupport: AnySupport)
-    extends StatefulService {
+    extends Service {
   override final val entityType = Crdt.name
 
   override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] =
@@ -135,7 +135,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
 
     private var crdtIsNew = false
     private var subscribers = Map.empty[Long, function.Function[SubscriptionContext, Optional[JavaPbAny]]]
-    private var cancelListeners = Map.empty[Long, function.Consumer[StreamCancelledContext]]
+    private var cancelListeners = Map.empty[Long, (function.Consumer[StreamCancelledContext], Metadata)]
     private val entity = {
       val ctx = new CrdtCreationContext with CapturingCrdtFactory with ActivatableContext
       try {
@@ -199,7 +199,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
         ctx.deactivate()
       }
 
-      val clientAction = ctx.createClientAction(reply, allowNoReply = true)
+      val clientAction = ctx.createClientAction(reply, allowNoReply = true, restartOnFailure = false)
 
       if (ctx.hasError) {
         verifyNoDelta("failed command handling")
@@ -241,9 +241,9 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
     def handleStreamCancelled(cancelled: StreamCancelled): List[CrdtStreamOut] = {
       subscribers -= cancelled.id
       cancelListeners.get(cancelled.id) match {
-        case Some(onCancel) =>
+        case Some((onCancel, metadata)) =>
           cancelListeners -= cancelled.id
-          val ctx = new CrdtStreamCancelledContext(cancelled)
+          val ctx = new CrdtStreamCancelledContext(cancelled, metadata)
           try {
             onCancel.accept(ctx)
           } finally {
@@ -292,7 +292,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
               context.deactivate()
             }
 
-            val clientAction = context.createClientAction(reply, allowNoReply = true)
+            val clientAction = context.createClientAction(reply, allowNoReply = true, restartOnFailure = false)
 
             if (context.hasError) {
               subscribers -= id
@@ -345,7 +345,7 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
           subscribers = subscribers.updated(command.id, onChange)
         }
         cancelCallback.foreach { onCancel =>
-          cancelListeners = cancelListeners.updated(command.id, onCancel)
+          cancelListeners = cancelListeners.updated(command.id, (onCancel, metadata))
         }
         changeCallback.isDefined || cancelCallback.isDefined
       }
@@ -363,9 +363,12 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
       override final def commandId: Long = command.id
 
       override final def commandName(): String = command.name
+
+      override val metadata: Metadata = new MetadataImpl(command.metadata.map(_.entries.toVector).getOrElse(Nil))
+
     }
 
-    class CrdtStreamCancelledContext(cancelled: StreamCancelled)
+    class CrdtStreamCancelledContext(cancelled: StreamCancelled, override val metadata: Metadata)
         extends StreamCancelledContext
         with CapturingCrdtFactory
         with AbstractEffectContext

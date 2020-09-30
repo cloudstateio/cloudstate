@@ -84,9 +84,11 @@ private[impl] trait AbstractClientActionContext extends ClientActionContext {
 
   protected def logError(message: String): Unit = ()
 
-  final def createClientAction(reply: Optional[JavaPbAny], allowNoReply: Boolean): Option[ClientAction] =
+  final def createClientAction(reply: Optional[JavaPbAny],
+                               allowNoReply: Boolean,
+                               restartOnFailure: Boolean): Option[ClientAction] =
     error match {
-      case Some(msg) => Some(ClientAction(ClientAction.Action.Failure(Failure(commandId, msg))))
+      case Some(msg) => Some(ClientAction(ClientAction.Action.Failure(Failure(commandId, msg, restartOnFailure))))
       case None =>
         if (reply.isPresent) {
           if (forward.isDefined) {

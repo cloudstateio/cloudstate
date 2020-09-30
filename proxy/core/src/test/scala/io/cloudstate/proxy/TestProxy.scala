@@ -23,7 +23,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.protocol.crdt.Crdt
 import io.cloudstate.protocol.entity.ProxyInfo
 import io.cloudstate.protocol.event_sourced.EventSourced
-import io.cloudstate.protocol.function.StatelessFunction
+import io.cloudstate.protocol.action.ActionProtocol
 import java.net.{ConnectException, Socket}
 import scala.concurrent.duration._
 
@@ -49,7 +49,7 @@ class TestProxy(servicePort: Int) {
     }
   """))
 
-  val info: ProxyInfo = EntityDiscoveryManager.proxyInfo(Seq(Crdt.name, StatelessFunction.name, EventSourced.name))
+  val info: ProxyInfo = EntityDiscoveryManager.proxyInfo(Seq(Crdt.name, ActionProtocol.name, EventSourced.name))
 
   val system: ActorSystem = CloudStateProxyMain.start(config)
 

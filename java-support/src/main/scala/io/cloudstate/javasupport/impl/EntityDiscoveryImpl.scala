@@ -21,18 +21,25 @@ import io.cloudstate.protocol.entity._
 import scala.concurrent.Future
 import akka.actor.ActorSystem
 import com.google.protobuf.DescriptorProtos
-import io.cloudstate.javasupport.{BuildInfo, StatefulService}
+import io.cloudstate.javasupport.{BuildInfo, Service}
 
-class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, StatefulService]) extends EntityDiscovery {
+class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, Service]) extends EntityDiscovery {
 
   private def configuredOrElse(key: String, default: String): String =
     if (system.settings.config.hasPath(key)) system.settings.config.getString(key) else default
+
+  private def configuredIntOrElse(key: String, default: Int): Int =
+    if (system.settings.config.hasPath(key)) system.settings.config.getInt(key) else default
 
   private val serviceInfo = ServiceInfo(
     serviceRuntime = sys.props.getOrElse("java.runtime.name", "")
       + " " + sys.props.getOrElse("java.runtime.version", ""),
     supportLibraryName = configuredOrElse("cloudstate.library.name", BuildInfo.name),
-    supportLibraryVersion = configuredOrElse("cloudstate.library.version", BuildInfo.version)
+    supportLibraryVersion = configuredOrElse("cloudstate.library.version", BuildInfo.version),
+    protocolMajorVersion =
+      configuredIntOrElse("cloudstate.library.protocol-major-version", BuildInfo.protocolMajorVersion),
+    protocolMinorVersion =
+      configuredIntOrElse("cloudstate.library.protocol-minor-version", BuildInfo.protocolMinorVersion)
   )
 
   /**
@@ -40,7 +47,7 @@ class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, StatefulSer
    */
   override def discover(in: ProxyInfo): scala.concurrent.Future[EntitySpec] = {
     system.log.info(
-      s"Received discovery call from sidecar [${in.proxyName} ${in.proxyVersion}] supporting CloudState ${in.protocolMajorVersion}.${in.protocolMinorVersion}"
+      s"Received discovery call from [${in.proxyName} ${in.proxyVersion}] supporting Cloudstate protocol ${in.protocolMajorVersion}.${in.protocolMinorVersion}"
     )
     system.log.debug(s"Supported sidecar entity types: ${in.supportedEntityTypes.mkString("[", ",", "]")}")
 
@@ -58,21 +65,17 @@ class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, StatefulSer
       // eg, the proxy doesn't have a configured journal, and so can't support event sourcing.
     }
 
-    if (false) // TODO verify compatibility with in.protocolMajorVersion & in.protocolMinorVersion
-      Future.failed(new Exception("Proxy version not compatible with library protocol support version"))
-    else {
-      val allDescriptors = AnySupport.flattenDescriptors(services.values.map(_.descriptor.getFile).toSeq)
-      val builder = DescriptorProtos.FileDescriptorSet.newBuilder()
-      allDescriptors.values.foreach(fd => builder.addFile(fd.toProto))
-      val fileDescriptorSet = builder.build().toByteString
+    val allDescriptors = AnySupport.flattenDescriptors(services.values.map(_.descriptor.getFile).toSeq)
+    val builder = DescriptorProtos.FileDescriptorSet.newBuilder()
+    allDescriptors.values.foreach(fd => builder.addFile(fd.toProto))
+    val fileDescriptorSet = builder.build().toByteString
 
-      val entities = services.map {
-        case (name, service) =>
-          Entity(service.entityType, name, service.persistenceId)
-      }.toSeq
+    val entities = services.map {
+      case (name, service) =>
+        Entity(service.entityType, name, service.persistenceId)
+    }.toSeq
 
-      Future.successful(EntitySpec(fileDescriptorSet, entities, Some(serviceInfo)))
-    }
+    Future.successful(EntitySpec(fileDescriptorSet, entities, Some(serviceInfo)))
   }
 
   /**

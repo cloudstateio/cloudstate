@@ -25,7 +25,7 @@ import akka.stream.scaladsl.Flow
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import io.cloudstate.javasupport.CloudStateRunner.Configuration
-import io.cloudstate.javasupport.{Context, ServiceCallFactory, StatefulService}
+import io.cloudstate.javasupport.{Context, Metadata, Service, ServiceCallFactory}
 import io.cloudstate.javasupport.eventsourced._
 import io.cloudstate.javasupport.impl.{
   AbstractClientActionContext,
@@ -33,6 +33,7 @@ import io.cloudstate.javasupport.impl.{
   ActivatableContext,
   AnySupport,
   FailInvoked,
+  MetadataImpl,
   ResolvedEntityFactory,
   ResolvedServiceMethod
 }
@@ -52,7 +53,7 @@ final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
                                         val anySupport: AnySupport,
                                         override val persistenceId: String,
                                         val snapshotEvery: Int)
-    extends StatefulService {
+    extends Service {
 
   override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] =
     factory match {
@@ -186,8 +187,17 @@ final class EventSourcedImpl(_system: ActorSystem,
             throw ProtocolException(command, "Receiving entity is not the intended recipient of command")
           val cmd =
             ScalaPbAny.toJavaProto(command.payload.getOrElse(throw ProtocolException(command, "No command payload")))
+          val metadata = new MetadataImpl(command.metadata.map(_.entries.toVector).getOrElse(Nil))
           val context =
-            new CommandContextImpl(thisEntityId, sequence, command.name, command.id, service.anySupport, log)
+            new CommandContextImpl(thisEntityId,
+                                   sequence,
+                                   command.name,
+                                   command.id,
+                                   metadata,
+                                   service.anySupport,
+                                   handler,
+                                   service.snapshotEvery,
+                                   log)
 
           val reply = try {
             handler.handleCommand(cmd, context)
@@ -199,19 +209,12 @@ final class EventSourcedImpl(_system: ActorSystem,
             context.deactivate() // Very important!
           }
 
-          val clientAction = context.createClientAction(reply, false)
+          val clientAction = context.createClientAction(reply, false, restartOnFailure = context.events.nonEmpty)
 
           if (!context.hasError) {
-            // apply events from successful command to local entity state
-            context.events.zipWithIndex.foreach {
-              case (event, i) =>
-                handler.handleEvent(ScalaPbAny.toJavaProto(event), new EventContextImpl(thisEntityId, sequence + i + 1))
-            }
-
             val endSequenceNumber = sequence + context.events.size
-            val performSnapshot = (endSequenceNumber / service.snapshotEvery) > (sequence / service.snapshotEvery)
             val snapshot =
-              if (performSnapshot) {
+              if (context.performSnapshot) {
                 val s = handler.snapshot(new SnapshotContext with AbstractContext {
                   override def entityId: String = entityId
                   override def sequenceNumber: Long = endSequenceNumber
@@ -260,7 +263,10 @@ final class EventSourcedImpl(_system: ActorSystem,
                            override val sequenceNumber: Long,
                            override val commandName: String,
                            override val commandId: Long,
+                           override val metadata: Metadata,
                            val anySupport: AnySupport,
+                           val handler: EventSourcedEntityHandler,
+                           val snapshotEvery: Int,
                            val log: LoggingAdapter)
       extends CommandContext
       with AbstractContext
@@ -269,10 +275,15 @@ final class EventSourcedImpl(_system: ActorSystem,
       with ActivatableContext {
 
     final var events: Vector[ScalaPbAny] = Vector.empty
+    final var performSnapshot: Boolean = false
 
     override def emit(event: AnyRef): Unit = {
       checkActive()
-      events :+= anySupport.encodeScala(event)
+      val encoded = anySupport.encodeScala(event)
+      val nextSequenceNumber = sequenceNumber + events.size + 1
+      handler.handleEvent(ScalaPbAny.toJavaProto(encoded), new EventContextImpl(entityId, nextSequenceNumber))
+      events :+= encoded
+      performSnapshot = (snapshotEvery > 0) && (performSnapshot || (nextSequenceNumber % snapshotEvery == 0))
     }
 
     override protected def logError(message: String): Unit =

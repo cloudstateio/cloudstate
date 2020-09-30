@@ -18,21 +18,21 @@ const fs = require("fs");
 const protobufHelper = require("./protobuf-helper");
 const grpc = require("grpc");
 const protoLoader = require("@grpc/proto-loader");
-const StatelessSupport = require("./stateless-support");
+const ActionSupport = require("./action-support");
 const CloudState = require("./cloudstate");
 
-const statelessServices = new StatelessSupport();
+const actionServices = new ActionSupport();
 
 /**
- * A stateless entity
+ * A Cloudstate Action
  *
- * @namespace module:cloudstate.stateless
+ * @namespace module:cloudstate.action
  */
 
-class Stateless {
+class Action {
 
   /**
-   * Create a new stateless entity.
+   * Create a new action.
    *
    * @param {string|string[]} desc A descriptor or list of descriptors to parse, containing the service to serve.
    * @param {string} serviceName The fully qualified name of the service that provides this entities interface.
@@ -69,13 +69,13 @@ class Stateless {
      *
      * The names of the properties must match the names of the service calls specified in the gRPC descriptor
      *
-     * @type {Object.<string, module:cloudstate.stateless.Stateless~commandHandler>}
+     * @type {Object.<string, module:cloudstate.action.Action~commandHandler>}
      */
     this.commandHandlers = {};
   }
 
   entityType() {
-    return statelessServices.entityType();
+    return actionServices.entityType();
   }
 
   /**
@@ -90,8 +90,8 @@ class Stateless {
   }
 
   register(allEntities) {
-    statelessServices.addService(this, allEntities);
-    return statelessServices;
+    actionServices.addService(this, allEntities);
+    return actionServices;
   }
 
   start(options) {
@@ -114,4 +114,4 @@ class Stateless {
 
 }
 
-module.exports = Stateless;
+module.exports = Action;
