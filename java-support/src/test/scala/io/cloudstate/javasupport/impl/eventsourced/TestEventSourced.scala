@@ -17,10 +17,11 @@
 package io.cloudstate.javasupport.impl.eventsourced
 
 import akka.actor.ActorSystem
-import akka.testkit.{EventFilter, SocketUtil}
+import akka.testkit.EventFilter
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.javasupport.{CloudState, CloudStateRunner}
+import io.cloudstate.testkit.Sockets
 import scala.reflect.ClassTag
 
 object TestEventSourced {
@@ -31,7 +32,7 @@ object TestEventSourced {
 class TestEventSourcedService(entityClass: Class[_],
                               descriptor: ServiceDescriptor,
                               fileDescriptors: Seq[FileDescriptor]) {
-  val port: Int = SocketUtil.temporaryLocalPort()
+  val port: Int = Sockets.temporaryLocalPort()
 
   val config: Config = ConfigFactory.load(ConfigFactory.parseString(s"""
     cloudstate.user-function-port = $port
