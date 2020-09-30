@@ -16,6 +16,7 @@
 
 package io.cloudstate.proxy.crud.store
 
+import akka.grpc.ProtobufSerializer
 import akka.util.ByteString
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import io.cloudstate.proxy.crud.store.JdbcStore.Key
@@ -52,18 +53,36 @@ trait JdbcRepository {
 
 }
 
-class JdbcRepositoryImpl(val store: JdbcStore[Key, ByteString])(implicit ec: ExecutionContext) extends JdbcRepository {
+object JdbcRepositoryImpl {
+
+  private[store] final object ReplySerializer extends ProtobufSerializer[ScalaPbAny] {
+    override final def serialize(state: ScalaPbAny): ByteString =
+      if (state.value.isEmpty) ByteString.empty
+      else ByteString.fromArrayUnsafe(state.value.toByteArray)
+
+    override final def deserialize(bytes: ByteString): ScalaPbAny =
+      ScalaPbAny.parseFrom(bytes.toByteBuffer.array())
+  }
+
+}
+
+class JdbcRepositoryImpl(val store: JdbcStore[Key, ByteString], serializer: ProtobufSerializer[ScalaPbAny])(
+    implicit ec: ExecutionContext
+) extends JdbcRepository {
+
+  def this(store: JdbcStore[Key, ByteString])(implicit ec: ExecutionContext) =
+    this(store, JdbcRepositoryImpl.ReplySerializer)
 
   def get(key: Key): Future[Option[ScalaPbAny]] =
     store
       .get(key)
       .map {
-        case Some(value) => Some(ScalaPbAny.parseFrom(value.asByteBuffer.array())) //TODO not sure!!!
+        case Some(value) => Some(serializer.deserialize(value))
         case None => None
       }
 
   def update(key: Key, entity: ScalaPbAny): Future[Unit] =
-    store.update(key, ByteString.fromArrayUnsafe(entity.toByteArray))
+    store.update(key, serializer.serialize(entity))
 
   def delete(key: Key): Future[Unit] = store.delete(key)
 }

@@ -77,7 +77,7 @@ final class JdbcStoreImpl(slickDatabase: JdbcSlickDatabase, queries: JdbcCrudSta
 
   override def update(key: Key, value: ByteString): Future[Unit] =
     for {
-      _ <- db.run(queries.insertOrUpdate(CrudStateRow(key, value.asByteBuffer.array())))
+      _ <- db.run(queries.insertOrUpdate(CrudStateRow(key, value.toByteBuffer.array())))
     } yield ()
 
   override def delete(key: Key): Future[Unit] =
