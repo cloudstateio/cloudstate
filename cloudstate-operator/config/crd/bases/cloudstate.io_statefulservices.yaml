@@ -29,7 +29,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: StatefulService is the Schema for the statefulservices API
+        description: StatefulService is the Schema for the statefulservices API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -1149,7 +1149,7 @@ spec:
             - containers
             type: object
           status:
-            description: StatefulServiceStatus defines the observed state of StatefulService
+            description: StatefulServiceStatus defines the observed state of StatefulService.
             properties:
               conditions:
                 description: Conditions of the StatefulService.
