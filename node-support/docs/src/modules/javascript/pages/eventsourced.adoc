@@ -10,7 +10,7 @@ While protobufs are the recommended format for persisting events, it is recommen
 
 For our shopping cart example, we'll create a new file called `domain.proto`, the name domain is selected to indicate that these are my applications domain objects:
 
-[source,proto,indent=0]
+[source,proto]
 ----
 include::example$domain.proto[]
 ----
@@ -21,7 +21,7 @@ In this file, the `Cart` message is the state, while `ItemAdded` and `ItemRemove
 
 An event sourced entity can be created using the link:{attachmentsdir}/api/module-cloudstate.EventSourced.html[EventSourced] class.
 
-[source,js,indent=0]
+[source,js]
 ----
 include::example$test/eventsourced/shoppingcart.js[tag=entity-class]
 ----
@@ -40,7 +40,7 @@ When you pass an event or snapshot to Cloudstate to persist, it needs to know ho
 
 The `EventSourced` class provides a helper method called link:{attachmentsdir}/api/module-cloudstate.EventSourced.html#lookupType[`lookupType`] to facilitate this. So before implementing anything, we'll look up these types so we can use them later.
 
-[source,js,indent=0]
+[source,js]
 ----
 include::example$test/eventsourced/shoppingcart.js[tag=lookup-type]
 ----
@@ -51,7 +51,7 @@ When there are no snapshots persisted for an entity (such as when the entity is 
 
 To create the initial state, we set the link:{attachmentsdir}/api/module-cloudstate.EventSourced.html#initial[`initial`] callback. This takes the id of the entity being created, and returns a new empty state, in this case, an empty shopping cart:
 
-[source,js,indent=0]
+[source,js]
 ----
 include::example$test/eventsourced/shoppingcart.js[tag=initial]
 ----
@@ -72,7 +72,7 @@ The command handler must return a message of the same type as the output type of
 
 The following shows the implementation of the `GetCart` command handler. This command handler is a read-only command handler, it doesn't emit any events, it just returns some state:
 
-[source,js,indent=0]
+[source,js]
 ----
 include::example$test/eventsourced/shoppingcart.js[tag=get-cart]
 ----
@@ -87,7 +87,7 @@ A command handler may emit an event by using the link:{attachmentsdir}/api/modul
 
 Here's an example of a command handler that emits an event:
 
-[source,js,indent=0]
+[source,js]
 ----
 include::example$test/eventsourced/shoppingcart.js[tag=add-item]
 ----
@@ -104,7 +104,7 @@ Event handlers take the event they are handling, and the state, and must return 
 
 Here's an example event handler for the `ItemAdded` event:
 
-[source,js,indent=0]
+[source,js]
 ----
 include::example$test/eventsourced/shoppingcart.js[tag=item-added]
 ----
@@ -115,7 +115,7 @@ Once you have your command handler and event handler functions implemented, you 
 
 The behavior callback can be set by setting the link:{attachmentsdir}/api/module-cloudstate.EventSourced.html#behavior[`behavior`] property on the entity:
 
-[source,js,indent=0]
+[source,js]
 ----
 include::example$test/eventsourced/shoppingcart.js[tag=behavior]
 ----
@@ -132,7 +132,7 @@ The entities behavior can be changed by returning different sets of handlers fro
 
 In the example below, we show a shopping cart that also has a checkout command. Once checked out, the shopping cart no longer accepts any commands to add or remove items, its state and therefore behavior changes:
 
-[source,js,indent=0]
+[source,js]
 ----
 include::example$test/eventsourced/shoppingcart.js[tag=multiple-behaviors]
 ----
@@ -141,14 +141,14 @@ include::example$test/eventsourced/shoppingcart.js[tag=multiple-behaviors]
 
 If you only have a single entity, as a convenience, you can start it directly, by invoking the link:{attachmentsdir}/api/module-cloudstate.EventSourced.html#start[`start`] method, like so:
 
-[source,js,indent=0]
+[source,js]
 ----
 include::example$test/eventsourced/shoppingcart.js[tag=start]
 ----
 
 Alternatively, you can add it to the `Cloudstate` server explicitly:
 
-[source,js,indent=0]
+[source,js]
 ----
 include::example$test/eventsourced/shoppingcart.js[tag=add-entity]
 ----

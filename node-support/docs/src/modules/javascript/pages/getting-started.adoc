@@ -71,14 +71,14 @@ You can place protobuf files in your project wherever you like, for example, in 
 
 There are two ways to create and start a Cloudstate gRPC server. The first is to create an link:{attachmentsdir}/api/module-cloudstate.Entity.html[`Entity`], and invoke link:{attachmentsdir}/api/module-cloudstate.Entity.html#start[`start`] on it. This allows creating a server that serves a single entity, with the default options. We'll look at this more in the subsequent pages. Alternatively, you can use the link:{attachmentsdir}/api/module-cloudstate.CloudState.html[`CloudState`] class, add one or more entities to it, and then invoke link:{attachmentsdir}/api/module-cloudstate.CloudState.html#start[`start`], like so:
 
-[source,js,indent=0]
+[source,js]
 ----
 include::example$test/gettingstarted/index.js[tag=start]
 ----
 
 If you created your protobuf file descriptor set at a different location to the default of `user-function.desc`, you can configure that here:
 
-[source,js,indent=0]
+[source,js]
 ----
 include::example$test/gettingstarted/index.js[tag=custom-desc]
 ----
