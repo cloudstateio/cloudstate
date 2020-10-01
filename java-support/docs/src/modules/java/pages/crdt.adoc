@@ -72,7 +72,7 @@ The callback is then able to return a message to be sent to the client (or empty
 
 If the shopping cart service had a `WatchCart` call, like this:
 
-[source,proto]
+[source,protobuf]
 ----
 rpc WatchCart(GetShoppingCart) returns (stream Cart);
 ----
