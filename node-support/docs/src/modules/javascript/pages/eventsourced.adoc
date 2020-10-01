@@ -10,7 +10,7 @@ While protobufs are the recommended format for persisting events, it is recommen
 
 For our shopping cart example, we'll create a new file called `domain.proto`, the name domain is selected to indicate that these are my applications domain objects:
 
-[source,proto]
+[source,protobuf]
 ----
 include::example$domain.proto[]
 ----

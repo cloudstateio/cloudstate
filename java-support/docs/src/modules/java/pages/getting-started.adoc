@@ -176,7 +176,7 @@ The Xolstice Maven plugin assumes a location of `src/main/proto` for your protob
 
 So, if you were to build the example shopping cart application shown earlier in xref:concepts:grpc.adoc[gRPC descriptors], you could simply paste that protobuf into `src/main/proto/shoppingcart.proto`. You may wish to also define the Java package, to ensure the package name used conforms to Java package naming conventions:
 
-[source,proto]
+[source,protobuf]
 ----
 option java_package = "com.example";
 ----
