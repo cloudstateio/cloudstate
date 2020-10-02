@@ -14,7 +14,7 @@ Currently, Cloudstate supports:
 * Javascript
 * Kotlin
 
-To write your Cloudstate services, you of course will need to know how to code in your chosen language. However, you will not need to learn a substantially different paradigm for using that language: The API for Cloudstate itself is short and straightfoward. And, you won't need anything else to be productive, unlike many other platforms that have a long and steep learning curve. See the  https://cloudstate.io/docs/core/current/user/lang/java/api/index.html[Javadoc, window="javadoc"] for the API as an example.
+To write your Cloudstate services, you of course will need to know how to code in your chosen language. However, you will not need to learn a substantially different paradigm for using that language: The API for Cloudstate itself is short and straightfoward. And, you won't need anything else to be productive, unlike many other platforms that have a long and steep learning curve.
 
 == Cloudstate projects
 

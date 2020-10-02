@@ -31,7 +31,7 @@ It is also possible to take a look at the various protobuf messages available in
 +
 .Example of an Event where the entity id is defined
 ****
-[source,proto]
+[source,protobuf]
 ----
 message PongSent {
     string id = 1 [(.cloudstate.entity_key) = true];
@@ -44,7 +44,7 @@ message PongSent {
 +
 .Example of topic/queue definition for the function output
 ****
-[source,proto]
+[source,protobuf]
 ----
 rpc Ping(PongSent) returns (PingSent) {
     option (.cloudstate.eventing) =
@@ -56,7 +56,7 @@ rpc Ping(PongSent) returns (PingSent) {
 +
 .Example of topic/queue definition for the function input
 ****
-[source,proto]
+[source,protobuf]
 ----
 rpc SeenPing(PingSent) returns (google.protobuf.Empty) {
     option (.cloudstate.eventing) = {

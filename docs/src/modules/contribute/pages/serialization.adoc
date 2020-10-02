@@ -12,7 +12,7 @@ Serialized primitive values have a `type_url` prefix of `p.cloudstate.io`. The p
 
 The `value` field contains a message that is serialized using the following schema:
 
-[source,proto]
+[source,protobuf]
 ----
 syntax = "proto3";
 message Primitive {
@@ -32,7 +32,7 @@ Serialized JSON values have a `type_url` prefix of `json.cloudstate.io`, and a p
 
 The `value` field contains a message that is serialized using the following schema:
 
-[source,proto]
+[source,protobuf]
 ----
 syntax = "proto3";
 message Json {

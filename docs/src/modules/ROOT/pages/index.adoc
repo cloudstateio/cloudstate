@@ -43,7 +43,7 @@ This documentation contains information for developers who want to use Cloudstat
 | Develop Cloudstate services
 | Developers
 | * xref:old-dart:index.adoc[Implementing in Dart]
-  * xref:old-go:index.adoc[Implementing in Go]
+  * xref:go:index.adoc[Implementing in Go]
   * xref:java:index.adoc[Implementing in Java]
   * xref:javascript:index.adoc[Implementing in JavaScript]
   * xref:kotlin:index.adoc[Implementing in Kotlin]
