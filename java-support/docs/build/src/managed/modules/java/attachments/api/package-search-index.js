@@ -1,0 +1,1 @@
+packageSearchIndex = [{"l":"All Packages","url":"allpackages-index.html"},{"l":"io.cloudstate.javasupport"},{"l":"io.cloudstate.javasupport.action"},{"l":"io.cloudstate.javasupport.crdt"},{"l":"io.cloudstate.javasupport.eventsourced"},{"l":"io.cloudstate.javasupport.impl"}]
