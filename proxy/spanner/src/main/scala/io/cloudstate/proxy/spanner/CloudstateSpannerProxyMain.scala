@@ -75,9 +75,10 @@ object CloudstateSpannerProxyMain {
   def main(args: Array[String]): Unit = {
     // Parse config early in order to fail fast
     val config = Config.fromTypesafeConfig()
+    start(config)(CloudStateProxyMain.start())
+  }
 
-    implicit val classicSystem: ClassicSystem = CloudStateProxyMain.start()
-
+  def start(config: Config)(implicit classicSystem: ClassicSystem): Unit = {
     val clientSettings =
       GrpcClientSettings
         .fromConfig("spanner-client")
