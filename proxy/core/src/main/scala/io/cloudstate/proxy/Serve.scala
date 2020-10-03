@@ -107,7 +107,7 @@ object Serve {
           case UserFunctionReply(Some(ClientAction(ClientAction.Action.Forward(_), _)), _, _) =>
             log.error("Cannot serialize forward reply, this should have been handled by the UserFunctionRouter")
             None
-          case UserFunctionReply(Some(ClientAction(ClientAction.Action.Failure(Failure(_, message, _)), _)), _, _) =>
+          case UserFunctionReply(Some(ClientAction(ClientAction.Action.Failure(Failure(_, message, _, _)), _)), _, _) =>
             log.error("User Function responded with a failure: {}", message)
             throw CommandException(message)
           case _ =>

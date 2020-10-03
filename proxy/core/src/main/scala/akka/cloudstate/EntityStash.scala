@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-/**
- * The CloudState module.
- *
- * @module cloudstate
- */
+package akka.cloudstate
 
-module.exports.CloudState = require("./src/cloudstate");
-module.exports.EventSourced = require("./src/eventsourced");
-module.exports.crdt = require("./src/crdt");
-module.exports.Action = require("./src/action");
-module.exports.Metadata = require("./src/metadata");
+import akka.actor.{ActorRef, StashSupport}
+import akka.dispatch.Envelope
+
+// Access package-private akka stash methods, for custom command unstashing
+object EntityStash {
+  def unstash(stash: StashSupport, message: Any, sender: ActorRef): Unit =
+    stash.mailbox.enqueueFirst(stash.self, Envelope(message, sender, stash.context.system))
+}

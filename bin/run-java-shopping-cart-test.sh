@@ -151,7 +151,7 @@ function fail_with_details {
   echo
   echo "=== Operator logs ==="
   echo
-  kubectl logs -l control-plane=controller-manager -n cloudstate-system --tail=-1
+  kubectl logs -l control-plane=controller-manager -n cloudstate-system -c manager --tail=-1
   echo
   echo "=== Deployment description ==="
   echo
@@ -165,9 +165,9 @@ function fail_with_details {
   echo
   kubectl logs -l cloudstate.io/stateful-service=$statefulservice -c cloudstate-sidecar --tail=-1
   echo
-  echo "=== User container logs ==="
+  echo "=== User function logs ==="
   echo
-  kubectl logs -l cloudstate.io/stateful-service=$statefulservice -c user-container --tail=-1
+  kubectl logs -l cloudstate.io/stateful-service=$statefulservice -c user-function --tail=-1
   exit 1
 }
 

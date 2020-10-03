@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
 # bump these to update the version
-kubebuilder_version=2.2.0
-controller_gen_version=v0.3.0
+kubebuilder_version=2.3.1
+controller_gen_version=v0.4.0
 kustomize_version=v3.4.0
 
 os=linux

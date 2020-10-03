@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
-/**
- * The CloudState module.
- *
- * @module cloudstate
- */
+package io.cloudstate.testkit
 
-module.exports.CloudState = require("./src/cloudstate");
-module.exports.EventSourced = require("./src/eventsourced");
-module.exports.crdt = require("./src/crdt");
-module.exports.Action = require("./src/action");
-module.exports.Metadata = require("./src/metadata");
+object Sockets {
+  // We were using akka.testkit.SocketUtil.temporaryLocalPort but that is broken
+  // in akka 2.6.9 (and will be fixed by https://github.com/akka/akka/pull/29607).
+  def temporaryLocalPort(): Int = {
+    val address = new java.net.InetSocketAddress("localhost", 0)
+    val socket = java.nio.channels.ServerSocketChannel.open().socket()
+    try {
+      socket.bind(address)
+      socket.getLocalPort
+    } finally socket.close()
+  }
+}

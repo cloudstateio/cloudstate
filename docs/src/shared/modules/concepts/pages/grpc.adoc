@@ -2,7 +2,7 @@
 
 Cloudstate entities specify their interfaces using https://grpc.io[gRPC] descriptors. The following example descriptor provides a shopping cart entity. It supports three different commands, `AddItem`, `RemoveItem` and `GetCart`.
 
-[source,proto]
+[source,protobuf]
 ----
 syntax = "proto3";
 

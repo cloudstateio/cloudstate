@@ -7,27 +7,18 @@ metadata:
   name: postgres
 spec:
 
-  # The type of store - valid values would come from an enum of supported databases.
+  # Configuration for a postgres store
   type: Postgres
 
-  # The deployment type, ie, how this store is deployed. Valid values would depend on
-  # the store type, but all types would support "Unmanaged", which indicates that the
-  # operator doesn't manage/deploy the database itself, ie, the user has to deploy
-  # the database themselves.
-  deployment: Unmanaged
-
-  # Type and deployment specific configuration for the store.
-  config:
-
     # The name of the unmanaged Postgres service to connect to.
-    service: postgresql-postgresql-svc.postgresql.svc.cluster.local
+    host: postgresql-postgresql-svc.postgresql.svc.cluster.local
 
-    # There are multiple ways to specify credentials, the recommended way is to pull
-    # them from a Kubernetes secret.
-    credentialsFromSecret:
+    # The credentials for connecting to Postgres
+    credentials:
       
-      # This is the name of the secret
-      name: postgres-shopping-cart
+      # The secret to consume the credentials from
+      secret:
+        name: postgres-shopping-cart
       
       # By default, the database, username and password will be read from fields in the
       # secret with the keys database, username and password respectively. If your
@@ -38,12 +29,3 @@ spec:
       # usernameKey = user
       # passwordKey = pass
 
-    # If the credentials are not in a secret, you can instead embed them directly
-    # (not recommended!). This can be combined with credentials from a secret, so for
-    # example, you can hard code the database name below, but still pull the username
-    # and password from a secret.
-    # credentials:
-    #   database: shopping_cart
-    #   username: shopping_cart
-    #   password: verysecret
-      

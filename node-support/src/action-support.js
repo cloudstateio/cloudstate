@@ -17,7 +17,7 @@
 const path = require("path");
 const grpc = require("grpc");
 const protoLoader = require("@grpc/proto-loader");
-const debug = require("debug")("cloudstate-stateless");
+const debug = require("debug")("cloudstate-action");
 // Bind to stdout
 debug.log = console.log.bind(console);
 const AnySupport = require("./protobuf-any");
@@ -25,7 +25,7 @@ const EffectSerializer = require("./effect-serializer");
 const Metadata = require("./metadata");
 const CloudEvents = require("./cloudevents");
 
-class StatelessSupport {
+class ActionSupport {
   constructor(root, service, commandHandlers, allEntities) {
     this.root = root;
     this.service = service;
@@ -35,7 +35,7 @@ class StatelessSupport {
   }
 }
 
-class StatelessHandler {
+class ActionHandler {
 
   constructor(support, grpcMethod, commandHandler, call, grpcCallback, metadata) {
     this.support = support;
@@ -305,19 +305,19 @@ class StatelessHandler {
   }
 }
 
-module.exports = class StatelessServices {
+module.exports = class ActionServices {
 
   constructor() {
     this.services = {};
   }
 
   addService(entity, allEntities) {
-    this.services[entity.serviceName] = new StatelessSupport(entity.root, entity.service,
+    this.services[entity.serviceName] = new ActionSupport(entity.root, entity.service,
         entity.commandHandlers, allEntities);
   }
 
   entityType() {
-    return "cloudstate.function.StatelessFunction";
+    return "cloudstate.action.ActionProtocol";
   }
 
   register(server) {
@@ -325,14 +325,14 @@ module.exports = class StatelessServices {
       path.join(__dirname, "..", "proto"),
       path.join(__dirname, "..", "protoc", "include")
     ];
-    const packageDefinition = protoLoader.loadSync(path.join("cloudstate", "function.proto"), {
+    const packageDefinition = protoLoader.loadSync(path.join("cloudstate", "action.proto"), {
       includeDirs: includeDirs
     });
     const grpcDescriptor = grpc.loadPackageDefinition(packageDefinition);
 
-    const statelessService = grpcDescriptor.cloudstate.function.StatelessFunction.service;
+    const actionService = grpcDescriptor.cloudstate.action.ActionProtocol.service;
 
-    server.addService(statelessService, {
+    server.addService(actionService, {
       handleUnary: this.handleUnary.bind(this),
       handleStreamedIn: this.handleStreamedIn.bind(this),
       handleStreamedOut: this.handleStreamedOut.bind(this),
@@ -344,7 +344,7 @@ module.exports = class StatelessServices {
     const service = this.services[data.serviceName];
     if (service && service.service.methods.hasOwnProperty(data.name)) {
       if (service.commandHandlers.hasOwnProperty(data.name)) {
-        return new StatelessHandler(service, service.service.methods[data.name], service.commandHandlers[data.name], call, callback, data.metadata)
+        return new ActionHandler(service, service.service.methods[data.name], service.commandHandlers[data.name], call, callback, data.metadata)
       } else {
         this.reportError("Service call " + data.serviceName + "." + data.name + " not implemented", call, callback)
       }

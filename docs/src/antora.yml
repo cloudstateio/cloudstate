@@ -8,7 +8,6 @@ nav:
 - modules/dart/nav.adoc
 - modules/old-dart/nav.adoc
 - modules/go/nav.adoc
-- modules/old-go/nav.adoc
 - modules/java/nav.adoc
 - modules/javascript/nav.adoc
 - modules/kotlin/nav.adoc

@@ -4,7 +4,7 @@ This page documents how to implement Cloudstate event sourced entities in Java. 
 
 An event sourced entity can be created by annotating it with the link:{attachmentsdir}/api/io/cloudstate/javasupport/eventsourced/EventSourcedEntity.html[`@EventSourcedEntity`] annotation.
 
-[source,java,indent=0]
+[source,java]
 ----
 include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=entity-class]
 ----
@@ -21,7 +21,7 @@ While protobuf is the recommended format for persisting events, it is recommende
 
 For our shopping cart example, we'll create a new file called `domain.proto`, the name domain is selected to indicate that these are my applications domain objects:
 
-[source,proto,indent=0]
+[source,protobuf]
 ----
 include::example$proto/domain.proto[]
 ----
@@ -30,7 +30,7 @@ include::example$proto/domain.proto[]
 
 Each entity should store its state locally in a mutable variable, either a mutable field or a multiple structure such as a collection. For our shopping cart, the state is a map of product ids to products, so we'll create a map to contain that:
 
-[source,java,indent=0]
+[source,java]
 ----
 include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=entity-state]
 ----
@@ -39,7 +39,7 @@ include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=entity-state
 
 The context available for injection into the constructor is a link:{attachmentsdir}/api/io/cloudstate/javasupport/eventsourced/EventSourcedEntityCreationContext.html[`EventSourcedEntityCreationContext`]. While you don't necessarily need to define a constructor, you can define one and have that context injected in. The constructor below shows how the `entityId` is injected:
 
-[source,java,indent=0]
+[source,java]
 ----
 include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=constructing]
 ----
@@ -56,7 +56,7 @@ The return type of the command handler must be the output type for the gRPC serv
 
 The following shows the implementation of the `GetCart` command handler. This command handler is a read-only command handler, it doesn't emit any events, it just returns some state:
 
-[source,java,indent=0]
+[source,java]
 ----
 include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=get-cart]
 ----
@@ -73,7 +73,7 @@ A command handler may emit an event by taking in a link:{attachmentsdir}/api/io/
 
 Here's an example of a command handler that emits an event:
 
-[source,java,indent=0]
+[source,java]
 ----
 include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=add-item]
 ----
@@ -92,7 +92,7 @@ Event handlers may be declared for a superclass or interface of the types they h
 
 Here's an example event handler for the `ItemAdded` event. A utility method, `convert` is also defined to assist it.
 
-[source,java,indent=0]
+[source,java]
 ----
 include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=item-added]
 ----
@@ -101,7 +101,7 @@ include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=item-added]
 
 Snapshots are an important optimisation for event sourced entities that may contain many events, to ensure that they can be loaded quickly even when they have very long journals. To produce a snapshot, a method annotated with link:{attachmentsdir}/api/io/cloudstate/javasupport/eventsourced/Snapshot.html[`@Snapshot`] must be declared. It takes a context class of type link:{attachmentsdir}/api/io/cloudstate/javasupport/eventsourced/SnapshotContext.html[`SnapshotContext`], and must return a snapshot of the current state in serializable form.
 
-[source,java,indent=0]
+[source,java]
 ----
 include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=snapshot]
 ----
@@ -110,7 +110,7 @@ When the entity is loaded again, the snapshot will first be loaded before any ot
 
 Multiple snapshot handlers may be defined to handle multiple different types of snapshots, the type matching is done in the same way as for events.
 
-[source,java,indent=0]
+[source,java]
 ----
 include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=handle-snapshot]
 ----
@@ -119,7 +119,7 @@ include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=handle-snaps
 
 Once you've created your entity, you can register it with the link:{attachmentsdir}/api/io/cloudstate/javasupport/CloudState.html[`CloudState`] server, by invoking the `registerEventSourcedEntity` method. In addition to passing your entity class and service descriptor, you also need to pass any descriptors that you use for persisting events, for example, the `domain.proto` descriptor.
 
-[source,java,indent=0]
+[source,java]
 ----
 include::example$docs/user/eventsourced/ShoppingCartEntity.java[tag=register]
 ----

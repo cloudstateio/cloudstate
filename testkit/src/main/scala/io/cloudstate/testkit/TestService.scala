@@ -18,7 +18,7 @@ package io.cloudstate.testkit
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.Http
-import akka.testkit.{SocketUtil, TestKit, TestProbe}
+import akka.testkit.{TestKit, TestProbe}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.testkit.crud.TestCrudService
 import io.cloudstate.testkit.discovery.TestEntityDiscoveryService
@@ -30,7 +30,7 @@ import scala.concurrent.duration._
 final class TestService {
   import TestService._
 
-  val port: Int = SocketUtil.temporaryLocalPort()
+  val port: Int = Sockets.temporaryLocalPort()
 
   val context = new TestServiceContext(port)
 

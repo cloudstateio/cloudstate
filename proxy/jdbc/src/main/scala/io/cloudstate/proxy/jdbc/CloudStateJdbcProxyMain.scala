@@ -16,14 +16,15 @@
 
 package io.cloudstate.proxy.jdbc
 
+import akka.actor.ActorSystem
 import io.cloudstate.proxy.CloudStateProxyMain
 
 object CloudStateJdbcProxyMain {
 
-  def main(args: Array[String]): Unit = {
+  def main(args: Array[String]): Unit =
+    start(CloudStateProxyMain.start())
 
-    val actorSystem = CloudStateProxyMain.start()
-
+  def start(actorSystem: ActorSystem): Unit = {
     // If in dev mode, we want to ensure the tables get created, which they won't be unless the health check is
     // instantiated
     val config = new CloudStateProxyMain.Configuration(actorSystem.settings.config.getConfig("cloudstate.proxy"))

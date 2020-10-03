@@ -26,8 +26,8 @@ import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 import io.cloudstate.javasupport.action._
 import io.cloudstate.javasupport.impl._
 import io.cloudstate.javasupport.{Context, Metadata, Service, ServiceCall, ServiceCallFactory}
+import io.cloudstate.protocol.action.{ActionCommand, ActionProtocol, ActionResponse}
 import io.cloudstate.protocol.entity.{Failure, Forward, Reply, SideEffect, Metadata => PbMetadata}
-import io.cloudstate.protocol.function.{FunctionCommand, FunctionReply, StatelessFunction}
 
 import scala.concurrent.Future
 import scala.compat.java8.FutureConverters._
@@ -44,11 +44,11 @@ final class ActionService(val actionHandler: ActionHandler,
       case _ => None
     }
 
-  override final val entityType = StatelessFunction.name
+  override final val entityType = ActionProtocol.name
 }
 
-final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, ActionService], rootContext: Context)
-    extends StatelessFunction {
+final class ActionProtocolImpl(_system: ActorSystem, services: Map[String, ActionService], rootContext: Context)
+    extends ActionProtocol {
 
   import _system.dispatcher
   implicit val system: ActorSystem = _system
@@ -67,14 +67,14 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Ac
   private def actionMessageToReply(msg: ActionReply[JavaPbAny]) = {
     val response = msg match {
       case message: MessageReply[JavaPbAny] =>
-        FunctionReply.Response.Reply(
+        ActionResponse.Response.Reply(
           Reply(
             Some(ScalaPbAny.fromJavaProto(message.payload())),
             toOptionPbMetadata(message.metadata())
           )
         )
       case forward: ForwardReply[JavaPbAny] =>
-        FunctionReply.Response.Forward(
+        ActionResponse.Response.Forward(
           Forward(
             forward.serviceCall().ref().method().getService.getFullName,
             forward.serviceCall().ref().method().getName,
@@ -83,7 +83,7 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Ac
           )
         )
       // ie, NoReply
-      case _ => FunctionReply.Response.Empty
+      case _ => ActionResponse.Response.Empty
     }
 
     val effects = msg match {
@@ -102,7 +102,7 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Ac
       )
     }
 
-    FunctionReply(response, encodedEffects)
+    ActionResponse(response, encodedEffects)
   }
 
   /**
@@ -111,7 +111,7 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Ac
    * payload. The reply may contain a direct reply, a forward or a failure, and it may contain many
    * side effects.
    */
-  override def handleUnary(in: FunctionCommand): Future[FunctionReply] =
+  override def handleUnary(in: ActionCommand): Future[ActionResponse] =
     services.get(in.serviceName) match {
       case Some(service) =>
         val context = createContext(in)
@@ -121,7 +121,7 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Ac
           .map(actionMessageToReply)
       case None =>
         Future.successful(
-          FunctionReply(FunctionReply.Response.Failure(Failure(0, "Unknown service: " + in.serviceName)))
+          ActionResponse(ActionResponse.Response.Failure(Failure(0, "Unknown service: " + in.serviceName)))
         )
     }
 
@@ -139,14 +139,14 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Ac
    * Either the client or the server may cancel the stream at any time, cancellation is indicated
    * through an HTTP2 stream RST message.
    */
-  override def handleStreamedIn(in: Source[FunctionCommand, NotUsed]): Future[FunctionReply] =
+  override def handleStreamedIn(in: Source[ActionCommand, NotUsed]): Future[ActionResponse] =
     in.prefixAndTail(1)
       .runWith(Sink.head)
       .flatMap {
         case (Nil, _) =>
           Future.successful(
-            FunctionReply(
-              FunctionReply.Response.Failure(
+            ActionResponse(
+              ActionResponse.Response.Failure(
                 Failure(
                   0,
                   "Cloudstate protocol failure: expected command message with service name and command name, but got empty stream"
@@ -170,7 +170,7 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Ac
                 .map(actionMessageToReply)
             case None =>
               Future.successful(
-                FunctionReply(FunctionReply.Response.Failure(Failure(0, "Unknown service: " + call.serviceName)))
+                ActionResponse(ActionResponse.Response.Failure(Failure(0, "Unknown service: " + call.serviceName)))
               )
           }
       }
@@ -184,7 +184,7 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Ac
    * Either the client or the server may cancel the stream at any time, cancellation is indicated
    * through an HTTP2 stream RST message.
    */
-  override def handleStreamedOut(in: FunctionCommand): Source[FunctionReply, NotUsed] =
+  override def handleStreamedOut(in: ActionCommand): Source[ActionResponse, NotUsed] =
     services.get(in.serviceName) match {
       case Some(service) =>
         val context = createContext(in)
@@ -193,7 +193,7 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Ac
           .asScala
           .map(actionMessageToReply)
       case None =>
-        Source.single(FunctionReply(FunctionReply.Response.Failure(Failure(0, "Unknown service: " + in.serviceName))))
+        Source.single(ActionResponse(ActionResponse.Response.Failure(Failure(0, "Unknown service: " + in.serviceName))))
     }
 
   /**
@@ -213,13 +213,13 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Ac
    * Either the client or the server may cancel the stream at any time, cancellation is indicated
    * through an HTTP2 stream RST message.
    */
-  override def handleStreamed(in: Source[FunctionCommand, NotUsed]): Source[FunctionReply, NotUsed] =
+  override def handleStreamed(in: Source[ActionCommand, NotUsed]): Source[ActionResponse, NotUsed] =
     in.prefixAndTail(1)
       .flatMapConcat {
         case (Nil, _) =>
           Source.single(
-            FunctionReply(
-              FunctionReply.Response.Failure(
+            ActionResponse(
+              ActionResponse.Response.Failure(
                 Failure(
                   0,
                   "Cloudstate protocol failure: expected command message with service name and command name, but got empty stream"
@@ -243,12 +243,12 @@ final class StatelessFunctionImpl(_system: ActorSystem, services: Map[String, Ac
                 .map(actionMessageToReply)
             case None =>
               Source.single(
-                FunctionReply(FunctionReply.Response.Failure(Failure(0, "Unknown service: " + call.serviceName)))
+                ActionResponse(ActionResponse.Response.Failure(Failure(0, "Unknown service: " + call.serviceName)))
               )
           }
       }
 
-  private def createContext(in: FunctionCommand): ActionContext = {
+  private def createContext(in: ActionCommand): ActionContext = {
     val metadata = new MetadataImpl(in.metadata.map(_.entries.toVector).getOrElse(Nil))
     new ActionContextImpl(metadata)
   }

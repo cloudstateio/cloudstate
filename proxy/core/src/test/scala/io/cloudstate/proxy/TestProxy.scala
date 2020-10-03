@@ -18,12 +18,13 @@ package io.cloudstate.proxy
 
 import akka.actor.ActorSystem
 import akka.testkit.TestEvent.Mute
-import akka.testkit.{EventFilter, SocketUtil, TestKit}
+import akka.testkit.{EventFilter, TestKit}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.protocol.crdt.Crdt
 import io.cloudstate.protocol.entity.ProxyInfo
 import io.cloudstate.protocol.event_sourced.EventSourced
-import io.cloudstate.protocol.function.StatelessFunction
+import io.cloudstate.protocol.action.ActionProtocol
+import io.cloudstate.testkit.Sockets
 import java.net.{ConnectException, Socket}
 
 import io.cloudstate.protocol.crud.Crud
@@ -35,7 +36,7 @@ object TestProxy {
 }
 
 class TestProxy(servicePort: Int) {
-  val port: Int = SocketUtil.temporaryLocalPort()
+  val port: Int = Sockets.temporaryLocalPort()
 
   val config: Config = ConfigFactory.load(ConfigFactory.parseString(s"""
     include "dev-mode"
@@ -53,7 +54,7 @@ class TestProxy(servicePort: Int) {
   """))
 
   val info: ProxyInfo =
-    EntityDiscoveryManager.proxyInfo(Seq(Crdt.name, StatelessFunction.name, EventSourced.name, Crud.name))
+    EntityDiscoveryManager.proxyInfo(Seq(Crdt.name, ActionProtocol.name, EventSourced.name, Crud.name))
 
   val system: ActorSystem = CloudStateProxyMain.start(config)
 
