@@ -32,9 +32,11 @@ import io.cloudstate.testkit.discovery.TestEntityDiscoveryService
 import scala.concurrent.Future
 
 class TestCrudService(context: TestServiceContext) {
-  private val testCrud = new TestCrudService.TestCrud(context)
+  import TestCrudService._
 
-  def expectConnection(): TestCrudService.Connection = context.probe.expectMsgType[TestCrudService.Connection]
+  private val testCrud = new TestCrud(context)
+
+  def expectConnection(): Connection = context.probe.expectMsgType[Connection]
 
   def handler: PartialFunction[HttpRequest, Future[HttpResponse]] =
     CrudHandler.partial(testCrud)(context.system)

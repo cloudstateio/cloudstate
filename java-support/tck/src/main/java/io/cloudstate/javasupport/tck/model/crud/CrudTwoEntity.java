@@ -14,26 +14,19 @@
  * limitations under the License.
  */
 
-package io.cloudstate.proxy.crud.store
+package io.cloudstate.javasupport.tck.model.crud;
 
-import akka.util.ByteString
-import io.cloudstate.proxy.crud.store.JdbcStore.Key
+import io.cloudstate.javasupport.crud.CrudEntity;
+import io.cloudstate.javasupport.crud.CommandHandler;
+import io.cloudstate.tck.model.crud.Crud.Request;
+import io.cloudstate.tck.model.crud.Crud.Response;
 
-import scala.concurrent.Future
+@CrudEntity
+public class CrudTwoEntity {
+  public CrudTwoEntity() {}
 
-final class JdbcInMemoryStore extends JdbcStore[Key, ByteString] {
-
-  private var store = Map.empty[Key, ByteString]
-
-  override def get(key: Key): Future[Option[ByteString]] = Future.successful(store.get(key))
-
-  override def update(key: Key, value: ByteString): Future[Unit] = {
-    store += key -> value
-    Future.unit
-  }
-
-  override def delete(key: Key): Future[Unit] = {
-    store -= key
-    Future.unit
+  @CommandHandler
+  public Response call(Request request) {
+    return Response.newBuilder().build();
   }
 }

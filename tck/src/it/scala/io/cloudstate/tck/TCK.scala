@@ -17,9 +17,28 @@
 package io.cloudstate.tck
 
 import org.scalatest._
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.testkit.ServiceAddress
+
 import scala.jdk.CollectionConverters._
+
+object TCK {
+
+  private def tckSuites(combinations: List[Config], verify: Set[String]): Vector[ManagedCloudStateTckSpec] = {
+    val eventSourced = tckSuite(combinations, verify, c => new ManagedCloudStateTCK(TckConfiguration.fromConfig(c)))
+    val crud = tckSuite(combinations, verify, c => new ManagedCloudStateCrudTCK(TckConfiguration.fromConfig(c)))
+    (eventSourced ++ crud).toVector
+  }
+
+  private def tckSuite(combinations: List[Config],
+                       verify: Set[String],
+                       factory: Config => ManagedCloudStateTckSpec): Iterator[ManagedCloudStateTckSpec] =
+    combinations
+      .iterator
+      .filter(section => verify(section.getString("name"))).
+      map(c => factory(c))
+
+}
 
 class TCK extends Suites({
   val config = ConfigFactory.load()
@@ -33,12 +52,8 @@ class TCK extends Suites({
     case _ => // All good
   }
 
-   combinations.
-    iterator.
-    asScala.
-    filter(section => verify(section.getString("name"))).
-    map(c => new ManagedCloudStateTCK(TckConfiguration.fromConfig(c))).
-    toVector
+  TCK.tckSuites(combinations.asScala.toList, verify)
+
   }: _*) with SequentialNestedSuiteExecution
 
 object ManagedCloudStateTCK {
@@ -51,10 +66,23 @@ object ManagedCloudStateTCK {
   }
 }
 
-class ManagedCloudStateTCK(config: TckConfiguration) extends CloudStateTCK("for " + config.name, ManagedCloudStateTCK.settings(config)) {
+/* TCK test suite for EventSourcing */
+class ManagedCloudStateTCK(override val config: TckConfiguration)
+  extends CloudStateTCK("for " + config.name, ManagedCloudStateTCK.settings(config))
+  with ManagedCloudStateTckSpec
+
+/* TCK test suite for CRUD */
+class ManagedCloudStateCrudTCK(override val config: TckConfiguration)
+  extends CloudStateCrudTCK("for " + config.name, ManagedCloudStateTCK.settings(config))
+  with ManagedCloudStateTckSpec
+
+trait ManagedCloudStateTckSpec extends WordSpecLike with BeforeAndAfterAll {
+
+  val config: TckConfiguration
+
   config.validate()
 
-  val processes: TckProcesses = TckProcesses.create(config)
+  private val processes: TckProcesses = TckProcesses.create(config)
 
   override def beforeAll(): Unit = try {
     processes.service.start()

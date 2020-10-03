@@ -172,7 +172,7 @@ final class CrudImpl(_system: ActorSystem,
             context.deactivate() // Very important!
           }
 
-          val clientAction = context.createClientAction(reply, false)
+          val clientAction = context.createClientAction(reply, false, false)
           if (!context.hasError) {
             val nextState = context.currentState()
             (nextState,
