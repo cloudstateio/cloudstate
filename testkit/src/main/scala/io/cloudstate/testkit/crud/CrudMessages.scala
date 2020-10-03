@@ -17,7 +17,8 @@
 package io.cloudstate.testkit.crud
 
 import com.google.protobuf.any.{Any => ScalaPbAny}
-import com.google.protobuf.{Empty => JavaPbEmpty, Message => JavaPbMessage}
+import com.google.protobuf.empty.{Empty => ScalaPbEmpty}
+import com.google.protobuf.{Any => JavaPbAny, Empty => JavaPbEmpty, Message => JavaPbMessage}
 import io.cloudstate.protocol.crud.CrudAction.Action.Update
 import io.cloudstate.protocol.crud.CrudAction.Action.Delete
 import io.cloudstate.protocol.entity._
@@ -38,6 +39,12 @@ object CrudMessages {
 
     def withDeleteAction(): Effects =
       copy(crudAction = Some(CrudAction(Delete(CrudDelete()))))
+
+    def withSideEffect(service: String, command: String, message: ScalaPbMessage): Effects =
+      withSideEffect(service, command, messagePayload(message), synchronous = false)
+
+    def withSideEffect(service: String, command: String, payload: Option[ScalaPbAny], synchronous: Boolean): Effects =
+      copy(sideEffects = sideEffects :+ SideEffect(service, command, payload, synchronous))
   }
 
   object Effects {
@@ -46,7 +53,7 @@ object CrudMessages {
 
   val EmptyInMessage: InMessage = InMessage.Empty
   val EmptyJavaMessage: JavaPbMessage = JavaPbEmpty.getDefaultInstance
-  val EmptyScalaMessage: ScalaPbAny = protobufAny(EmptyJavaMessage)
+  val EmptyScalaMessage: ScalaPbMessage = ScalaPbEmpty.defaultInstance
 
   def init(serviceName: String, entityId: String): InMessage =
     init(serviceName, entityId, Some(CrudInitState()))
@@ -93,6 +100,18 @@ object CrudMessages {
   def reply(id: Long, payload: Option[ScalaPbAny], effects: Effects): OutMessage =
     OutMessage.Reply(CrudReply(id, clientActionReply(payload), effects.sideEffects, effects.crudAction))
 
+  def replyAction(id: Long, action: Option[ClientAction], effects: Effects): OutMessage =
+    OutMessage.Reply(CrudReply(id, action, effects.sideEffects, effects.crudAction))
+
+  def forward(id: Long, service: String, command: String, payload: ScalaPbMessage): OutMessage =
+    forward(id, service, command, payload, Effects.empty)
+
+  def forward(id: Long, service: String, command: String, payload: ScalaPbMessage, effects: Effects): OutMessage =
+    forward(id, service, command, messagePayload(payload), effects)
+
+  def forward(id: Long, service: String, command: String, payload: Option[ScalaPbAny], effects: Effects): OutMessage =
+    replyAction(id, clientActionForward(service, command, payload), effects)
+
   def actionFailure(id: Long, description: String): OutMessage =
     OutMessage.Reply(CrudReply(id, clientActionFailure(id, description)))
 
@@ -111,6 +130,18 @@ object CrudMessages {
   def clientActionFailure(id: Long, description: String): Option[ClientAction] =
     Some(ClientAction(ClientAction.Action.Failure(Failure(id, description))))
 
+  def clientActionForward(service: String, command: String, payload: Option[ScalaPbAny]): Option[ClientAction] =
+    Some(ClientAction(ClientAction.Action.Forward(Forward(service, command, payload))))
+
+  def sideEffect(service: String, command: String, payload: ScalaPbMessage, synchronous: Boolean): Effects =
+    sideEffect(service, command, messagePayload(payload), synchronous)
+
+  def sideEffect(service: String, command: String, payload: ScalaPbMessage): Effects =
+    sideEffect(service, command, messagePayload(payload), synchronous = false)
+
+  def sideEffect(service: String, command: String, payload: Option[ScalaPbAny], synchronous: Boolean): Effects =
+    Effects.empty.withSideEffect(service, command, payload, synchronous)
+
   def update(state: JavaPbMessage): Effects =
     Effects.empty.withUpdateAction(state)
 
@@ -126,10 +157,14 @@ object CrudMessages {
   def messagePayload(message: ScalaPbMessage): Option[ScalaPbAny] =
     Option(message).map(protobufAny)
 
-  def protobufAny(message: JavaPbMessage): ScalaPbAny =
-    ScalaPbAny("type.googleapis.com/" + message.getDescriptorForType.getFullName, message.toByteString)
+  def protobufAny(message: JavaPbMessage): ScalaPbAny = message match {
+    case javaPbAny: JavaPbAny => ScalaPbAny.fromJavaProto(javaPbAny)
+    case _ => ScalaPbAny("type.googleapis.com/" + message.getDescriptorForType.getFullName, message.toByteString)
+  }
 
-  def protobufAny(message: ScalaPbMessage): ScalaPbAny =
-    ScalaPbAny("type.googleapis.com/" + message.companion.scalaDescriptor.fullName, message.toByteString)
+  def protobufAny(message: ScalaPbMessage): ScalaPbAny = message match {
+    case scalaPbAny: ScalaPbAny => scalaPbAny
+    case _ => ScalaPbAny("type.googleapis.com/" + message.companion.scalaDescriptor.fullName, message.toByteString)
+  }
 
 }

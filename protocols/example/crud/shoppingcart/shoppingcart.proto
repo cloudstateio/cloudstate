@@ -59,27 +59,27 @@ message Cart {
 service ShoppingCart {
     rpc AddItem(AddLineItem) returns (google.protobuf.Empty) {
         option (google.api.http) = {
-            post: "/cart/{user_id}/items/add",
+            post: "/crud/cart/{user_id}/items/add",
             body: "*",
         };
         option (.cloudstate.eventing).in = "items";
     }
 
     rpc RemoveItem(RemoveLineItem) returns (google.protobuf.Empty) {
-        option (google.api.http).post = "/cart/{user_id}/items/{product_id}/remove";
+        option (google.api.http).post = "/crud/cart/{user_id}/items/{product_id}/remove";
     }
 
     rpc GetCart(GetShoppingCart) returns (Cart) {
         option (google.api.http) = {
-            get: "/carts/{user_id}",
+            get: "/crud/carts/{user_id}",
             additional_bindings: {
-                get: "/carts/{user_id}/items",
+                get: "/crud/carts/{user_id}/items",
                 response_body: "items"
             }
         };
     }
 
     rpc RemoveCart(RemoveShoppingCart) returns (google.protobuf.Empty) {
-        option (google.api.http).post = "/carts/{user_id}/remove";
+        option (google.api.http).post = "/crud/carts/{user_id}/remove";
     }
 }

@@ -16,7 +16,6 @@
 
 package io.cloudstate.javasupport.impl.eventsourced
 
-import akka.actor.ActorSystem
 import akka.testkit.EventFilter
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.typesafe.config.{Config, ConfigFactory}

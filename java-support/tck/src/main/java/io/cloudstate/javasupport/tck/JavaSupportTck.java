@@ -18,10 +18,13 @@ package io.cloudstate.javasupport.tck;
 
 import com.example.shoppingcart.Shoppingcart;
 import io.cloudstate.javasupport.CloudState;
+import io.cloudstate.javasupport.tck.model.crud.CrudTckModelEntity;
+import io.cloudstate.javasupport.tck.model.crud.CrudTwoEntity;
 import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedTckModelEntity;
 import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedTwoEntity;
 import io.cloudstate.samples.shoppingcart.ShoppingCartEntity;
 import io.cloudstate.tck.model.Eventsourced;
+import io.cloudstate.tck.model.crud.Crud;
 
 public final class JavaSupportTck {
   public static final void main(String[] args) throws Exception {
@@ -37,6 +40,16 @@ public final class JavaSupportTck {
             ShoppingCartEntity.class,
             Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
             com.example.shoppingcart.persistence.Domain.getDescriptor())
+        .registerCrudEntity(
+            CrudTckModelEntity.class,
+            Crud.getDescriptor().findServiceByName("CrudTckModel"),
+            Crud.getDescriptor())
+        .registerCrudEntity(CrudTwoEntity.class, Crud.getDescriptor().findServiceByName("CrudTwo"))
+        .registerCrudEntity(
+            io.cloudstate.samples.crud.shoppingcart.ShoppingCartEntity.class,
+            com.example.crud.shoppingcart.Shoppingcart.getDescriptor()
+                .findServiceByName("ShoppingCart"),
+            com.example.crud.shoppingcart.persistence.Domain.getDescriptor())
         .start()
         .toCompletableFuture()
         .get();

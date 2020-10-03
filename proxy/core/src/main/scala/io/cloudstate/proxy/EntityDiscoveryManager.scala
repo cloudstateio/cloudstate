@@ -141,32 +141,6 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
       .withChannelBuilderOverrides(_.maxInboundMessageSize(config.maxInboundMessageSize.toInt))
       .withTls(false)
   private[this] final val entityDiscoveryClient = EntityDiscoveryClient(clientSettings)
-  private[this] final val autoscaler = {
-    val autoscalerSettings = AutoscalerSettings(system)
-    if (autoscalerSettings.enabled) {
-      val managerSettings = ClusterSingletonManagerSettings(system)
-      val proxySettings = ClusterSingletonProxySettings(system)
-
-      val scalerFactory: ScalerFactory = (autoscaler, factory) => {
-        if (config.devMode) factory.actorOf(Props(new NoScaler(autoscaler)), "noScaler")
-        else factory.actorOf(KubernetesDeploymentScaler.props(autoscaler), "kubernetesDeploymentScaler")
-      }
-
-      val singleton = context.actorOf(
-        ClusterSingletonManager.props(
-          Autoscaler.props(autoscalerSettings, scalerFactory, new ClusterMembershipFacadeImpl(Cluster(system))),
-          terminationMessage = PoisonPill,
-          managerSettings
-        ),
-        "autoscaler"
-      )
-
-      context.actorOf(ClusterSingletonProxy.props(singleton.path.toStringWithoutAddress, proxySettings),
-                      "autoscalerProxy")
-    } else {
-      context.actorOf(Props(new NoAutoscaler), "noAutoscaler")
-    }
-  }
 
   private final val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
       Crdt.name -> new CrdtSupportFactory(system, config, entityDiscoveryClient, clientSettings),

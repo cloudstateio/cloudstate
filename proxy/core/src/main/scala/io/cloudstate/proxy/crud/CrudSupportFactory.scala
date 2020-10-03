@@ -37,7 +37,8 @@ import scala.concurrent.{ExecutionContext, Future}
 class CrudSupportFactory(system: ActorSystem,
                          config: EntityDiscoveryManager.Configuration,
                          grpcClientSettings: GrpcClientSettings)(implicit ec: ExecutionContext, mat: Materializer)
-    extends EntityTypeSupportFactory {
+    extends EntityTypeSupportFactory
+    with JdbcStoreFactory {
 
   private final val log = Logging.getLogger(system, this.getClass)
 
@@ -53,8 +54,7 @@ class CrudSupportFactory(system: ActorSystem,
                                                       config.passivationTimeout,
                                                       config.relayOutputBufferSize)
 
-    val store = new JdbcStoreFactory(config.config).buildCrudStore()
-    val repository = new JdbcRepositoryImpl(store)
+    val repository = new JdbcRepositoryImpl(buildCrudStore(config.config))
 
     log.debug("Starting CrudEntity for {}", entity.persistenceId)
     val clusterSharding = ClusterSharding(system)

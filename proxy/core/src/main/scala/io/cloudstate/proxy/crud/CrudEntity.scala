@@ -26,7 +26,6 @@ import akka.pattern.pipe
 import akka.stream.scaladsl._
 import akka.stream.{CompletionStrategy, Materializer, OverflowStrategy}
 import akka.util.Timeout
-import com.google.protobuf.any.{Any => pbAny}
 import io.cloudstate.protocol.crud.CrudAction.Action.{Delete, Update}
 import io.cloudstate.protocol.crud.{
   CrudAction,
@@ -88,7 +87,7 @@ final class CrudEntitySupervisor(client: CrudClient,
             NotUsed
           }
       )
-      .runWith(Sink.actorRef(self, CrudEntity.StreamClosed, CrudEntity.StreamFailed))
+      .runWith(Sink.actorRef(self, CrudEntity.StreamClosed, CrudEntity.StreamFailed.apply))
     context.become(waitingForRelay)
   }
 
@@ -96,17 +95,17 @@ final class CrudEntitySupervisor(client: CrudClient,
     case Relay(relayRef) =>
       // Cluster sharding URL encodes entity ids, so to extract it we need to decode.
       val entityId = URLDecoder.decode(self.path.name, "utf-8")
-      val manager = context.watch(
+      val entity = context.watch(
         context
           .actorOf(CrudEntity.props(configuration, entityId, relayRef, repository), "entity")
       )
-      context.become(forwarding(manager, relayRef))
+      context.become(forwarding(entity, relayRef))
       unstashAll()
     case _ => stash()
   }
 
-  private[this] final def forwarding(manager: ActorRef, relay: ActorRef): Receive = {
-    case Terminated(`manager`) =>
+  private[this] final def forwarding(entity: ActorRef, relay: ActorRef): Receive = {
+    case Terminated(`entity`) =>
       if (streamTerminated) {
         context.stop(self)
       } else {
@@ -114,19 +113,19 @@ final class CrudEntitySupervisor(client: CrudClient,
         context.become(stopping)
       }
 
-    case toParent if sender() == manager =>
-      context.parent ! toParent
+    case message if sender() == entity =>
+      context.parent ! message
 
     case CrudEntity.StreamClosed =>
       streamTerminated = true
-      manager forward CrudEntity.StreamClosed
+      entity forward CrudEntity.StreamClosed
 
     case failed: CrudEntity.StreamFailed =>
       streamTerminated = true
-      manager forward failed
+      entity forward failed
 
-    case msg =>
-      manager forward msg
+    case message =>
+      entity forward message
   }
 
   private def stopping: Receive = {
@@ -159,10 +158,12 @@ object CrudEntity {
       replyTo: ActorRef
   )
 
-  private case object LoadInitStateSuccess
-  private case class LoadInitStateFailure(cause: Throwable)
-  private case object SaveStateSuccess
-  private case object AlreadyInitialized
+  private case class ReadStateSuccess(initialized: Boolean)
+  private case class ReadStateFailure(cause: Throwable)
+
+  private sealed trait DatabaseOperationWriteStatus
+  private case object WriteStateSuccess extends DatabaseOperationWriteStatus
+  private case class WriteStateFailure(cause: Throwable) extends DatabaseOperationWriteStatus
 
   final def props(configuration: Configuration, entityId: String, relay: ActorRef, repository: JdbcRepository): Props =
     Props(new CrudEntity(configuration, entityId, relay, repository))
@@ -202,7 +203,6 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
     repository
       .get(Key(persistenceId, entityId))
       .map { state =>
-        // related to the first access to the database when the actor starts
         if (!inited) {
           relay ! CrudStreamIn(
             CrudStreamIn.Message.Init(
@@ -214,13 +214,11 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
             )
           )
           inited = true
-          CrudEntity.LoadInitStateSuccess
-        } else {
-          CrudEntity.AlreadyInitialized
         }
+        CrudEntity.ReadStateSuccess(inited)
       }
       .recover {
-        case error => CrudEntity.LoadInitStateFailure(error)
+        case error => CrudEntity.ReadStateFailure(error)
       }
       .pipeTo(self)
 
@@ -245,7 +243,7 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       case null =>
       case req => req.replyTo ! createFailure(msg)
     }
-    val errorNotification = createFailure("Entity terminated")
+    val errorNotification = createFailure("CRUD Entity terminated")
     stashedCommands.foreach {
       case (_, replyTo) => replyTo ! errorNotification
     }
@@ -281,24 +279,20 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       clientAction = Some(ClientAction(ClientAction.Action.Failure(Failure(description = message))))
     )
 
-  override final def receive: PartialFunction[Any, Unit] = waitingForInitState
+  override final def receive: Receive = {
+    case CrudEntity.ReadStateSuccess(initialize) =>
+      if (initialize) {
+        context.become(running)
+        unstashAll()
+      }
 
-  private def waitingForInitState: PartialFunction[Any, Unit] = {
-    case CrudEntity.LoadInitStateSuccess =>
-      context.become(initialized)
-      unstashAll()
-
-    case CrudEntity.AlreadyInitialized =>
-    // ignore entity already initialized
-
-    case CrudEntity.LoadInitStateFailure(error) =>
-      crash("Unexpected CRUD entity failure",
-            s"(cannot load the initial state due to unexpected failure) - ${error.getMessage}")
+    case CrudEntity.ReadStateFailure(error) =>
+      throw error
 
     case _ => stash()
   }
 
-  private def initialized: PartialFunction[Any, Unit] = {
+  private def running: Receive = {
 
     case command: EntityCommand if currentCommand != null =>
       stashedCommands = stashedCommands.enqueue((command, sender()))
@@ -323,18 +317,15 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
             currentCommand.replyTo ! esReplyToUfReply(r)
             commandHandled()
           } else {
-            r.crudAction map { a =>
-              performCrudAction(a)
-                .map { _ =>
-                  // Make sure that the current request is still ours
-                  if (currentCommand == null || currentCommand.commandId != commandId) {
-                    crash("Unexpected CRUD entity behavior", "currentRequest changed before the state were persisted")
-                  }
-                  currentCommand.replyTo ! esReplyToUfReply(r)
-                  commandHandled()
-                  CrudEntity.SaveStateSuccess
+            r.crudAction.map { a =>
+              performAction(a) { _ =>
+                // Make sure that the current request is still ours
+                if (currentCommand == null || currentCommand.commandId != commandId) {
+                  crash("Unexpected CRUD entity behavior", "currentRequest changed before the state were persisted")
                 }
-                .pipeTo(self)
+                currentCommand.replyTo ! esReplyToUfReply(r)
+                commandHandled()
+              }.pipeTo(self)
             }
           }
 
@@ -358,6 +349,13 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
           crash("Unexpected CRUD entity failure", "empty or unknown message from entity output stream")
       }
 
+    case CrudEntity.WriteStateSuccess =>
+    // Nothing to do, database write access the native crud database was successful
+
+    case CrudEntity.WriteStateFailure(error) =>
+      notifyOutstandingRequests("Unexpected CRUD entity failure")
+      throw error
+
     case CrudEntity.StreamClosed =>
       notifyOutstandingRequests("Unexpected CRUD entity termination")
       context.stop(self)
@@ -366,25 +364,40 @@ final class CrudEntity(configuration: CrudEntity.Configuration,
       notifyOutstandingRequests("Unexpected CRUD entity termination")
       throw error
 
-    case CrudEntity.SaveStateSuccess =>
-    // Nothing to do, access the native crud database was successful
-
-    case ReceiveTimeout =>
-      context.parent ! ShardRegion.Passivate(stopMessage = CrudEntity.Stop)
-
     case CrudEntity.Stop =>
       stopped = true
       if (currentCommand == null) {
         context.stop(self)
       }
+
+    case ReceiveTimeout =>
+      context.parent ! ShardRegion.Passivate(stopMessage = CrudEntity.Stop)
   }
 
-  private def performCrudAction(crudAction: CrudAction): Future[Unit] =
+  private def performAction(
+      crudAction: CrudAction
+  )(handler: Unit => Unit): Future[CrudEntity.DatabaseOperationWriteStatus] =
     crudAction.action match {
       case Update(CrudUpdate(Some(value), _)) =>
-        repository.update(Key(persistenceId, entityId), value)
+        repository
+          .update(Key(persistenceId, entityId), value)
+          .map { _ =>
+            handler(())
+            CrudEntity.WriteStateSuccess
+          }
+          .recover {
+            case error => CrudEntity.WriteStateFailure(error)
+          }
 
       case Delete(_) =>
-        repository.delete(Key(persistenceId, entityId))
+        repository
+          .delete(Key(persistenceId, entityId))
+          .map { _ =>
+            handler(())
+            CrudEntity.WriteStateSuccess
+          }
+          .recover {
+            case error => CrudEntity.WriteStateFailure(error)
+          }
     }
 }

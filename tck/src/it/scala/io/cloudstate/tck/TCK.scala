@@ -33,13 +33,13 @@ class TCK extends Suites({
     case _ => // All good
   }
 
-   combinations.
+  combinations.
     iterator.
     asScala.
     filter(section => verify(section.getString("name"))).
     map(c => new ManagedCloudStateTCK(TckConfiguration.fromConfig(c))).
     toVector
-  }: _*) with SequentialNestedSuiteExecution
+}: _*) with SequentialNestedSuiteExecution
 
 object ManagedCloudStateTCK {
   def settings(config: TckConfiguration): CloudStateTCK.Settings = {

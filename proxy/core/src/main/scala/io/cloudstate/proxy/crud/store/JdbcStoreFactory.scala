@@ -28,17 +28,17 @@ object JdbcStoreFactory {
   final val JDBC = "jdbc"
 }
 
-class JdbcStoreFactory(config: Config)(implicit ec: ExecutionContext) {
+trait JdbcStoreFactory {
 
-  def buildCrudStore(): JdbcStore[Key, ByteString] =
+  def buildCrudStore(config: Config)(implicit ec: ExecutionContext): JdbcStore[Key, ByteString] =
     config.getString("crud.store-type") match {
       case IN_MEMORY => new JdbcInMemoryStore
-      case JDBC => buildJdbcCrudStore()
+      case JDBC => buildJdbcCrudStore(config)
       case other =>
         throw new IllegalArgumentException(s"CRUD store-type must be one of: ${IN_MEMORY} or ${JDBC} but is '$other'")
     }
 
-  private def buildJdbcCrudStore(): JdbcStore[Key, ByteString] = {
+  private def buildJdbcCrudStore(config: Config)(implicit ec: ExecutionContext): JdbcStore[Key, ByteString] = {
     val slickDatabase = JdbcSlickDatabase(config)
     val tableConfiguration = new JdbcCrudStateTableConfiguration(
       config.getConfig("crud.jdbc-state-store")

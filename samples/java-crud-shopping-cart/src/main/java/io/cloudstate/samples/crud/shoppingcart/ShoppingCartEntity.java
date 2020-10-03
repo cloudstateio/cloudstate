@@ -30,7 +30,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /** A CRUD entity. */
-@CrudEntity
+@CrudEntity(persistenceId = "crud-shopping-cart")
 public class ShoppingCartEntity {
 
   private final String entityId;
@@ -75,11 +75,7 @@ public class ShoppingCartEntity {
   }
 
   @CommandHandler
-  public Empty removeCart(
-      Shoppingcart.RemoveShoppingCart cartItem, CommandContext<Domain.Cart> ctx) {
-    if (!entityId.equals(cartItem.getUserId())) {
-      ctx.fail("Cannot remove unknown cart " + cartItem.getUserId());
-    }
+  public Empty removeCart(Shoppingcart.RemoveShoppingCart cart, CommandContext<Domain.Cart> ctx) {
     ctx.deleteState();
     return Empty.getDefaultInstance();
   }

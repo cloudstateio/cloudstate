@@ -16,11 +16,12 @@
 
 package io.cloudstate.javasupport.impl.crud
 
-import akka.testkit.{EventFilter, SocketUtil}
+import akka.testkit.EventFilter
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.javasupport.{CloudState, CloudStateRunner}
 import scala.reflect.ClassTag
+import io.cloudstate.testkit.Sockets
 
 object TestCrud {
   def service[T: ClassTag](descriptor: ServiceDescriptor, fileDescriptors: FileDescriptor*): TestCrudService =
@@ -28,7 +29,7 @@ object TestCrud {
 }
 
 class TestCrudService(entityClass: Class[_], descriptor: ServiceDescriptor, fileDescriptors: Seq[FileDescriptor]) {
-  val port: Int = SocketUtil.temporaryLocalPort()
+  val port: Int = Sockets.temporaryLocalPort()
 
   val config: Config = ConfigFactory.load(ConfigFactory.parseString(s"""
     cloudstate.user-function-port = $port

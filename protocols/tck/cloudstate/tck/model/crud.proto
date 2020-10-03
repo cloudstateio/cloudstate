@@ -1,0 +1,128 @@
+// Copyright 2019 Lightbend Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//
+// == Cloudstate TCK model test for event-sourced entities ==
+//
+
+syntax = "proto3";
+
+package cloudstate.tck.model.crud;
+
+import "cloudstate/entity_key.proto";
+
+option java_package = "io.cloudstate.tck.model.crud";
+
+//
+// The `CrudTckModel` service should be implemented in the following ways:
+//
+// - The entity persistence-id must be `crud-tck-model`.
+// - The state of the entity is simply a string.
+// - The state string values is wrapped in `Persisted` messages.
+// - The command handler must set the state to the value of a `Persisted` message.
+// - The `Process` method receives a `Request` message with actions to take.
+// - Request actions must be processed in order, and can require updating state, deleting state, forwarding, side effects, or failing.
+// - The `Process` method must reply with the state in a `Response`, after taking actions, unless forwarding or failing.
+// - Forwarding and side effects must always be made to the second service `CrudTwo`.
+//
+service CrudTckModel {
+  rpc Process(Request) returns (Response);
+}
+
+//
+// The `CrudTwo` service is only for verifying forward actions and side effects.
+// The `Call` method is not required to do anything, and may simply return an empty `Response` message.
+//
+service CrudTwo {
+  rpc Call(Request) returns (Response);
+}
+
+//
+// A `Request` message contains any actions that the entity should process.
+// Actions must be processed in order. Any actions after a `Fail` may be ignored.
+//
+message Request {
+  string id = 1 [(.cloudstate.entity_key) = true];
+  repeated RequestAction actions = 2;
+}
+
+//
+// Each `RequestAction` is one of:
+//
+// - Update: update the state, with a given value.
+// - Delete: delete the state.
+// - Forward: forward to another service, in place of replying with a Response.
+// - Effect: add a side effect to another service to the reply.
+// - Fail: fail the current `Process` command.
+//
+message RequestAction {
+  oneof action {
+    Update update = 1;
+    Delete delete = 2;
+    Forward forward = 3;
+    Effect effect = 4;
+    Fail fail = 5;
+  }
+}
+
+//
+// Update the state, with the state value in a `Persisted` message.
+//
+message Update {
+  string value = 1;
+}
+
+//
+// Delete an the state with a `Persisted` message.
+//
+message Delete {}
+
+//
+// Replace the response with a forward to `cloudstate.tck.model.CrudTwo/Call`.
+// The payload must be a `Request` message with the given `id`.
+//
+message Forward {
+  string id = 1;
+}
+
+//
+// Add a side effect to the reply, to `cloudstate.tck.model.CrudTwo/Call`.
+// The payload must be a `Request` message with the given `id`.
+// The side effect should be marked synchronous based on the given `synchronous` value.
+//
+message Effect {
+  string id = 1;
+  bool synchronous = 2;
+}
+
+//
+// Fail the current command with the given description `message`.
+//
+message Fail {
+  string message = 1;
+}
+
+//
+// The `Response` message for the `Process` must contain the current state (after processing actions).
+//
+message Response {
+  string message = 1;
+}
+
+//
+// The `Persisted` message wraps both state value.
+//
+message Persisted {
+  string value = 1;
+}
