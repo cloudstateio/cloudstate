@@ -21,7 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// StatefulStoreSpec defines the desired state of StatefulStore
+// StatefulStoreSpec defines the desired state of StatefulStore.
 type StatefulStoreSpec struct {
 	// InMemory store will keep everything in memory. This is the simplest
 	// option to get started, but must not be used in production.
@@ -53,7 +53,7 @@ type PostgresStore struct {
 	// +optional
 	Port int32 `json:"port,omitempty"`
 
-	// Credentials for the postgres instance.
+	// Credentials for the Postgres instance.
 	// +optional
 	Credentials *PostgresCredentials `json:"credentials,omitempty"`
 
@@ -63,7 +63,7 @@ type PostgresStore struct {
 	GoogleCloudSQL *GoogleCloudSQLPostgresStore `json:"googleCloudSql,omitempty"`
 }
 
-// PostgresCredentials is the credentials for a postgres instance.
+// PostgresCredentials is the credentials for a Postgres instance.
 type PostgresCredentials struct {
 	// Secret is the name of a secret in the local namespace to load the credentials from.
 	// +optional
@@ -89,7 +89,7 @@ type GoogleCloudSQLPostgresStore struct {
 	// +optional
 	Name string `json:"name,omitempty"`
 
-	// The number of cores the postgres instance should use.
+	// The number of cores the Postgres instance should use.
 	// Must be 1, or an even number between 2 and 64.
 	// Defaults to 1.
 	// Modifiable after creation but will take store offline for several minutes.
@@ -98,9 +98,8 @@ type GoogleCloudSQLPostgresStore struct {
 	// +optional
 	Cores int32 `json:"cores,omitempty"`
 
-	// The amount of memory the postgres instance should have.
-	// Must be between 0.9 GiB and 6.5 GiB per vCPU, and must be
-	// a multiple of 256 MiB, and at least 3.75 GiB.
+	// The amount of memory the Postgres instance should have.
+	// Must be between 0.9 GiB and 6.5 GiB per vCPU, and must be	// a multiple of 256 MiB, and at least 3.75 GiB.
 	// Defaults to 3.75 GiB.
 	// Modifiable after creation but will take store offline for several minutes.
 	// +optional
@@ -228,7 +227,7 @@ type CassandraCredentials struct {
 	KeyspaceKey string `json:"keyspaceKey,omitempty"`
 }
 
-// StatefulStoreStatus defines the observed state of StatefulStore
+// StatefulStoreStatus defines the observed state of StatefulStore.
 type StatefulStoreStatus struct {
 	// Summary of the current status.
 	// +optional
@@ -242,7 +241,7 @@ type StatefulStoreStatus struct {
 	Postgres *PostgresStoreStatus `json:"postgres,omitempty"`
 }
 
-// PostgresStoreStatus defines the state of a postgres store
+// PostgresStoreStatus defines the state of a postgres store.
 type PostgresStoreStatus struct {
 
 	// GoogleCloudSQL is the status of the managed Google Cloud SQL Postgres instance.
@@ -250,14 +249,14 @@ type PostgresStoreStatus struct {
 	GoogleCloudSQL *GoogleCloudSQLPostgresStoreStatus `json:"googleCloudSql,omitempty"`
 }
 
-// GoogleCloudSQLPostgresStoreStatus defines the status of a Google Cloud SQL postgres store
+// GoogleCloudSQLPostgresStoreStatus defines the status of a Google Cloud SQL postgres store.
 type GoogleCloudSQLPostgresStoreStatus struct {
 
 	// InstanceName is the name of the instance.
 	InstanceName string `json:"instanceName"`
 }
 
-// StatefulStore is the Schema for the statefulstores API
+// StatefulStore is the Schema for the statefulstores API.
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
@@ -270,7 +269,7 @@ type StatefulStore struct {
 	Status StatefulStoreStatus `json:"status,omitempty"`
 }
 
-// StatefulStoreList contains a list of StatefulStore
+// StatefulStoreList contains a list of StatefulStore.
 // +kubebuilder:object:root=true
 type StatefulStoreList struct {
 	metav1.TypeMeta `json:",inline"`

@@ -1,5 +1,4 @@
 /*
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -17,13 +16,14 @@ package main
 
 import (
 	"flag"
+	"os"
+	"time"
+
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/config"
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/controllers"
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/stores"
 	"github.com/ilyakaznacheev/cleanenv"
-	"os"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"time"
 
 	cloudstatev1alpha1 "github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/apis/v1alpha1"
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/webhooks"
@@ -43,9 +43,7 @@ var (
 
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
-
 	_ = cloudstatev1alpha1.AddToScheme(scheme)
-
 	_ = istio.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
@@ -59,22 +57,22 @@ func readConfigs(cfg *config.OperatorConfig) {
 	if !pathProvided {
 		configPath = "/etc/config/config.yaml"
 	}
-
 	err := cleanenv.ReadConfig(configPath, cfg)
-	if err != nil {
-		if os.IsNotExist(err) {
-			if pathProvided {
-				setupLog.Error(err, "config file not found", "file", configPath)
-				os.Exit(1)
-			} // else we just go with the defaults
-			setupLog.Info("using default configs")
-			return
-		} else {
-			setupLog.Error(err, "error reading config file", "err", err)
-			os.Exit(1)
-		}
+	if err == nil {
+		setupLog.Info("using config", "file", configPath)
+		return
 	}
-	setupLog.Info("using config", "file", configPath)
+	if os.IsNotExist(err) {
+		if pathProvided {
+			setupLog.Error(err, "config file not found", "file", configPath)
+			os.Exit(1)
+		} // else we just go with the defaults.
+		setupLog.Info("using default configs")
+		return
+	}
+
+	setupLog.Error(err, "error reading config file", "err", err)
+	os.Exit(1)
 }
 
 func main() {
@@ -85,7 +83,7 @@ func main() {
 		enableDebugLogs      bool
 	)
 
-	// Setting this here to catch logs from readConfig.  Will reset as appropriate below.
+	// Setting this here to catch logs from readConfig. Will reset as appropriate below.
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
 	}))
@@ -93,16 +91,16 @@ func main() {
 	var cfg config.OperatorConfig
 	readConfigs(&cfg)
 
-	// Todo: Move these two to config file?
+	// TODO: Move these two to config file?
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.DurationVar(&reconcileTimeout, "reconcile-timeout", 60*time.Second, "the max time a reconcile loop can spend")
 	flag.BoolVar(&enableDebugLogs, "debug", true, "Enable debug logs.")
 	// Could override config or env setting with something like this...
-	//flag.StringVar(&cfg.StatefulServiceConfig.InMemoryImageName, "inMemoryImageName", "somedefault", "name of inmemory image")
+	// flag.StringVar(&cfg.StatefulServiceConfig.InMemoryImageName, "inMemoryImageName", "somedefault", "name of inmemory image")
 
-	// Adds documentation about possible env var settings
+	// Adds documentation about possible env var settings.
 	flag.Usage = cleanenv.FUsage(flag.CommandLine.Output(), &cfg, nil, flag.Usage)
 	flag.Parse()
 

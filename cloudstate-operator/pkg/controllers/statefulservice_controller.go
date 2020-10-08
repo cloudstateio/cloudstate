@@ -1,5 +1,4 @@
 /*
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -19,10 +18,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/config"
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/reconciliation"
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/stores"
-	"time"
 
 	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	cloudstate "github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/apis/v1alpha1"
@@ -50,7 +50,7 @@ var (
 	defaultReplicas int32 = 1
 )
 
-// StatefulServiceReconciler reconciles a StatefulService object
+// StatefulServiceReconciler reconciles a StatefulService object.
 type StatefulServiceReconciler struct {
 	client.Client
 	Log              logr.Logger
@@ -76,76 +76,67 @@ func (r *StatefulServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 	log := r.Log.WithValues("statefulservice", req.NamespacedName)
 
 	// Get the stateful service to reconcile.
-	statefulService := &cloudstate.StatefulService{}
-	if err := r.Get(ctx, req.NamespacedName, statefulService); err != nil {
+	var service cloudstate.StatefulService
+	if err := r.Get(ctx, req.NamespacedName, &service); err != nil {
 		log.Error(err, "Unable to fetch StatefulService")
 		return ctrl.Result{}, ignoreNotFound(err)
 	}
 
-	// Get the configmap for the service
-	configMap, err := r.getOrCreateConfigMap(ctx, statefulService)
+	// Get the ConfigMap for the service.
+	configMap, err := r.getOrCreateConfigMap(ctx, &service)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to create ConfigMap: %w", err)
 	}
-	// Parse the config
-	ssConfig, err := config.ParseStatefulServiceFromConfigMapWithDefaults(configMap)
+	// Parse the config.
+	config, err := config.ParseStatefulServiceFromConfigMapWithDefaults(configMap)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to parse config from ConfigMap: %w", err)
 	}
-
 	// Get owned deployment.
-	obj, err := reconciliation.GetControlledStructured(ctx, r, statefulService, &appsv1.DeploymentList{})
+	obj, err := reconciliation.GetControlledStructured(ctx, r, &service, &appsv1.DeploymentList{})
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	var actualDeployment *appsv1.Deployment
+	var actual *appsv1.Deployment
 	if obj != nil {
-		actualDeployment = obj.(*appsv1.Deployment)
+		var ok bool
+		if actual, ok = obj.(*appsv1.Deployment); !ok {
+			return ctrl.Result{}, fmt.Errorf("controlled structured: %+v is no appsv1.Deployment: %w", obj, err)
+		}
 	}
-
-	// Tweak statefulservice if need be
-	if err := r.checkStatefulService(ctx, statefulService); err != nil {
+	// Tweak statefulservice if need be.
+	if err := r.checkStatefulService(ctx, &service); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to fixup statefulservice: %w", err)
 	}
-
 	// Create service for deployment pods.
-	_, err = r.reconcileService(ctx, statefulService)
-	if err != nil {
+	if _, err := r.reconcileService(ctx, &service); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to reconcile service: %w", err)
 	}
-
-	// Create HPA for pods
-	err = r.reconcileHpa(ctx, statefulService, ssConfig)
-	if err != nil {
+	// Create HPA for pods.
+	if err := r.reconcileHpa(ctx, &service, config); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to reconcile horizontal pod autoscaler: %w", err)
 	}
-
-	err = r.reconcileRoleAndBinding(ctx, log, statefulService.Namespace)
-	if err != nil {
+	if err := r.reconcileRoleAndBinding(ctx, log, service.Namespace); err != nil {
 		return ctrl.Result{}, fmt.Errorf("unable to reconcile role and role binding: %w", err)
 	}
-
-	// Create desired deployment.
-	desiredDeployment, err := r.createDesiredDeployment(statefulService, ssConfig)
+	desired, err := r.createDesiredDeployment(&service, config)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
-	conditions, err := r.Stores.ReconcileStatefulService(ctx, statefulService, desiredDeployment)
+	conditions, err := r.Stores.ReconcileStatefulService(ctx, &service, desired)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
-	if err = r.updateStatus(ctx, log, statefulService, actualDeployment, conditions); err != nil {
+	if err := r.updateStatus(ctx, log, &service, actual, conditions); err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Update last applied annotation to detect when updates happen.
-	setLastApplied(desiredDeployment)
+	setLastApplied(desired)
 
 	// Create new deployment
-	if actualDeployment == nil {
-		if err := r.Create(ctx, desiredDeployment); err != nil {
+	if actual == nil {
+		if err := r.Create(ctx, desired); err != nil {
 			if apierrs.IsAlreadyExists(err) {
 				log.V(1).Info("Deployment creation already in progress, skipping")
 				return ctrl.Result{}, nil
@@ -158,26 +149,21 @@ func (r *StatefulServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 	}
 
 	// Check if needs update.
-	if !needsUpdate(log.WithValues("type", "deployment"), actualDeployment, desiredDeployment) {
+	if !needsUpdate(log.WithValues("type", "deployment"), actual, desired) {
 		log.V(1).Info("No change in deployment")
 		return ctrl.Result{}, nil
 	}
 
-	if err := r.Update(ctx, desiredDeployment); err != nil {
+	if err := r.Update(ctx, desired); err != nil {
 		log.Error(err, "Unable to update deployment")
 		return ctrl.Result{}, err
 	}
 
 	log.Info("Updated deployment")
 	return ctrl.Result{}, nil
-
 }
 
-func (r *StatefulServiceReconciler) getOrCreateConfigMap(
-	ctx context.Context,
-	statefulService *cloudstate.StatefulService,
-) (*corev1.ConfigMap, error) {
-
+func (r *StatefulServiceReconciler) getOrCreateConfigMap(ctx context.Context, statefulService *cloudstate.StatefulService) (*corev1.ConfigMap, error) {
 	obj, err := reconciliation.GetControlledStructured(ctx, r, statefulService, &corev1.ConfigMapList{})
 	if err != nil {
 		return nil, err
@@ -201,37 +187,34 @@ func (r *StatefulServiceReconciler) getOrCreateConfigMap(
 	return configMap, r.Create(ctx, configMap)
 }
 
-func (r *StatefulServiceReconciler) createDesiredDeployment(statefulService *cloudstate.StatefulService,
-	ssConfig *config.StatefulServiceConfig) (*appsv1.Deployment, error) {
-
-	containers := make([]corev1.Container, len(statefulService.Spec.Containers))
-	copy(containers, statefulService.Spec.Containers)
-	if containers[0].Name == "" {
+func (r *StatefulServiceReconciler) createDesiredDeployment(service *cloudstate.StatefulService, config *config.StatefulServiceConfig) (*appsv1.Deployment, error) {
+	containers := make([]corev1.Container, len(service.Spec.Containers))
+	copy(containers, service.Spec.Containers)
+	if len(containers) > 0 && containers[0].Name == "" {
 		containers[0].Name = "user-function"
 	}
-
-	desiredDeployment := &appsv1.Deployment{
+	desired := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        statefulService.Name,
-			Namespace:   statefulService.Namespace,
+			Name:        service.Name,
+			Namespace:   service.Namespace,
 			Labels:      make(map[string]string),
 			Annotations: make(map[string]string),
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: statefulService.Spec.Replicas,
+			Replicas: service.Spec.Replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					CloudstateStatefulServiceLabel: statefulService.Name,
+					CloudstateStatefulServiceLabel: service.Name,
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						CloudstateStatefulServiceLabel: statefulService.Name,
+						CloudstateStatefulServiceLabel: service.Name,
 					},
 					Annotations: map[string]string{
 						CloudstateEnabledAnnotation:               "true",
-						CloudstateStatefulServiceConfigAnnotation: "ss-cfg-" + statefulService.Name,
+						CloudstateStatefulServiceConfigAnnotation: "ss-cfg-" + service.Name,
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -241,27 +224,25 @@ func (r *StatefulServiceReconciler) createDesiredDeployment(statefulService *clo
 		},
 	}
 
-	if statefulService.Spec.StoreConfig != nil && statefulService.Spec.StoreConfig.StatefulStore.Name != "" {
-		desiredDeployment.Spec.Template.Annotations[stores.CloudstateStatefulStoreAnnotation] = statefulService.Spec.StoreConfig.StatefulStore.Name
+	if service.Spec.StoreConfig != nil && service.Spec.StoreConfig.StatefulStore.Name != "" {
+		desired.Spec.Template.Annotations[stores.CloudstateStatefulStoreAnnotation] = service.Spec.StoreConfig.StatefulStore.Name
 	}
-
-	reconciliation.SetCommonLabels(statefulService.Name, desiredDeployment.Labels)
-	if err := ctrl.SetControllerReference(statefulService, desiredDeployment, r.Scheme); err != nil {
+	reconciliation.SetCommonLabels(service.Name, desired.Labels)
+	if err := ctrl.SetControllerReference(service, desired, r.Scheme); err != nil {
 		return nil, fmt.Errorf("unable to set owner: %w", err)
 	}
-	if statefulService.Spec.Replicas == nil {
-		desiredDeployment.Spec.Replicas = &defaultReplicas
+	if service.Spec.Replicas == nil {
+		desired.Spec.Replicas = &defaultReplicas
 	}
-
 	// Create pod template for deployment.
-	reconciliation.SetCommonLabels(statefulService.Name, desiredDeployment.Spec.Template.Labels)
-	return desiredDeployment, nil
+	reconciliation.SetCommonLabels(service.Name, desired.Spec.Template.Labels)
+	return desired, nil
 }
 
 // setLastApplied sets the last applied annotation to the value of the desired object.
 func setLastApplied(desired runtime.Object) {
 	if err := patch.DefaultAnnotator.SetLastAppliedAnnotation(desired); err != nil {
-		panic(err)
+		panic(err) // TODO(review comment): is this needed, if yes explain why.
 	}
 }
 
@@ -271,23 +252,19 @@ func setLastApplied(desired runtime.Object) {
 func needsUpdate(log logr.Logger, actual, desired runtime.Object) bool {
 	if !lastAppliedConfigExists(desired) {
 		// Precondition is that the lastApplied annotation is set on desired.
-		panic("lastApplied was not set on desired")
+		panic("lastApplied was not set on desired") // TODO(review comment): is this needed, if yes explain why.
 	}
-
 	if deletionTimestampExists(actual) {
 		return false
 	}
-
 	if !lastAppliedConfigExists(actual) {
 		// No lastApplied annotation on actual state - update is needed.
 		return true
 	}
-
 	patchResult, err := patch.DefaultPatchMaker.Calculate(actual, desired)
 	if err != nil {
-		panic(err)
+		panic(err) // TODO(review comment): is this needed, if yes explain why.
 	}
-
 	if !patchResult.IsEmpty() {
 		log.V(1).Info("changed", "patchResult", patchResult.String())
 		return true
@@ -298,7 +275,7 @@ func needsUpdate(log logr.Logger, actual, desired runtime.Object) bool {
 func lastAppliedConfigExists(obj runtime.Object) bool {
 	anno, err := meta.NewAccessor().Annotations(obj)
 	if err != nil {
-		panic(err)
+		panic(err) // TODO(review comment): is this needed, if yes explain why.
 	}
 	_, exists := anno[patch.LastAppliedConfig]
 	return exists
@@ -307,16 +284,12 @@ func lastAppliedConfigExists(obj runtime.Object) bool {
 func deletionTimestampExists(obj runtime.Object) bool {
 	a, err := meta.Accessor(obj)
 	if err != nil {
-		panic(err)
+		panic(err) // TODO(review comment): is this needed, if yes explain why.
 	}
 	return !a.GetDeletionTimestamp().IsZero()
 }
 
-func (r *StatefulServiceReconciler) reconcileService(
-	ctx context.Context,
-	statefulService *cloudstate.StatefulService,
-) (*corev1.Service, error) {
-
+func (r *StatefulServiceReconciler) reconcileService(ctx context.Context, statefulService *cloudstate.StatefulService) (*corev1.Service, error) {
 	obj, err := reconciliation.GetControlledStructured(ctx, r, statefulService, &corev1.ServiceList{})
 	if err != nil {
 		return nil, err
@@ -355,7 +328,6 @@ func (r *StatefulServiceReconciler) reconcileService(
 	if err := ctrl.SetControllerReference(statefulService, desired, r.Scheme); err != nil {
 		return nil, err
 	}
-
 	if actual == nil {
 		return desired, r.Create(ctx, desired)
 	}
@@ -365,71 +337,59 @@ func (r *StatefulServiceReconciler) reconcileService(
 	return desired, r.Update(ctx, desired)
 }
 
-func (r *StatefulServiceReconciler) reconcileHpa(
-	ctx context.Context,
-	statefulService *cloudstate.StatefulService,
-	ssConfig *config.StatefulServiceConfig,
-) error {
-
-	obj, err := reconciliation.GetControlledStructured(ctx, r, statefulService, &autoscalingv2beta2.HorizontalPodAutoscalerList{})
+func (r *StatefulServiceReconciler) reconcileHpa(ctx context.Context, service *cloudstate.StatefulService, config *config.StatefulServiceConfig) error {
+	obj, err := reconciliation.GetControlledStructured(ctx, r, service, &autoscalingv2beta2.HorizontalPodAutoscalerList{})
 	if err != nil {
 		return err
 	}
-
-	if ssConfig.Autoscaler.Enabled {
-		var actual *autoscalingv2beta2.HorizontalPodAutoscaler
-		if obj != nil {
-			actual = obj.(*autoscalingv2beta2.HorizontalPodAutoscaler)
-		}
-
-		desired := &autoscalingv2beta2.HorizontalPodAutoscaler{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      statefulService.Name,
-				Namespace: statefulService.Namespace,
-			},
-			Spec: autoscalingv2beta2.HorizontalPodAutoscalerSpec{
-				ScaleTargetRef: autoscalingv2beta2.CrossVersionObjectReference{
-					APIVersion: statefulService.APIVersion,
-					Kind:       statefulService.Kind,
-					Name:       statefulService.Name,
-				},
-				MinReplicas: &ssConfig.Autoscaler.MinReplicas,
-				MaxReplicas: ssConfig.Autoscaler.MaxReplicas,
-				Metrics: []autoscalingv2beta2.MetricSpec{
-					{
-						Type: autoscalingv2beta2.ResourceMetricSourceType,
-						Resource: &autoscalingv2beta2.ResourceMetricSource{
-							Name: corev1.ResourceCPU,
-							Target: autoscalingv2beta2.MetricTarget{
-								Type:               autoscalingv2beta2.UtilizationMetricType,
-								AverageUtilization: &ssConfig.Autoscaler.CpuUtilizationThreshold,
-							},
-						},
-					},
-				},
-			},
-		}
-
-		if err := ctrl.SetControllerReference(statefulService, desired, r.Scheme); err != nil {
-			return err
-		}
-		setLastApplied(desired)
-
-		if actual == nil {
-			return r.Create(ctx, desired)
-		}
-
-		if !needsUpdate(r.Log.WithValues("type", "HorizontalPodAutoscaler"), actual, desired) {
-			return nil
-		}
-
-		return r.Update(ctx, desired)
-	} else {
+	if !config.Autoscaler.Enabled {
 		if obj != nil {
 			return r.Delete(ctx, obj)
 		}
 		return nil
 	}
+	var actual *autoscalingv2beta2.HorizontalPodAutoscaler
+	if obj != nil {
+		actual = obj.(*autoscalingv2beta2.HorizontalPodAutoscaler)
+	}
+	desired := &autoscalingv2beta2.HorizontalPodAutoscaler{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      service.Name,
+			Namespace: service.Namespace,
+		},
+		Spec: autoscalingv2beta2.HorizontalPodAutoscalerSpec{
+			ScaleTargetRef: autoscalingv2beta2.CrossVersionObjectReference{
+				APIVersion: service.APIVersion,
+				Kind:       service.Kind,
+				Name:       service.Name,
+			},
+			MinReplicas: &config.Autoscaler.MinReplicas,
+			MaxReplicas: config.Autoscaler.MaxReplicas,
+			Metrics: []autoscalingv2beta2.MetricSpec{
+				{
+					Type: autoscalingv2beta2.ResourceMetricSourceType,
+					Resource: &autoscalingv2beta2.ResourceMetricSource{
+						Name: corev1.ResourceCPU,
+						Target: autoscalingv2beta2.MetricTarget{
+							Type:               autoscalingv2beta2.UtilizationMetricType,
+							AverageUtilization: &config.Autoscaler.CPUUtilizationThreshold,
+						},
+					},
+				},
+			},
+		},
+	}
+	if err := ctrl.SetControllerReference(service, desired, r.Scheme); err != nil {
+		return err
+	}
+	setLastApplied(desired)
+	if actual == nil {
+		return r.Create(ctx, desired)
+	}
+	if !needsUpdate(r.Log.WithValues("type", "HorizontalPodAutoscaler"), actual, desired) {
+		return nil
+	}
+	return r.Update(ctx, desired)
 }
 
 // checkStatefulService modifies the StatefulService if need be.
@@ -444,17 +404,11 @@ func (r *StatefulServiceReconciler) checkStatefulService(ctx context.Context, st
 	return nil
 }
 
-func (r *StatefulServiceReconciler) reconcileRoleAndBinding(
-	ctx context.Context,
-	log logr.Logger,
-	namespace string,
-) error {
-
-	actualRole := &rbacv1.Role{}
+func (r *StatefulServiceReconciler) reconcileRoleAndBinding(ctx context.Context, log logr.Logger, namespace string) error {
 	err := r.Client.Get(ctx, client.ObjectKey{
 		Name:      "cloudstate-pod-reader",
 		Namespace: namespace,
-	}, actualRole)
+	}, &rbacv1.Role{})
 	if err != nil && apierrs.IsNotFound(err) {
 		desiredRole := &rbacv1.Role{
 			ObjectMeta: metav1.ObjectMeta{
@@ -469,7 +423,6 @@ func (r *StatefulServiceReconciler) reconcileRoleAndBinding(
 				},
 			},
 		}
-
 		if err := r.Client.Create(ctx, desiredRole); err != nil {
 			return err
 		}
@@ -477,11 +430,10 @@ func (r *StatefulServiceReconciler) reconcileRoleAndBinding(
 		return err
 	}
 
-	actualBinding := &rbacv1.RoleBinding{}
 	err = r.Client.Get(ctx, client.ObjectKey{
 		Name:      "cloudstate-pod-reader-binding",
 		Namespace: namespace,
-	}, actualBinding)
+	}, &rbacv1.RoleBinding{})
 	if err != nil && apierrs.IsNotFound(err) {
 		desiredBinding := &rbacv1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
@@ -500,7 +452,6 @@ func (r *StatefulServiceReconciler) reconcileRoleAndBinding(
 				},
 			},
 		}
-
 		if err := r.Client.Create(ctx, desiredBinding); err != nil {
 			return err
 		}
@@ -511,18 +462,9 @@ func (r *StatefulServiceReconciler) reconcileRoleAndBinding(
 	return nil
 }
 
-func (r *StatefulServiceReconciler) updateStatus(
-	ctx context.Context,
-	log logr.Logger,
-	statefulService *cloudstate.StatefulService,
-	deployment *appsv1.Deployment,
-	conditions []cloudstate.CloudstateCondition,
-) error {
-
-	origStatus := statefulService.Status.DeepCopy()
-
-	statefulService.Status.Selector = CloudstateStatefulServiceLabel + "=" + statefulService.Name
-
+func (r *StatefulServiceReconciler) updateStatus(ctx context.Context, log logr.Logger, service *cloudstate.StatefulService, deployment *appsv1.Deployment, conditions []cloudstate.CloudstateCondition) error {
+	origStatus := service.Status.DeepCopy()
+	service.Status.Selector = CloudstateStatefulServiceLabel + "=" + service.Name
 	condition := cloudstate.CloudstateCondition{
 		Type: cloudstate.CloudstateNotReady,
 	}
@@ -531,7 +473,7 @@ func (r *StatefulServiceReconciler) updateStatus(
 		condition.Status = corev1.ConditionTrue
 		condition.Reason = "Unavailable"
 		condition.Message = "Application is not running yet"
-		statefulService.Status.Replicas = 0
+		service.Status.Replicas = 0
 	} else {
 		log.V(1).Info("Inspecting status",
 			"spec.replicas", *deployment.Spec.Replicas,
@@ -544,7 +486,6 @@ func (r *StatefulServiceReconciler) updateStatus(
 		allReplicasUpToDate := deployment.Status.Replicas == deployment.Status.UpdatedReplicas
 		// replicas are all available?
 		allReplicasAvailable := deployment.Status.Replicas == deployment.Status.AvailableReplicas
-
 		if desiredNumberOfReplicas && allReplicasUpToDate && allReplicasAvailable {
 			condition.Status = corev1.ConditionFalse
 			condition.Reason = "Ready"
@@ -564,27 +505,23 @@ func (r *StatefulServiceReconciler) updateStatus(
 			}
 		}
 
-		statefulService.Status.Replicas = deployment.Status.AvailableReplicas
-
+		service.Status.Replicas = deployment.Status.AvailableReplicas
 	}
-
 	conditions = append(conditions, condition)
 
-	// The summary is the reason for the first true (ie, failing) condition, or Ready otherwise
-	statefulService.Status.Summary = "Ready"
-	for idx := range conditions {
-		if conditions[idx].Status == corev1.ConditionTrue {
-			statefulService.Status.Summary = conditions[idx].Reason
+	// The summary is the reason for the first true (ie, failing) condition, or Ready otherwise.
+	service.Status.Summary = "Ready"
+	for _, cond := range conditions {
+		if cond.Status == corev1.ConditionTrue {
+			service.Status.Summary = cond.Reason
 			break
 		}
 	}
-
-	updated := reconciliation.ReconcileStatefulServiceConditions(statefulService.Status.Conditions, conditions)
-
+	updated := reconciliation.ReconcileStatefulServiceConditions(service.Status.Conditions, conditions)
 	if len(updated) == 0 &&
-		origStatus.Replicas == statefulService.Status.Replicas &&
-		origStatus.Summary == statefulService.Status.Summary &&
-		origStatus.Selector == statefulService.Status.Selector {
+		origStatus.Replicas == service.Status.Replicas &&
+		origStatus.Summary == service.Status.Summary &&
+		origStatus.Selector == service.Status.Selector {
 		// do nothing - no changes
 		log.V(1).Info("No status update")
 		return nil
@@ -592,14 +529,14 @@ func (r *StatefulServiceReconciler) updateStatus(
 
 	// update status
 	if len(updated) > 0 {
-		statefulService.Status.Conditions = updated
+		service.Status.Conditions = updated
 	}
-	if err := r.Status().Update(ctx, statefulService); err != nil {
+	if err := r.Status().Update(ctx, service); err != nil {
 		return err
 	}
 	log.Info("Updated status",
-		"replicas", statefulService.Status.Replicas,
-		"summary", statefulService.Status.Summary)
+		"replicas", service.Status.Replicas,
+		"summary", service.Status.Summary)
 	return nil
 }
 
@@ -622,10 +559,8 @@ func (r *StatefulServiceReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Secret{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&autoscalingv2beta2.HorizontalPodAutoscaler{})
-
 	if err := r.Stores.SetupWithStatefulServiceController(builder); err != nil {
 		return err
 	}
-
 	return builder.Complete(r)
 }
