@@ -18,12 +18,13 @@ package io.cloudstate.proxy
 
 import akka.actor.ActorSystem
 import akka.testkit.TestEvent.Mute
-import akka.testkit.{EventFilter, SocketUtil, TestKit}
+import akka.testkit.{EventFilter, TestKit}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.protocol.crdt.Crdt
 import io.cloudstate.protocol.entity.ProxyInfo
 import io.cloudstate.protocol.event_sourced.EventSourced
 import io.cloudstate.protocol.action.ActionProtocol
+import io.cloudstate.testkit.Sockets
 import java.net.{ConnectException, Socket}
 import scala.concurrent.duration._
 
@@ -32,7 +33,7 @@ object TestProxy {
 }
 
 class TestProxy(servicePort: Int) {
-  val port: Int = SocketUtil.temporaryLocalPort()
+  val port: Int = Sockets.temporaryLocalPort()
 
   val config: Config = ConfigFactory.load(ConfigFactory.parseString(s"""
     include "dev-mode"

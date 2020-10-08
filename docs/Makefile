@@ -5,59 +5,55 @@ upstream := cloudstateio/cloudstate
 branch   := docs/current
 sources  := src src/shared build/src/managed
 
+cloudstate_antora_download := https://github.com/cloudstateio/cloudstate-antora/raw/master/cloudstate-antora
 cloudstate_antora := .cache/bin/cloudstate-antora
+descriptor := build/site.yml
+src_managed := build/src/managed
+managed_partials := ${src_managed}/modules/ROOT/partials
 
 .SILENT:
 
 build: clean managed validate html
 
-install:
-	[ -f ${cloudstate_antora} ] || ( \
-		mkdir -p .cache/bin ;\
-		curl -Lo ${cloudstate_antora} https://github.com/cloudstateio/cloudstate-antora/raw/master/cloudstate-antora ;\
-		chmod +x ${cloudstate_antora} )
+${cloudstate_antora}:
+	mkdir -p $$(dirname ${cloudstate_antora})
+	curl -Lo ${cloudstate_antora} ${cloudstate_antora_download}
+	chmod +x ${cloudstate_antora}
 
 clean-cache:
 	rm -rf .cache
 
-update: clean-cache install
+update: clean-cache ${cloudstate_antora}
 
-clean: install
+clean: ${cloudstate_antora}
 	${cloudstate_antora} clean
 
 managed: attributes
-	mkdir -p build/src/managed
-	cp src/shared/antora.yml build/src/managed/antora.yml
+	mkdir -p "${src_managed}"
+	cp src/shared/antora.yml "${src_managed}/antora.yml"
 
-attributes: install
-	mkdir -p build/src/managed/modules/ROOT/partials
+attributes: ${cloudstate_antora}
+	mkdir -p "${managed_partials}"
 	${cloudstate_antora} version | xargs -0  printf ":cloudstate-version: %s" \
-		> build/src/managed/modules/ROOT/partials/attributes.adoc
+		> "${managed_partials}/attributes.adoc"
 
-descriptor: install
-	[ -f "build/site.yml" ] || ( \
-		mkdir -p build ;\
-		${cloudstate_antora} source --preview --upstream ${upstream} ${sources} > build/source.yml ;\
-		${cloudstate_antora} site --preview --exclude ${module} build/source.yml > build/site.yml )
+${descriptor}: ${cloudstate_antora}
+	mkdir -p $$(dirname ${descriptor})
+	${cloudstate_antora} source --preview --upstream ${upstream} ${sources} > build/source.yml
+	${cloudstate_antora} site --preview --exclude ${module} build/source.yml > ${descriptor}
 
-validate: descriptor
-	${cloudstate_antora} validate build/site.yml
+validate: ${descriptor}
+	${cloudstate_antora} validate ${descriptor}
 
-html: descriptor
-	${cloudstate_antora} build build/site.yml
-
-preview: build
-	${cloudstate_antora} preview
+html: ${descriptor}
+	${cloudstate_antora} build ${descriptor}
 
 build-author-mode: clean managed validate html-author-mode
 
-html-author-mode: descriptor
-	${cloudstate_antora} build --author-mode build/site.yml
+html-author-mode: ${descriptor}
+	${cloudstate_antora} build --author-mode ${descriptor}
 
-preview-author-mode: build-author-mode
-	${cloudstate_antora} preview
-
-validate-links: install
+validate-links: ${cloudstate_antora}
 	${cloudstate_antora} validate --no-xrefs --links --links-config config/validate-links.json
 
 deploy: clean managed

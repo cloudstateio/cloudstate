@@ -176,7 +176,7 @@ The Xolstice Maven plugin assumes a location of `src/main/proto` for your protob
 
 So, if you were to build the example shopping cart application shown earlier in xref:concepts:grpc.adoc[gRPC descriptors], you could simply paste that protobuf into `src/main/proto/shoppingcart.proto`. You may wish to also define the Java package, to ensure the package name used conforms to Java package naming conventions:
 
-[source,proto]
+[source,protobuf]
 ----
 option java_package = "com.example";
 ----
@@ -187,7 +187,7 @@ Now if you run `mvn compile`, you'll find your generated protobuf files in `targ
 
 Your main class will be responsible for creating the Cloudstate gRPC server, registering the entities for it to serve, and starting it. To do this, you can use the link:{attachmentsdir}/api/io/cloudstate/javasupport/CloudState.html[`CloudState`] server builder, for example:
 
-[source,java,indent=0]
+[source,java]
 ----
 include::example$docs/user/gettingstarted/ShoppingCartMain.java[tag=shopping-cart-main]
 ----
