@@ -15,4 +15,4 @@ spec:
       # Since the datastore is a Cassandra datastore, we need to specify the keyspace to use.
       keyspace: shoppingcart
   containers:
-    - image: calncal/js-shopping-cart:latest
+    - image: cloudstateio/samples-js-shopping-cart:latest
