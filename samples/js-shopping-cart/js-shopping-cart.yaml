@@ -3,14 +3,16 @@ apiVersion: cloudstate.io/v1alpha1
 kind: StatefulService
 metadata:
   name: shopping-cart
+  labels:
+    app: shopping-cart
 spec:
-
   # Datastore configuration
-  storeConfig:
-    statefulStore:
-        # Name of a deployed Datastore to use.
-        name: inmemory
-
+  datastore:
+    # Name of a deployed Datastore to use.
+    name: cassandra
+    # Datastore specific configuration
+    config:
+      # Since the datastore is a Cassandra datastore, we need to specify the keyspace to use.
+      keyspace: shoppingcart
   containers:
-    - image: cloudstateio/samples-js-shopping-cart:latest
-      name: user-function
+    - image: calncal/js-shopping-cart:latest

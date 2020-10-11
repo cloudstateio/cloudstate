@@ -6,9 +6,9 @@ kind: StatefulStore
 metadata:
   name: cassandra
 spec:
-
   # This is a Cassandra deployment, so supply configuration for Cassandra.
-  cassandra:
-
+  type: Cassandra
+  deployment: Unmanaged
+  config:
     # The host name of the Cassandra service to connect to.
-    service: cassandra-cassandra-0.cassandra-cassandra-svc.cassandra.svc.cluster.local
+    service: cassandra-cassandra-0.cassandra-cassandra-svc.default.svc.cluster.local
