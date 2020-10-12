@@ -651,6 +651,7 @@ lazy val `java-support-tck` = (project in file("java-support/tck"))
   .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
   .settings(
     name := "cloudstate-java-tck",
+    dynverTagPrefix := "java-support-",
     dockerSettings,
     mainClass in Compile := Some("io.cloudstate.javasupport.tck.JavaSupportTck"),
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
