@@ -85,6 +85,7 @@ jobs:
     - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
     - sbt -Duse.native.builds=false -Ddocker.tag=latest "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish tck/docker:publish
     - cd .devcontainer && ./build.sh push && cd -
+    - sbt java-support-tck/docker:publish
 
   - stage: Deploy
     name: Publish Java Support release
@@ -92,6 +93,8 @@ jobs:
     script:
     - sbt java-support/publish java-support/bintrayRelease java-support/bintraySyncMavenCentral
     - make -C java-support/docs deploy
+    - echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
+    - sbt java-support-tck/docker:publish
 
   - stage: Deploy
     name: Publish Node Support release
