@@ -391,7 +391,7 @@ TODO: add general docs
 
     ```
     kubectl create namespace cloudstate
-    kubectl apply -n cloudstate -f https://raw.githubusercontent.com/cloudstateio/cloudstate/master/operator/cloudstate.yaml
+    kubectl apply -n cloudstate -f https://raw.githubusercontent.com/cloudstateio/cloudstate/v0.5.1/operator/cloudstate.yaml
     ```
     
 You are now ready to install an event sourced function. We have a shopping cart example in the `samples/js-shopping-cart` directory of this project. This can be installed by following these instructions:
@@ -399,7 +399,7 @@ You are now ready to install an event sourced function. We have a shopping cart 
 1. Configure a Cassandra store. If you called your Cassandra deployment `cassandra` and deployed it to the default namespace, this can be installed by running:
 
     ```
-    kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/master/samples/js-shopping-cart/cassandra-store.yaml
+    kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/v0.5.1/samples/js-shopping-cart/cassandra-store.yaml
     ```
     
     Otherwise, download the above file and update the `service` parameter to match the first node of your Cassandra stateful set.
@@ -407,10 +407,10 @@ You are now ready to install an event sourced function. We have a shopping cart 
 2. Install the shopping cart, this can be done by running:
 
     ```
-    kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/master/samples/js-shopping-cart/js-shopping-cart.yaml
+    kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/v0.5.1/samples/js-shopping-cart/js-shopping-cart.yaml
     ```
     
-The operator will install a service, you can then create an ingress for that service. To test, instantiate a gRPC client in your favourite language for [this descriptor](protocols/example/shoppingcart/shoppingcart.proto). You may need to also download the [`cloudstate/entity.proto`](https://raw.githubusercontent.com/cloudstateio/cloudstate/master/protocols/protocol/cloudstate/entity.proto) and [`google/protobuf/empty.proto`](https://raw.githubusercontent.com/protocolbuffers/protobuf/master/src/google/protobuf/empty.proto) descriptors to compile it in your language. The shopping cart descriptor is deployed with debug on, so try getting the logs of the `shopping-cart` container in each of the deployed pods to see what's happening when commands are sent.
+The operator will install a service, you can then create an ingress for that service. To test, instantiate a gRPC client in your favourite language for [this descriptor](protocols/example/shoppingcart/shoppingcart.proto). You may need to also download the [`cloudstate/entity.proto`](https://raw.githubusercontent.com/cloudstateio/cloudstate/v0.5.1/protocols/protocol/cloudstate/entity.proto) and [`google/protobuf/empty.proto`](https://raw.githubusercontent.com/protocolbuffers/protobuf/master/src/google/protobuf/empty.proto) descriptors to compile it in your language. The shopping cart descriptor is deployed with debug on, so try getting the logs of the `shopping-cart` container in each of the deployed pods to see what's happening when commands are sent.
 
 ### Points of interest in the code
 
