@@ -35,6 +35,7 @@ This documentation contains information for developers who want to use Cloudstat
 | Developers, contributors, administrators
 | * xref:develop:prerequisites.adoc[Prerequisites]
   * xref:develop:install.adoc[Installing Cloudstate]
+  * xref:develop:gke.adoc[Run on GKE]
 
 | Learn about service development
 | Developers, contributors
