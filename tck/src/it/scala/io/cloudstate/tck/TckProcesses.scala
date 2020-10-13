@@ -105,8 +105,9 @@ object TckProcesses {
           extraArgs ++
           env.toSeq.flatMap {
             case (key, value) => Seq("-e", s"$key=$value")
-          } :+
-          spec.dockerImage
+          } ++
+          Seq(spec.dockerImage) ++
+          spec.dockerArgs
 
         Process(command).run(logger)
       }

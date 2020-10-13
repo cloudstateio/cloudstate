@@ -31,19 +31,23 @@ type OperatorConfig struct {
 }
 
 type NoStoreConfig struct {
-	Image string `yaml:"image" env:"NO_STORE_IMAGE"`
+	Image string   `yaml:"image" env:"NO_STORE_IMAGE"`
+	Args  []string `yaml:"args"`
 }
 
 type InMemoryConfig struct {
-	Image string `yaml:"image" env:"IN_MEMORY_IMAGE"`
+	Image string   `yaml:"image" env:"IN_MEMORY_IMAGE"`
+	Args  []string `yaml:"args"`
 }
 
 type CassandraConfig struct {
-	Image string `yaml:"image" env:"CASSANDRA_IMAGE"`
+	Image string   `yaml:"image" env:"CASSANDRA_IMAGE"`
+	Args  []string `yaml:"args"`
 }
 
 type PostgresConfig struct {
-	Image string `yaml:"image" env:"POSTGRES_IMAGE"`
+	Image string   `yaml:"image" env:"POSTGRES_IMAGE"`
+	Args  []string `yaml:"args"`
 
 	GoogleCloudSQL PostgresGoogleCloudSQLConfig `yaml:"googleCloudSql"`
 }
@@ -59,7 +63,8 @@ type PostgresGoogleCloudSQLConfig struct {
 }
 
 type SpannerConfig struct {
-	Image string `yaml:"image" env:"SPANNER_IMAGE"`
+	Image string   `yaml:"image" env:"SPANNER_IMAGE"`
+	Args  []string `yaml:"args"`
 }
 
 type GCPConfig struct {
@@ -96,4 +101,11 @@ func SetDefaults(config *OperatorConfig) {
 	config.Postgres.GoogleCloudSQL.DefaultCores = 1
 	config.Postgres.GoogleCloudSQL.DefaultMemory = "3840"
 	config.SidecarMetrics.Port = 9099
+
+	config.NoStore.Args = []string{
+		"-Dconfig.resource=no-store.conf",
+	}
+	config.InMemory.Args = []string{
+		"-Dconfig.resource=in-memory.conf",
+	}
 }
