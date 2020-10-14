@@ -58,6 +58,9 @@ func (s *SpannerStore) SetupWithStatefulStoreController(builder *builder.Builder
 func (s *SpannerStore) InjectPodStoreConfig(ctx context.Context, name string, namespace string, pod *corev1.Pod,
 	container *corev1.Container, store *cloudstate.StatefulStore) error {
 	container.Image = s.Config.Image
+	if s.Config.Args != nil {
+		container.Args = s.Config.Args
+	}
 	spec := store.Spec.Spanner
 	if spec == nil {
 		return errors.New("nil Spanner store")

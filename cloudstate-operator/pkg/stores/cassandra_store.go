@@ -67,6 +67,9 @@ func (s *CassandraStore) SetupWithStatefulServiceController(builder *builder.Bui
 
 func (s *CassandraStore) InjectPodStoreConfig(ctx context.Context, name string, namespace string, pod *corev1.Pod, container *corev1.Container, store *cloudstate.StatefulStore) error {
 	container.Image = s.Config.Image
+	if s.Config.Args != nil {
+		container.Args = s.Config.Args
+	}
 	spec := store.Spec.Cassandra
 	if spec == nil {
 		return errors.New("nil Cassandra store")

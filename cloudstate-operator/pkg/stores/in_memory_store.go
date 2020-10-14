@@ -40,6 +40,9 @@ func (s *InMemoryStore) SetupWithStatefulStoreController(builder *builder.Builde
 
 func (s *InMemoryStore) InjectPodStoreConfig(ctx context.Context, name string, namespace string, pod *corev1.Pod, cloudstateSidecarContainer *corev1.Container, store *cloudstate.StatefulStore) error {
 	cloudstateSidecarContainer.Image = s.Config.Image
+	if s.Config.Args != nil {
+		cloudstateSidecarContainer.Args = s.Config.Args
+	}
 	return nil
 }
 

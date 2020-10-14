@@ -73,21 +73,19 @@ Start sbt:
 sbt
 ----
 
-Now build one or more proxy images. Cloudstate has a different image for each database backend, and in most cases, is able to build either a native image, or an image that runs a regular JVM. It takes at least 5 minutes to compile the native images, so for most development purposes, we recommend using the regular JVM images. For example, to compile the `InMemory` proxy image, run:
+Now build one or more proxy images. Cloudstate has a different image for each database backend, and in most cases, is able to build either a native image, or an image that runs a regular JVM. It takes at least 5 minutes to compile the native images, so for most development purposes, we recommend using the regular JVM images. For example, to compile the core proxy image, run:
 
 [source,sh]
 ----
-dockerBuildInMemory publishLocal
+dockerBuildCore publishLocal
 ----
 
 The following commands are available:
 
-* `dockerBuildInMemory`
-* `dockerBuildNativeInMemory`
+* `dockerBuildCore`
+* `dockerBuildNativeCore`
 * `dockerBuildCassandra`
 * `dockerBuildNativeCassandra`
-* `dockerBuildNoStore`
-* `dockerBuildNativeNoStore`
 * `dockerBuildPostgres`
 * `dockerBuildNativePostgres`
 * `dockerBuildAllNonNative`
@@ -275,7 +273,7 @@ Once you've installed Cloudstate and got a user function running, the proxy can 
 
 [source,sh]
 ----
-sbt:cloudstate> dockerBuildInMemory publishLocal
+sbt:cloudstate> dockerBuildCore publishLocal
 ----
 
 Now, after each time you make changes and rebuild the docker image, the simplest way to ensure your Cloudstate functions pick it up is to delete the pods for it and let the deployment recreate them, eg:

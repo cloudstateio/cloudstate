@@ -28,7 +28,8 @@ final case class TckProcessConfig private (
     command: List[String],
     stopCommand: Option[List[String]],
     envVars: Map[String, String],
-    dockerImage: String
+    dockerImage: String,
+    dockerArgs: List[String],
 ) {
   def validate(): Unit =
     if (dockerImage.nonEmpty) {
@@ -52,7 +53,8 @@ object TckProcessConfig {
       envVars = config.getConfig("env-vars").root.unwrapped.asScala.toMap.map {
         case (key, value: AnyRef) => key -> value.toString
       },
-      dockerImage = config.getString("docker-image")
+      dockerImage = config.getString("docker-image"),
+      dockerArgs = config.getStringList("docker-args").asScala.toList
     )
 }
 

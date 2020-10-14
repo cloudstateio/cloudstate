@@ -1923,9 +1923,13 @@ apiVersion: v1
 data:
   config.yaml: |
     noStore:
-      image: cloudstateio/cloudstate-proxy-no-store:latest
+      image: cloudstateio/cloudstate-proxy-core:latest
+      # args:
+      # - "-Dconfig.resource=no-store.conf"
     inMemory:
-      image: cloudstateio/cloudstate-proxy-in-memory:latest
+      image: cloudstateio/cloudstate-proxy-core:latest
+      # args:
+      # - "-Dconfig.resource=in-memory.conf"
     postgres:
       image: cloudstateio/cloudstate-proxy-postgres:latest
     cassandra:
