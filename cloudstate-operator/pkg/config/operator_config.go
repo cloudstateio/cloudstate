@@ -20,13 +20,14 @@ import (
 )
 
 type OperatorConfig struct {
-	Configs   map[string]*yaml.Node `yaml:",inline"`
-	NoStore   NoStoreConfig         `yaml:"noStore"`
-	InMemory  InMemoryConfig        `yaml:"inMemory"`
-	Cassandra CassandraConfig       `yaml:"cassandra"`
-	Postgres  PostgresConfig        `yaml:"postgres"`
-	Spanner   SpannerConfig         `yaml:"spanner"`
-	GCP       GCPConfig             `yaml:"gcp"`
+	Configs        map[string]*yaml.Node `yaml:",inline"`
+	NoStore        NoStoreConfig         `yaml:"noStore"`
+	InMemory       InMemoryConfig        `yaml:"inMemory"`
+	Cassandra      CassandraConfig       `yaml:"cassandra"`
+	Postgres       PostgresConfig        `yaml:"postgres"`
+	Spanner        SpannerConfig         `yaml:"spanner"`
+	GCP            GCPConfig             `yaml:"gcp"`
+	SidecarMetrics SidecarMetricsConfig  `yaml:"sidecarMetrics"`
 }
 
 type NoStoreConfig struct {
@@ -76,6 +77,10 @@ func (c *OperatorConfig) Get(key string, obj interface{}) error {
 	return cleanenv.ReadEnv(obj)
 }
 
+type SidecarMetricsConfig struct {
+	Port int32 `yaml:"port" env:"SIDECAR_METRICS_PORT"`
+}
+
 func ReadConfig(path string) (*OperatorConfig, error) {
 	var config OperatorConfig
 	SetDefaults(&config)
@@ -90,4 +95,5 @@ func SetDefaults(config *OperatorConfig) {
 	config.Postgres.GoogleCloudSQL.Region = "us-east1"
 	config.Postgres.GoogleCloudSQL.DefaultCores = 1
 	config.Postgres.GoogleCloudSQL.DefaultMemory = "3840"
+	config.SidecarMetrics.Port = 9099
 }

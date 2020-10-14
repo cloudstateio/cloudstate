@@ -52,15 +52,15 @@ func init() {
 // The default file path is "/etc/config/config.yaml". This can be overridden with the CONFIG_PATH environment variable.
 // It is a fatal error if an explicit CONFIG_PATH is provided and not found.
 // If the default path is not found, we go with default config settings.  (Transitional behaviour that may change.)
-func readConfigs(cfg *config.OperatorConfig) {
+func readConfigs() *config.OperatorConfig {
 	configPath, pathProvided := os.LookupEnv("CONFIG_PATH")
 	if !pathProvided {
 		configPath = "/etc/config/config.yaml"
 	}
-	err := cleanenv.ReadConfig(configPath, cfg)
+	cfg, err := config.ReadConfig(configPath)
 	if err == nil {
 		setupLog.Info("using config", "file", configPath)
-		return
+		return cfg
 	}
 	if os.IsNotExist(err) {
 		if pathProvided {
@@ -68,11 +68,14 @@ func readConfigs(cfg *config.OperatorConfig) {
 			os.Exit(1)
 		} // else we just go with the defaults.
 		setupLog.Info("using default configs")
-		return
+		var cfg config.OperatorConfig
+		config.SetDefaults(&cfg)
+		return &cfg
 	}
 
 	setupLog.Error(err, "error reading config file", "err", err)
 	os.Exit(1)
+	return nil
 }
 
 func main() {
@@ -88,8 +91,7 @@ func main() {
 		o.Development = true
 	}))
 
-	var cfg config.OperatorConfig
-	readConfigs(&cfg)
+	cfg := readConfigs()
 
 	// TODO: Move these two to config file?
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -120,13 +122,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	store := stores.DefaultMultiStores(mgr.GetClient(), scheme, ctrl.Log, &cfg)
+	store := stores.DefaultMultiStores(mgr.GetClient(), scheme, ctrl.Log, cfg)
 
 	mgr.GetWebhookServer().Register("/inject-v1-pod",
 		&webhook.Admission{Handler: webhooks.NewPodInjector(
 			mgr.GetClient(),
 			ctrl.Log.WithName("webhooks").WithName("PodInjector"),
 			store,
+			cfg,
 		)})
 
 	if err = (&controllers.StatefulStoreReconciler{
@@ -134,7 +137,7 @@ func main() {
 		Log:              ctrl.Log.WithName("controllers").WithName("StatefulStore"),
 		Scheme:           mgr.GetScheme(),
 		ReconcileTimeout: reconcileTimeout,
-		OperatorConfig:   &cfg,
+		OperatorConfig:   cfg,
 		Stores:           store,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StatefulStore")
@@ -145,7 +148,7 @@ func main() {
 		Log:              ctrl.Log.WithName("controllers").WithName("StatefulService"),
 		Scheme:           mgr.GetScheme(),
 		ReconcileTimeout: reconcileTimeout,
-		OperatorConfig:   &cfg,
+		OperatorConfig:   cfg,
 		Stores:           store,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StatefulService")
