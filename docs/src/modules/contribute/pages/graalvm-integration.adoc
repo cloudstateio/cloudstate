@@ -41,7 +41,7 @@ This will take 5 or more minutes. Among the output you should see the result of 
 
 The resulting Docker image is `cloudstate-proxy-native-core:latest`.
 
-This image supports running in multiple different nodes, depending on the arguments passed to it - it can be run in dev mode, with an in memory store, or with no configured store, `-Dconfig.resource=dev-mode.conf`, `-Dconfig.resource=in-memory.conf` or `-Dconfig.resource=no-store.conf`, respectively. You can also run `dockerBuildNativePostrges`, `dockerBuildNativeCassandra` and `dockerBuildNativeSpanner` to build a production proxy that has a Postgres, Cassandra and Spanner support respectively. These will attempt the Kubernetes cluster bootstrap process, so can only be used in Kubernetes with appropriate environment variables set to help them discover other pods in the same deployment.
+This image supports running in multiple different modes, depending on the arguments passed to it - it can be run in dev mode, with an in memory store, or with no configured store, `-Dconfig.resource=dev-mode.conf`, `-Dconfig.resource=in-memory.conf` or `-Dconfig.resource=no-store.conf`, respectively. You can also run `dockerBuildNativePostrges`, `dockerBuildNativeCassandra` and `dockerBuildNativeSpanner` to build a production proxy that has a Postgres, Cassandra and Spanner support respectively. These will attempt the Kubernetes cluster bootstrap process, so can only be used in Kubernetes with appropriate environment variables set to help them discover other pods in the same deployment.
 
 Substituting `publishLocal` for `publish` will push the docker images to a remote Docker registry, to enable this the `-Ddocker.registry` and `-Ddocker.username` flags must be specified to the `sbt` command.
 
