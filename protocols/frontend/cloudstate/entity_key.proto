@@ -23,7 +23,7 @@ import "google/protobuf/descriptor.proto";
 package cloudstate;
 
 option java_package = "io.cloudstate";
-option go_package = "github.com/cloudstateio/go-support/cloudstate/;cloudstate";
+option go_package = "github.com/cloudstateio/go-support/cloudstate;cloudstate";
 
 extend google.protobuf.FieldOptions {
     bool entity_key = 50002;
