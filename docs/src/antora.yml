@@ -6,7 +6,6 @@ nav:
 - modules/concepts/nav.adoc
 - modules/develop/nav.adoc
 - modules/dart/nav.adoc
-- modules/old-dart/nav.adoc
 - modules/go/nav.adoc
 - modules/java/nav.adoc
 - modules/javascript/nav.adoc
