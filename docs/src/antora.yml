@@ -14,7 +14,6 @@ nav:
 - modules/python/nav.adoc
 - modules/old-python/nav.adoc
 - modules/springboot/nav.adoc
-- modules/old-springboot/nav.adoc
 - modules/dotnet/nav.adoc
 - modules/old-dotnet/nav.adoc
 - modules/deploy/nav.adoc
