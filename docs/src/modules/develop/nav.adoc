@@ -1,5 +1,6 @@
 * xref:index.adoc[Developing Cloudstate services]
 ** xref:prerequisites.adoc[Prerequisites]
 ** xref:install.adoc[Installing Cloudstate]
+** xref:gke.adoc[Run on GKE]
 ** xref:examples.adoc[Available Cloudstate examples]
 ** xref:tutorial.adoc[The shopping cart tutorial]

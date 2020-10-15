@@ -12,7 +12,7 @@ If you simply want to run the native image locally, you can use the following co
 
 [source,sh]
 ----
-sbt "dockerBuildDevMode publishLocal"
+sbt "dockerBuildNativeCore publishLocal"
 ----
 
 This will take 5 or more minutes. Among the output you should see the result of the native image build, for example:
@@ -39,9 +39,9 @@ This will take 5 or more minutes. Among the output you should see the result of 
 [success] Total time: 304 s, completed Aug 6, 2019 4:00:02 PM
 ----
 
-The resulting Docker image is `cloudstate-proxy-dev-mode:latest`.
+The resulting Docker image is `cloudstate-proxy-native-core:latest`.
 
-This image is a dev mode image, it uses an in memory store, and forms a single cluster by itself. You can also run `dockerBuildNoStore` and `dockerBuildInMemory`, `dockerBuildCassandra` to build a production proxy that has no store, an in memory store or Cassandra store respectively. These will attempt the Kubernetes cluster bootstrap process, so can only be used in Kubernetes with appropriate environment variables set to help them discover other pods in the same deployment.
+This image supports running in multiple different modes, depending on the arguments passed to it - it can be run in dev mode, with an in memory store, or with no configured store, `-Dconfig.resource=dev-mode.conf`, `-Dconfig.resource=in-memory.conf` or `-Dconfig.resource=no-store.conf`, respectively. You can also run `dockerBuildNativePostrges`, `dockerBuildNativeCassandra` and `dockerBuildNativeSpanner` to build a production proxy that has a Postgres, Cassandra and Spanner support respectively. These will attempt the Kubernetes cluster bootstrap process, so can only be used in Kubernetes with appropriate environment variables set to help them discover other pods in the same deployment.
 
 Substituting `publishLocal` for `publish` will push the docker images to a remote Docker registry, to enable this the `-Ddocker.registry` and `-Ddocker.username` flags must be specified to the `sbt` command.
 
@@ -53,7 +53,7 @@ For all other platforms, the simplest way is to run the user function in a docke
 
 [source,sh]
 ----
-docker run -it --rm --name cloudstate -p 9000:9000 cloudstate-proxy-dev-mode
+docker run -it --rm --name cloudstate -p 9000:9000 cloudstate-proxy-core -Dconfig.resource=dev-mode.conf
 docker run -it --rm --network container:cloudstate --name shopping-cart -e "DEBUG=cloudstate*" js-shopping-cart
 ----
 

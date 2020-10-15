@@ -46,12 +46,10 @@ This way, the same instance will be reused, rather than having to pay the cost o
 
 In our build, we have multiple different images that we want to build from the same project - both native and non native images, along with different configurations. To support this, we need to reconfigure sbt for each image we want to build. To support this, we have a number of command helpers that dynamically configure sbt, then run a selected command. These are:
 
-* `dockerBuildInMemory`
-* `dockerBuildNativeInMemory`
+* `dockerBuildCore`
+* `dockerBuildNativeCore`
 * `dockerBuildCassandra`
 * `dockerBuildNativeCassandra`
-* `dockerBuildNoStore`
-* `dockerBuildNativeNoStore`
 * `dockerBuildPostgres`
 * `dockerBuildNativePostgres`
 * `dockerBuildAllNonNative`
@@ -63,7 +61,7 @@ To just build a native image, run the selected command above, followed by `publi
 
 [source,sh]
 ----
-dockerBuildNativeInMemory publishLocal
+dockerBuildNativeCore publishLocal
 ----
 
 Contrary to the name of the command, this will build the image remotely if you have that enabled - the reason for this is that the remote build agent support doesn't redefine any of the sbt docker plugin commands, it simply configures the sbt docker plugin to run against the remote docker daemon. So `publishLocal` usually means just build an image in the docker daemon, but don't push it, and since our docker daemon happens to be running remotely through ssh port forwarding, it's done remotely.
@@ -83,7 +81,7 @@ Now you can build and push an image to that repo by running:
 
 [source,sh]
 ----
-dockerBuildNativeInMemory publish
+dockerBuildNativeCore publish
 ----
 
 === Building and pulling an image
@@ -128,7 +126,7 @@ Now after building the dev mode native image, you can run the integration tests:
 
 [source,sh]
 ----
-dockerBuildNativeDevMode publishLocalPull
+dockerBuildNativeCore publishLocalPull
 tck/it:test
 ----
 
