@@ -50,7 +50,7 @@ This documentation contains information for developers who want to use Cloudstat
   * xref:kotlin:index.adoc[Implementing in Kotlin]
   * xref:old-python:index.adoc[Implementing in Python]
   * xref:springboot:index.adoc[Implementing in Spring Boot]
-  * xref:old-dotnet:index.adoc[Implementing in .Net]
+  * xref:dotnet:index.adoc[Implementing in .Net]
 
 | Deploy in production
 | Developers, administrators
