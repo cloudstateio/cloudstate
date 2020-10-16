@@ -29,7 +29,7 @@ import com.google.protobuf.Descriptors.ServiceDescriptor
 import io.cloudstate.protocol.crud.CrudClient
 import io.cloudstate.protocol.entity.{Entity, Metadata}
 import io.cloudstate.proxy._
-import io.cloudstate.proxy.crud.store.{JdbcRepositoryImpl, JdbcStoreFactory}
+import io.cloudstate.proxy.crud.store.{JdbcRepositoryImpl, JdbcStoreSupport}
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -38,7 +38,7 @@ class CrudSupportFactory(system: ActorSystem,
                          config: EntityDiscoveryManager.Configuration,
                          grpcClientSettings: GrpcClientSettings)(implicit ec: ExecutionContext, mat: Materializer)
     extends EntityTypeSupportFactory
-    with JdbcStoreFactory {
+    with JdbcStoreSupport {
 
   private final val log = Logging.getLogger(system, this.getClass)
 
@@ -54,7 +54,7 @@ class CrudSupportFactory(system: ActorSystem,
                                                       config.passivationTimeout,
                                                       config.relayOutputBufferSize)
 
-    val repository = new JdbcRepositoryImpl(buildCrudStore(config.config))
+    val repository = new JdbcRepositoryImpl(createStore(config.config))
 
     log.debug("Starting CrudEntity for {}", entity.persistenceId)
     val clusterSharding = ClusterSharding(system)

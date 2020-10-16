@@ -28,7 +28,7 @@ import com.google.protobuf.any.{Any => ScalaPbAny}
 import io.cloudstate.javasupport.crud._
 import io.cloudstate.javasupport.impl._
 import io.cloudstate.javasupport.impl.crud.CrudImpl.{failure, failureMessage, EntityException, ProtocolException}
-import io.cloudstate.javasupport.{Context, Service, ServiceCallFactory}
+import io.cloudstate.javasupport.{Context, Metadata, Service, ServiceCallFactory}
 import io.cloudstate.protocol.crud.CrudAction.Action.{Delete, Update}
 import io.cloudstate.protocol.crud._
 import io.cloudstate.protocol.crud.CrudStreamIn.Message.{Command => InCommand, Empty => InEmpty, Init => InInit}
@@ -153,10 +153,12 @@ final class CrudImpl(_system: ActorSystem,
 
         case ((state, _), InCommand(command)) =>
           val cmd = ScalaPbAny.toJavaProto(command.payload.get)
+          val metadata = new MetadataImpl(command.metadata.map(_.entries.toVector).getOrElse(Nil))
           val context = new CommandContextImpl(
             thisEntityId,
             command.name,
             command.id,
+            metadata,
             state,
             service.anySupport,
             log
@@ -216,6 +218,7 @@ final class CrudImpl(_system: ActorSystem,
   private final class CommandContextImpl(override val entityId: String,
                                          override val commandName: String,
                                          override val commandId: Long,
+                                         override val metadata: Metadata,
                                          val state: Option[ScalaPbAny],
                                          val anySupport: AnySupport,
                                          val log: LoggingAdapter)

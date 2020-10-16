@@ -20,7 +20,7 @@ import java.lang.reflect.{Constructor, InvocationTargetException, Method}
 import java.util.Optional
 
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
-import io.cloudstate.javasupport.{ServiceCall, ServiceCallFactory}
+import io.cloudstate.javasupport.{Metadata, ServiceCall, ServiceCallFactory}
 import io.cloudstate.javasupport.crud.{
   CommandContext,
   CommandHandler,
@@ -179,6 +179,7 @@ private class AdaptedCommandContext(val delegate: CommandContext[JavaPbAny], any
 
   override def commandName(): String = delegate.commandName()
   override def commandId(): Long = delegate.commandId()
+  override def metadata(): Metadata = delegate.metadata()
   override def entityId(): String = delegate.entityId()
   override def effect(effect: ServiceCall, synchronous: Boolean): Unit = delegate.effect(effect, synchronous)
   override def fail(errorMessage: String): RuntimeException = delegate.fail(errorMessage)

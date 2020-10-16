@@ -19,26 +19,26 @@ package io.cloudstate.proxy.crud.store
 import akka.util.ByteString
 import com.typesafe.config.Config
 import io.cloudstate.proxy.crud.store.JdbcStore.Key
-import io.cloudstate.proxy.crud.store.JdbcStoreFactory.{IN_MEMORY, JDBC}
+import io.cloudstate.proxy.crud.store.JdbcStoreSupport.{IN_MEMORY, JDBC}
 
 import scala.concurrent.ExecutionContext;
 
-object JdbcStoreFactory {
+object JdbcStoreSupport {
   final val IN_MEMORY = "in-memory"
   final val JDBC = "jdbc"
 }
 
-trait JdbcStoreFactory {
+trait JdbcStoreSupport {
 
-  def buildCrudStore(config: Config)(implicit ec: ExecutionContext): JdbcStore[Key, ByteString] =
+  def createStore(config: Config)(implicit ec: ExecutionContext): JdbcStore[Key, ByteString] =
     config.getString("crud.store-type") match {
       case IN_MEMORY => new JdbcInMemoryStore
-      case JDBC => buildJdbcCrudStore(config)
+      case JDBC => createJdbcStore(config)
       case other =>
         throw new IllegalArgumentException(s"CRUD store-type must be one of: ${IN_MEMORY} or ${JDBC} but is '$other'")
     }
 
-  private def buildJdbcCrudStore(config: Config)(implicit ec: ExecutionContext): JdbcStore[Key, ByteString] = {
+  private def createJdbcStore(config: Config)(implicit ec: ExecutionContext): JdbcStore[Key, ByteString] = {
     val slickDatabase = JdbcSlickDatabase(config)
     val tableConfiguration = new JdbcCrudStateTableConfiguration(
       config.getConfig("crud.jdbc-state-store")

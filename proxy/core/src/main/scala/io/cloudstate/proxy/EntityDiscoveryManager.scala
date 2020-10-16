@@ -17,19 +17,13 @@
 package io.cloudstate.proxy
 
 import akka.Done
-import akka.actor.{Actor, ActorLogging, CoordinatedShutdown, PoisonPill, Props, Status}
+import akka.actor.{Actor, ActorLogging, CoordinatedShutdown, Props, Status}
 import akka.cluster.Cluster
 import akka.util.Timeout
 import akka.pattern.pipe
 import akka.stream.scaladsl.RunnableGraph
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.Http.ServerBinding
-import akka.cluster.singleton.{
-  ClusterSingletonManager,
-  ClusterSingletonManagerSettings,
-  ClusterSingletonProxy,
-  ClusterSingletonProxySettings
-}
 import akka.grpc.GrpcClientSettings
 import akka.stream.Materializer
 import com.google.protobuf.DescriptorProtos
@@ -40,15 +34,6 @@ import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.crdt.Crdt
 import io.cloudstate.protocol.crud.Crud
 import io.cloudstate.protocol.event_sourced.EventSourced
-import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
-import io.cloudstate.proxy.autoscaler.{
-  Autoscaler,
-  AutoscalerSettings,
-  ClusterMembershipFacadeImpl,
-  KubernetesDeploymentScaler,
-  NoAutoscaler,
-  NoScaler
-}
 import io.cloudstate.proxy.action.ActionProtocolSupportFactory
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
 import io.cloudstate.proxy.crud.CrudSupportFactory

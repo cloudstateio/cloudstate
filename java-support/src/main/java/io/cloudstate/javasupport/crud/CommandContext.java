@@ -18,6 +18,7 @@ package io.cloudstate.javasupport.crud;
 
 import io.cloudstate.javasupport.ClientActionContext;
 import io.cloudstate.javasupport.EffectContext;
+import io.cloudstate.javasupport.MetadataContext;
 
 import java.util.Optional;
 
@@ -28,7 +29,8 @@ import java.util.Optional;
  * or deleting the entity state in response to a command, along with forwarding the result to other
  * entities, and performing side effects on other entities.
  */
-public interface CommandContext<T> extends CrudContext, ClientActionContext, EffectContext {
+public interface CommandContext<T>
+    extends CrudContext, ClientActionContext, EffectContext, MetadataContext {
 
   /**
    * The name of the command being executed.

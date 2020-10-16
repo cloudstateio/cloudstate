@@ -26,11 +26,13 @@ import io.cloudstate.javasupport.crud.{
   CommandHandler,
   CrudContext,
   CrudEntity,
-  CrudEntityCreationContext
+  CrudEntityCreationContext,
+  CrudEntityHandler
 }
 import io.cloudstate.javasupport.impl.{AnySupport, ResolvedServiceMethod, ResolvedType}
-import io.cloudstate.javasupport.{Context, EntityId, ServiceCall, ServiceCallFactory, ServiceCallRef}
+import io.cloudstate.javasupport.{Context, EntityId, Metadata, ServiceCall, ServiceCallFactory, ServiceCallRef}
 import org.scalatest.{Matchers, WordSpec}
+
 import scala.compat.java8.OptionConverters._
 
 class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
@@ -54,6 +56,7 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
     override def updateState(newState: JavaPbAny): Unit = currentState = Some(newState)
     override def deleteState(): Unit = currentState = None
     override def entityId(): String = "foo"
+    override def metadata(): Metadata = ???
     override def fail(errorMessage: String): RuntimeException = ???
     override def forward(to: ServiceCall): Unit = ???
     override def effect(effect: ServiceCall, synchronous: Boolean): Unit = ???
@@ -78,16 +81,16 @@ class AnnotationBasedCrudSupportSpec extends WordSpec with Matchers {
   val anySupport = new AnySupport(Array(Shoppingcart.getDescriptor), this.getClass.getClassLoader)
   val serviceDescriptor = Shoppingcart.getDescriptor.findServiceByName("ShoppingCart")
 
-  def method(name: String = "AddItem") =
+  def method(name: String = "AddItem"): ResolvedServiceMethod[String, Wrapped] =
     ResolvedServiceMethod(serviceDescriptor.findMethodByName(name), StringResolvedType, WrappedResolvedType)
 
-  def create(behavior: AnyRef, methods: ResolvedServiceMethod[_, _]*) =
+  def create(behavior: AnyRef, methods: ResolvedServiceMethod[_, _]*): CrudEntityHandler =
     new AnnotationBasedCrudSupport(behavior.getClass,
                                    anySupport,
                                    methods.map(m => m.descriptor.getName -> m).toMap,
                                    Some(_ => behavior)).create(MockContext)
 
-  def create(clazz: Class[_]) =
+  def create(clazz: Class[_]): CrudEntityHandler =
     new AnnotationBasedCrudSupport(clazz, anySupport, Map.empty, None).create(MockContext)
 
   def command(str: String) =
