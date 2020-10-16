@@ -16,14 +16,19 @@ readonly base_dir="$(cd "$script_dir/.." && pwd)"
 
 readonly owner="cloudstateio"
 readonly repo="cloudstate"
-
 readonly version="${tag:1}"
-readonly asset="$base_dir/operator/cloudstate-$version.yaml"
 
 readonly release_url="https://api.github.com/repos/$owner/$repo/releases/tags/$tag"
 readonly release_id=$(curl -s $release_url | jq -r .id)
-
 readonly auth_header="Authorization: token $token"
-readonly asset_url="https://uploads.github.com/repos/$owner/$repo/releases/$release_id/assets?name=$(basename $asset)"
 
-curl -H "$auth_header" -H "Content-Type: application/octet-stream" --data-binary @"$asset" $asset_url
+readonly -a assets=(
+  "$base_dir/operator/cloudstate-$version.yaml"
+  "$base_dir/protocols/target/cloudstate-protocols-$version.zip"
+  "$base_dir/protocols/target/cloudstate-tck-protocols-$version.zip"
+)
+
+for asset in "${assets[@]}"; do
+  asset_url="https://uploads.github.com/repos/$owner/$repo/releases/$release_id/assets?name=$(basename $asset)"
+  curl -H "$auth_header" -H "Content-Type: application/octet-stream" --data-binary @"$asset" $asset_url
+done

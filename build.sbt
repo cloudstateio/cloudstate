@@ -125,17 +125,18 @@ lazy val root = (project in file("."))
   )
   .settings(common)
 
-val cloudstateProtocolsName = "cloudstate-protocols"
-val cloudstateTCKProtocolsName = "cloudstate-tck-protocols"
-
 lazy val protocols = (project in file("protocols"))
   .enablePlugins(NoPublish)
   .settings(
     name := "protocols",
     packageBin in Compile := {
       val base = baseDirectory.value
-      val cloudstateProtos = base / s"$cloudstateProtocolsName.zip"
-      val cloudstateTCKProtos = base / s"$cloudstateTCKProtocolsName.zip"
+      val targetDir = target.value
+      val releaseVersion = version.value
+      val cloudstateProtocolsName = s"cloudstate-protocols-$releaseVersion"
+      val cloudstateTCKProtocolsName = s"cloudstate-tck-protocols-$releaseVersion"
+      val cloudstateProtocolsZip = targetDir / s"$cloudstateProtocolsName.zip"
+      val cloudstateTCKProtocolsZip = targetDir / s"$cloudstateTCKProtocolsName.zip"
 
       def archiveStructure(topDirName: String, files: PathFinder): Seq[(File, String)] =
         files pair Path.relativeTo(base) map {
@@ -144,21 +145,26 @@ lazy val protocols = (project in file("protocols"))
 
       // Common Language Support Proto Dependencies
       IO.zip(
-        archiveStructure(cloudstateProtocolsName,
-                         (base / "frontend" ** "*.proto" +++
-                         base / "protocol" ** "*.proto")),
-        cloudstateProtos
+        archiveStructure(
+          cloudstateProtocolsName,
+          base / "frontend" ** "*.proto" +++
+          base / "protocol" ** "*.proto"
+        ),
+        cloudstateProtocolsZip
       )
 
       // Common TCK Language Support Proto Dependencies
-      IO.zip(archiveStructure(cloudstateTCKProtocolsName, base / "example" ** "*.proto"), cloudstateTCKProtos)
-
-      cloudstateProtos
-    },
-    cleanFiles ++= Seq(
-        baseDirectory.value / s"$cloudstateProtocolsName.zip",
-        baseDirectory.value / s"$cloudstateTCKProtocolsName.zip"
+      IO.zip(
+        archiveStructure(
+          cloudstateTCKProtocolsName,
+          base / "example" ** "*.proto" +++
+          base / "tck" ** "*.proto"
+        ),
+        cloudstateTCKProtocolsZip
       )
+
+      cloudstateProtocolsZip
+    }
   )
 
 lazy val proxyDockerBuild = settingKey[Option[String]](
