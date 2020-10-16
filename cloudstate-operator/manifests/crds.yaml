@@ -27,7 +27,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: StatefulService is the Schema for the statefulservices API
+        description: StatefulService is the Schema for the statefulservices API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -1148,7 +1148,7 @@ spec:
             - containers
             type: object
           status:
-            description: StatefulServiceStatus defines the observed state of StatefulService
+            description: StatefulServiceStatus defines the observed state of StatefulService.
             properties:
               conditions:
                 description: Conditions of the StatefulService.
@@ -1240,7 +1240,7 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: StatefulStore is the Schema for the statefulstores API
+        description: StatefulStore is the Schema for the statefulstores API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -1255,7 +1255,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: StatefulStoreSpec defines the desired state of StatefulStore
+            description: StatefulStoreSpec defines the desired state of StatefulStore.
             properties:
               cassandra:
                 description: Cassandra
@@ -1304,7 +1304,7 @@ spec:
                 description: Postgres will store state in Postgres.
                 properties:
                   credentials:
-                    description: Credentials for the postgres instance.
+                    description: Credentials for the Postgres instance.
                     properties:
                       databaseKey:
                         description: DatabaseKey is the key of the database in the
@@ -1334,7 +1334,7 @@ spec:
                       if this is used.
                     properties:
                       cores:
-                        description: The number of cores the postgres instance should
+                        description: The number of cores the Postgres instance should
                           use. Must be 1, or an even number between 2 and 64. Defaults
                           to 1. Modifiable after creation but will take store offline
                           for several minutes.
@@ -1353,11 +1353,11 @@ spec:
                         anyOf:
                         - type: integer
                         - type: string
-                        description: The amount of memory the postgres instance should
+                        description: "The amount of memory the Postgres instance should
                           have. Must be between 0.9 GiB and 6.5 GiB per vCPU, and
-                          must be a multiple of 256 MiB, and at least 3.75 GiB. Defaults
-                          to 3.75 GiB. Modifiable after creation but will take store
-                          offline for several minutes.
+                          must be\t// a multiple of 256 MiB, and at least 3.75 GiB.
+                          Defaults to 3.75 GiB. Modifiable after creation but will
+                          take store offline for several minutes."
                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                         x-kubernetes-int-or-string: true
                       name:
@@ -1438,7 +1438,7 @@ spec:
                 type: object
             type: object
           status:
-            description: StatefulStoreStatus defines the observed state of StatefulStore
+            description: StatefulStoreStatus defines the observed state of StatefulStore.
             properties:
               conditions:
                 items:

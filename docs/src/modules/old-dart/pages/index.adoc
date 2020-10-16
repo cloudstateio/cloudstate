@@ -1,5 +1,0 @@
-= Implementing in Dart
-
-Information on implementing Cloudstate services in Dart is published at:
-
-https://cloudstate.io/old/docs/dart/current/

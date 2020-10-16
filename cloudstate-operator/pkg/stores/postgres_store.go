@@ -1,12 +1,29 @@
+/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package stores
 
 import (
+	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"strconv"
+
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/config"
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/reconciliation"
 	"github.com/go-logr/logr"
-	"golang.org/x/net/context"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -14,7 +31,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"strconv"
 
 	gcloud "github.com/cloudstateio/cloudstate/cloudstate-operator/internal/google/api/sql.cnrm.cloud/v1beta1"
 	cloudstate "github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/apis/v1alpha1"
@@ -28,7 +44,7 @@ type PostgresStore struct {
 	Scheme *runtime.Scheme
 	Log    logr.Logger
 	Config *config.PostgresConfig
-	Gcp    *config.GcpConfig
+	GCP    *config.GCPConfig
 }
 
 var _ Store = (*PostgresStore)(nil)
@@ -43,142 +59,116 @@ const (
 	postgresUsernameEnvVar = "POSTGRES_USERNAME"
 	postgresPasswordEnvVar = "POSTGRES_PASSWORD"
 
-	PostgresGoogleCloudSqlInstanceNotReady cloudstate.CloudstateConditionType = "CloudSqlInstanceNotReady"
-	PostgresGoogleCloudSqlDatabaseNotReady cloudstate.CloudstateConditionType = "CloudSqlDatabaseNotReady"
-	PostgresGoogleCloudSqlUserNotReady     cloudstate.CloudstateConditionType = "CloudSqlUserNotReady"
+	PostgresGoogleCloudSQLInstanceNotReady cloudstate.CloudstateConditionType = "CloudSqlInstanceNotReady"
+	PostgresGoogleCloudSQLDatabaseNotReady cloudstate.CloudstateConditionType = "CloudSqlDatabaseNotReady"
+	PostgresGoogleCloudSQLUserNotReady     cloudstate.CloudstateConditionType = "CloudSqlUserNotReady"
 
 	postgresCnxSecretPrefix   = "postgres-cnx-"
 	postgresCredsSecretPrefix = "postgres-creds-"
 )
 
-func (p *PostgresStore) SetupWithStatefulServiceController(builder *builder.Builder) error {
-
-	if p.Config.GoogleCloudSql.Enabled {
-		uSqlDatabase := gcloud.NewSQLDatabase()
-		uSqlUser := gcloud.NewSQLUser()
-
-		builder.
-			Watches(&source.Kind{Type: uSqlDatabase}, &handler.EnqueueRequestForOwner{
-				IsController: true,
-				OwnerType:    &cloudstate.StatefulService{}}).
-			Watches(&source.Kind{Type: uSqlUser}, &handler.EnqueueRequestForOwner{
-				IsController: true,
-				OwnerType:    &cloudstate.StatefulService{}})
+func (s *PostgresStore) SetupWithStatefulServiceController(builder *builder.Builder) error {
+	if !s.Config.GoogleCloudSQL.Enabled {
+		return nil
 	}
+	uSQLDatabase := gcloud.NewSQLDatabase()
+	uSQLUser := gcloud.NewSQLUser()
+	builder.
+		Watches(&source.Kind{Type: uSQLDatabase}, &handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &cloudstate.StatefulService{}}).
+		Watches(&source.Kind{Type: uSQLUser}, &handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &cloudstate.StatefulService{}})
 
 	return nil
 }
 
-func (p *PostgresStore) SetupWithStatefulStoreController(builder *builder.Builder) error {
-
-	if p.Config.GoogleCloudSql.Enabled {
-		uSqlInstance := gcloud.NewSQLInstance()
-
-		builder.
-			Watches(&source.Kind{Type: uSqlInstance}, &handler.EnqueueRequestForOwner{
-				IsController: true,
-				OwnerType:    &cloudstate.StatefulStore{}}).
-			Owns(&corev1.Secret{})
-
+func (s *PostgresStore) SetupWithStatefulStoreController(builder *builder.Builder) error {
+	if !s.Config.GoogleCloudSQL.Enabled {
+		return nil
 	}
-
+	sqlInstance := gcloud.NewSQLInstance()
+	builder.
+		Watches(&source.Kind{Type: sqlInstance}, &handler.EnqueueRequestForOwner{
+			IsController: true,
+			OwnerType:    &cloudstate.StatefulStore{}}).
+		Owns(&corev1.Secret{})
 	return nil
 }
 
-func (c *PostgresStore) InjectPodStoreConfig(
-	ctx context.Context,
-	name string,
-	namespace string,
-	pod *corev1.Pod,
-	cloudstateSidecarContainer *corev1.Container,
-	store *cloudstate.StatefulStore,
-) error {
-
-	cloudstateSidecarContainer.Image = c.Config.Image
-
+func (s *PostgresStore) InjectPodStoreConfig(ctx context.Context, name string, namespace string, pod *corev1.Pod, container *corev1.Container, store *cloudstate.StatefulStore) error {
+	container.Image = s.Config.Image
+	if s.Config.Args != nil {
+		container.Args = s.Config.Args
+	}
 	spec := store.Spec.Postgres
-
 	if spec == nil {
-		return fmt.Errorf("nil Postgres store")
+		return errors.New("nil Postgres store")
 	}
 
 	host := spec.Host
 	if host != "" {
-		c.injectUnmanagedStoreConfig(cloudstateSidecarContainer, host, spec, pod)
+		s.injectUnmanagedStoreConfig(container, host, spec, pod)
 	} else if spec.GoogleCloudSQL != nil {
-		if !c.Config.GoogleCloudSql.Enabled {
-			return fmt.Errorf("postgres Google Cloud SQL support is not enabled")
+		if !s.Config.GoogleCloudSQL.Enabled {
+			return errors.New("postgres Google Cloud SQL support is not enabled")
 		}
-		if err := c.injectGoogleCloudSqlStoreConfig(name, namespace, cloudstateSidecarContainer, store, pod); err != nil {
+		if err := s.injectGoogleCloudSQLStoreConfig(name, namespace, container, store, pod); err != nil {
 			return err
 		}
 	} else {
-		return fmt.Errorf("postgres host must not be empty")
+		return errors.New("postgres host must not be empty")
 	}
 
 	return nil
 }
 
-func (c *PostgresStore) ReconcileStatefulService(
-	ctx context.Context,
-	statefulService *cloudstate.StatefulService,
-	deployment *appsv1.Deployment,
-	store *cloudstate.StatefulStore,
-) ([]cloudstate.CloudstateCondition, error) {
-
-	log := c.Log.WithValues("statefulservice", statefulService.Namespace+"/"+statefulService.Name)
+func (s *PostgresStore) ReconcileStatefulService(ctx context.Context, service *cloudstate.StatefulService, deployment *appsv1.Deployment, store *cloudstate.StatefulStore) ([]cloudstate.CloudstateCondition, error) {
+	log := s.Log.WithValues("statefulservice", service.Namespace+"/"+service.Name)
 	spec := store.Spec.Postgres
-
 	if spec == nil {
-		return nil, fmt.Errorf("nil Postgres store")
+		return nil, errors.New("nil Postgres store")
 	}
-
 	host := spec.Host
 	if host != "" {
-		c.reconcileUnmanagedDeploymentStoreConfig(spec, statefulService, deployment)
+		s.reconcileUnmanagedDeploymentStoreConfig(spec, service, deployment)
 	} else if spec.GoogleCloudSQL != nil {
-		if !c.Config.GoogleCloudSql.Enabled {
+		if !s.Config.GoogleCloudSQL.Enabled {
 			return []cloudstate.CloudstateCondition{
 				{
-					Type:    PostgresGoogleCloudSqlInstanceNotReady,
+					Type:    PostgresGoogleCloudSQLInstanceNotReady,
 					Status:  corev1.ConditionTrue,
 					Reason:  "GoogleCloudSQLSupportNotEnabled",
 					Message: "Postgres Google Cloud SQL support is not enabled",
 				},
 			}, nil
 		}
-		return c.reconcileGoogleCloudSqlDeployment(ctx, statefulService, deployment, store, log)
+		return s.reconcileGoogleCloudSQLDeployment(ctx, service, deployment, store, log)
 	} else {
-		return nil, fmt.Errorf("postgres host must not be empty")
+		return nil, errors.New("postgres host must not be empty")
 	}
 
 	return nil, nil
 }
 
-func (c *PostgresStore) reconcileUnmanagedDeploymentStoreConfig(
-	postgresStore *cloudstate.PostgresStore,
-	statefulService *cloudstate.StatefulService,
-	deployment *appsv1.Deployment,
-) {
-	if statefulService.Spec.StoreConfig.Database != "" {
-		deployment.Spec.Template.Annotations[CloudstatePostgresDatabaseAnnotation] = statefulService.Spec.StoreConfig.Database
+func (s *PostgresStore) reconcileUnmanagedDeploymentStoreConfig(config *cloudstate.PostgresStore, service *cloudstate.StatefulService, deployment *appsv1.Deployment) {
+	if db := service.Spec.StoreConfig.Database; db != "" {
+		deployment.Spec.Template.Annotations[CloudstatePostgresDatabaseAnnotation] = db
 	}
-
-	if statefulService.Spec.StoreConfig.Secret != nil {
-		deployment.Spec.Template.Annotations[CloudstatePostgresSecretAnnotation] = statefulService.Spec.StoreConfig.Secret.Name
+	if secret := service.Spec.StoreConfig.Secret; secret != nil {
+		deployment.Spec.Template.Annotations[CloudstatePostgresSecretAnnotation] = secret.Name
 	}
 }
 
-func (c *PostgresStore) injectUnmanagedStoreConfig(cloudstateSidecarContainer *corev1.Container, host string, spec *cloudstate.PostgresStore, pod *corev1.Pod) {
+func (s *PostgresStore) injectUnmanagedStoreConfig(cloudstateSidecarContainer *corev1.Container, host string, spec *cloudstate.PostgresStore, pod *corev1.Pod) {
 	appendEnvVar(cloudstateSidecarContainer, postgresServiceEnvVar, host)
 	if spec.Port != 0 {
 		appendEnvVar(cloudstateSidecarContainer, postgresPortEnvVar, strconv.Itoa(int(spec.Port)))
 	}
 	var secret *corev1.LocalObjectReference
-	if pod.Annotations[CloudstatePostgresSecretAnnotation] != "" {
-		secret = &corev1.LocalObjectReference{
-			Name: pod.Annotations[CloudstatePostgresSecretAnnotation],
-		}
+	if name := pod.Annotations[CloudstatePostgresSecretAnnotation]; name != "" {
+		secret = &corev1.LocalObjectReference{Name: name}
 	} else if spec.Credentials != nil {
 		secret = spec.Credentials.Secret
 	}
@@ -186,19 +176,19 @@ func (c *PostgresStore) injectUnmanagedStoreConfig(cloudstateSidecarContainer *c
 	usernameKey := "username"
 	passwordKey := "password"
 	if spec.Credentials != nil {
-		if spec.Credentials.DatabaseKey != "" {
-			databaseKey = spec.Credentials.DatabaseKey
+		if key := spec.Credentials.DatabaseKey; key != "" {
+			databaseKey = key
 		}
-		if spec.Credentials.UsernameKey != "" {
-			usernameKey = spec.Credentials.UsernameKey
+		if key := spec.Credentials.UsernameKey; key != "" {
+			usernameKey = key
 		}
-		if spec.Credentials.PasswordKey != "" {
-			passwordKey = spec.Credentials.PasswordKey
+		if key := spec.Credentials.PasswordKey; key != "" {
+			passwordKey = key
 		}
 	}
 	// Keyspace config
-	if pod.Annotations[CloudstatePostgresDatabaseAnnotation] != "" {
-		appendEnvVar(cloudstateSidecarContainer, postgresDatabaseEnvVar, pod.Annotations[CloudstatePostgresDatabaseAnnotation])
+	if db := pod.Annotations[CloudstatePostgresDatabaseAnnotation]; db != "" {
+		appendEnvVar(cloudstateSidecarContainer, postgresDatabaseEnvVar, db)
 	} else if secret != nil {
 		appendOptionalSecretEnvVar(cloudstateSidecarContainer, postgresDatabaseEnvVar, *secret, databaseKey)
 	}
@@ -209,25 +199,22 @@ func (c *PostgresStore) injectUnmanagedStoreConfig(cloudstateSidecarContainer *c
 	}
 }
 
-func (p *PostgresStore) injectGoogleCloudSqlStoreConfig(name string, namespace string, cloudstateSidecarContainer *corev1.Container, store *cloudstate.StatefulStore, pod *corev1.Pod) error {
-
+func (s *PostgresStore) injectGoogleCloudSQLStoreConfig(name string, namespace string, cloudstateSidecarContainer *corev1.Container, store *cloudstate.StatefulStore, pod *corev1.Pod) error {
 	databaseName := pod.Annotations[CloudstatePostgresDatabaseAnnotation]
 	secretName := pod.Annotations[CloudstatePostgresSecretAnnotation]
 	cnxSecretName := postgresCnxSecretPrefix + store.Name
 
 	// We don't really want to create databases in a mutating webhook, so rather than trying to do that, we just
-	// require an operator to already have done that
+	// require an operator to already have done that.
 	if secretName == "" || databaseName == "" {
-		return fmt.Errorf("a Google Cloud SQL store requires using a StatefulService to reconcile it")
+		return errors.New("a Google Cloud SQL store requires using a StatefulService to reconcile it")
 	}
-
 	secret := corev1.LocalObjectReference{
 		Name: secretName,
 	}
 	cnxSecret := corev1.LocalObjectReference{
 		Name: cnxSecretName,
 	}
-
 	appendSecretEnvVar(cloudstateSidecarContainer, postgresServiceEnvVar, cnxSecret, "instanceIP")
 	appendSecretEnvVar(cloudstateSidecarContainer, postgresPortEnvVar, cnxSecret, "port")
 	appendEnvVar(cloudstateSidecarContainer, postgresDatabaseEnvVar, databaseName)
@@ -237,42 +224,40 @@ func (p *PostgresStore) injectGoogleCloudSqlStoreConfig(name string, namespace s
 	return nil
 }
 
-func (p *PostgresStore) reconcileGoogleCloudSqlDeployment(
-	ctx context.Context,
-	statefulService *cloudstate.StatefulService,
-	deployment *appsv1.Deployment,
-	store *cloudstate.StatefulStore,
-	log logr.Logger,
-) ([]cloudstate.CloudstateCondition, error) {
-
-	ownedSqlDatabases, err := reconciliation.GetControlledUnstructured(ctx, p.Client, statefulService.Name, statefulService.Namespace,
-		statefulService.GroupVersionKind(), gcloud.SQLDatabaseGVK, true)
+func (s *PostgresStore) reconcileGoogleCloudSQLDeployment(ctx context.Context, statefulService *cloudstate.StatefulService, deployment *appsv1.Deployment, store *cloudstate.StatefulStore, log logr.Logger) ([]cloudstate.CloudstateCondition, error) {
+	ownedSQLDatabases, err := reconciliation.GetControlledUnstructured(
+		ctx, s.Client, statefulService.Name, statefulService.Namespace,
+		statefulService.GroupVersionKind(), gcloud.SQLDatabaseGVK, true,
+	)
 	if err != nil {
-		p.Log.Error(err, "unable to list owned SQL database(s)")
+		s.Log.Error(err, "unable to list owned SQL database(s)")
 		return nil, err
 	}
-	var ownedSqlDatabase *gcloud.SQLDatabase = nil
-	if len(ownedSqlDatabases) > 0 {
-		ownedSqlDatabase = &ownedSqlDatabases[0]
-	}
-	ownedSqlUsers, err := reconciliation.GetControlledUnstructured(ctx, p.Client, statefulService.Name, statefulService.Namespace,
-		statefulService.GroupVersionKind(), gcloud.SQLUserGVK, true)
-	if err != nil {
-		p.Log.Error(err, "unable to list owned SQL users")
-		return nil, err
-	}
-	var ownedSqlUser *gcloud.SQLUser = nil
-	if len(ownedSqlUsers) > 0 {
-		ownedSqlUser = &ownedSqlUsers[0]
+	var ownedSQLDatabase *gcloud.SQLDatabase
+	if len(ownedSQLDatabases) > 0 {
+		ownedSQLDatabase = &ownedSQLDatabases[0]
 	}
 
-	secretObj, err := reconciliation.GetControlledStructured(ctx, p.Client, statefulService, &corev1.SecretList{})
+	ownedSQLUsers, err := reconciliation.GetControlledUnstructured(
+		ctx, s.Client, statefulService.Name, statefulService.Namespace,
+		statefulService.GroupVersionKind(), gcloud.SQLUserGVK, true,
+	)
+	if err != nil {
+		s.Log.Error(err, "unable to list owned SQL users")
+		return nil, err
+	}
+	var ownedSQLUser *gcloud.SQLUser = nil
+	if len(ownedSQLUsers) > 0 {
+		ownedSQLUser = &ownedSQLUsers[0]
+	}
+
+	secretObj, err := reconciliation.GetControlledStructured(ctx, s.Client, statefulService, &corev1.SecretList{})
 	if err != nil {
 		return nil, err
 	}
-	var ownedSqlUserSecret *corev1.Secret
+	var ownedSQLUserSecret *corev1.Secret
 	if secretObj != nil {
-		ownedSqlUserSecret = secretObj.(*corev1.Secret)
+		ownedSQLUserSecret = secretObj.(*corev1.Secret)
 	}
 
 	var conditions []cloudstate.CloudstateCondition
@@ -283,19 +268,18 @@ func (p *PostgresStore) reconcileGoogleCloudSqlDeployment(
 	secretName := postgresCredsSecretPrefix + statefulService.Name
 
 	var instanceName string
-
 	if store.Status.Postgres != nil && store.Status.Postgres.GoogleCloudSQL != nil &&
 		store.Status.Postgres.GoogleCloudSQL.InstanceName != "" {
 		instanceName = store.Status.Postgres.GoogleCloudSQL.InstanceName
 	} else {
-		instanceName = p.createCloudSQLInstanceName(store)
-		conditions = append(conditions, p.conditionForSQLInstance(nil))
+		instanceName = s.createCloudSQLInstanceName(store)
+		conditions = append(conditions, s.conditionForSQLInstance(nil))
 	}
-	// Create SQLDatabase, SQLUser, and secret (password)
-	if err := p.reconcileGoogleCloudSQLDatabase(ctx, statefulService, ownedSqlDatabase, instanceName, databaseName, log); err != nil {
+	// Create SQLDatabase, SQLUser, and secret (password).
+	if err := s.reconcileGoogleCloudSQLDatabase(ctx, statefulService, ownedSQLDatabase, instanceName, databaseName, log); err != nil {
 		return nil, fmt.Errorf("unable to reconcile sqldatabase: %w", err)
 	}
-	if err := p.reconcileGoogleCloudSQLUser(ctx, statefulService, ownedSqlUser, ownedSqlUserSecret, instanceName, secretName, log); err != nil {
+	if err := s.reconcileGoogleCloudSQLUser(ctx, statefulService, ownedSQLUser, ownedSQLUserSecret, instanceName, secretName, log); err != nil {
 		return nil, fmt.Errorf("unable to reconcile sqluser: %w", err)
 	}
 
@@ -304,13 +288,11 @@ func (p *PostgresStore) reconcileGoogleCloudSqlDeployment(
 	deployment.Annotations[CloudstatePostgresSecretAnnotation] = secretName
 
 	// Add conditions for managed resources
-	conditions = append(conditions, p.conditionForSQLDatabase(ownedSqlDatabase), p.conditionForSQLUser(ownedSqlUser))
+	conditions = append(conditions, s.conditionForSQLDatabase(ownedSQLDatabase), s.conditionForSQLUser(ownedSQLUser))
 	return conditions, nil
 }
 
-func (p *PostgresStore) createDesiredGoogleCloudSQLDatabase(statefulService *cloudstate.StatefulService,
-	instanceName string, databaseName string) (*gcloud.SQLDatabase, error) {
-
+func (s *PostgresStore) createDesiredGoogleCloudSQLDatabase(statefulService *cloudstate.StatefulService, instanceName string, databaseName string) (*gcloud.SQLDatabase, error) {
 	sqlDatabase := gcloud.MakeSQLDatabase(
 		map[string]interface{}{
 			"metadata": map[string]interface{}{
@@ -328,15 +310,13 @@ func (p *PostgresStore) createDesiredGoogleCloudSQLDatabase(statefulService *clo
 		},
 	)
 	sqlDatabase.SetLabels(reconciliation.SetCommonLabels(statefulService.Name, sqlDatabase.GetLabels()))
-	if err := ctrl.SetControllerReference(statefulService, sqlDatabase, p.Scheme); err != nil {
+	if err := ctrl.SetControllerReference(statefulService, sqlDatabase, s.Scheme); err != nil {
 		return nil, fmt.Errorf("unable to set owner: %w", err)
 	}
 	return sqlDatabase, nil
 }
 
-func (p *PostgresStore) createDesiredGoogleCloudSQLUser(statefulService *cloudstate.StatefulService,
-	ownedSqlUserSecret *corev1.Secret, instanceName string) (*gcloud.SQLUser, error) {
-
+func (s *PostgresStore) createDesiredGoogleCloudSQLUser(statefulService *cloudstate.StatefulService, ownedSQLUserSecret *corev1.Secret, instanceName string) (*gcloud.SQLUser, error) {
 	sqlUser := gcloud.MakeSQLUser(
 		map[string]interface{}{
 			"metadata": map[string]interface{}{
@@ -349,10 +329,9 @@ func (p *PostgresStore) createDesiredGoogleCloudSQLUser(statefulService *cloudst
 					"name": instanceName,
 				},
 				"password": map[string]interface{}{
-					//"value": "changeMeSomehow",  // plain password
 					"valueFrom": map[string]interface{}{
 						"secretKeyRef": map[string]string{
-							"name": ownedSqlUserSecret.Name,
+							"name": ownedSQLUserSecret.Name,
 							"key":  "password",
 						},
 					},
@@ -360,22 +339,19 @@ func (p *PostgresStore) createDesiredGoogleCloudSQLUser(statefulService *cloudst
 			},
 		},
 	)
-
 	sqlUser.SetLabels(reconciliation.SetCommonLabels(statefulService.Name, sqlUser.GetLabels()))
-	if err := ctrl.SetControllerReference(statefulService, sqlUser, p.Scheme); err != nil {
+	if err := ctrl.SetControllerReference(statefulService, sqlUser, s.Scheme); err != nil {
 		return nil, fmt.Errorf("unable to set owner: %w", err)
 	}
 	return sqlUser, nil
 }
 
-func (p *PostgresStore) createDesiredGoogleCloudSQLUserSecret(statefulService *cloudstate.StatefulService, secretName string) (*corev1.Secret, error) {
-
+func (s *PostgresStore) createDesiredGoogleCloudSQLUserSecret(statefulService *cloudstate.StatefulService, secretName string) (*corev1.Secret, error) {
 	randomBytes, err := reconciliation.GenerateRandomBytes(16)
 	if err != nil {
 		return nil, err
 	}
 	password := base64.StdEncoding.EncodeToString(randomBytes)
-
 	desiredSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      secretName,
@@ -387,274 +363,256 @@ func (p *PostgresStore) createDesiredGoogleCloudSQLUserSecret(statefulService *c
 			"password": []byte(password),
 		},
 	}
-
 	desiredSecret.SetLabels(reconciliation.SetCommonLabels(secretName, desiredSecret.GetLabels()))
-	if err := ctrl.SetControllerReference(statefulService, desiredSecret, p.Scheme); err != nil {
+	if err := ctrl.SetControllerReference(statefulService, desiredSecret, s.Scheme); err != nil {
 		return nil, fmt.Errorf("unable to set owner: %w", err)
 	}
 	return desiredSecret, nil
 }
 
-func (p *PostgresStore) conditionForSQLDatabase(db *gcloud.SQLDatabase) cloudstate.CloudstateCondition {
+func (s *PostgresStore) conditionForSQLDatabase(db *gcloud.SQLDatabase) cloudstate.CloudstateCondition {
 	condition := cloudstate.CloudstateCondition{
-		Type: PostgresGoogleCloudSqlDatabaseNotReady,
+		Type: PostgresGoogleCloudSQLDatabaseNotReady,
 	}
-	if db != nil {
-		if status, ok := db.UnstructuredContent()["status"]; ok {
-			// There _has_ to be a better way to do this stuff...
-			sqlDatabaseStatus := status.(map[string]interface{}) //["conditions"][0]["type"]
-			conditions := sqlDatabaseStatus["conditions"]        //.([]map[string]interface{})
-			sqlDBCondition := conditions.([]interface{})[0]
-			sqlDBCondType := sqlDBCondition.(map[string]interface{})["type"].(string)
-			sqlDBCondStatus := sqlDBCondition.(map[string]interface{})["status"].(string) //corev1.ConditionStatus
-			sqlDBCondReason := sqlDBCondition.(map[string]interface{})["reason"].(string)
-			sqlDBCondMessage := sqlDBCondition.(map[string]interface{})["message"].(string)
-			if sqlDBCondType == "Ready" && sqlDBCondStatus == "True" {
-				condition.Status = corev1.ConditionFalse // SQLDatabase uses Ready while StatefulService uses NotReady so status is opposite
-				condition.Reason = "CloudSqlDatabaseReady"
-				condition.Message = "The Google Cloud SQL database has been provisioned"
-			} else {
-				condition.Status = corev1.ConditionTrue // SQLDatabase uses Ready while StatefulService uses NotReady so status is opposite
-				condition.Reason = "CloudSqlDatabaseUnavailable"
-				condition.Message = fmt.Sprintf("The Google Cloud SQL database is not yet ready: %s: %s", sqlDBCondReason, sqlDBCondMessage)
-			}
-		} else {
-			condition.Status = corev1.ConditionTrue // SQLDatabase uses Ready while StatefulService uses NotReady so status is opposite
-			condition.Reason = "CloudSqlDatabaseUnknownStatus"
-			condition.Message = fmt.Sprintf("The Google Cloud SQL database has unknown status")
-		}
-	} else {
+	if db == nil {
 		condition.Status = corev1.ConditionTrue // SQLDatabase uses Ready while StatefulService uses NotReady so status is opposite
 		condition.Reason = "CloudSqlDatabaseNotCreated"
-		condition.Message = fmt.Sprintf("The Google Cloud SQL database as not been created")
+		condition.Message = "The Google Cloud SQL database as not been created"
+		return condition
 	}
 
+	status, ok := db.UnstructuredContent()["status"]
+	if !ok {
+		condition.Status = corev1.ConditionTrue // SQLDatabase uses Ready while StatefulService uses NotReady so status is opposite
+		condition.Reason = "CloudSqlDatabaseUnknownStatus"
+		condition.Message = "The Google Cloud SQL database has unknown status"
+		return condition
+	}
+	// There _has_ to be a better way to do this stuff…
+	// TODO(review comment): probably runtime.DefaultUnstructuredConverter
+	sqlDatabaseStatus := status.(map[string]interface{}) // ["conditions"][0]["type"]
+	conditions := sqlDatabaseStatus["conditions"]        // .([]map[string]interface{})
+	sqlDBCondition := conditions.([]interface{})[0]
+	sqlDBCondType := sqlDBCondition.(map[string]interface{})["type"].(string)
+	sqlDBCondStatus := sqlDBCondition.(map[string]interface{})["status"].(string) // corev1.ConditionStatus
+	sqlDBCondReason := sqlDBCondition.(map[string]interface{})["reason"].(string)
+	sqlDBCondMessage := sqlDBCondition.(map[string]interface{})["message"].(string)
+	if !(sqlDBCondType == "Ready" && sqlDBCondStatus == "True") {
+		condition.Status = corev1.ConditionTrue // SQLDatabase uses Ready while StatefulService uses NotReady so status is opposite
+		condition.Reason = "CloudSqlDatabaseUnavailable"
+		condition.Message = fmt.Sprintf("The Google Cloud SQL database is not yet ready: %s: %s", sqlDBCondReason, sqlDBCondMessage)
+		return condition
+	}
+
+	condition.Status = corev1.ConditionFalse // SQLDatabase uses Ready while StatefulService uses NotReady so status is opposite
+	condition.Reason = "CloudSqlDatabaseReady"
+	condition.Message = "The Google Cloud SQL database has been provisioned"
 	return condition
 }
 
-func (p *PostgresStore) conditionForSQLUser(user *gcloud.SQLUser) cloudstate.CloudstateCondition {
+func (s *PostgresStore) conditionForSQLUser(user *gcloud.SQLUser) cloudstate.CloudstateCondition {
 	condition := cloudstate.CloudstateCondition{
-		Type: PostgresGoogleCloudSqlUserNotReady,
+		Type: PostgresGoogleCloudSQLUserNotReady,
 	}
-	if user != nil {
-		if status, ok := user.UnstructuredContent()["status"]; ok {
-			// There _has_ to be a better way to do this stuff...
-			sqlUserStatus := status.(map[string]interface{}) //["conditions"][0]["type"]
-			conditions := sqlUserStatus["conditions"]        //.([]map[string]interface{})
-			sqlUserCondition := conditions.([]interface{})[0]
-			sqlUserCondType := sqlUserCondition.(map[string]interface{})["type"].(string)
-			sqlUserCondStatus := sqlUserCondition.(map[string]interface{})["status"].(string) //corev1.ConditionStatus
-			sqlUserCondReason := sqlUserCondition.(map[string]interface{})["reason"].(string)
-			sqlUserCondMessage := sqlUserCondition.(map[string]interface{})["message"].(string)
-			if sqlUserCondType == "Ready" && sqlUserCondStatus == "True" {
-				condition.Status = corev1.ConditionFalse // SQLUser uses Ready while StatefulService uses NotReady so status is opposite
-				condition.Reason = "CloudSqlUserReady"
-				condition.Message = "The Google Cloud SQL user has been provisioned"
-			} else {
-				condition.Status = corev1.ConditionTrue // SQLUser uses Ready while StatefulService uses NotReady so status is opposite
-				condition.Reason = "CloudSqlUserUnavailable"
-				condition.Message = fmt.Sprintf("The Google Cloud SQL user is not yet ready: %s: %s", sqlUserCondReason, sqlUserCondMessage)
-			}
-		} else {
-			condition.Status = corev1.ConditionTrue // SQLUser uses Ready while StatefulService uses NotReady so status is opposite
-			condition.Reason = "CloudSqlUserUnknownStatus"
-			condition.Message = fmt.Sprintf("The Google Cloud SQL user has unknown status")
-		}
-	} else {
+	if user == nil {
 		condition.Status = corev1.ConditionTrue // SQLUser uses Ready while StatefulService uses NotReady so status is opposite
 		condition.Reason = "CloudSqlUserNotCreated"
-		condition.Message = fmt.Sprintf("The Google Cloud SQL user as not been created")
+		condition.Message = "The Google Cloud SQL user as not been created"
+		return condition
+	}
+	status, ok := user.UnstructuredContent()["status"]
+	if !ok {
+		condition.Status = corev1.ConditionTrue // SQLUser uses Ready while StatefulService uses NotReady so status is opposite
+		condition.Reason = "CloudSqlUserUnknownStatus"
+		condition.Message = "The Google Cloud SQL user has unknown status"
+		return condition
+	}
+	// There _has_ to be a better way to do this stuff...
+	sqlUserStatus := status.(map[string]interface{}) // ["conditions"][0]["type"]
+	conditions := sqlUserStatus["conditions"]        // .([]map[string]interface{})
+	sqlUserCondition := conditions.([]interface{})[0]
+	sqlUserCondType := sqlUserCondition.(map[string]interface{})["type"].(string)
+	sqlUserCondStatus := sqlUserCondition.(map[string]interface{})["status"].(string) // corev1.ConditionStatus
+	sqlUserCondReason := sqlUserCondition.(map[string]interface{})["reason"].(string)
+	sqlUserCondMessage := sqlUserCondition.(map[string]interface{})["message"].(string)
+
+	if !(sqlUserCondType == "Ready" && sqlUserCondStatus == "True") {
+		condition.Status = corev1.ConditionTrue // SQLUser uses Ready while StatefulService uses NotReady so status is opposite
+		condition.Reason = "CloudSqlUserUnavailable"
+		condition.Message = fmt.Sprintf("The Google Cloud SQL user is not yet ready: %s: %s", sqlUserCondReason, sqlUserCondMessage)
+		return condition
 	}
 
+	condition.Status = corev1.ConditionFalse // SQLUser uses Ready while StatefulService uses NotReady so status is opposite
+	condition.Reason = "CloudSqlUserReady"
+	condition.Message = "The Google Cloud SQL user has been provisioned"
 	return condition
 }
 
-func (p *PostgresStore) conditionForSQLInstance(instance *gcloud.SQLInstance) cloudstate.CloudstateCondition {
-	condition := cloudstate.CloudstateCondition{
-		Type: PostgresGoogleCloudSqlInstanceNotReady,
+func (s *PostgresStore) conditionForSQLInstance(instance *gcloud.SQLInstance) cloudstate.CloudstateCondition {
+	c := cloudstate.CloudstateCondition{
+		Type: PostgresGoogleCloudSQLInstanceNotReady,
 	}
 	if instance == nil {
-		condition.Status = corev1.ConditionTrue
-		condition.Reason = "CloudSqlInstanceNotCreated"
-		condition.Message = "The Google Cloud SQL instance has not yet been created"
-	} else {
-		// is SQLInstance ready?
-		// There _has_ to be a better way to do this...
-		sqlIContent := instance.UnstructuredContent()
-		if sqlIStatusIface, ok := sqlIContent["status"]; !ok {
-			condition.Status = corev1.ConditionTrue
-			condition.Reason = "CloudSqlInstanceUnknownStatus"
-			condition.Message = fmt.Sprintf("The Google Cloud SQL instance has unknown status")
-		} else {
-			sqlIStatus := sqlIStatusIface.(map[string]interface{})
-			conditions := sqlIStatus["conditions"] //.([]map[string]interface{})
-			sqlICondition := conditions.([]interface{})[0]
-			sqlICondType := sqlICondition.(map[string]interface{})["type"].(string)
-			sqlICondStatus := sqlICondition.(map[string]interface{})["status"].(string) //corev1.ConditionStatus
-			sqlICondReason := sqlICondition.(map[string]interface{})["reason"].(string)
-			sqlICondMessage := sqlICondition.(map[string]interface{})["message"].(string)
-
-			if sqlICondType != "Ready" { // some type we don't know about
-				condition.Status = corev1.ConditionTrue
-				condition.Reason = "CloudSqlInstanceNotReady"
-				condition.Message = fmt.Sprintf("The Google Cloud SQL has status: %s:%s, %s: %s",
-					sqlICondType, sqlICondStatus, sqlICondReason, sqlICondMessage)
-			} else if sqlICondStatus != "True" {
-				condition.Status = corev1.ConditionTrue
-				condition.Reason = "CloudSqlInstanceNotReady"
-				condition.Message = fmt.Sprintf("The Google Cloud SQL instance has status: %s -- %s", sqlICondReason, sqlICondMessage)
-			} else {
-				condition.Status = corev1.ConditionFalse
-				condition.Reason = "CloudSqlInstanceReady"
-				condition.Message = "The Google Cloud SQL instance is ready"
-			}
-		}
+		c.Status = corev1.ConditionTrue
+		c.Reason = "CloudSqlInstanceNotCreated"
+		c.Message = "The Google Cloud SQL instance has not yet been created"
+		return c
 	}
+	// is SQLInstance ready?
+	// There _has_ to be a better way to do this...
+	sqlIContent := instance.UnstructuredContent()
+	sqlIStatusIface, ok := sqlIContent["status"]
+	if !ok {
+		c.Status = corev1.ConditionTrue
+		c.Reason = "CloudSqlInstanceUnknownStatus"
+		c.Message = "The Google Cloud SQL instance has unknown status"
+		return c
+	}
+	sqlIStatus := sqlIStatusIface.(map[string]interface{})
+	conditions := sqlIStatus["conditions"] // .([]map[string]interface{})
+	sqlICondition := conditions.([]interface{})[0]
+	sqlICondType := sqlICondition.(map[string]interface{})["type"].(string)
+	sqlICondStatus := sqlICondition.(map[string]interface{})["status"].(string) // corev1.ConditionStatus
+	sqlICondReason := sqlICondition.(map[string]interface{})["reason"].(string)
+	sqlICondMessage := sqlICondition.(map[string]interface{})["message"].(string)
 
-	return condition
+	if sqlICondType != "Ready" { // some type we don't know about
+		c.Status = corev1.ConditionTrue
+		c.Reason = "CloudSqlInstanceNotReady"
+		c.Message = fmt.Sprintf(
+			"The Google Cloud SQL has status: %s:%s, %s: %s",
+			sqlICondType, sqlICondStatus, sqlICondReason, sqlICondMessage,
+		)
+		return c
+	}
+	if sqlICondStatus != "True" {
+		c.Status = corev1.ConditionTrue
+		c.Reason = "CloudSqlInstanceNotReady"
+		c.Message = fmt.Sprintf("The Google Cloud SQL instance has status: %s -- %s", sqlICondReason, sqlICondMessage)
+		return c
+	}
+	c.Status = corev1.ConditionFalse
+	c.Reason = "CloudSqlInstanceReady"
+	c.Message = "The Google Cloud SQL instance is ready"
+	return c
 }
 
-func (p *PostgresStore) reconcileGoogleCloudSQLUser(
-	ctx context.Context,
-	statefulService *cloudstate.StatefulService,
-	actualSqlUser *gcloud.SQLUser,
-	actualSecret *corev1.Secret,
-	instanceName string,
-	secretName string,
-	log logr.Logger,
-) error {
+// TODO(review comment): these long arguments lists have to be captured with a type somehow, I think.
+func (s *PostgresStore) reconcileGoogleCloudSQLUser(ctx context.Context, statefulService *cloudstate.StatefulService, actualSQLUser *gcloud.SQLUser, actualSecret *corev1.Secret, instanceName string, secretName string, log logr.Logger) error {
 	if actualSecret == nil {
-		desiredSecret, err := p.createDesiredGoogleCloudSQLUserSecret(statefulService, secretName)
+		desiredSecret, err := s.createDesiredGoogleCloudSQLUserSecret(statefulService, secretName)
 		if err != nil {
 			return err
 		}
 		log.Info("Creating secret for CloudSQL user", "secret", secretName)
-		if err := p.Client.Create(ctx, desiredSecret); err != nil {
+		if err := s.Client.Create(ctx, desiredSecret); err != nil {
 			return err
 		}
 		actualSecret = desiredSecret
 	}
 
-	desired, err := p.createDesiredGoogleCloudSQLUser(statefulService, actualSecret, instanceName)
+	desired, err := s.createDesiredGoogleCloudSQLUser(statefulService, actualSecret, instanceName)
 	if err != nil {
 		return err
 	}
-
-	if actualSqlUser == nil {
+	if actualSQLUser == nil {
 		reconciliation.SetLastApplied(desired)
 		log.Info("Creating CloudSQL user", "SQLUser", desired.GetName())
-		return p.Client.Create(ctx, desired)
+		return s.Client.Create(ctx, desired)
 	}
 
 	// Need to copy over annotations as any generated by Google config-connector are required.
-	desired.SetAnnotations(actualSqlUser.GetAnnotations())
+	desired.SetAnnotations(actualSQLUser.GetAnnotations())
 	reconciliation.SetLastApplied(desired)
-
-	if !reconciliation.NeedsUpdate(p.Log.WithValues("type", "SQLUser"), actualSqlUser, desired) {
+	if !reconciliation.NeedsUpdate(s.Log.WithValues("type", "SQLUser"), actualSQLUser, desired) {
 		return nil
 	}
 
-	// Todo: factor this out into separate method
+	// TODO: factor this out into separate method
 	// Resource version is required for the update, but needs to be set after
 	// the last applied annotation to avoid unnecessary diffs
-	resourceVersion, _, _ := unstructured.NestedString(actualSqlUser.Object, "metadata", "resourceVersion")
-	if err := unstructured.SetNestedField(desired.Object, resourceVersion, "metadata", "resourceVersion"); err != nil {
-		return err
-	}
-
-	log.Info("Updating CloudSQL user", "SQLUser", desired.GetName())
-	if err = p.Client.Update(ctx, desired); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p *PostgresStore) reconcileGoogleCloudSQLDatabase(
-	ctx context.Context,
-	statefulService *cloudstate.StatefulService,
-	actual *gcloud.SQLDatabase,
-	instanceName string,
-	databaseName string,
-	log logr.Logger,
-) error {
-	desired, err := p.createDesiredGoogleCloudSQLDatabase(statefulService, instanceName, databaseName)
+	resourceVersion, _, err := unstructured.NestedString(actualSQLUser.Object, "metadata", "resourceVersion")
 	if err != nil {
 		return err
 	}
+	if err := unstructured.SetNestedField(desired.Object, resourceVersion, "metadata", "resourceVersion"); err != nil {
+		return err
+	}
+	log.Info("Updating CloudSQL user", "SQLUser", desired.GetName())
+	return s.Client.Update(ctx, desired)
+}
 
+func (s *PostgresStore) reconcileGoogleCloudSQLDatabase(ctx context.Context, statefulService *cloudstate.StatefulService, actual *gcloud.SQLDatabase, instanceName string, databaseName string, log logr.Logger) error {
+	desired, err := s.createDesiredGoogleCloudSQLDatabase(statefulService, instanceName, databaseName)
+	if err != nil {
+		return err
+	}
 	if actual == nil {
 		log.Info("Creating CloudSQL database", "SQLDatabase", databaseName)
-		if err = p.Client.Create(ctx, desired); err != nil {
-			return err
-		} else {
-			return nil
-		}
+		return s.Client.Create(ctx, desired)
 	}
 
 	desired.SetAnnotations(actual.GetAnnotations())
 	reconciliation.SetLastApplied(desired)
-
 	if !reconciliation.NeedsUpdate(log.WithValues("type", "SQLDatabase"), actual, desired) {
 		return nil
 	}
 
-	resourceVersion, _, _ := unstructured.NestedString(actual.Object, "metadata", "resourceVersion")
+	resourceVersion, _, err := unstructured.NestedString(actual.Object, "metadata", "resourceVersion")
+	if err != nil {
+		return err
+	}
 	if err := unstructured.SetNestedField(desired.Object, resourceVersion, "metadata", "resourceVersion"); err != nil {
 		return err
 	}
-
 	log.Info("Updating CloudSQL database", "SQLDatabase", databaseName)
-	if err = p.Client.Update(ctx, desired); err != nil {
-		return err
-	}
-	return nil
+	return s.Client.Update(ctx, desired)
 }
 
-func (p *PostgresStore) ReconcileStatefulStore(ctx context.Context, store *cloudstate.StatefulStore) ([]cloudstate.CloudstateCondition, bool, error) {
+func (s *PostgresStore) ReconcileStatefulStore(ctx context.Context, store *cloudstate.StatefulStore) ([]cloudstate.CloudstateCondition, bool, error) {
 	spec := store.Spec.Postgres
-
 	if spec == nil {
-		return nil, false, fmt.Errorf("nil Postgres store")
+		return nil, false, errors.New("nil Postgres store")
 	}
-
 	host := spec.Host
 	if host != "" {
 		return nil, false, nil
-	} else if spec.GoogleCloudSQL != nil {
-		if !p.Config.GoogleCloudSql.Enabled {
-			return []cloudstate.CloudstateCondition{
-				{
-					Type:    PostgresGoogleCloudSqlInstanceNotReady,
-					Status:  corev1.ConditionTrue,
-					Reason:  "GoogleCloudSQLSupportNotEnabled",
-					Message: "Postgres Google Cloud SQL support is not enabled",
-				},
-			}, false, nil
-		}
-		return p.reconcileGoogleCloudSQLInstance(ctx, store)
-	} else {
-		return nil, false, fmt.Errorf("postgres host must not be empty")
 	}
-
+	if spec.GoogleCloudSQL == nil {
+		return nil, false, errors.New("postgres host must not be empty")
+	}
+	if !s.Config.GoogleCloudSQL.Enabled {
+		return []cloudstate.CloudstateCondition{
+			{
+				Type:    PostgresGoogleCloudSQLInstanceNotReady,
+				Status:  corev1.ConditionTrue,
+				Reason:  "GoogleCloudSQLSupportNotEnabled",
+				Message: "Postgres Google Cloud SQL support is not enabled",
+			},
+		}, false, nil
+	}
+	return s.reconcileGoogleCloudSQLInstance(ctx, store)
 }
 
-func (p *PostgresStore) reconcileGoogleCloudSQLInstance(ctx context.Context, statefulStore *cloudstate.StatefulStore) ([]cloudstate.CloudstateCondition, bool, error) {
-
+func (s *PostgresStore) reconcileGoogleCloudSQLInstance(ctx context.Context, statefulStore *cloudstate.StatefulStore) ([]cloudstate.CloudstateCondition, bool, error) {
 	// Get SQLInstances we currently own
 	// Pruning since we allow at most one instance per controller instance
-	ownedSqlInstances, err := reconciliation.GetControlledUnstructured(ctx, p.Client, statefulStore.Name,
-		statefulStore.Namespace, statefulStore.GroupVersionKind(), gcloud.SQLInstanceGVK, true)
-
+	ownedSQLInstances, err := reconciliation.GetControlledUnstructured(
+		ctx, s.Client, statefulStore.Name,
+		statefulStore.Namespace, statefulStore.GroupVersionKind(), gcloud.SQLInstanceGVK, true,
+	)
 	if err != nil {
-		p.Log.Error(err, "unable to list owned SQL instances")
+		s.Log.Error(err, "unable to list owned SQL instances")
 		return nil, false, err
 	}
-	var ownedSqlInstance *unstructured.Unstructured = nil
-	if len(ownedSqlInstances) > 0 {
-		ownedSqlInstance = &ownedSqlInstances[0]
+
+	var ownedSQLInstance *unstructured.Unstructured
+	if len(ownedSQLInstances) > 0 {
+		ownedSQLInstance = &ownedSQLInstances[0]
 	}
 
-	obj, err := reconciliation.GetControlledStructured(ctx, p.Client, statefulStore, &corev1.SecretList{})
+	obj, err := reconciliation.GetControlledStructured(ctx, s.Client, statefulStore, &corev1.SecretList{})
 	if err != nil {
 		return nil, false, err
 	}
@@ -663,7 +621,7 @@ func (p *PostgresStore) reconcileGoogleCloudSQLInstance(ctx context.Context, sta
 		ownedSQLCnxSecret = obj.(*corev1.Secret)
 	}
 
-	sqlInstance, err := p.reconcileSQLInstance(ctx, statefulStore, ownedSqlInstance)
+	sqlInstance, err := s.reconcileSQLInstance(ctx, statefulStore, ownedSQLInstance)
 	if err != nil {
 		return nil, false, fmt.Errorf("unable to reconcile sqlinstance: %w", err)
 	}
@@ -671,7 +629,6 @@ func (p *PostgresStore) reconcileGoogleCloudSQLInstance(ctx context.Context, sta
 	updated := false
 	if statefulStore.Status.Postgres == nil || statefulStore.Status.Postgres.GoogleCloudSQL == nil ||
 		statefulStore.Status.Postgres.GoogleCloudSQL.InstanceName != sqlInstance.GetName() {
-
 		updated = true
 		statefulStore.Status.Postgres = &cloudstate.PostgresStoreStatus{
 			GoogleCloudSQL: &cloudstate.GoogleCloudSQLPostgresStoreStatus{
@@ -680,47 +637,37 @@ func (p *PostgresStore) reconcileGoogleCloudSQLInstance(ctx context.Context, sta
 		}
 	}
 
-	if err := p.reconcileSQLCnxSecret(ctx, statefulStore, ownedSqlInstance, ownedSQLCnxSecret); err != nil {
+	if err := s.reconcileSQLCnxSecret(ctx, statefulStore, ownedSQLInstance, ownedSQLCnxSecret); err != nil {
 		return nil, false, fmt.Errorf("unable to reconcile client SQL connection secret: %w", err)
 	}
-
 	return []cloudstate.CloudstateCondition{
-		p.conditionForSQLInstance(sqlInstance),
+		s.conditionForSQLInstance(sqlInstance),
 	}, updated, nil
 }
 
 // reconcileSQLInstance reconciles a SQLInstance, setting the owner to statefulStore.  Will create the SQLInstance if
-// ownedSqlInstance is nil.  Either way, returns the name of the SQLInstance if and only if the error is nil.
-func (p *PostgresStore) reconcileSQLInstance(
-	ctx context.Context,
-	statefulStore *cloudstate.StatefulStore,
-	ownedSqlInstance *unstructured.Unstructured,
-) (*gcloud.SQLInstance, error) {
+// ownedSQLInstance is nil.  Either way, returns the name of the SQLInstance if and only if the error is nil.
+func (s *PostgresStore) reconcileSQLInstance(ctx context.Context,
+	statefulStore *cloudstate.StatefulStore, ownedSQLInstance *unstructured.Unstructured) (*gcloud.SQLInstance, error) {
 	var actual *unstructured.Unstructured
-	if ownedSqlInstance != nil {
-		actual = ownedSqlInstance
+	if ownedSQLInstance != nil {
+		actual = ownedSQLInstance
 	}
-
-	desired, err := p.createDesiredSQLInstance(statefulStore, ownedSqlInstance)
+	desired, err := s.createDesiredSQLInstance(statefulStore, ownedSQLInstance)
 	if err != nil {
 		return nil, err
 	}
-
 	reconciliation.SetLastApplied(desired)
-
 	if actual == nil {
-		if err = p.Client.Create(ctx, desired); err != nil {
+		if err = s.Client.Create(ctx, desired); err != nil {
 			return nil, err
 		} else {
 			return desired, nil
 		}
 	}
-
-	if !reconciliation.NeedsUpdate(p.Log.WithValues("type", "SQLInstance"), actual, desired) {
-		//log.V(1).Info("No change in SQLInstance")
+	if !reconciliation.NeedsUpdate(s.Log.WithValues("type", "SQLInstance"), actual, desired) {
 		return actual, nil
 	}
-
 	// Resource version is required for the update, but needs to be set after
 	// the last applied annotation to avoid unnecessary diffs
 	resourceVersion, _, _ := unstructured.NestedString(actual.Object, "metadata", "resourceVersion")
@@ -728,60 +675,51 @@ func (p *PostgresStore) reconcileSQLInstance(
 		return nil, err
 	}
 	// Copy status across as well
-	status, found, _ := unstructured.NestedMap(actual.Object, "status")
+	status, found, err := unstructured.NestedMap(actual.Object, "status")
+	if err != nil {
+		return nil, err
+	}
 	if found {
 		if err := unstructured.SetNestedMap(desired.Object, status, "status"); err != nil {
 			return nil, err
 		}
 	}
-
-	if err = p.Client.Update(ctx, desired); err != nil {
+	if err = s.Client.Update(ctx, desired); err != nil {
 		return nil, err
 	}
 	return desired, nil
 }
 
-// Bundle connection info for SQLInstance in k8s secret
-func (p *PostgresStore) reconcileSQLCnxSecret(
-	ctx context.Context,
-	statefulStore *cloudstate.StatefulStore,
-	sqlInstance *gcloud.SQLInstance,
-	ownedSQLCnxSecret *corev1.Secret,
-) error {
-	var actual *corev1.Secret
-	if ownedSQLCnxSecret != nil {
-		actual = ownedSQLCnxSecret
-	}
-
+// Bundle connection info for SQLInstance in k8s secret.
+func (s *PostgresStore) reconcileSQLCnxSecret(ctx context.Context, statefulStore *cloudstate.StatefulStore, sqlInstance *gcloud.SQLInstance, ownedSQLCnxSecret *corev1.Secret) error {
 	if sqlInstance == nil {
 		return nil // Need a sql instance to proceed
 	}
 
-	desired, err := p.createDesiredSQLCnxSecret(statefulStore, sqlInstance)
-	if desired == nil { // sqlInstance isn't ready with info required to create the secret
-		return nil
+	var actual *corev1.Secret
+	if ownedSQLCnxSecret != nil {
+		actual = ownedSQLCnxSecret
 	}
+	desired, err := s.createDesiredSQLCnxSecret(statefulStore, sqlInstance)
 	if err != nil {
 		return err
+	}
+	if desired == nil { // sqlInstance isn't ready with info required to create the secret
+		return nil
 	}
 	reconciliation.SetLastApplied(desired)
 
 	if actual == nil {
-		if err = p.Client.Create(ctx, desired); err != nil {
+		if err = s.Client.Create(ctx, desired); err != nil {
 			return err
 		} else {
 			return nil
 		}
 	}
-
-	if !reconciliation.NeedsUpdate(p.Log.WithValues("type", "Secret"), actual, desired) {
+	if !reconciliation.NeedsUpdate(s.Log.WithValues("type", "Secret"), actual, desired) {
 		return nil
 	}
-
-	if err = p.Client.Update(ctx, desired); err != nil {
-		return err
-	}
-	return nil
+	return s.Client.Update(ctx, desired)
 }
 
 // createDesiredSQLInstance creates a SQLInstance based on the spec in the StatefulStore.  If name is provided
@@ -790,39 +728,37 @@ func (p *PostgresStore) reconcileSQLCnxSecret(
 // Some fields are immutable once created. (e.g. databaseVersion)  For some of these, if existing is nil (ie. this is the initial
 // creation of the object), the desired values are taken from the global config.  If existing is non-nil, the desired values match those
 // in the existing object.  This allows us to change how new objects are created but leave existing ones alone.
-func (p *PostgresStore) createDesiredSQLInstance(statefulStore *cloudstate.StatefulStore, existing *gcloud.SQLInstance) (*gcloud.SQLInstance, error) {
-
+func (s *PostgresStore) createDesiredSQLInstance(statefulStore *cloudstate.StatefulStore, existing *gcloud.SQLInstance) (*gcloud.SQLInstance, error) {
 	// For these properties, use the value in the existing object if it exists.
 	var name string
 	var dbVersion string
 	var dbRegion string
-	privateNetworkRef := "projects/" + p.Gcp.Project + "/global/networks/" + p.Gcp.Network
+	privateNetworkRef := "projects/" + s.GCP.Project + "/global/networks/" + s.GCP.Network
 
 	// If "databaseVersion" is unspecified in configs or existing, we'll use the GCP default.
-	if p.Config.GoogleCloudSql.TypeVersion != "" {
-		dbVersion = p.Config.GoogleCloudSql.TypeVersion
+	if version := s.Config.GoogleCloudSQL.TypeVersion; version != "" {
+		dbVersion = version
 	}
+
 	if existing != nil {
 		name = existing.GetName()
-		existingDBVersion, found, _ := unstructured.NestedString(existing.UnstructuredContent(), "spec", "databaseVersion")
-		if found {
+		if existingDBVersion, found, _ := unstructured.NestedString(existing.UnstructuredContent(), "spec", "databaseVersion"); found {
 			dbVersion = existingDBVersion
 		}
-		existingDBRegion, found, _ := unstructured.NestedString(existing.UnstructuredContent(), "spec", "region")
-		if found {
+		if existingDBRegion, found, _ := unstructured.NestedString(existing.UnstructuredContent(), "spec", "region"); found {
 			dbRegion = existingDBRegion
 		}
-		existingPrivateNetworkRef, found, _ := unstructured.NestedString(existing.UnstructuredContent(), "spec", "settings", "ipConfiguration", "privateNetworkRef", "external")
-		if found {
+		if existingPrivateNetworkRef, found, _ := unstructured.NestedString(
+			existing.UnstructuredContent(), "spec", "settings", "ipConfiguration", "privateNetworkRef", "external",
+		); found {
 			privateNetworkRef = existingPrivateNetworkRef
 		}
 	}
 
 	// Create a unique name for the SQLInstance if we need to
 	if name == "" {
-		name = p.createCloudSQLInstanceName(statefulStore)
+		name = s.createCloudSQLInstanceName(statefulStore)
 	}
-
 	sqlInstance := gcloud.MakeSQLInstance(
 		map[string]interface{}{
 			"metadata": map[string]interface{}{
@@ -836,6 +772,8 @@ func (p *PostgresStore) createDesiredSQLInstance(statefulStore *cloudstate.State
 			},
 		},
 	)
+	// c := runtime.DefaultUnstructuredConverter
+	// c.FromUnstructured(sqlInstance.UnstructuredContent(), )
 	sqlInstanceSpec := sqlInstance.UnstructuredContent()["spec"].(map[string]interface{})
 	sqlInstanceSpecSettings := sqlInstanceSpec["settings"].(map[string]interface{})
 
@@ -847,44 +785,43 @@ func (p *PostgresStore) createDesiredSQLInstance(statefulStore *cloudstate.State
 		},
 	}
 
-	// Assume requested values are valid for now.  Will validate in a validating admission webhook at some point
-
+	// Assume requested values are valid for now. Will validate in a validating admission webhook at some point
 	if dbVersion != "" {
 		sqlInstanceSpec["databaseVersion"] = dbVersion
 	}
-	cloudSql := statefulStore.Spec.Postgres.GoogleCloudSQL
-	if cloudSql.HighAvailability {
+	cloudSQL := statefulStore.Spec.Postgres.GoogleCloudSQL
+	if cloudSQL.HighAvailability {
 		// Based on https://cloud.google.com/config-connector/docs/reference/resources#sqlinstance
 		sqlInstanceSpecSettings["availabilityType"] = "REGIONAL"
 		// Do we want to change the name to indicate HA?
 	}
-	if !cloudSql.Storage.Capacity.IsZero() {
-		sqlInstanceSpecSettings["diskSize"] = cloudSql.Storage.Capacity.Value()
+	if !cloudSQL.Storage.Capacity.IsZero() {
+		sqlInstanceSpecSettings["diskSize"] = cloudSQL.Storage.Capacity.Value()
 	}
-	if cloudSql.Storage.AutomaticIncrease {
+	if cloudSQL.Storage.AutomaticIncrease {
 		sqlInstanceSpecSettings["diskAutoresize"] = true
 	}
-	if cloudSql.Storage.Type != "" {
-		sqlInstanceSpecSettings["diskType"] = cloudSql.Storage.Type
+	if cloudSQL.Storage.Type != "" {
+		sqlInstanceSpecSettings["diskType"] = cloudSQL.Storage.Type
 	}
 
 	// Use cores and memory values to determine a machine type (aka tier)
 	// Assuming values have already been validated.
-	cores := p.Config.GoogleCloudSql.DefaultCores
-	if cloudSql.Cores > 0 {
-		cores = cloudSql.Cores
+	cores := s.Config.GoogleCloudSQL.DefaultCores
+	if cloudSQL.Cores > 0 {
+		cores = cloudSQL.Cores
 	}
-	memory := p.Config.GoogleCloudSql.DefaultMemory
-	if !cloudSql.Memory.IsZero() {
+	memory := s.Config.GoogleCloudSQL.DefaultMemory
+	if !cloudSQL.Memory.IsZero() {
 		result := make([]byte, 0, 18)
-		number, _ := cloudSql.Memory.CanonicalizeBytes(result)
-		//_ = suffix // Could check that suffix is "Mi"...
+		number, _ := cloudSQL.Memory.CanonicalizeBytes(result)
+		// _ = suffix // Could check that suffix is "Mi"...
 		memory = string(number)
 	}
 	var tier = "db-custom-" + strconv.FormatInt(int64(cores), 10) + "-" + memory
 	sqlInstanceSpecSettings["tier"] = tier
 
-	// Todo: implement this other feature:
+	// TODO: implement this other feature:
 	// Don't see how to do this with config-connector atm...
 	// storage:
 	//   description: The storage configuration.
@@ -896,14 +833,13 @@ func (p *PostgresStore) createDesiredSQLInstance(statefulStore *cloudstate.State
 
 	//	sqlInstanceRes := schema.GroupVersionResource{Group: "sql.cnrm.cloud.google.com", Version: "v1beta1", Resource: "sqlinstances"}
 	sqlInstance.SetLabels(reconciliation.SetCommonLabels(statefulStore.Name, sqlInstance.GetLabels()))
-	if err := ctrl.SetControllerReference(statefulStore, sqlInstance, p.Scheme); err != nil {
+	if err := ctrl.SetControllerReference(statefulStore, sqlInstance, s.Scheme); err != nil {
 		return nil, fmt.Errorf("unable to set owner: %w", err)
 	}
-
 	return sqlInstance, nil
 }
 
-func (p *PostgresStore) createCloudSQLInstanceName(statefulStore *cloudstate.StatefulStore) string {
+func (s *PostgresStore) createCloudSQLInstanceName(statefulStore *cloudstate.StatefulStore) string {
 	name := statefulStore.Spec.Postgres.GoogleCloudSQL.Name
 	if name == "" {
 		name = statefulStore.Name
@@ -911,13 +847,12 @@ func (p *PostgresStore) createCloudSQLInstanceName(statefulStore *cloudstate.Sta
 	return name
 }
 
-func (p *PostgresStore) createDesiredSQLCnxSecret(statefulStore *cloudstate.StatefulStore, sqlInstance *gcloud.SQLInstance) (*corev1.Secret, error) {
+func (s *PostgresStore) createDesiredSQLCnxSecret(statefulStore *cloudstate.StatefulStore, sqlInstance *gcloud.SQLInstance) (*corev1.Secret, error) {
 	if sqlInstance == nil {
-		return nil, fmt.Errorf("sqlInstance cannot be nil")
+		return nil, errors.New("sqlInstance cannot be nil")
 	}
 
 	secretName := postgresCnxSecretPrefix + statefulStore.Name
-
 	// Instance not ready if any of these are not found.
 	instanceIP, found, err := unstructured.NestedString(sqlInstance.Object, "status", "privateIpAddress")
 	if !found {
@@ -941,7 +876,7 @@ func (p *PostgresStore) createDesiredSQLCnxSecret(statefulStore *cloudstate.Stat
 	}
 
 	desiredSecret.SetLabels(reconciliation.SetCommonLabels(secretName, desiredSecret.GetLabels()))
-	if err := ctrl.SetControllerReference(statefulStore, desiredSecret, p.Scheme); err != nil {
+	if err := ctrl.SetControllerReference(statefulStore, desiredSecret, s.Scheme); err != nil {
 		return nil, fmt.Errorf("unable to set owner: %w", err)
 	}
 	return desiredSecret, nil

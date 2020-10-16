@@ -1,5 +1,4 @@
 /*
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -56,7 +55,7 @@ type StatefulServiceStoreConfig struct {
 	Secret *corev1.LocalObjectReference `json:"secret,omitempty"`
 }
 
-// StatefulServiceStatus defines the observed state of StatefulService
+// StatefulServiceStatus defines the observed state of StatefulService.
 type StatefulServiceStatus struct {
 	// Summary of the current status.
 	// +optional
@@ -102,7 +101,7 @@ const (
 	CloudstateNotReady CloudstateConditionType = "NotReady"
 )
 
-// StatefulService is the Schema for the statefulservices API
+// StatefulService is the Schema for the statefulservices API.
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.selector
@@ -117,7 +116,7 @@ type StatefulService struct {
 	Status StatefulServiceStatus `json:"status,omitempty"`
 }
 
-// StatefulServiceList contains a list of StatefulService
+// StatefulServiceList contains a list of StatefulService.
 // +kubebuilder:object:root=true
 type StatefulServiceList struct {
 	metav1.TypeMeta `json:",inline"`

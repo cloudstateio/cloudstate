@@ -1,15 +1,30 @@
+/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package stores
 
 import (
-	"fmt"
-	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/config"
-	"golang.org/x/net/context"
-	v1 "k8s.io/api/apps/v1"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"context"
+	"errors"
 	"strconv"
+
+	cloudstate "github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/apis/v1alpha1"
+	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/config"
+	v1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 )
-import corev1 "k8s.io/api/core/v1"
-import cloudstate "github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/apis/v1alpha1"
 
 type CassandraStore struct {
 	Config *config.CassandraConfig
@@ -28,100 +43,81 @@ const (
 	CassandraPasswordEnvVar      = "CASSANDRA_PASSWORD"
 )
 
-func (c *CassandraStore) ReconcileStatefulStore(
-	ctx context.Context,
-	store *cloudstate.StatefulStore,
-) ([]cloudstate.CloudstateCondition, bool, error) {
+func (s *CassandraStore) ReconcileStatefulStore(ctx context.Context, store *cloudstate.StatefulStore) ([]cloudstate.CloudstateCondition, bool, error) {
 	return nil, false, nil
 }
 
-func (c *CassandraStore) SetupWithStatefulStoreController(builder *builder.Builder) error {
+func (s *CassandraStore) SetupWithStatefulStoreController(builder *builder.Builder) error {
 	return nil
 }
 
-func (c *CassandraStore) ReconcileStatefulService(
-	ctx context.Context,
-	statefulService *cloudstate.StatefulService,
-	deployment *v1.Deployment,
-	store *cloudstate.StatefulStore,
-) ([]cloudstate.CloudstateCondition, error) {
-
-	if statefulService.Spec.StoreConfig.Database != "" {
-		deployment.Spec.Template.Annotations[CloudstateCassandraKeyspaceAnnotation] = statefulService.Spec.StoreConfig.Database
+func (s *CassandraStore) ReconcileStatefulService(ctx context.Context, service *cloudstate.StatefulService, deployment *v1.Deployment, store *cloudstate.StatefulStore) ([]cloudstate.CloudstateCondition, error) {
+	if db := service.Spec.StoreConfig.Database; db != "" {
+		deployment.Spec.Template.Annotations[CloudstateCassandraKeyspaceAnnotation] = db
 	}
-	if statefulService.Spec.StoreConfig.Secret != nil {
-		deployment.Spec.Template.Annotations[CloudstateCassandraSecretAnnotation] = statefulService.Spec.StoreConfig.Secret.Name
+	if secret := service.Spec.StoreConfig.Secret; secret != nil {
+		deployment.Spec.Template.Annotations[CloudstateCassandraSecretAnnotation] = secret.Name
 	}
-
 	return nil, nil
 }
 
-func (c *CassandraStore) SetupWithStatefulServiceController(builder *builder.Builder) error {
+func (s *CassandraStore) SetupWithStatefulServiceController(builder *builder.Builder) error {
 	return nil
 }
 
-func (c *CassandraStore) InjectPodStoreConfig(
-	ctx context.Context,
-	name string,
-	namespace string,
-	pod *corev1.Pod,
-	cloudstateSidecarContainer *corev1.Container,
-	store *cloudstate.StatefulStore,
-) error {
-
-	cloudstateSidecarContainer.Image = c.Config.Image
-
-	spec := store.Spec.Cassandra
-
-	if spec == nil {
-		return fmt.Errorf("nil Cassandra store")
+func (s *CassandraStore) InjectPodStoreConfig(ctx context.Context, name string, namespace string, pod *corev1.Pod, container *corev1.Container, store *cloudstate.StatefulStore) error {
+	container.Image = s.Config.Image
+	if s.Config.Args != nil {
+		container.Args = s.Config.Args
 	}
-
+	spec := store.Spec.Cassandra
+	if spec == nil {
+		return errors.New("nil Cassandra store")
+	}
 	host := spec.Host
 	if host == "" {
-		return fmt.Errorf("cassandra host must not be empty")
+		return errors.New("cassandra host must not be empty")
 	}
-	appendEnvVar(cloudstateSidecarContainer, CassandraContactPointsEnvVar, host)
-
+	appendEnvVar(container, CassandraContactPointsEnvVar, host)
 	if spec.Port != 0 {
-		appendEnvVar(cloudstateSidecarContainer, CassandraPortEnvVar, strconv.Itoa(int(spec.Port)))
+		appendEnvVar(container, CassandraPortEnvVar, strconv.Itoa(int(spec.Port)))
 	}
 
 	var secret *corev1.LocalObjectReference
-	if pod.Annotations[CloudstateCassandraSecretAnnotation] != "" {
+	if name := pod.Annotations[CloudstateCassandraSecretAnnotation]; name != "" {
 		secret = &corev1.LocalObjectReference{
-			Name: pod.Annotations[CloudstateCassandraSecretAnnotation],
+			Name: name,
 		}
-	} else if spec.Credentials != nil {
-		secret = spec.Credentials.Secret
+	} else if c := spec.Credentials; c != nil {
+		secret = c.Secret
 	}
 
 	keyspaceKey := "keyspace"
 	usernameKey := "username"
 	passwordKey := "password"
-	if spec.Credentials != nil {
-		if spec.Credentials.KeyspaceKey != "" {
-			keyspaceKey = spec.Credentials.KeyspaceKey
+	if c := spec.Credentials; c != nil {
+		if c.KeyspaceKey != "" {
+			keyspaceKey = c.KeyspaceKey
 		}
-		if spec.Credentials.UsernameKey != "" {
-			usernameKey = spec.Credentials.UsernameKey
+		if c.UsernameKey != "" {
+			usernameKey = c.UsernameKey
 		}
-		if spec.Credentials.PasswordKey != "" {
-			passwordKey = spec.Credentials.PasswordKey
+		if c.PasswordKey != "" {
+			passwordKey = c.PasswordKey
 		}
 	}
 
 	// Keyspace config
-	if pod.Annotations[CloudstateCassandraKeyspaceAnnotation] != "" {
-		appendEnvVar(cloudstateSidecarContainer, CassandraKeySpaceEnvVar, pod.Annotations[CloudstateCassandraKeyspaceAnnotation])
+	if ks := pod.Annotations[CloudstateCassandraKeyspaceAnnotation]; ks != "" {
+		appendEnvVar(container, CassandraKeySpaceEnvVar, ks)
 	} else if secret != nil {
-		appendOptionalSecretEnvVar(cloudstateSidecarContainer, CassandraKeySpaceEnvVar, *secret, keyspaceKey)
+		appendOptionalSecretEnvVar(container, CassandraKeySpaceEnvVar, *secret, keyspaceKey)
 	}
 
 	// username/password config
 	if secret != nil {
-		appendSecretEnvVar(cloudstateSidecarContainer, CassandraUsernameEnvVar, *secret, usernameKey)
-		appendSecretEnvVar(cloudstateSidecarContainer, CassandraPasswordEnvVar, *secret, passwordKey)
+		appendSecretEnvVar(container, CassandraUsernameEnvVar, *secret, usernameKey)
+		appendSecretEnvVar(container, CassandraPasswordEnvVar, *secret, passwordKey)
 	}
 
 	return nil

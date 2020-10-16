@@ -72,21 +72,21 @@ commands:
 
 jobs:
 
-  build-core-native-images:
+  build-core-native-image:
     machine: true
     resource_class: large
-    description: "Build core native images"
+    description: "Build core native image"
     steps:
     - checkout
     - install-java-11
     - setup_sbt
     - restore_sbt_cache
     - run:
-        name: Build sbt native images
-        command: sbt "dockerBuildNativeDevMode publishLocal" "dockerBuildNativeInMemory publishLocal"
+        name: Build sbt native image
+        command: sbt "dockerBuildNativeCore publishLocal"
     - save_docker_image:
         tar_file: cloudstate-proxy-native-core.tar
-        docker_image: cloudstateio/cloudstate-proxy-native-in-memory:latest cloudstateio/cloudstate-proxy-native-dev-mode:latest
+        docker_image: cloudstateio/cloudstate-proxy-native-core:latest
     - persist_to_workspace:
         root: /tmp/workspace
         paths:
@@ -147,14 +147,13 @@ jobs:
     - run:
         name: Build sbt images
         command: |
-          sbt 'dockerBuildDevMode publishLocal' \
-            'dockerBuildInMemory publishLocal' \
+          sbt 'dockerBuildCore publishLocal' \
             'dockerBuildPostgres publishLocal' \
             'dockerBuildCassandra publishLocal' \
             java-shopping-cart/docker:publishLocal
     - save_docker_image:
         tar_file: cloudstate-sbt-images.tar
-        docker_image: cloudstateio/cloudstate-proxy-dev-mode:latest cloudstateio/cloudstate-proxy-in-memory:latest cloudstateio/cloudstate-proxy-postgres:latest cloudstateio/cloudstate-proxy-cassandra:latest cloudstateio/java-shopping-cart:latest
+        docker_image: cloudstateio/cloudstate-proxy-core:latest cloudstateio/cloudstate-proxy-postgres:latest cloudstateio/cloudstate-proxy-cassandra:latest cloudstateio/java-shopping-cart:latest
     - persist_to_workspace:
         root: /tmp/workspace
         paths:
@@ -338,8 +337,7 @@ jobs:
           name: Push docker images
           command: |
             echo "$DOCKER_PASSWORD" | docker login -u cloudstatebot --password-stdin
-            docker push cloudstateio/cloudstate-proxy-native-dev-mode:latest
-            docker push cloudstateio/cloudstate-proxy-native-in-memory:latest
+            docker push cloudstateio/cloudstate-proxy-native-core:latest
             docker push cloudstateio/cloudstate-proxy-native-postgres:latest
             docker push cloudstateio/cloudstate-proxy-native-cassandra:latest
 
@@ -348,13 +346,13 @@ workflows:
     jobs:
       - build-operator
       - build-sbt-images
-      - build-core-native-images
+      - build-core-native-image
       - build-postgres-native-image
       - build-cassandra-native-image
       - native-image-it-test:
           name: Native-image TCK integration tests
           requires:
-            - build-core-native-images
+            - build-core-native-image
       - minikube-smoke-test:
           name: Minikube smoke test
           requires:
@@ -366,7 +364,7 @@ workflows:
           requires:
           - build-operator
           - build-sbt-images
-          - build-core-native-images
+          - build-core-native-image
       - native-image-smoke-test:
           name: Native-image Postgres smoke test
           proxy-store: Postgres
@@ -384,7 +382,7 @@ workflows:
       - publish-native-images:
           name: Publish native images to docker hub
           requires:
-            - build-core-native-images
+            - build-core-native-image
             - build-postgres-native-image
             - build-cassandra-native-image
           filters:

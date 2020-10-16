@@ -1,0 +1,52 @@
+= Run on GKE
+
+include::ROOT:partial$attributes.adoc[]
+include::ROOT:partial$include.adoc[]
+
+== Cluster creation
+Create a GKE cluster. We recommend at least 6 vCPUs (ie, a node pool of 3 `n1-standard-2` nodes). Also ensure that the current user is a cluster admin.
+
+Detailed instructions for creating the GKE cluster can be found in the https://github.com/knative/docs/blob/release-0.12/docs/install/Knative-with-GKE.md[Knative documentation], follow all the steps up to (but not including) installing Knative.
+
+== Cassandra Set up
+If using an event sourced entity, install Cassandra. This can be done from the Google Marketplace, by visiting the https://console.cloud.google.com/marketplace/details/google/cassandra[Cassandra Cluster], selecting configure, selecting your GCloud project, and then installing it in the Kubernetes cluster you just created.
+
+The defaults should be good enough, in our examples we called the app instance name *cassandra*.
+
+_Note: there is an option to use an in memory store if you just want to test it out, of course, as soon as your pods shut down (or if they are rebalanced), your store will be lost._
+
+== Cluster preparation
+Create the cloudstate namespace and install the Cloudstate operator:
+
+[source,sh,subs="attributes+"]
+----
+kubectl create namespace cloudstate
+kubectl apply -n cloudstate -f https://raw.githubusercontent.com/cloudstateio/cloudstate/v{cloudstate-version}/operator/cloudstate.yaml
+----
+
+== Deploying function
+You are now ready to install an event sourced function. We have a shopping cart example in the `samples/js-shopping-cart` directory of this project. This can be installed by following these instructions:
+
+=== Installing StatefulStore
+Configure a Cassandra store. If you called your Cassandra deployment *cassandra* and deployed it to the default namespace, this can be installed by running:
+
+[source,sh,subs="attributes+"]
+----
+kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/v{cloudstate-version}/samples/js-shopping-cart/cassandra-store.yaml
+----
+
+Otherwise, download the above file and update the service parameter to match the first node of your Cassandra stateful set.
+
+=== Installing StatefulService
+Install the shopping cart, this can be done by running:
+
+[source,sh,subs="attributes+"]
+----
+kubectl apply -f https://raw.githubusercontent.com/cloudstateio/cloudstate/v{cloudstate-version}/samples/js-shopping-cart/js-shopping-cart.yaml
+----
+
+The operator will install a service, you can then create an ingress for that service. To test, instantiate a gRPC client in your favourite language for this descriptor. You may need to also download the `cloudstate/entity.proto` and `google/protobuf/empty.proto` descriptors to compile it in your language.
+
+NOTE: The shopping cart descriptor is deployed with debug on, so try getting the logs of the shopping-cart container in each of the deployed pods to see what's happening when commands are sent.
+
+

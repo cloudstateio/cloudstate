@@ -164,8 +164,8 @@ lazy val protocols = (project in file("protocols"))
       )
   )
 
-lazy val proxyDockerBuild = settingKey[Option[(String, Option[String])]](
-  "Docker artifact name and configuration file which gets overridden by the buildProxy command"
+lazy val proxyDockerBuild = settingKey[Option[String]](
+  "Docker artifact name which gets overridden by the buildProxy command"
 )
 
 def dockerSettings: Seq[Setting[_]] = Seq(
@@ -179,7 +179,7 @@ def dockerSettings: Seq[Setting[_]] = Seq(
   dockerAlias := {
     val old = dockerAlias.value
     proxyDockerBuild.value match {
-      case Some((dockerName, _)) => old.withName(dockerName)
+      case Some(dockerName) => old.withName(dockerName)
       case None => old
     }
   },
@@ -204,27 +204,19 @@ def buildProxyHelp(commandName: String, name: String) =
      s"Execute the given docker scoped task (eg, publishLocal or publish) for the $name build of the proxy.")
   )
 
-def buildProxyCommand(commandName: String,
-                      project: => Project,
-                      name: String,
-                      configResource: Option[String],
-                      native: Boolean): Command = {
+def buildProxyCommand(commandName: String, project: => Project, name: String, native: Boolean): Command = {
   val cn =
     if (native) s"dockerBuildNative$commandName"
     else s"dockerBuild$commandName"
   val imageName =
     if (native) s"native-$name"
     else name
-  val configResourceSetting = configResource match {
-    case Some(resource) => "Some(\"" + resource + "\")"
-    case None => "None"
-  }
   Command.single(
     cn,
     buildProxyHelp(cn, name)
   ) { (state, command) =>
     List(
-      s"""set proxyDockerBuild in `${project.id}` := Some(("cloudstate-proxy-$imageName", $configResourceSetting))""",
+      s"""set proxyDockerBuild in `${project.id}` := Some("cloudstate-proxy-$imageName")""",
       s"""set graalVMDockerPublishLocalBuild in ThisBuild := $native""",
       s"${project.id}/docker:$command",
       s"set proxyDockerBuild in `${project.id}` := None"
@@ -233,25 +225,21 @@ def buildProxyCommand(commandName: String,
 }
 
 commands ++= Seq(
-  buildProxyCommand("DevMode", `proxy-core`, "dev-mode", Some("dev-mode.conf"), true),
-  buildProxyCommand("DevMode", `proxy-core`, "dev-mode", Some("dev-mode.conf"), false),
-  buildProxyCommand("NoStore", `proxy-core`, "no-store", Some("no-store.conf"), true),
-  buildProxyCommand("NoStore", `proxy-core`, "no-store", Some("no-store.conf"), false),
-  buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), true),
-  buildProxyCommand("InMemory", `proxy-core`, "in-memory", Some("in-memory.conf"), false),
-  buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, true),
-  buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", None, false),
-  buildProxyCommand("Spanner", `proxy-spanner`, "spanner", None, true),
-  buildProxyCommand("Spanner", `proxy-spanner`, "spanner", None, false),
-  buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, true),
-  buildProxyCommand("Postgres", `proxy-postgres`, "postgres", None, false),
+  buildProxyCommand("Core", `proxy-core`, "core", true),
+  buildProxyCommand("Core", `proxy-core`, "core", false),
+  buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", true),
+  buildProxyCommand("Cassandra", `proxy-cassandra`, "cassandra", false),
+  buildProxyCommand("Spanner", `proxy-spanner`, "spanner", true),
+  buildProxyCommand("Spanner", `proxy-spanner`, "spanner", false),
+  buildProxyCommand("Postgres", `proxy-postgres`, "postgres", true),
+  buildProxyCommand("Postgres", `proxy-postgres`, "postgres", false),
   Command.single("dockerBuildAllNonNative", buildProxyHelp("dockerBuildAllNonNative", "all non native")) {
     (state, command) =>
-      List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres", "Spanner")
+      List("Core", "Cassandra", "Postgres", "Spanner")
         .map(c => s"dockerBuild$c $command") ::: state
   },
   Command.single("dockerBuildAllNative", buildProxyHelp("dockerBuildAllNative", "all native")) { (state, command) =>
-    List("DevMode", "NoStore", "InMemory", "Cassandra", "Postgres", "Spanner")
+    List("Core", "Cassandra", "Postgres", "Spanner")
       .map(c => s"dockerBuildNative$c $command") ::: state
   }
 )
@@ -269,13 +257,9 @@ def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
     }, graalVMBuildServer.value),
   dockerEntrypoint := {
     val old = dockerEntrypoint.value
-    val withLibraryPath = if (graalVMDockerPublishLocalBuild.value) {
+    if (graalVMDockerPublishLocalBuild.value) {
       old :+ s"-Djava.library.path=${DockerBaseImageJavaLibraryPath}"
     } else old
-    proxyDockerBuild.value match {
-      case Some((_, Some(configResource))) => withLibraryPath :+ s"-Dconfig.resource=$configResource"
-      case _ => withLibraryPath
-    }
   }
 )
 
@@ -658,6 +642,7 @@ lazy val `java-support-tck` = (project in file("java-support/tck"))
   .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
   .settings(
     name := "cloudstate-java-tck",
+    dynverTagPrefix := "java-support-",
     dockerSettings,
     mainClass in Compile := Some("io.cloudstate.javasupport.tck.JavaSupportTck"),
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),

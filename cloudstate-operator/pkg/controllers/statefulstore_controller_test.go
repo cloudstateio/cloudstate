@@ -1,7 +1,22 @@
+/*
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package controllers
 
 import (
 	"context"
+
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/stores"
 
 	gcloud "github.com/cloudstateio/cloudstate/cloudstate-operator/internal/google/api/sql.cnrm.cloud/v1beta1"
@@ -72,7 +87,7 @@ var _ = Describe("StatefulStore Controller", func() {
 	Context("when a default ManagedPostgresStore StatefulStore is created", func() {
 		var (
 			statefulStore *cloudstate.StatefulStore
-			//secretName      string
+			// secretName      string
 		)
 
 		BeforeEach(func() {
@@ -89,7 +104,7 @@ var _ = Describe("StatefulStore Controller", func() {
 			}
 
 			Expect(k8sClient.Create(ctx, statefulStore)).To(Succeed(), "failed to create statefulstore")
-			//secretName = "postgres-cnx-" + statefulStore.Name
+			// secretName = "postgres-cnx-" + statefulStore.Name
 		})
 
 		It("should create a SQL instance", func() {
@@ -103,14 +118,14 @@ var _ = Describe("StatefulStore Controller", func() {
 
 		// Can't test this atm because we're not wired to GCP so no SQLInstance is ever created.
 		// The secret depends on info from that so will never come into existence at this time.
-		//It("should create an instance cnx info secret", func() {
+		// It("should create an instance cnx info secret", func() {
 		//	secret := &corev1.Secret{}
 		//	waitForResource(ctx, namespace, secretName, secret)
 		//	pp.Fprintf(GinkgoWriter, "Created secret for SQL instance cnx: %v\n", *secret)
 		//
 		//	By("owned by the stateful store")
 		//	Expect(secret).To(beOwnedBy(statefulStore))
-		//})
+		// })
 
 		It("should update its status", func() {
 			sqlInstance := gcloud.NewSQLInstance()
@@ -122,11 +137,11 @@ var _ = Describe("StatefulStore Controller", func() {
 			By("SQLInstance not ready yet")
 			Expect(actual.Status.Conditions).To(HaveLen(1), "should have a status condition")
 			condition := actual.Status.Conditions[0]
-			Expect(condition.Type).To(Equal(stores.PostgresGoogleCloudSqlInstanceNotReady))
+			Expect(condition.Type).To(Equal(stores.PostgresGoogleCloudSQLInstanceNotReady))
 			Expect(condition.Status).To(Equal(corev1.ConditionTrue))
 			Expect(actual.Status.Summary).To(Equal("CloudSqlInstanceUnknownStatus"))
 
-			// Todo: In order for the status to progress further we'll need the test
+			// TODO: In order for the status to progress further we'll need the test
 			// environment actually wired to GCP or have mocks in place.
 		})
 
@@ -165,7 +180,7 @@ var _ = Describe("StatefulStore Controller", func() {
 		BeforeEach(func() {
 			memory, _ := resource.ParseQuantity("3.75Gi")
 			capacity, _ := resource.ParseQuantity("2Gi")
-			//automaticIncreaseLimit, _ := resource.ParseQuantity("10Gi")
+			// automaticIncreaseLimit, _ := resource.ParseQuantity("10Gi")
 			statefulStore = &cloudstate.StatefulStore{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "my-custom-postgres-statefulstore",
@@ -181,8 +196,8 @@ var _ = Describe("StatefulStore Controller", func() {
 								Type:              "SSD",
 								Capacity:          capacity,
 								AutomaticIncrease: true,
-								// Todo: not implemented.  What to do?
-								//AutomaticIncreaseLimit: automaticIncreaseLimit,
+								// TODO: not implemented.  What to do?
+								// AutomaticIncreaseLimit: automaticIncreaseLimit,
 							},
 						},
 					},
@@ -208,7 +223,7 @@ var _ = Describe("StatefulStore Controller", func() {
 			Expect(settings["tier"]).To(Equal("db-custom-4-3840"))
 
 			// Will have to tweak StatefulStoreReconciler in suite-test.go somehow to test this...
-			//region := sqlSpec["region"].(string)
+			// region := sqlSpec["region"].(string)
 
 			By("owned by the stateful store")
 			Expect(sqlInstance).To(beOwnedBy(statefulStore))

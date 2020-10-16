@@ -16,7 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// Todo: Change the name of this file.  It's not just about SQL stuff anymore
+// TODO: Change the name of this file.  It's not just about SQL stuff anymore
 
 var (
 	SQLInstanceGVK = schema.GroupVersionKind{

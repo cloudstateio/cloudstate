@@ -1,5 +1,4 @@
 /*
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -17,13 +16,14 @@ package main
 
 import (
 	"flag"
+	"os"
+	"time"
+
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/config"
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/controllers"
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/stores"
 	"github.com/ilyakaznacheev/cleanenv"
-	"os"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"time"
 
 	cloudstatev1alpha1 "github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/apis/v1alpha1"
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/webhooks"
@@ -43,9 +43,7 @@ var (
 
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
-
 	_ = cloudstatev1alpha1.AddToScheme(scheme)
-
 	_ = istio.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }
@@ -54,27 +52,30 @@ func init() {
 // The default file path is "/etc/config/config.yaml". This can be overridden with the CONFIG_PATH environment variable.
 // It is a fatal error if an explicit CONFIG_PATH is provided and not found.
 // If the default path is not found, we go with default config settings.  (Transitional behaviour that may change.)
-func readConfigs(cfg *config.OperatorConfig) {
+func readConfigs() *config.OperatorConfig {
 	configPath, pathProvided := os.LookupEnv("CONFIG_PATH")
 	if !pathProvided {
 		configPath = "/etc/config/config.yaml"
 	}
-
-	err := cleanenv.ReadConfig(configPath, cfg)
-	if err != nil {
-		if os.IsNotExist(err) {
-			if pathProvided {
-				setupLog.Error(err, "config file not found", "file", configPath)
-				os.Exit(1)
-			} // else we just go with the defaults
-			setupLog.Info("using default configs")
-			return
-		} else {
-			setupLog.Error(err, "error reading config file", "err", err)
-			os.Exit(1)
-		}
+	cfg, err := config.ReadConfig(configPath)
+	if err == nil {
+		setupLog.Info("using config", "file", configPath)
+		return cfg
 	}
-	setupLog.Info("using config", "file", configPath)
+	if os.IsNotExist(err) {
+		if pathProvided {
+			setupLog.Error(err, "config file not found", "file", configPath)
+			os.Exit(1)
+		} // else we just go with the defaults.
+		setupLog.Info("using default configs")
+		var cfg config.OperatorConfig
+		config.SetDefaults(&cfg)
+		return &cfg
+	}
+
+	setupLog.Error(err, "error reading config file", "err", err)
+	os.Exit(1)
+	return nil
 }
 
 func main() {
@@ -85,24 +86,23 @@ func main() {
 		enableDebugLogs      bool
 	)
 
-	// Setting this here to catch logs from readConfig.  Will reset as appropriate below.
+	// Setting this here to catch logs from readConfig. Will reset as appropriate below.
 	ctrl.SetLogger(zap.New(func(o *zap.Options) {
 		o.Development = true
 	}))
 
-	var cfg config.OperatorConfig
-	readConfigs(&cfg)
+	cfg := readConfigs()
 
-	// Todo: Move these two to config file?
+	// TODO: Move these two to config file?
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.DurationVar(&reconcileTimeout, "reconcile-timeout", 60*time.Second, "the max time a reconcile loop can spend")
 	flag.BoolVar(&enableDebugLogs, "debug", true, "Enable debug logs.")
 	// Could override config or env setting with something like this...
-	//flag.StringVar(&cfg.StatefulServiceConfig.InMemoryImageName, "inMemoryImageName", "somedefault", "name of inmemory image")
+	// flag.StringVar(&cfg.StatefulServiceConfig.InMemoryImageName, "inMemoryImageName", "somedefault", "name of inmemory image")
 
-	// Adds documentation about possible env var settings
+	// Adds documentation about possible env var settings.
 	flag.Usage = cleanenv.FUsage(flag.CommandLine.Output(), &cfg, nil, flag.Usage)
 	flag.Parse()
 
@@ -122,13 +122,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	store := stores.DefaultMultiStores(mgr.GetClient(), scheme, ctrl.Log, &cfg)
+	store := stores.DefaultMultiStores(mgr.GetClient(), scheme, ctrl.Log, cfg)
 
 	mgr.GetWebhookServer().Register("/inject-v1-pod",
 		&webhook.Admission{Handler: webhooks.NewPodInjector(
 			mgr.GetClient(),
 			ctrl.Log.WithName("webhooks").WithName("PodInjector"),
 			store,
+			cfg,
 		)})
 
 	if err = (&controllers.StatefulStoreReconciler{
@@ -136,7 +137,7 @@ func main() {
 		Log:              ctrl.Log.WithName("controllers").WithName("StatefulStore"),
 		Scheme:           mgr.GetScheme(),
 		ReconcileTimeout: reconcileTimeout,
-		OperatorConfig:   &cfg,
+		OperatorConfig:   cfg,
 		Stores:           store,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StatefulStore")
@@ -147,7 +148,7 @@ func main() {
 		Log:              ctrl.Log.WithName("controllers").WithName("StatefulService"),
 		Scheme:           mgr.GetScheme(),
 		ReconcileTimeout: reconcileTimeout,
-		OperatorConfig:   &cfg,
+		OperatorConfig:   cfg,
 		Stores:           store,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StatefulService")

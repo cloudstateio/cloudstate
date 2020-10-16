@@ -1,5 +1,4 @@
 /*
-
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -18,13 +17,14 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"testing"
+	"time"
+
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/config"
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/stores"
 	istio "istio.io/client-go/pkg/apis/networking/v1alpha3"
-	"path/filepath"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
-	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -136,7 +136,7 @@ func runController(ctx context.Context) chan struct{} {
 		},
 		Postgres: config.PostgresConfig{
 			Image: "cloudstate-proxy-postgres",
-			GoogleCloudSql: config.PostgresGoogleCloudSqlConfig{
+			GoogleCloudSQL: config.PostgresGoogleCloudSQLConfig{
 				Enabled: true,
 			},
 		},
