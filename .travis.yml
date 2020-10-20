@@ -75,6 +75,7 @@ jobs:
     - sbt "set concurrentRestrictions in Global += Tags.limitAll(1)" "dockerBuildAllNonNative publish" operator/docker:publish tck/docker:publish
     - sbt proxy/publish proxy/bintrayRelease proxy/bintraySyncMavenCentral
     - sbt -Duse.native.builds=false operator/compileK8sDescriptors
+    - sbt protocols/package
     - travis/upload-release-assets.sh
     - make -C docs deploy
 
