@@ -14,23 +14,23 @@
  * limitations under the License.
  */
 
-package io.cloudstate.samples.crud.shoppingcart;
+package io.cloudstate.samples.valueentity.shoppingcart;
 
-import com.example.crud.shoppingcart.Shoppingcart;
-import com.example.crud.shoppingcart.persistence.Domain;
+import com.example.valueentity.shoppingcart.Shoppingcart;
+import com.example.valueentity.shoppingcart.persistence.Domain;
 import com.google.protobuf.Empty;
 import io.cloudstate.javasupport.EntityId;
-import io.cloudstate.javasupport.crud.CommandContext;
-import io.cloudstate.javasupport.crud.CommandHandler;
-import io.cloudstate.javasupport.crud.CrudEntity;
+import io.cloudstate.javasupport.valueentity.CommandContext;
+import io.cloudstate.javasupport.valueentity.CommandHandler;
+import io.cloudstate.javasupport.valueentity.ValueEntity;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-/** A CRUD entity. */
-@CrudEntity(persistenceId = "crud-shopping-cart")
+/** A value entity. */
+@ValueEntity(persistenceId = "value-entity-shopping-cart")
 public class ShoppingCartEntity {
 
   private final String entityId;
