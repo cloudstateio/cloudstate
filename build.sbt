@@ -118,7 +118,7 @@ lazy val root = (project in file("."))
     `java-support-docs`,
     `java-support-tck`,
     `java-shopping-cart`,
-    `java-crud-shopping-cart`,
+    `java-valueentity-shopping-cart`,
     `java-pingpong`,
     `akka-client`,
     operator,
@@ -638,7 +638,7 @@ lazy val `java-support-docs` = (project in file("java-support/docs"))
   )
 
 lazy val `java-support-tck` = (project in file("java-support/tck"))
-  .dependsOn(`java-support`, `java-shopping-cart`, `java-crud-shopping-cart`)
+  .dependsOn(`java-support`, `java-shopping-cart`, `java-valueentity-shopping-cart`)
   .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
   .settings(
     name := "cloudstate-java-tck",
@@ -672,13 +672,13 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
     assemblySettings("java-shopping-cart.jar")
   )
 
-lazy val `java-crud-shopping-cart` = (project in file("samples/java-crud-shopping-cart"))
+lazy val `java-valueentity-shopping-cart` = (project in file("samples/java-valueentity-shopping-cart"))
   .dependsOn(`java-support`)
   .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
   .settings(
-    name := "java-crud-shopping-cart",
+    name := "java-valueentity-shopping-cart",
     dockerSettings,
-    mainClass in Compile := Some("io.cloudstate.samples.crud.shoppingcart.Main"),
+    mainClass in Compile := Some("io.cloudstate.samples.valueentity.shoppingcart.Main"),
     PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
     PB.protoSources in Compile ++= {
@@ -689,7 +689,7 @@ lazy val `java-crud-shopping-cart` = (project in file("samples/java-crud-shoppin
         PB.gens.java -> (sourceManaged in Compile).value
       ),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "11", "-target", "11"),
-    assemblySettings("java-crud-shopping-cart.jar")
+    assemblySettings("java-valueentity-shopping-cart.jar")
   )
 
 lazy val `java-pingpong` = (project in file("samples/java-pingpong"))

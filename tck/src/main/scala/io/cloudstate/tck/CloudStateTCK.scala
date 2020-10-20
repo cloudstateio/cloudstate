@@ -21,28 +21,28 @@ import akka.grpc.ServiceDescription
 import akka.testkit.TestKit
 import com.example.shoppingcart.persistence.domain
 import com.example.shoppingcart.shoppingcart._
-import com.example.crud.shoppingcart.shoppingcart.{
-  AddLineItem => CrudAddLineItem,
-  Cart => CrudCart,
-  GetShoppingCart => CrudGetShoppingCart,
-  RemoveLineItem => CrudRemoveLineItem,
-  ShoppingCart => CrudShoppingCart,
-  ShoppingCartClient => CrudShoppingCartClient
+import com.example.valueentity.shoppingcart.shoppingcart.{
+  AddLineItem => ValueEntityAddLineItem,
+  Cart => ValueEntityCart,
+  GetShoppingCart => ValueEntityGetShoppingCart,
+  RemoveLineItem => ValueEntityRemoveLineItem,
+  ShoppingCart => ValueEntityShoppingCart,
+  ShoppingCartClient => ValueEntityShoppingCartClient
 }
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.protocol.action.ActionProtocol
 import io.cloudstate.protocol.crdt.Crdt
-import io.cloudstate.protocol.crud.Crud
+import io.cloudstate.protocol.value_entity.ValueEntityProtocol
 import io.cloudstate.protocol.event_sourced._
-import io.cloudstate.tck.model.crud.crud.{CrudTckModel, CrudTwo}
+import io.cloudstate.tck.model.valuentity.valueentity.{ValueEntityTckModel, ValueEntityTwo}
 import io.cloudstate.testkit.InterceptService.InterceptorSettings
 import io.cloudstate.testkit.eventsourced.{EventSourcedMessages, InterceptEventSourcedService}
-import io.cloudstate.testkit.crud.{CrudMessages}
 import io.cloudstate.testkit.{InterceptService, ServiceAddress, TestClient, TestProtocol}
 import io.grpc.StatusRuntimeException
 import io.cloudstate.tck.model.eventsourced.{EventSourcedTckModel, EventSourcedTwo}
+import io.cloudstate.testkit.valuentity.ValueEntityMessages
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 
@@ -78,7 +78,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
 
   private[this] final val client = TestClient(settings.proxy.host, settings.proxy.port)
   private[this] final val shoppingCartClient = ShoppingCartClient(client.settings)(system)
-  private[this] final val crudShoppingCartClient = CrudShoppingCartClient(client.settings)(system)
+  private[this] final val valueEntityShoppingCartClient = ValueEntityShoppingCartClient(client.settings)(system)
 
   private[this] final val protocol = TestProtocol(settings.service.host, settings.service.port)
 
@@ -122,7 +122,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         info.supportedEntityTypes must contain theSameElementsAs Seq(
           EventSourced.name,
           Crdt.name,
-          Crud.name,
+          ValueEntityProtocol.name,
           ActionProtocol.name
         )
 
@@ -150,20 +150,20 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           entity.persistenceId must not be empty
         }
 
-        spec.entities.find(_.serviceName == CrudTckModel.name).foreach { entity =>
-          serviceNames must contain("CrudTckModel")
-          entity.entityType mustBe Crud.name
-          entity.persistenceId mustBe "crud-tck-model"
+        spec.entities.find(_.serviceName == ValueEntityTckModel.name).foreach { entity =>
+          serviceNames must contain("ValueEntityTckModel")
+          entity.entityType mustBe ValueEntityProtocol.name
+          entity.persistenceId mustBe "value-entity-tck-model"
         }
 
-        spec.entities.find(_.serviceName == CrudTwo.name).foreach { entity =>
-          serviceNames must contain("CrudTwo")
-          entity.entityType mustBe Crud.name
+        spec.entities.find(_.serviceName == ValueEntityTwo.name).foreach { entity =>
+          serviceNames must contain("ValueEntityTwo")
+          entity.entityType mustBe ValueEntityProtocol.name
         }
 
-        spec.entities.find(_.serviceName == CrudShoppingCart.name).foreach { entity =>
+        spec.entities.find(_.serviceName == ValueEntityShoppingCart.name).foreach { entity =>
           serviceNames must contain("ShoppingCart")
-          entity.entityType mustBe Crud.name
+          entity.entityType mustBe ValueEntityProtocol.name
           entity.persistenceId must not be empty
         }
 
@@ -601,8 +601,8 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         }
       }
 
-      "verify the HTTP API for CRUD ShoppingCart service" in testFor(CrudShoppingCart) {
-        import CrudShoppingCartVerifier._
+      "verify the HTTP API for Value Entity ShoppingCart service" in testFor(ValueEntityShoppingCart) {
+        import ValueEntityShoppingCartVerifier._
 
         def checkHttpRequest(path: String, body: String = null)(expected: => String): Unit = {
           val response = client.http.request(path, body)
@@ -612,79 +612,79 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
 
         val session = shoppingCartSession(interceptor)
 
-        checkHttpRequest("crud/carts/foo") {
+        checkHttpRequest("ve/carts/foo") {
           session.verifyConnection()
           session.verifyGetInitialEmptyCart("foo")
           """{"items":[]}"""
         }
 
-        checkHttpRequest("crud/cart/foo/items/add", """{"productId": "A14362347", "name": "Deluxe", "quantity": 5}""") {
+        checkHttpRequest("ve/cart/foo/items/add", """{"productId": "A14362347", "name": "Deluxe", "quantity": 5}""") {
           session.verifyAddItem("foo", Item("A14362347", "Deluxe", 5), Cart(Item("A14362347", "Deluxe", 5)))
           "{}"
         }
 
-        checkHttpRequest("crud/cart/foo/items/add", """{"productId": "B14623482", "name": "Basic", "quantity": 1}""") {
+        checkHttpRequest("ve/cart/foo/items/add", """{"productId": "B14623482", "name": "Basic", "quantity": 1}""") {
           session.verifyAddItem("foo",
                                 Item("B14623482", "Basic", 1),
                                 Cart(Item("A14362347", "Deluxe", 5), Item("B14623482", "Basic", 1)))
           "{}"
         }
 
-        checkHttpRequest("crud/cart/foo/items/add", """{"productId": "A14362347", "name": "Deluxe", "quantity": 2}""") {
+        checkHttpRequest("ve/cart/foo/items/add", """{"productId": "A14362347", "name": "Deluxe", "quantity": 2}""") {
           session.verifyAddItem("foo",
                                 Item("A14362347", "Deluxe", 2),
                                 Cart(Item("B14623482", "Basic", 1), Item("A14362347", "Deluxe", 7)))
           "{}"
         }
 
-        checkHttpRequest("crud/carts/foo") {
+        checkHttpRequest("ve/carts/foo") {
           session.verifyGetCart("foo", shoppingCart(Item("B14623482", "Basic", 1), Item("A14362347", "Deluxe", 7)))
           """{"items":[{"productId":"B14623482","name":"Basic","quantity":1},{"productId":"A14362347","name":"Deluxe","quantity":7}]}"""
         }
 
-        checkHttpRequest("crud/carts/foo/items") {
+        checkHttpRequest("ve/carts/foo/items") {
           session.verifyGetCart("foo", shoppingCart(Item("B14623482", "Basic", 1), Item("A14362347", "Deluxe", 7)))
           """[{"productId":"B14623482","name":"Basic","quantity":1.0},{"productId":"A14362347","name":"Deluxe","quantity":7.0}]"""
         }
 
-        checkHttpRequest("crud/cart/foo/items/A14362347/remove", "") {
+        checkHttpRequest("ve/cart/foo/items/A14362347/remove", "") {
           session.verifyRemoveItem("foo", "A14362347", Cart(Item("B14623482", "Basic", 1)))
           "{}"
         }
 
-        checkHttpRequest("crud/carts/foo") {
+        checkHttpRequest("ve/carts/foo") {
           session.verifyGetCart("foo", shoppingCart(Item("B14623482", "Basic", 1)))
           """{"items":[{"productId":"B14623482","name":"Basic","quantity":1}]}"""
         }
 
-        checkHttpRequest("crud/carts/foo/items") {
+        checkHttpRequest("ve/carts/foo/items") {
           session.verifyGetCart("foo", shoppingCart(Item("B14623482", "Basic", 1)))
           """[{"productId":"B14623482","name":"Basic","quantity":1.0}]"""
         }
 
-        checkHttpRequest("crud/carts/foo/remove", """{"userId": "foo"}""") {
+        checkHttpRequest("ve/carts/foo/remove", """{"userId": "foo"}""") {
           session.verifyRemoveCart("foo")
           "{}"
         }
 
-        checkHttpRequest("crud/carts/foo") {
+        checkHttpRequest("ve/carts/foo") {
           session.verifyGetCart("foo", shoppingCart())
           """{"items":[]}"""
         }
       }
     }
 
-    "verifying model test: crud entities" must {
-      import CrudMessages._
-      import io.cloudstate.tck.model.crud.crud._
+    "verifying model test: value entities" must {
+      import ValueEntityMessages._
+      import io.cloudstate.tck.model.valuentity.valueentity._
 
-      val ServiceTwo = CrudTwo.name
+      val ServiceTwo = ValueEntityTwo.name
 
       var entityId: Int = 0
       def nextEntityId(): String = { entityId += 1; s"entity:$entityId" }
 
-      def crudTest(test: String => Any): Unit =
-        testFor(CrudTckModel, CrudTwo)(test(nextEntityId()))
+      def valueEntityTest(test: String => Any): Unit =
+        testFor(ValueEntityTckModel, ValueEntityTwo)(test(nextEntityId()))
 
       def updateState(value: String): RequestAction =
         RequestAction(RequestAction.Action.Update(Update(value)))
@@ -725,19 +725,19 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
       def sideEffects(ids: String*): Effects =
         ids.foldLeft(Effects.empty) { case (e, id) => e.withSideEffect(ServiceTwo, "Call", Request(id)) }
 
-      "verify initial empty state" in crudTest { id =>
-        protocol.crud
+      "verify initial empty state" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id)))
           .expect(reply(1, Response()))
           .passivate()
       }
 
-      "verify update state" in crudTest { id =>
-        protocol.crud
+      "verify update state" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, updateStates("A"))))
           .expect(reply(1, Response("A"), update("A")))
           .send(command(2, id, "Process", Request(id)))
@@ -745,10 +745,10 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .passivate()
       }
 
-      "verify delete state" in crudTest { id =>
-        protocol.crud
+      "verify delete state" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, updateStates("A"))))
           .expect(reply(1, Response("A"), update("A")))
           .send(command(2, id, "Process", Request(id, Seq(deleteState()))))
@@ -758,10 +758,10 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .passivate()
       }
 
-      "verify sub invocations with multiple update states" in crudTest { id =>
-        protocol.crud
+      "verify sub invocations with multiple update states" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, updateStates("A", "B", "C"))))
           .expect(reply(1, Response("C"), update("C")))
           .send(command(2, id, "Process", Request(id)))
@@ -769,10 +769,10 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .passivate()
       }
 
-      "verify sub invocations with multiple update states and delete states" in crudTest { id =>
-        protocol.crud
+      "verify sub invocations with multiple update states and delete states" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, updateAndDeleteActions("A", "B"))))
           .expect(reply(1, Response(), delete()))
           .send(command(2, id, "Process", Request(id)))
@@ -780,10 +780,10 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .passivate()
       }
 
-      "verify sub invocations with update, delete and update states" in crudTest { id =>
-        protocol.crud
+      "verify sub invocations with update, delete and update states" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, deleteBetweenUpdateActions("A", "B"))))
           .expect(reply(1, Response("B"), update("B")))
           .send(command(2, id, "Process", Request(id)))
@@ -791,10 +791,10 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .passivate()
       }
 
-      "verify rehydration after passivation" in crudTest { id =>
-        protocol.crud
+      "verify rehydration after passivation" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, updateStates("A"))))
           .expect(reply(1, Response("A"), update("A")))
           .send(command(2, id, "Process", Request(id, updateStates("B"))))
@@ -804,9 +804,9 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .send(command(4, id, "Process", Request(id, updateStates("D"))))
           .expect(reply(4, Response("D"), update("D")))
           .passivate()
-        protocol.crud
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id, state(persisted("D"))))
+          .send(init(ValueEntityTckModel.name, id, state(persisted("D"))))
           .send(command(1, id, "Process", Request(id, updateStates("E"))))
           .expect(reply(1, Response("E"), update("E")))
           .send(command(2, id, "Process", Request(id)))
@@ -814,84 +814,84 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .passivate()
       }
 
-      "verify reply with multiple side effects" in crudTest { id =>
-        protocol.crud
+      "verify reply with multiple side effects" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, sideEffectsTo("1", "2", "3"))))
           .expect(reply(1, Response(), sideEffects("1", "2", "3")))
           .passivate()
       }
 
-      "verify reply with side effect to second service" in crudTest { id =>
-        protocol.crud
+      "verify reply with side effect to second service" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id)))))
           .expect(reply(1, Response(), sideEffect(ServiceTwo, "Call", Request(id))))
           .passivate()
       }
 
-      "verify reply with multiple side effects and state" in crudTest { id =>
+      "verify reply with multiple side effects and state" in valueEntityTest { id =>
         val actions = updateStates("A", "B", "C", "D", "E") ++ sideEffectsTo("1", "2", "3")
         val effects = sideEffects("1", "2", "3").withUpdateAction(persisted("E"))
-        protocol.crud
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, actions)))
           .expect(reply(1, Response("E"), effects))
           .passivate()
       }
 
-      "verify synchronous side effect to second service" in crudTest { id =>
-        protocol.crud
+      "verify synchronous side effect to second service" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id, synchronous = true)))))
           .expect(reply(1, Response(), sideEffect(ServiceTwo, "Call", Request(id), synchronous = true)))
           .passivate()
       }
 
-      "verify forward to second service" in crudTest { id =>
-        protocol.crud
+      "verify forward to second service" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(forwardTo(id)))))
           .expect(forward(1, ServiceTwo, "Call", Request(id)))
           .passivate()
       }
 
-      "verify forward with updated state to second service" in crudTest { id =>
-        protocol.crud
+      "verify forward with updated state to second service" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(updateState("A"), forwardTo(id)))))
           .expect(forward(1, ServiceTwo, "Call", Request(id), update("A")))
           .passivate()
       }
 
-      "verify forward and side effect to second service" in crudTest { id =>
-        protocol.crud
+      "verify forward and side effect to second service" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id), forwardTo(id)))))
           .expect(forward(1, ServiceTwo, "Call", Request(id), sideEffect(ServiceTwo, "Call", Request(id))))
           .passivate()
       }
 
-      "verify failure action" in crudTest { id =>
-        protocol.crud
+      "verify failure action" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(failWith("expected failure")))))
           .expect(actionFailure(1, "expected failure"))
           .passivate()
       }
 
-      "verify connection after failure action" in crudTest { id =>
-        protocol.crud
+      "verify connection after failure action" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(updateState("A")))))
           .expect(reply(1, Response("A"), update("A")))
           .send(command(2, id, "Process", Request(id, Seq(failWith("expected failure")))))
@@ -901,61 +901,64 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .passivate()
       }
 
-      "verify failure action do not allow side effects" in crudTest { id =>
-        protocol.crud
+      "verify failure action do not allow side effects" in valueEntityTest { id =>
+        protocol.valueEntity
           .connect()
-          .send(init(CrudTckModel.name, id))
+          .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id), failWith("expected failure")))))
           .expect(actionFailure(1, "expected failure"))
           .passivate()
       }
     }
 
-    "verifying app test: crud shopping cart" must {
-      import CrudMessages._
-      import CrudShoppingCartVerifier._
+    "verifying app test: value entity shopping cart" must {
+      import ValueEntityMessages._
+      import ValueEntityShoppingCartVerifier._
 
-      def verifyGetInitialEmptyCart(session: CrudShoppingCartVerifier, cartId: String): Unit = {
-        crudShoppingCartClient.getCart(CrudGetShoppingCart(cartId)).futureValue mustBe CrudCart()
+      def verifyGetInitialEmptyCart(session: ValueEntityShoppingCartVerifier, cartId: String): Unit = {
+        valueEntityShoppingCartClient.getCart(ValueEntityGetShoppingCart(cartId)).futureValue mustBe ValueEntityCart()
         session.verifyConnection()
         session.verifyGetInitialEmptyCart(cartId)
       }
 
-      def verifyGetCart(session: CrudShoppingCartVerifier, cartId: String, expected: Item*): Unit = {
+      def verifyGetCart(session: ValueEntityShoppingCartVerifier, cartId: String, expected: Item*): Unit = {
         val expectedCart = shoppingCart(expected: _*)
-        crudShoppingCartClient.getCart(CrudGetShoppingCart(cartId)).futureValue mustBe expectedCart
+        valueEntityShoppingCartClient.getCart(ValueEntityGetShoppingCart(cartId)).futureValue mustBe expectedCart
         session.verifyGetCart(cartId, expectedCart)
       }
 
-      def verifyAddItem(session: CrudShoppingCartVerifier, cartId: String, item: Item, expected: Cart): Unit = {
-        val addLineItem = CrudAddLineItem(cartId, item.id, item.name, item.quantity)
-        crudShoppingCartClient.addItem(addLineItem).futureValue mustBe EmptyScalaMessage
+      def verifyAddItem(session: ValueEntityShoppingCartVerifier, cartId: String, item: Item, expected: Cart): Unit = {
+        val addLineItem = ValueEntityAddLineItem(cartId, item.id, item.name, item.quantity)
+        valueEntityShoppingCartClient.addItem(addLineItem).futureValue mustBe EmptyScalaMessage
         session.verifyAddItem(cartId, item, expected)
       }
 
-      def verifyRemoveItem(session: CrudShoppingCartVerifier, cartId: String, itemId: String, expected: Cart): Unit = {
-        val removeLineItem = CrudRemoveLineItem(cartId, itemId)
-        crudShoppingCartClient.removeItem(removeLineItem).futureValue mustBe EmptyScalaMessage
+      def verifyRemoveItem(session: ValueEntityShoppingCartVerifier,
+                           cartId: String,
+                           itemId: String,
+                           expected: Cart): Unit = {
+        val removeLineItem = ValueEntityRemoveLineItem(cartId, itemId)
+        valueEntityShoppingCartClient.removeItem(removeLineItem).futureValue mustBe EmptyScalaMessage
         session.verifyRemoveItem(cartId, itemId, expected)
       }
 
-      def verifyAddItemFailure(session: CrudShoppingCartVerifier, cartId: String, item: Item): Unit = {
-        val addLineItem = CrudAddLineItem(cartId, item.id, item.name, item.quantity)
-        val error = crudShoppingCartClient.addItem(addLineItem).failed.futureValue
+      def verifyAddItemFailure(session: ValueEntityShoppingCartVerifier, cartId: String, item: Item): Unit = {
+        val addLineItem = ValueEntityAddLineItem(cartId, item.id, item.name, item.quantity)
+        val error = valueEntityShoppingCartClient.addItem(addLineItem).failed.futureValue
         error mustBe a[StatusRuntimeException]
         val description = error.asInstanceOf[StatusRuntimeException].getStatus.getDescription
         session.verifyAddItemFailure(cartId, item, description)
       }
 
-      def verifyRemoveItemFailure(session: CrudShoppingCartVerifier, cartId: String, itemId: String): Unit = {
-        val removeLineItem = CrudRemoveLineItem(cartId, itemId)
-        val error = crudShoppingCartClient.removeItem(removeLineItem).failed.futureValue
+      def verifyRemoveItemFailure(session: ValueEntityShoppingCartVerifier, cartId: String, itemId: String): Unit = {
+        val removeLineItem = ValueEntityRemoveLineItem(cartId, itemId)
+        val error = valueEntityShoppingCartClient.removeItem(removeLineItem).failed.futureValue
         error mustBe a[StatusRuntimeException]
         val description = error.asInstanceOf[StatusRuntimeException].getStatus.getDescription
         session.verifyRemoveItemFailure(cartId, itemId, description)
       }
 
-      "verify get cart, add item, remove item, and failures" in testFor(CrudShoppingCart) {
+      "verify get cart, add item, remove item, and failures" in testFor(ValueEntityShoppingCart) {
         val session = shoppingCartSession(interceptor)
         verifyGetInitialEmptyCart(session, "cart:1") // initial empty state
 

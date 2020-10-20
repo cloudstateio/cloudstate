@@ -20,12 +20,12 @@ import akka.actor.ActorSystem;
 import akka.stream.Materializer;
 import com.typesafe.config.Config;
 import com.google.protobuf.Descriptors;
-import io.cloudstate.javasupport.crud.CrudEntity;
+import io.cloudstate.javasupport.valueentity.ValueEntity;
 import io.cloudstate.javasupport.action.Action;
 import io.cloudstate.javasupport.action.ActionHandler;
 import io.cloudstate.javasupport.crdt.CrdtEntity;
 import io.cloudstate.javasupport.crdt.CrdtEntityFactory;
-import io.cloudstate.javasupport.crud.CrudEntityFactory;
+import io.cloudstate.javasupport.valueentity.ValueEntityFactory;
 import io.cloudstate.javasupport.eventsourced.EventSourcedEntity;
 import io.cloudstate.javasupport.eventsourced.EventSourcedEntityFactory;
 import io.cloudstate.javasupport.impl.AnySupport;
@@ -33,8 +33,8 @@ import io.cloudstate.javasupport.impl.action.AnnotationBasedActionSupport;
 import io.cloudstate.javasupport.impl.action.ActionService;
 import io.cloudstate.javasupport.impl.crdt.AnnotationBasedCrdtSupport;
 import io.cloudstate.javasupport.impl.crdt.CrdtStatefulService;
-import io.cloudstate.javasupport.impl.crud.AnnotationBasedCrudSupport;
-import io.cloudstate.javasupport.impl.crud.CrudStatefulService;
+import io.cloudstate.javasupport.impl.valueentity.AnnotationBasedValueEntitySupport;
+import io.cloudstate.javasupport.impl.valueentity.ValueEntityStatefulService;
 import io.cloudstate.javasupport.impl.eventsourced.AnnotationBasedEventSourcedSupport;
 import io.cloudstate.javasupport.impl.eventsourced.EventSourcedStatefulService;
 
@@ -305,9 +305,9 @@ public final class CloudState {
   }
 
   /**
-   * Register an annotated CRUD entity.
+   * Register a annotated value entity.
    *
-   * <p>The entity class must be annotated with {@link io.cloudstate.javasupport.crud.CrudEntity}.
+   * <p>The entity class must be annotated with {@link ValueEntity}.
    *
    * @param entityClass The entity class.
    * @param descriptor The descriptor for the service that this entity implements.
@@ -315,15 +315,15 @@ public final class CloudState {
    *     types when needed.
    * @return This stateful service builder.
    */
-  public CloudState registerCrudEntity(
+  public CloudState registerValueEntity(
       Class<?> entityClass,
       Descriptors.ServiceDescriptor descriptor,
       Descriptors.FileDescriptor... additionalDescriptors) {
 
-    CrudEntity entity = entityClass.getAnnotation(CrudEntity.class);
+    ValueEntity entity = entityClass.getAnnotation(ValueEntity.class);
     if (entity == null) {
       throw new IllegalArgumentException(
-          entityClass + " does not declare an " + CrudEntity.class + " annotation!");
+          entityClass + " does not declare an " + ValueEntity.class + " annotation!");
     }
 
     final String persistenceId;
@@ -334,9 +334,9 @@ public final class CloudState {
     }
 
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
-    CrudStatefulService service =
-        new CrudStatefulService(
-            new AnnotationBasedCrudSupport(entityClass, anySupport, descriptor),
+    ValueEntityStatefulService service =
+        new ValueEntityStatefulService(
+            new AnnotationBasedValueEntitySupport(entityClass, anySupport, descriptor),
             descriptor,
             anySupport,
             persistenceId);
@@ -347,27 +347,27 @@ public final class CloudState {
   }
 
   /**
-   * Register a CRUD entity factory.
+   * Register a value entity factory.
    *
    * <p>This is a low level API intended for custom (eg, non reflection based) mechanisms for
    * implementing the entity.
    *
-   * @param factory The CRUD factory.
+   * @param factory The value entity factory.
    * @param descriptor The descriptor for the service that this entity implements.
    * @param persistenceId The persistence id for this entity.
    * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
    *     types when needed.
    * @return This stateful service builder.
    */
-  public CloudState registerCrudEntity(
-      CrudEntityFactory factory,
+  public CloudState registerValueEntity(
+      ValueEntityFactory factory,
       Descriptors.ServiceDescriptor descriptor,
       String persistenceId,
       Descriptors.FileDescriptor... additionalDescriptors) {
     services.put(
         descriptor.getFullName(),
         system ->
-            new CrudStatefulService(
+            new ValueEntityStatefulService(
                 factory, descriptor, newAnySupport(additionalDescriptors), persistenceId));
 
     return this;
