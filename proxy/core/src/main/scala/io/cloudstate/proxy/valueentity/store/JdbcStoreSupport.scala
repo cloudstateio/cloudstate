@@ -31,17 +31,19 @@ object JdbcStoreSupport {
 trait JdbcStoreSupport {
 
   def createStore(config: Config)(implicit ec: ExecutionContext): JdbcStore[Key, ByteString] =
-    config.getString("crud.store-type") match {
+    config.getString("value-entity-persistence-store.store-type") match {
       case IN_MEMORY => new JdbcInMemoryStore
       case JDBC => createJdbcStore(config)
       case other =>
-        throw new IllegalArgumentException(s"CRUD store-type must be one of: ${IN_MEMORY} or ${JDBC} but is '$other'")
+        throw new IllegalArgumentException(
+          s"Value Entity store-type must be one of: ${IN_MEMORY} or ${JDBC} but is '$other'"
+        )
     }
 
   private def createJdbcStore(config: Config)(implicit ec: ExecutionContext): JdbcStore[Key, ByteString] = {
     val slickDatabase = JdbcSlickDatabase(config)
     val tableConfiguration = new JdbcValueEntityTableConfiguration(
-      config.getConfig("crud.jdbc-state-store")
+      config.getConfig("value-entity-persistence-store.jdbc-state-store")
     )
     val queries = new JdbcValueEntityQueries(slickDatabase.profile, tableConfiguration)
     new JdbcStoreImpl(slickDatabase, queries)

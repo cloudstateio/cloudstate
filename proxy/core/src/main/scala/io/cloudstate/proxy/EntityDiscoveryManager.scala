@@ -57,7 +57,7 @@ object EntityDiscoveryManager {
       numberOfShards: Int,
       proxyParallelism: Int,
       journalEnabled: Boolean,
-      crudEnabled: Boolean,
+      valueEntityEnabled: Boolean,
       config: Config
   ) {
     validate()
@@ -75,7 +75,7 @@ object EntityDiscoveryManager {
            numberOfShards = config.getInt("number-of-shards"),
            proxyParallelism = config.getInt("proxy-parallelism"),
            journalEnabled = config.getBoolean("journal-enabled"),
-           crudEnabled = config.getBoolean("crud-enabled"),
+           valueEntityEnabled = config.getBoolean("value-entity-enabled"),
            config = config)
     }
 
@@ -137,7 +137,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
         )
       else Map.empty
     } ++ {
-      if (config.crudEnabled)
+      if (config.valueEntityEnabled)
         Map(
           ValueEntityProtocol.name -> new ValueEntitySupportFactory(system, config, clientSettings)
         )

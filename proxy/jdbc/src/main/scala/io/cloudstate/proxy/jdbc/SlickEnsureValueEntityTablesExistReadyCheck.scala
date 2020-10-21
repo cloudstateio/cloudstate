@@ -36,30 +36,30 @@ import scala.util.{Failure, Success, Try}
 
 class SlickEnsureValueEntityTablesExistReadyCheck(system: ActorSystem) extends (() => Future[Boolean]) {
 
-  private val crudConfig = system.settings.config.getConfig("cloudstate.proxy")
-  private val autoCreateTables = crudConfig.getBoolean("jdbc.auto-create-tables")
+  private val valueEntityConfig = system.settings.config.getConfig("cloudstate.proxy")
+  private val autoCreateTables = valueEntityConfig.getBoolean("jdbc.auto-create-tables")
 
   private val check: () => Future[Boolean] = if (autoCreateTables) {
-    // Get a hold of the cloudstate-crud-jdbc slick database instance
-    val db = JdbcSlickDatabase(crudConfig)
+    // Get a hold of the cloudstate.proxy.value-entity-persistence-store.jdbc.database.slick database instance
+    val db = JdbcSlickDatabase(valueEntityConfig)
 
     val actor = system.actorOf(
       BackoffSupervisor.props(
         BackoffOpts.onFailure(
-          childProps = Props(new EnsureCrudTablesExistsActor(db)),
-          childName = "crud-table-creator",
+          childProps = Props(new EnsureValueEntityTablesExistsActor(db)),
+          childName = "value-entity-table-creator",
           minBackoff = 3.seconds,
           maxBackoff = 30.seconds,
           randomFactor = 0.2
         )
       ),
-      "crud-table-creator-supervisor"
+      "value-entity-table-creator-supervisor"
     )
 
     implicit val timeout = Timeout(10.seconds) // TODO make configurable?
     import akka.pattern.ask
 
-    () => (actor ? EnsureCrudTablesExistsActor.Ready).mapTo[Boolean]
+    () => (actor ? EnsureValueEntityTablesExistsActor.Ready).mapTo[Boolean]
   } else { () =>
     Future.successful(true)
   }
@@ -67,7 +67,7 @@ class SlickEnsureValueEntityTablesExistReadyCheck(system: ActorSystem) extends (
   override def apply(): Future[Boolean] = check()
 }
 
-private object EnsureCrudTablesExistsActor {
+private object EnsureValueEntityTablesExistsActor {
 
   case object Ready
 
@@ -76,10 +76,10 @@ private object EnsureCrudTablesExistsActor {
 /**
  * Copied/adapted from https://github.com/lagom/lagom/blob/60897ef752ddbfc28553d3726b8fdb830a3ebdc4/persistence-jdbc/core/src/main/scala/com/lightbend/lagom/internal/persistence/jdbc/SlickProvider.scala
  */
-private class EnsureCrudTablesExistsActor(db: JdbcSlickDatabase) extends Actor with ActorLogging {
+private class EnsureValueEntityTablesExistsActor(db: JdbcSlickDatabase) extends Actor with ActorLogging {
   // TODO refactor this to be in sync with the event sourced one
 
-  import EnsureCrudTablesExistsActor._
+  import EnsureValueEntityTablesExistsActor._
 
   private val profile = db.profile
 
@@ -88,12 +88,12 @@ private class EnsureCrudTablesExistsActor(db: JdbcSlickDatabase) extends Actor w
   implicit val ec = context.dispatcher
 
   private val stateCfg = new JdbcValueEntityTableConfiguration(
-    context.system.settings.config.getConfig("cloudstate.proxy.crud.jdbc-state-store")
+    context.system.settings.config.getConfig("cloudstate.proxy.value-entity-persistence-store.jdbc-state-store")
   )
 
   private val stateTable = new JdbcValueEntityTable {
     override val valueEntityTableCfg: JdbcValueEntityTableConfiguration = stateCfg
-    override val profile: JdbcProfile = EnsureCrudTablesExistsActor.this.profile
+    override val profile: JdbcProfile = EnsureValueEntityTablesExistsActor.this.profile
   }
 
   private val stateStatements = stateTable.ValueEntityTableQuery.schema.createStatements.toSeq

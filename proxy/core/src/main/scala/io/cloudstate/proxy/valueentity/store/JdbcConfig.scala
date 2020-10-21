@@ -48,12 +48,12 @@ object JdbcSlickDatabase {
 
   def apply(config: Config): JdbcSlickDatabase = {
     val database: JdbcBackend.Database = Database.forConfig(
-      "crud.jdbc.database.slick",
+      "value-entity-persistence-store.jdbc.database.slick",
       config
     )
     val profile: JdbcProfile = DatabaseConfig
       .forConfig[JdbcProfile](
-        "crud.jdbc.database.slick",
+        "value-entity-persistence-store.jdbc.database.slick",
         config
       )
       .profile
