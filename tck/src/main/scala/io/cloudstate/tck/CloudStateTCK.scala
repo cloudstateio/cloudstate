@@ -211,7 +211,13 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         events(eventValues: _*).withSnapshot(persisted(snapshotValue))
 
       def sideEffects(ids: String*): Effects =
-        ids.foldLeft(Effects.empty) { case (e, id) => e.withSideEffect(ServiceTwo, "Call", Request(id)) }
+        createSideEffects(synchronous = false, ids)
+
+      def synchronousSideEffects(ids: String*): Effects =
+        createSideEffects(synchronous = true, ids)
+
+      def createSideEffects(synchronous: Boolean, ids: Seq[String]): Effects =
+        ids.foldLeft(Effects.empty) { case (e, id) => e.withSideEffect(ServiceTwo, "Call", Request(id), synchronous) }
 
       "verify initial empty state" in eventSourcedTest { id =>
         protocol.eventSourced
@@ -346,7 +352,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .connect()
           .send(init(EventSourcedTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id)))))
-          .expect(reply(1, Response(), sideEffect(EventSourcedTwo.name, "Call", Request(id))))
+          .expect(reply(1, Response(), sideEffects(id)))
           .passivate()
       }
 
@@ -355,7 +361,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .connect()
           .send(init(EventSourcedTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id, synchronous = true)))))
-          .expect(reply(1, Response(), sideEffect(EventSourcedTwo.name, "Call", Request(id), synchronous = true)))
+          .expect(reply(1, Response(), synchronousSideEffects(id)))
           .passivate()
       }
 
@@ -364,7 +370,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .connect()
           .send(init(EventSourcedTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id), forwardTo(id)))))
-          .expect(forward(1, ServiceTwo, "Call", Request(id), sideEffect(ServiceTwo, "Call", Request(id))))
+          .expect(forward(1, ServiceTwo, "Call", Request(id), sideEffects(id)))
           .passivate()
       }
 
@@ -722,8 +728,17 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
       def delete(): Effects =
         Effects.empty.withDeleteAction()
 
+      //def sideEffects(ids: String*): Effects =
+      //  ids.foldLeft(Effects.empty) { case (e, id) => e.withSideEffect(ServiceTwo, "Call", Request(id)) }
+
       def sideEffects(ids: String*): Effects =
-        ids.foldLeft(Effects.empty) { case (e, id) => e.withSideEffect(ServiceTwo, "Call", Request(id)) }
+        createSideEffects(synchronous = false, ids)
+
+      def synchronousSideEffects(ids: String*): Effects =
+        createSideEffects(synchronous = true, ids)
+
+      def createSideEffects(synchronous: Boolean, ids: Seq[String]): Effects =
+        ids.foldLeft(Effects.empty) { case (e, id) => e.withSideEffect(ServiceTwo, "Call", Request(id), synchronous) }
 
       "verify initial empty state" in valueEntityTest { id =>
         protocol.valueEntity
@@ -828,7 +843,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .connect()
           .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id)))))
-          .expect(reply(1, Response(), sideEffect(ServiceTwo, "Call", Request(id))))
+          .expect(reply(1, Response(), sideEffects(id)))
           .passivate()
       }
 
@@ -848,7 +863,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .connect()
           .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id, synchronous = true)))))
-          .expect(reply(1, Response(), sideEffect(ServiceTwo, "Call", Request(id), synchronous = true)))
+          .expect(reply(1, Response(), synchronousSideEffects(id)))
           .passivate()
       }
 
@@ -875,7 +890,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .connect()
           .send(init(ValueEntityTckModel.name, id))
           .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id), forwardTo(id)))))
-          .expect(forward(1, ServiceTwo, "Call", Request(id), sideEffect(ServiceTwo, "Call", Request(id))))
+          .expect(forward(1, ServiceTwo, "Call", Request(id), sideEffects(id)))
           .passivate()
       }
 

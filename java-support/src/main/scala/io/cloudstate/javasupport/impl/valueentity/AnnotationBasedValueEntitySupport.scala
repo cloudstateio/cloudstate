@@ -16,22 +16,14 @@
 
 package io.cloudstate.javasupport.impl.valueentity
 
-import java.lang.reflect.{Constructor, InvocationTargetException, Method}
+import java.lang.reflect.{Constructor, InvocationTargetException}
 import java.util.Optional
 
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 import io.cloudstate.javasupport.{Metadata, ServiceCall, ServiceCallFactory}
-import io.cloudstate.javasupport.valueentity.{
-  CommandContext,
-  CommandHandler,
-  ValueEntity,
-  ValueEntityContext,
-  ValueEntityCreationContext,
-  ValueEntityFactory,
-  ValueEntityHandler
-}
+import io.cloudstate.javasupport.valueentity._
 import io.cloudstate.javasupport.impl.ReflectionHelper.{InvocationContext, MainArgumentParameterHandler}
-import io.cloudstate.javasupport.impl.valueentity.ValueEntityImpl.EntityException
+import io.cloudstate.javasupport.impl.EntityExceptions.EntityException
 import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEntityFactory, ResolvedServiceMethod}
 
 /**

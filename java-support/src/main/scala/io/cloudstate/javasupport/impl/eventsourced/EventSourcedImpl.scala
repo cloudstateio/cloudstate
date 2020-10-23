@@ -32,12 +32,12 @@ import io.cloudstate.javasupport.impl.{
   AbstractEffectContext,
   ActivatableContext,
   AnySupport,
+  EntityExceptions,
   FailInvoked,
   MetadataImpl,
   ResolvedEntityFactory,
   ResolvedServiceMethod
 }
-import io.cloudstate.protocol.entity.{Command, Failure}
 import io.cloudstate.protocol.event_sourced.EventSourcedStreamIn.Message.{
   Command => InCommand,
   Empty => InEmpty,
@@ -69,6 +69,7 @@ final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
       this
 }
 
+/*
 object EventSourcedImpl {
   final case class EntityException(entityId: String, commandId: Long, commandName: String, message: String)
       extends RuntimeException(message)
@@ -108,13 +109,14 @@ object EventSourcedImpl {
     case _ => "Terminating entity due to unexpected failure"
   }
 }
+ */
 
 final class EventSourcedImpl(_system: ActorSystem,
                              _services: Map[String, EventSourcedStatefulService],
                              rootContext: Context,
                              configuration: Configuration)
     extends EventSourced {
-  import EventSourcedImpl._
+  import EntityExceptions._
 
   private final val system = _system
   private final val services = _services.iterator
