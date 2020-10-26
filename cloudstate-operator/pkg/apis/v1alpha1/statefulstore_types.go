@@ -132,7 +132,7 @@ const (
 	PostgresSSLModeAllow PostgresSSLMode = "allow"
 
 	// PostgresSSLModePrefer prefer SSL, use if you don't care about encryption but will pay the overhead of encryption
-	// if the server supports it
+	// if the server supports it.
 	PostgresSSLModePrefer PostgresSSLMode = "prefer"
 
 	// PostgresSSLModeRequire require SSL, use if you want your data to be encrypted, and you accept the overhead. You
