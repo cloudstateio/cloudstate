@@ -124,7 +124,7 @@ type PostgresSSLMode string
 
 const (
 	// PostgresSSLModeDisable disable SSL, use if you don't care about security and don't want to pay the overhead
-	// for encryption
+	// for encryption.
 	PostgresSSLModeDisable PostgresSSLMode = "disable"
 
 	// PostgresSSLModeAllow allow SSL, use if you don't care about security but will pay the overhead for encryption
