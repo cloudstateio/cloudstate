@@ -1420,28 +1420,37 @@ spec:
                     description: SSL configuration for the Postgres connection.
                     properties:
                       cert:
-                        description: SSLCert is the key of the client certificate
-                          in the secret. This must be a PEM encoded X509 certificate.
+                        description: Cert is the key of the client certificate in
+                          the secret. This must be a PEM encoded X509 certificate.
                           It is ignored if using a PKCS-12 keychain.
                         type: string
                       key:
-                        description: SSLKey is the key of the private key for the
-                          client to use in the secret. This must be a PKCS-12 keychain
-                          or a PKCS-8 DER encoded key. If encrypted, the password
-                          should be specified in sslPassword.
+                        description: Key is the key of the private key for the client
+                          to use in the secret. This must be a PKCS-12 keychain or
+                          a PKCS-8 DER encoded key. If encrypted, the password should
+                          be specified in sslPassword.
                         type: string
                       mode:
-                        description: SslMode is the mode that should be used for SSL.
+                        description: 'Mode is the mode that should be used for SSL.
+                          The value here matches the modes supported by the postgres
+                          libpq client library: https://www.postgresql.org/docs/9.1/libpq-ssl.html
                           Valid values are disable, allow, prefer, require, verify-ca
-                          and verify-full. Defaults to disable.
+                          and verify-full. Defaults to disable.'
+                        enum:
+                        - disable
+                        - allow
+                        - prefer
+                        - require
+                        - verify-ca
+                        - verify-full
                         type: string
                       password:
-                        description: SSLPassword is the password to use to decrypt
-                          the sslKey.
+                        description: Password is the password to use to decrypt the
+                          sslKey.
                         type: string
                       rootCert:
-                        description: SSLRootCert is the key of the root certificate
-                          in the secret. This must be a PEM encoded X509 certificate.
+                        description: RootCert is the key of the root certificate in
+                          the secret. This must be a PEM encoded X509 certificate.
                         type: string
                       secret:
                         description: Secret is the secret that contain any SSL certificates

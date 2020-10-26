@@ -88,8 +88,10 @@ type PostgresCredentials struct {
 
 // PostgressSSL is the configuration for Postgres SSL connections.
 type PostgresSSL struct {
-	// SslMode is the mode that should be used for SSL. Valid values are disable, allow, prefer, require,
-	// verify-ca and verify-full. Defaults to disable.
+	// Mode is the mode that should be used for SSL.
+	// The value here matches the modes supported by the postgres libpq client library:
+	// https://www.postgresql.org/docs/9.1/libpq-ssl.html
+	// Valid values are disable, allow, prefer, require, verify-ca and verify-full. Defaults to disable.
 	// +optional
 	Mode PostgresSSLMode `json:"mode,omitempty"`
 
@@ -97,26 +99,27 @@ type PostgresSSL struct {
 	// +optional
 	Secret *corev1.LocalObjectReference `json:"secret,omitempty"`
 
-	// SSLRootCert is the key of the root certificate in the secret. This must be a PEM encoded X509 certificate.
+	// RootCert is the key of the root certificate in the secret. This must be a PEM encoded X509 certificate.
 	// +optional
 	RootCert string `json:"rootCert,omitempty"`
 
-	// SSLCert is the key of the client certificate in the secret. This must be a PEM encoded X509 certificate.
+	// Cert is the key of the client certificate in the secret. This must be a PEM encoded X509 certificate.
 	// It is ignored if using a PKCS-12 keychain.
 	// +optional
 	Cert string `json:"cert,omitempty"`
 
-	// SSLKey is the key of the private key for the client to use in the secret. This must be a PKCS-12 keychain or a
+	// Key is the key of the private key for the client to use in the secret. This must be a PKCS-12 keychain or a
 	// PKCS-8 DER encoded key. If encrypted, the password should be specified in sslPassword.
 	// +optional
 	Key string `json:"key,omitempty"`
 
-	// SSLPassword is the password to use to decrypt the sslKey.
+	// Password is the password to use to decrypt the sslKey.
 	// +optional
 	Password string `json:"password,omitempty"`
 }
 
 // PostgresSSLMode is the mode for SSL in postgres.
+// +kubebuilder:validation:Enum=disable;allow;prefer;require;verify-ca;verify-full
 type PostgresSSLMode string
 
 const (
@@ -136,9 +139,9 @@ const (
 	// trust that the network will make sure you always connect to the server you want.
 	PostgresSSLModeRequire PostgresSSLMode = "require"
 
-	// PostgresSSLModeVerifyCa verify CA SSL, use if you want your data encrypted, and you accept the overhead. You
+	// PostgresSSLModeVerifyCA verify CA SSL, use if you want your data encrypted, and you accept the overhead. You
 	// want to be sure that you connect to a server that you trust.
-	PostgresSSLModeVerifyCa PostgresSSLMode = "verify-ca"
+	PostgresSSLModeVerifyCA PostgresSSLMode = "verify-ca"
 
 	// PostgresSSLModeVerifyFull verify full SSL, use if you want your data encrypted, and you accept the overhead. You
 	// want to be sure that you connect to a server you trust, and that it's the one you specify.
