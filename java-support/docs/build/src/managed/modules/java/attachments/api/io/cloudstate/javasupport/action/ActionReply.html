@@ -27,7 +27,7 @@
     catch(err) {
     }
 //-->
-var data = {"i0":6,"i1":1,"i2":1,"i3":1,"i4":1,"i5":6};
+var data = {"i0":6,"i1":1,"i2":1,"i3":6,"i4":1,"i5":1,"i6":1,"i7":6,"i8":6};
 var tabs = {65535:["t0","All Methods"],1:["t1","Static Methods"],2:["t2","Instance Methods"],4:["t3","Abstract Methods"]};
 var altColor = "altColor";
 var rowColor = "rowColor";
@@ -128,13 +128,13 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 </dl>
 <dl>
 <dt>All Known Subinterfaces:</dt>
-<dd><code><a href="ForwardReply.html" title="interface in io.cloudstate.javasupport.action">ForwardReply</a>&lt;T&gt;</code>, <code><a href="MessageReply.html" title="interface in io.cloudstate.javasupport.action">MessageReply</a>&lt;T&gt;</code></dd>
+<dd><code><a href="FailureReply.html" title="interface in io.cloudstate.javasupport.action">FailureReply</a>&lt;T&gt;</code>, <code><a href="ForwardReply.html" title="interface in io.cloudstate.javasupport.action">ForwardReply</a>&lt;T&gt;</code>, <code><a href="MessageReply.html" title="interface in io.cloudstate.javasupport.action">MessageReply</a>&lt;T&gt;</code></dd>
 </dl>
 <hr>
 <pre>public interface <span class="typeNameLabel">ActionReply&lt;T&gt;</span></pre>
 <div class="block">An action reply.
 
- <p>Action replies allow returning forwards and attaching effects to messages.</div>
+ <p>Action replies allow returning forwards or failures, and attaching effects to messages.</div>
 </li>
 </ul>
 </div>
@@ -163,20 +163,34 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 </td>
 </tr>
 <tr id="i1" class="rowColor">
+<td class="colFirst"><code>static &lt;T&gt;&nbsp;<a href="FailureReply.html" title="interface in io.cloudstate.javasupport.action">FailureReply</a>&lt;T&gt;</code></td>
+<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#failure(java.lang.String)">failure</a></span>&#8203;(java.lang.String&nbsp;description)</code></th>
+<td class="colLast">
+<div class="block">Create a failure reply.</div>
+</td>
+</tr>
+<tr id="i2" class="altColor">
 <td class="colFirst"><code>static &lt;T&gt;&nbsp;<a href="ForwardReply.html" title="interface in io.cloudstate.javasupport.action">ForwardReply</a>&lt;T&gt;</code></td>
 <th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#forward(io.cloudstate.javasupport.ServiceCall)">forward</a></span>&#8203;(<a href="../ServiceCall.html" title="interface in io.cloudstate.javasupport">ServiceCall</a>&nbsp;serviceCall)</code></th>
 <td class="colLast">
 <div class="block">Create a forward reply.</div>
 </td>
 </tr>
-<tr id="i2" class="altColor">
+<tr id="i3" class="rowColor">
+<td class="colFirst"><code>boolean</code></td>
+<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#isEmpty()">isEmpty</a></span>()</code></th>
+<td class="colLast">
+<div class="block">Whether this reply is empty: does not have a message, forward, or failure.</div>
+</td>
+</tr>
+<tr id="i4" class="altColor">
 <td class="colFirst"><code>static &lt;T&gt;&nbsp;<a href="MessageReply.html" title="interface in io.cloudstate.javasupport.action">MessageReply</a>&lt;T&gt;</code></td>
 <th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#message(T)">message</a></span>&#8203;(T&nbsp;payload)</code></th>
 <td class="colLast">
 <div class="block">Create a message reply.</div>
 </td>
 </tr>
-<tr id="i3" class="rowColor">
+<tr id="i5" class="rowColor">
 <td class="colFirst"><code>static &lt;T&gt;&nbsp;<a href="MessageReply.html" title="interface in io.cloudstate.javasupport.action">MessageReply</a>&lt;T&gt;</code></td>
 <th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#message(T,io.cloudstate.javasupport.Metadata)">message</a></span>&#8203;(T&nbsp;payload,
        <a href="../Metadata.html" title="interface in io.cloudstate.javasupport">Metadata</a>&nbsp;metadata)</code></th>
@@ -184,16 +198,23 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <div class="block">Create a message reply.</div>
 </td>
 </tr>
-<tr id="i4" class="altColor">
+<tr id="i6" class="altColor">
 <td class="colFirst"><code>static &lt;T&gt;&nbsp;<a href="ActionReply.html" title="interface in io.cloudstate.javasupport.action">ActionReply</a>&lt;T&gt;</code></td>
 <th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#noReply()">noReply</a></span>()</code></th>
 <td class="colLast">
-<div class="block">Create a reply that contains neither a message nor a forward.</div>
+<div class="block">Create a reply that contains neither a message nor a forward nor a failure.</div>
 </td>
 </tr>
-<tr id="i5" class="rowColor">
+<tr id="i7" class="rowColor">
 <td class="colFirst"><code><a href="ActionReply.html" title="interface in io.cloudstate.javasupport.action">ActionReply</a>&lt;<a href="ActionReply.html" title="type parameter in ActionReply">T</a>&gt;</code></td>
 <th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#withEffects(io.cloudstate.javasupport.action.Effect...)">withEffects</a></span>&#8203;(<a href="Effect.html" title="interface in io.cloudstate.javasupport.action">Effect</a>...&nbsp;effects)</code></th>
+<td class="colLast">
+<div class="block">Attach the given effects to this reply.</div>
+</td>
+</tr>
+<tr id="i8" class="altColor">
+<td class="colFirst"><code><a href="ActionReply.html" title="interface in io.cloudstate.javasupport.action">ActionReply</a>&lt;<a href="ActionReply.html" title="type parameter in ActionReply">T</a>&gt;</code></td>
+<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#withEffects(java.util.Collection)">withEffects</a></span>&#8203;(java.util.Collection&lt;<a href="Effect.html" title="interface in io.cloudstate.javasupport.action">Effect</a>&gt;&nbsp;effects)</code></th>
 <td class="colLast">
 <div class="block">Attach the given effects to this reply.</div>
 </td>
@@ -215,6 +236,20 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <!--   -->
 </a>
 <h3>Method Detail</h3>
+<a id="isEmpty()">
+<!--   -->
+</a>
+<ul class="blockList">
+<li class="blockList">
+<h4>isEmpty</h4>
+<pre class="methodSignature">boolean&nbsp;isEmpty()</pre>
+<div class="block">Whether this reply is empty: does not have a message, forward, or failure.</div>
+<dl>
+<dt><span class="returnLabel">Returns:</span></dt>
+<dd>Whether the reply is empty.</dd>
+</dl>
+</li>
+</ul>
 <a id="effects()">
 <!--   -->
 </a>
@@ -226,6 +261,22 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dl>
 <dt><span class="returnLabel">Returns:</span></dt>
 <dd>The effects.</dd>
+</dl>
+</li>
+</ul>
+<a id="withEffects(java.util.Collection)">
+<!--   -->
+</a>
+<ul class="blockList">
+<li class="blockList">
+<h4>withEffects</h4>
+<pre class="methodSignature"><a href="ActionReply.html" title="interface in io.cloudstate.javasupport.action">ActionReply</a>&lt;<a href="ActionReply.html" title="type parameter in ActionReply">T</a>&gt;&nbsp;withEffects&#8203;(java.util.Collection&lt;<a href="Effect.html" title="interface in io.cloudstate.javasupport.action">Effect</a>&gt;&nbsp;effects)</pre>
+<div class="block">Attach the given effects to this reply.</div>
+<dl>
+<dt><span class="paramLabel">Parameters:</span></dt>
+<dd><code>effects</code> - The effects to attach.</dd>
+<dt><span class="returnLabel">Returns:</span></dt>
+<dd>A new reply with the attached effects.</dd>
 </dl>
 </li>
 </ul>
@@ -299,6 +350,22 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 </dl>
 </li>
 </ul>
+<a id="failure(java.lang.String)">
+<!--   -->
+</a>
+<ul class="blockList">
+<li class="blockList">
+<h4>failure</h4>
+<pre class="methodSignature">static&nbsp;&lt;T&gt;&nbsp;<a href="FailureReply.html" title="interface in io.cloudstate.javasupport.action">FailureReply</a>&lt;T&gt;&nbsp;failure&#8203;(java.lang.String&nbsp;description)</pre>
+<div class="block">Create a failure reply.</div>
+<dl>
+<dt><span class="paramLabel">Parameters:</span></dt>
+<dd><code>description</code> - The description of the failure.</dd>
+<dt><span class="returnLabel">Returns:</span></dt>
+<dd>A failure reply.</dd>
+</dl>
+</li>
+</ul>
 <a id="noReply()">
 <!--   -->
 </a>
@@ -306,7 +373,7 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <li class="blockList">
 <h4>noReply</h4>
 <pre class="methodSignature">static&nbsp;&lt;T&gt;&nbsp;<a href="ActionReply.html" title="interface in io.cloudstate.javasupport.action">ActionReply</a>&lt;T&gt;&nbsp;noReply()</pre>
-<div class="block">Create a reply that contains neither a message nor a forward.
+<div class="block">Create a reply that contains neither a message nor a forward nor a failure.
 
  <p>This may be useful for emitting effects without sending a message.</div>
 <dl>

@@ -320,6 +320,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">Delete the CRDT.</div>
 </dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/action/FailureReply.html#description()">description()</a></span> - Method in interface io.cloudstate.javasupport.action.<a href="io/cloudstate/javasupport/action/FailureReply.html" title="interface in io.cloudstate.javasupport.action">FailureReply</a></dt>
+<dd>
+<div class="block">The description of the failure.</div>
+</dd>
 </dl>
 <a id="I:E">
 <!--   -->
@@ -424,6 +428,14 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/ClientActionContext.html#fail(java.lang.String)">fail(String)</a></span> - Method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/ClientActionContext.html" title="interface in io.cloudstate.javasupport">ClientActionContext</a></dt>
 <dd>
 <div class="block">Fail the command with the given message.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/action/ActionReply.html#failure(java.lang.String)">failure(String)</a></span> - Static method in interface io.cloudstate.javasupport.action.<a href="io/cloudstate/javasupport/action/ActionReply.html" title="interface in io.cloudstate.javasupport.action">ActionReply</a></dt>
+<dd>
+<div class="block">Create a failure reply.</div>
+</dd>
+<dt><a href="io/cloudstate/javasupport/action/FailureReply.html" title="interface in io.cloudstate.javasupport.action"><span class="typeNameLink">FailureReply</span></a>&lt;<a href="io/cloudstate/javasupport/action/FailureReply.html" title="type parameter in FailureReply">T</a>&gt; - Interface in <a href="io/cloudstate/javasupport/action/package-summary.html">io.cloudstate.javasupport.action</a></dt>
+<dd>
+<div class="block">A failure reply.</div>
 </dd>
 <dt><a href="io/cloudstate/javasupport/crdt/Flag.html" title="interface in io.cloudstate.javasupport.crdt"><span class="typeNameLink">Flag</span></a> - Interface in <a href="io/cloudstate/javasupport/crdt/package-summary.html">io.cloudstate.javasupport.crdt</a></dt>
 <dd>
@@ -618,6 +630,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">Whether this metadata is also a CloudEvent.</div>
 </dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/action/ActionReply.html#isEmpty()">isEmpty()</a></span> - Method in interface io.cloudstate.javasupport.action.<a href="io/cloudstate/javasupport/action/ActionReply.html" title="interface in io.cloudstate.javasupport.action">ActionReply</a></dt>
+<dd>
+<div class="block">Whether this reply is empty: does not have a message, forward, or failure.</div>
+</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/Flag.html#isEnabled()">isEnabled()</a></span> - Method in interface io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/Flag.html" title="interface in io.cloudstate.javasupport.crdt">Flag</a></dt>
 <dd>
 <div class="block">Whether this flag is enabled.</div>
@@ -786,7 +802,7 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 </dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/action/ActionReply.html#noReply()">noReply()</a></span> - Static method in interface io.cloudstate.javasupport.action.<a href="io/cloudstate/javasupport/action/ActionReply.html" title="interface in io.cloudstate.javasupport.action">ActionReply</a></dt>
 <dd>
-<div class="block">Create a reply that contains neither a message nor a forward.</div>
+<div class="block">Create a reply that contains neither a message nor a forward nor a failure.</div>
 </dd>
 </dl>
 <a id="I:O">
@@ -1102,9 +1118,21 @@ the order they are declared.</div>
 <dd>
 <div class="block">Attach the given effects to this reply.</div>
 </dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/action/FailureReply.html#withEffects(io.cloudstate.javasupport.action.Effect...)">withEffects(Effect...)</a></span> - Method in interface io.cloudstate.javasupport.action.<a href="io/cloudstate/javasupport/action/FailureReply.html" title="interface in io.cloudstate.javasupport.action">FailureReply</a></dt>
+<dd>&nbsp;</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/action/ForwardReply.html#withEffects(io.cloudstate.javasupport.action.Effect...)">withEffects(Effect...)</a></span> - Method in interface io.cloudstate.javasupport.action.<a href="io/cloudstate/javasupport/action/ForwardReply.html" title="interface in io.cloudstate.javasupport.action">ForwardReply</a></dt>
 <dd>&nbsp;</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/action/MessageReply.html#withEffects(io.cloudstate.javasupport.action.Effect...)">withEffects(Effect...)</a></span> - Method in interface io.cloudstate.javasupport.action.<a href="io/cloudstate/javasupport/action/MessageReply.html" title="interface in io.cloudstate.javasupport.action">MessageReply</a></dt>
+<dd>&nbsp;</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/action/ActionReply.html#withEffects(java.util.Collection)">withEffects(Collection&lt;Effect&gt;)</a></span> - Method in interface io.cloudstate.javasupport.action.<a href="io/cloudstate/javasupport/action/ActionReply.html" title="interface in io.cloudstate.javasupport.action">ActionReply</a></dt>
+<dd>
+<div class="block">Attach the given effects to this reply.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/action/FailureReply.html#withEffects(java.util.Collection)">withEffects(Collection&lt;Effect&gt;)</a></span> - Method in interface io.cloudstate.javasupport.action.<a href="io/cloudstate/javasupport/action/FailureReply.html" title="interface in io.cloudstate.javasupport.action">FailureReply</a></dt>
+<dd>&nbsp;</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/action/ForwardReply.html#withEffects(java.util.Collection)">withEffects(Collection&lt;Effect&gt;)</a></span> - Method in interface io.cloudstate.javasupport.action.<a href="io/cloudstate/javasupport/action/ForwardReply.html" title="interface in io.cloudstate.javasupport.action">ForwardReply</a></dt>
+<dd>&nbsp;</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/action/MessageReply.html#withEffects(java.util.Collection)">withEffects(Collection&lt;Effect&gt;)</a></span> - Method in interface io.cloudstate.javasupport.action.<a href="io/cloudstate/javasupport/action/MessageReply.html" title="interface in io.cloudstate.javasupport.action">MessageReply</a></dt>
 <dd>&nbsp;</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/CloudEvent.html#withId(java.lang.String)">withId(String)</a></span> - Method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/CloudEvent.html" title="interface in io.cloudstate.javasupport">CloudEvent</a></dt>
 <dd>

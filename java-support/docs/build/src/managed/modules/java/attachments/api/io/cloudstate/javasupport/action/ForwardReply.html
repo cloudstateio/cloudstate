@@ -27,7 +27,7 @@
     catch(err) {
     }
 //-->
-var data = {"i0":6,"i1":6};
+var data = {"i0":6,"i1":6,"i2":6};
 var tabs = {65535:["t0","All Methods"],2:["t2","Instance Methods"],4:["t3","Abstract Methods"]};
 var altColor = "altColor";
 var rowColor = "rowColor";
@@ -159,7 +159,14 @@ extends <a href="ActionReply.html" title="interface in io.cloudstate.javasupport
 </tr>
 <tr id="i1" class="rowColor">
 <td class="colFirst"><code><a href="ForwardReply.html" title="interface in io.cloudstate.javasupport.action">ForwardReply</a>&lt;<a href="ForwardReply.html" title="type parameter in ForwardReply">T</a>&gt;</code></td>
-<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#withEffects(io.cloudstate.javasupport.action.Effect...)">withEffects</a></span>&#8203;(<a href="Effect.html" title="interface in io.cloudstate.javasupport.action">Effect</a>...&nbsp;effect)</code></th>
+<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#withEffects(io.cloudstate.javasupport.action.Effect...)">withEffects</a></span>&#8203;(<a href="Effect.html" title="interface in io.cloudstate.javasupport.action">Effect</a>...&nbsp;effects)</code></th>
+<td class="colLast">
+<div class="block">Attach the given effects to this reply.</div>
+</td>
+</tr>
+<tr id="i2" class="altColor">
+<td class="colFirst"><code><a href="ForwardReply.html" title="interface in io.cloudstate.javasupport.action">ForwardReply</a>&lt;<a href="ForwardReply.html" title="type parameter in ForwardReply">T</a>&gt;</code></td>
+<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#withEffects(java.util.Collection)">withEffects</a></span>&#8203;(java.util.Collection&lt;<a href="Effect.html" title="interface in io.cloudstate.javasupport.action">Effect</a>&gt;&nbsp;effects)</code></th>
 <td class="colLast">
 <div class="block">Attach the given effects to this reply.</div>
 </td>
@@ -170,7 +177,7 @@ extends <a href="ActionReply.html" title="interface in io.cloudstate.javasupport
 <!--   -->
 </a>
 <h3>Methods inherited from interface&nbsp;io.cloudstate.javasupport.action.<a href="ActionReply.html" title="interface in io.cloudstate.javasupport.action">ActionReply</a></h3>
-<code><a href="ActionReply.html#effects()">effects</a></code></li>
+<code><a href="ActionReply.html#effects()">effects</a>, <a href="ActionReply.html#isEmpty()">isEmpty</a></code></li>
 </ul>
 </li>
 </ul>
@@ -202,20 +209,39 @@ extends <a href="ActionReply.html" title="interface in io.cloudstate.javasupport
 </dl>
 </li>
 </ul>
+<a id="withEffects(java.util.Collection)">
+<!--   -->
+</a>
+<ul class="blockList">
+<li class="blockList">
+<h4>withEffects</h4>
+<pre class="methodSignature"><a href="ForwardReply.html" title="interface in io.cloudstate.javasupport.action">ForwardReply</a>&lt;<a href="ForwardReply.html" title="type parameter in ForwardReply">T</a>&gt;&nbsp;withEffects&#8203;(java.util.Collection&lt;<a href="Effect.html" title="interface in io.cloudstate.javasupport.action">Effect</a>&gt;&nbsp;effects)</pre>
+<div class="block"><span class="descfrmTypeLabel">Description copied from interface:&nbsp;<code><a href="ActionReply.html#withEffects(java.util.Collection)">ActionReply</a></code></span></div>
+<div class="block">Attach the given effects to this reply.</div>
+<dl>
+<dt><span class="overrideSpecifyLabel">Specified by:</span></dt>
+<dd><code><a href="ActionReply.html#withEffects(java.util.Collection)">withEffects</a></code>&nbsp;in interface&nbsp;<code><a href="ActionReply.html" title="interface in io.cloudstate.javasupport.action">ActionReply</a>&lt;<a href="ForwardReply.html" title="type parameter in ForwardReply">T</a>&gt;</code></dd>
+<dt><span class="paramLabel">Parameters:</span></dt>
+<dd><code>effects</code> - The effects to attach.</dd>
+<dt><span class="returnLabel">Returns:</span></dt>
+<dd>A new reply with the attached effects.</dd>
+</dl>
+</li>
+</ul>
 <a id="withEffects(io.cloudstate.javasupport.action.Effect...)">
 <!--   -->
 </a>
 <ul class="blockListLast">
 <li class="blockList">
 <h4>withEffects</h4>
-<pre class="methodSignature"><a href="ForwardReply.html" title="interface in io.cloudstate.javasupport.action">ForwardReply</a>&lt;<a href="ForwardReply.html" title="type parameter in ForwardReply">T</a>&gt;&nbsp;withEffects&#8203;(<a href="Effect.html" title="interface in io.cloudstate.javasupport.action">Effect</a>...&nbsp;effect)</pre>
+<pre class="methodSignature"><a href="ForwardReply.html" title="interface in io.cloudstate.javasupport.action">ForwardReply</a>&lt;<a href="ForwardReply.html" title="type parameter in ForwardReply">T</a>&gt;&nbsp;withEffects&#8203;(<a href="Effect.html" title="interface in io.cloudstate.javasupport.action">Effect</a>...&nbsp;effects)</pre>
 <div class="block"><span class="descfrmTypeLabel">Description copied from interface:&nbsp;<code><a href="ActionReply.html#withEffects(io.cloudstate.javasupport.action.Effect...)">ActionReply</a></code></span></div>
 <div class="block">Attach the given effects to this reply.</div>
 <dl>
 <dt><span class="overrideSpecifyLabel">Specified by:</span></dt>
 <dd><code><a href="ActionReply.html#withEffects(io.cloudstate.javasupport.action.Effect...)">withEffects</a></code>&nbsp;in interface&nbsp;<code><a href="ActionReply.html" title="interface in io.cloudstate.javasupport.action">ActionReply</a>&lt;<a href="ForwardReply.html" title="type parameter in ForwardReply">T</a>&gt;</code></dd>
 <dt><span class="paramLabel">Parameters:</span></dt>
-<dd><code>effect</code> - The effects to attach.</dd>
+<dd><code>effects</code> - The effects to attach.</dd>
 <dt><span class="returnLabel">Returns:</span></dt>
 <dd>A new reply with the attached effects.</dd>
 </dl>
