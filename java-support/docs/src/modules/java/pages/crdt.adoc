@@ -158,7 +158,7 @@ A map of PNCounter values. This exposes the current value of the PNCounters dire
 
 == Registering the entity
 
-Once you've created your entity, you can register it with the link:{attachmentsdir}/api/io/cloudstate/javasupport/CloudState.html[`CloudState`] server, by invoking the link:++api/io/cloudstate/javasupport/CloudState.html#registerEventSourcedEntity-java.lang.Class-com.google.protobuf.Descriptors.ServiceDescriptor-com.google.protobuf.Descriptors.FileDescriptor...-++[`registerCrdtEntity`] method.
+Once you've created your entity, you can register it with the link:{attachmentsdir}/api/io/cloudstate/javasupport/CloudState.html[`CloudState`] server, by invoking the link:{attachmentsdir}++/api/io/cloudstate/javasupport/CloudState.html#registerCrdtEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,com.google.protobuf.Descriptors.FileDescriptor...)++[`registerCrdtEntity`] method.
 In addition to passing your entity class and service descriptor, if you use protobuf for serialization and any protobuf message definitions are missing from your service descriptor (they are not declared directly in the file, nor as dependencies), then you'll need to pass those protobuf descriptors as well.
 
 [source,java]
