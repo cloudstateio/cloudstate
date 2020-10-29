@@ -16,21 +16,19 @@
 
 package io.cloudstate.javasupport.action;
 
-import io.cloudstate.javasupport.ServiceCall;
-
 import java.util.Collection;
 
-/** A forward reply. */
-public interface ForwardReply<T> extends ActionReply<T> {
+/** A failure reply. */
+public interface FailureReply<T> extends ActionReply<T> {
 
   /**
-   * The service call that is being forwarded to.
+   * The description of the failure.
    *
-   * @return The service call.
+   * @return The failure description.
    */
-  ServiceCall serviceCall();
+  String description();
 
-  ForwardReply<T> withEffects(Collection<Effect> effects);
+  FailureReply<T> withEffects(Collection<Effect> effects);
 
-  ForwardReply<T> withEffects(Effect... effects);
+  FailureReply<T> withEffects(Effect... effects);
 }

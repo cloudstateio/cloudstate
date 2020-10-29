@@ -18,6 +18,7 @@ package io.cloudstate.javasupport.action;
 
 import io.cloudstate.javasupport.Metadata;
 import io.cloudstate.javasupport.ServiceCall;
+import io.cloudstate.javasupport.impl.action.FailureReplyImpl;
 import io.cloudstate.javasupport.impl.action.ForwardReplyImpl;
 import io.cloudstate.javasupport.impl.action.MessageReplyImpl;
 import io.cloudstate.javasupport.impl.action.NoReply;
@@ -27,17 +28,32 @@ import java.util.Collection;
 /**
  * An action reply.
  *
- * <p>Action replies allow returning forwards and attaching effects to messages.
+ * <p>Action replies allow returning forwards or failures, and attaching effects to messages.
  *
  * @param <T> The type of the message that must be returned by this action call.
  */
 public interface ActionReply<T> {
+  /**
+   * Whether this reply is empty: does not have a message, forward, or failure.
+   *
+   * @return Whether the reply is empty.
+   */
+  boolean isEmpty();
+
   /**
    * The effects attached to this reply.
    *
    * @return The effects.
    */
   Collection<Effect> effects();
+
+  /**
+   * Attach the given effects to this reply.
+   *
+   * @param effects The effects to attach.
+   * @return A new reply with the attached effects.
+   */
+  ActionReply<T> withEffects(Collection<Effect> effects);
 
   /**
    * Attach the given effects to this reply.
@@ -79,7 +95,17 @@ public interface ActionReply<T> {
   }
 
   /**
-   * Create a reply that contains neither a message nor a forward.
+   * Create a failure reply.
+   *
+   * @param description The description of the failure.
+   * @return A failure reply.
+   */
+  static <T> FailureReply<T> failure(String description) {
+    return new FailureReplyImpl<>(description);
+  }
+
+  /**
+   * Create a reply that contains neither a message nor a forward nor a failure.
    *
    * <p>This may be useful for emitting effects without sending a message.
    *
