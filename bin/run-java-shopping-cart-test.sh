@@ -148,6 +148,7 @@ done
 kubectl get deployment $deployment
 
 function fail_with_details {
+  echo "Failed:" "$@"
   echo
   echo "=== Operator logs ==="
   echo
@@ -174,20 +175,21 @@ function fail_with_details {
 # Wait for the deployment to be available
 echo
 echo "Waiting for deployment to be ready..."
-kubectl wait --for=condition=available --timeout=1m deployment/$deployment || fail_with_details
+kubectl rollout status --timeout=1m deployment/$deployment || fail_with_details
 kubectl get deployment $deployment
 
 # Scale up the deployment, to test with akka clustering
 echo
 echo "Scaling deployment..."
-kubectl scale --replicas=3 deployment/$deployment
+kubectl scale --replicas=3 statefulservice/$statefulservice
 kubectl get deployment $deployment
 
 # Wait for the scaled deployment to be available
 echo
 echo "Waiting for deployment to be ready..."
-kubectl wait --for=condition=available --timeout=5m deployment/$deployment || fail_with_details
+kubectl rollout status --timeout=5m deployment/$deployment || fail_with_details
 kubectl get deployment $deployment
+[ $(kubectl get deployment $deployment -o "jsonpath={.status.availableReplicas}") -eq 3 ] || fail_with_details "Expected 3 available replicas"
 
 # Expose the shopping-cart service
 nodeport="$deployment-node-port"
@@ -208,7 +210,12 @@ for i in {1..9} ; do
   echo
   echo "Testing shopping cart $cart_id ..."
 
-  initial_cart=$(curl -s $url/carts/$cart_id)
+  initial_cart=''
+  for attempt in {1..5} ; do
+    initial_cart=$(curl -s $url/carts/$cart_id || echo '')
+    [ -n "$initial_cart" ] && break || sleep 1
+  done
+
   if [[ "$empty_cart" != "$initial_cart" ]]
   then
       echo "Expected '$empty_cart'"
