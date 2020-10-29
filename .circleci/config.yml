@@ -257,6 +257,12 @@ jobs:
       - run:
           name: Run shopping cart test (Cassandra)
           command: bin/run-java-shopping-cart-test.sh Cassandra --no-build
+      - run:
+          name: Run entity shopping cart test (InMemory)
+          command: bin/run-java-entity-shopping-cart-test.sh InMemory --no-build
+      - run:
+          name: Run entity shopping cart test (Postgres)
+          command: bin/run-java-entity-shopping-cart-test.sh Postgres --no-build
 
   native-image-smoke-test:
     parameters:
@@ -300,6 +306,9 @@ jobs:
           - run:
               name: Load in memory image
               command: docker image load < /tmp/workspace/cloudstate-proxy-native-core.tar
+          - run:
+              name: Run entity shopping cart test (InMemory)
+              command: bin/run-java-entity-shopping-cart-test.sh InMemory --no-build
       - when:
           condition:
             equal: [ Postgres, << parameters.proxy-store >> ]
@@ -318,6 +327,9 @@ jobs:
                 command: |
                   bin/install-cassandra.sh
                   docker image load < /tmp/workspace/cloudstate-proxy-native-cassandra.tar
+            - run:
+                name: Run entity shopping cart test (Postgres)
+                command: bin/run-java-entity-shopping-cart-test.sh Postgres --no-build
       - run:
           name: Run shopping cart test (<< parameters.proxy-store >>)
           command: bin/run-java-shopping-cart-test.sh << parameters.proxy-store >> --no-build
