@@ -154,7 +154,7 @@ jobs:
             java-valueentity-shopping-cart/docker:publishLocal
     - save_docker_image:
         tar_file: cloudstate-sbt-images.tar
-        docker_image: cloudstateio/cloudstate-proxy-core:latest cloudstateio/cloudstate-proxy-postgres:latest cloudstateio/cloudstate-proxy-cassandra:latest cloudstateio/java-shopping-cart:latest
+        docker_image: cloudstateio/cloudstate-proxy-core:latest cloudstateio/cloudstate-proxy-postgres:latest cloudstateio/cloudstate-proxy-cassandra:latest cloudstateio/java-shopping-cart:latest cloudstateio/java-valueentity-shopping-cart:latest
     - persist_to_workspace:
         root: /tmp/workspace
         paths:
