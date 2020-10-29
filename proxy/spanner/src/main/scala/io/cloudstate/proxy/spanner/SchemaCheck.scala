@@ -20,6 +20,7 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.Done
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.adapter.TypedSchedulerOps
+import akka.actor.CoordinatedShutdown
 import akka.pattern.after
 import com.google.longrunning.{GetOperationRequest, Operation, OperationsClient}
 import com.google.spanner.admin.database.v1.{DatabaseAdminClient, UpdateDatabaseDdlRequest}
@@ -44,6 +45,8 @@ object SchemaCheck {
     override def apply(): Future[Boolean] =
       ready.future
   }
+
+  final case object CreateSchemaFailure extends CoordinatedShutdown.Reason
 
   private val ready = Promise[Boolean]()
 
@@ -117,6 +120,7 @@ object SchemaCheck {
 
         case HandleFailure(t) if numberOfRetries <= 0 =>
           context.log.error("Cannot create schema!", t)
+          CoordinatedShutdown(context.system).run(CreateSchemaFailure)
           Behaviors.stopped
 
         case HandleFailure(t) =>
