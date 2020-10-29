@@ -28,7 +28,7 @@ class JdbcValueEntityTableColumnNames(config: Config) {
   val entityId: String = cfg.getString("entityId")
   val state: String = cfg.getString("state")
 
-  override def toString: String = s"JdbcCrudStateTableColumnNames($persistentId,$entityId,$state)"
+  override def toString: String = s"JdbcValueEntityTableColumnNames($persistentId,$entityId,$state)"
 }
 
 class JdbcValueEntityTableConfiguration(config: Config) {
@@ -41,7 +41,7 @@ class JdbcValueEntityTableConfiguration(config: Config) {
   }
   val columnNames: JdbcValueEntityTableColumnNames = new JdbcValueEntityTableColumnNames(config)
 
-  override def toString: String = s"JdbcCrudStateTableConfiguration($tableName,$schemaName,$columnNames)"
+  override def toString: String = s"JdbcValueEntityTableColumnNames($tableName,$schemaName,$columnNames)"
 }
 
 object JdbcSlickDatabase {
