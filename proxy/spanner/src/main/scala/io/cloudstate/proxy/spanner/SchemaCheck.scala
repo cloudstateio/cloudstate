@@ -24,7 +24,6 @@ import akka.actor.Scheduler
 import com.google.longrunning.{GetOperationRequest, Operation, OperationsClient}
 import com.google.spanner.admin.database.v1.{DatabaseAdminClient, UpdateDatabaseDdlRequest}
 import io.grpc.{Status, StatusRuntimeException}
-import org.slf4j.Logger
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.util.{Failure, Success, Try}
 import akka.pattern.after
@@ -98,67 +97,61 @@ object SchemaCheck {
                               scheduler: Scheduler)(
       implicit ec: ExecutionContext
   ) = {
-    def tryCreate(name: String, ddl: String) =
+    def tryCreate(ddl: String) =
       adminClient
         .updateDatabaseDdl(UpdateDatabaseDdlRequest(databaseName, List(ddl)))
         .transform {
           case Success(o) =>
             Success(o)
-          case Failure(t) if alreadyExists(name, t) =>
+          case Failure(t) if alreadyExists(t) =>
             Success(Operation(done = true, result = Operation.Result.Empty))
-          case Failure(t) =>
-            Failure(t)
+          case other =>
+            other
         }
 
-    Future
-      .sequence(
-        List(
-          tryCreate(journalTable, Schema.createJournalTableDdl(journalTable)),
-          tryCreate(tagsTable, Schema.createTagsTableDdl(tagsTable, journalTable)),
-          tryCreate(deletionsTable, Schema.createDeletionsTableDdl(deletionsTable)),
-          tryCreate(Schema.tagsIndexName(tagsTable), Schema.createTagsIndexDdl(tagsTable)),
-          tryCreate(snapshotTable, Schema.createSnapshotsTableDdl(snapshotTable))
-        ).map(_.flatMap(await(operationsClient, scheduler, operationAwaitDelay, operationAwaitMaxDuration)))
-      )
-      .map(_ => Done)
+    def await(operation: Operation)(implicit ec: ExecutionContext): Future[Done] = {
+      val deadline = operationAwaitMaxDuration.fromNow
+
+      def loop(o: Operation): Future[Done] =
+        if (deadline.hasTimeLeft())
+          operationsClient
+            .getOperation(GetOperationRequest(o.name))
+            .flatMap { o =>
+              if (o.done)
+                Future.successful(Done)
+              else
+                after(operationAwaitDelay, scheduler)(loop(o))
+            } else
+          Future.failed(
+            new IllegalStateException(s"Operation ${operation.name} not done after $operationAwaitMaxDuration!")
+          )
+
+      if (operation.done)
+        Future.successful(Done)
+      else
+        loop(operation)
+    }
+
+    val ddl =
+      List(
+        Schema.createJournalTableDdl(journalTable),
+        Schema.createTagsTableDdl(tagsTable, journalTable),
+        Schema.createDeletionsTableDdl(deletionsTable),
+        Schema.createTagsIndexDdl(tagsTable),
+        Schema.createSnapshotsTableDdl(snapshotTable)
+      ).mkString
+
+    tryCreate(ddl).flatMap(await)
   }
 
-  private def alreadyExists(name: String, t: Throwable) =
+  private def alreadyExists(t: Throwable) =
     t match {
       case e: StatusRuntimeException =>
         val isFailedPrecondition = e.getStatus.getCode == Status.Code.FAILED_PRECONDITION
-        val isDuplicate = e.getStatus.getDescription.contains(s"Duplicate name in schema: $name")
+        val isDuplicate = e.getStatus.getDescription.contains(s"Duplicate name in schema")
         isFailedPrecondition && isDuplicate
 
       case _ =>
         false
     }
-
-  private def await(
-      operationsClient: OperationsClient,
-      scheduler: Scheduler,
-      operationAwaitDelay: FiniteDuration,
-      operationAwaitMaxDuration: FiniteDuration
-  )(operation: Operation)(implicit ec: ExecutionContext): Future[Done] = {
-    val deadline = operationAwaitMaxDuration.fromNow
-
-    def loop(o: Operation): Future[Done] =
-      if (deadline.hasTimeLeft)
-        operationsClient
-          .getOperation(GetOperationRequest(o.name))
-          .flatMap { o =>
-            if (o.done)
-              Future.successful(Done)
-            else
-              after(operationAwaitDelay, scheduler)(loop(o))
-          } else
-        Future.failed(
-          new IllegalStateException(s"Operation ${operation.name} not done after $operationAwaitMaxDuration!")
-        )
-
-    if (operation.done)
-      Future.successful(Done)
-    else
-      loop(operation)
-  }
 }
