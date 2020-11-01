@@ -19,6 +19,7 @@ package io.cloudstate.proxy.spanner
 import akka.actor.{ActorSystem => ClassicSystem}
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.grpc.GrpcClientSettings
+import akka.stream.scaladsl.Source
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.longrunning.OperationsClient
 import com.google.spanner.admin.database.v1.DatabaseAdminClient
@@ -50,15 +51,21 @@ object CloudstateSpannerProxyMain {
       val snapshotsTable = getString("snapshots-table")
       val operationAwaitDelay = getDuration("operation-await-delay").toScala
       val operationAwaitMaxDuration = getDuration("operation-await-max-duration").toScala
-      Config(projectId,
-             instanceId,
-             databaseId,
-             journalTable,
-             tagsTable,
-             deletionsTable,
-             snapshotsTable,
-             operationAwaitDelay,
-             operationAwaitMaxDuration)
+      val numberOfRetries = getInt("number-of-retries")
+      val retryDelay = getDuration("retry-delay").toScala
+      Config(
+        projectId,
+        instanceId,
+        databaseId,
+        journalTable,
+        tagsTable,
+        deletionsTable,
+        snapshotsTable,
+        operationAwaitDelay,
+        operationAwaitMaxDuration,
+        numberOfRetries,
+        retryDelay
+      )
     }
   }
 
@@ -70,7 +77,9 @@ object CloudstateSpannerProxyMain {
                           deletionsTable: String,
                           snapshotsTable: String,
                           operationAwaitDelay: FiniteDuration,
-                          operationAwaitMaxDuration: FiniteDuration)
+                          operationAwaitMaxDuration: FiniteDuration,
+                          numberOfRetries: Int,
+                          retryDelay: FiniteDuration)
 
   def main(args: Array[String]): Unit = {
     // Parse config early in order to fail fast
@@ -98,16 +107,22 @@ object CloudstateSpannerProxyMain {
     import config._
     val databaseName = s"projects/$projectId/instances/$instanceId/databases/$databaseId"
     classicSystem.spawn(
-      SchemaCheck(databaseName,
-                  journalTable,
-                  tagsTable,
-                  deletionsTable,
-                  snapshotsTable,
-                  operationAwaitDelay,
-                  operationAwaitMaxDuration,
-                  adminClient,
-                  operationsClient),
+      SchemaCheck(
+        databaseName,
+        journalTable,
+        tagsTable,
+        deletionsTable,
+        snapshotsTable,
+        operationAwaitDelay,
+        operationAwaitMaxDuration,
+        adminClient,
+        operationsClient,
+        numberOfRetries,
+        retryDelay
+      ),
       "schema-check"
     )
+
+    Source(1 to 5)
   }
 }
