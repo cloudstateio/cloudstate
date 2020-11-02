@@ -203,7 +203,7 @@ for i in {1..9} ; do
       echo "Entity shopping cart update for $cart_id succeeded."
   fi
 
-  curl -s -X POST $url/ve/cart/$cart_id/remove -H "Content-Type: application/json" -d '{"userId": "'"$cart_id"'"}' > /dev/null
+  curl -s -X POST $url/ve/carts/$cart_id/remove -H "Content-Type: application/json" -d '{"userId": "'"$cart_id"'"}' > /dev/null
 
   deleted_cart=$(curl -s $url/ve/carts/$cart_id)
   if [[ "$empty_cart" != "$deleted_cart" ]]
@@ -212,7 +212,7 @@ for i in {1..9} ; do
       echo "But got '$deleted_cart'"
       fail_with_details
   else
-      echo echo "Entity shopping cart delete for $cart_id succeeded."
+      echo "Entity shopping cart delete for $cart_id succeeded."
   fi
 done
 
