@@ -19,11 +19,12 @@ package io.cloudstate.proxy.valueentity.store
 import akka.util.ByteString
 import io.cloudstate.proxy.valueentity.store.JdbcStore.Key
 
+import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
 
 final class JdbcInMemoryStore extends JdbcStore[Key, ByteString] {
 
-  private var store = Map.empty[Key, ByteString]
+  private var store = TrieMap.empty[Key, ByteString]
 
   override def get(key: Key): Future[Option[ByteString]] = Future.successful(store.get(key))
 

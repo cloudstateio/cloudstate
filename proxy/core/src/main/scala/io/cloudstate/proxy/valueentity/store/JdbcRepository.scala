@@ -19,6 +19,7 @@ package io.cloudstate.proxy.valueentity.store
 import akka.grpc.ProtobufSerializer
 import akka.util.ByteString
 import com.google.protobuf.any.{Any => ScalaPbAny}
+import com.google.protobuf.{ByteString => PbByteString}
 import io.cloudstate.proxy.valueentity.store.JdbcStore.Key
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -55,13 +56,21 @@ trait JdbcRepository {
 
 object JdbcRepositoryImpl {
 
-  private[store] final object ReplySerializer extends ProtobufSerializer[ScalaPbAny] {
-    override final def serialize(state: ScalaPbAny): ByteString =
-      if (state.value.isEmpty) ByteString.empty
-      else ByteString.fromArrayUnsafe(state.value.toByteArray)
+  private[store] final object EntitySerializer extends ProtobufSerializer[ScalaPbAny] {
+    private val separator = ByteString("|")
 
-    override final def deserialize(bytes: ByteString): ScalaPbAny =
-      ScalaPbAny.parseFrom(bytes.toByteBuffer.array())
+    override final def serialize(entity: ScalaPbAny): ByteString =
+      if (entity.value.isEmpty) {
+        ByteString(entity.typeUrl) ++ separator ++ ByteString.empty
+      } else {
+        ByteString(entity.typeUrl) ++ separator ++ ByteString.fromArrayUnsafe(entity.value.toByteArray)
+      }
+
+    override final def deserialize(bytes: ByteString): ScalaPbAny = {
+      val separatorIndex = bytes.indexOf(separator.head)
+      val (typeUrl, value) = bytes.splitAt(separatorIndex)
+      ScalaPbAny(typeUrl.utf8String, PbByteString.copyFrom(value.tail.toByteBuffer))
+    }
   }
 
 }
@@ -71,7 +80,7 @@ class JdbcRepositoryImpl(val store: JdbcStore[Key, ByteString], serializer: Prot
 ) extends JdbcRepository {
 
   def this(store: JdbcStore[Key, ByteString])(implicit ec: ExecutionContext) =
-    this(store, JdbcRepositoryImpl.ReplySerializer)
+    this(store, JdbcRepositoryImpl.EntitySerializer)
 
   def get(key: Key): Future[Option[ScalaPbAny]] =
     store

@@ -61,71 +61,111 @@ final class ValueEntitySupervisor(client: ValueEntityProtocolClient,
     extends Actor
     with Stash {
 
-  import ValueEntitySupervisor._
+  private val entityId = URLDecoder.decode(self.path.name, "utf-8")
+  private val relay = context.watch(context.actorOf(ValueEntityRelay.props(client, configuration), "relay"))
+  private val entity =
+    context.watch(context.actorOf(ValueEntity.props(configuration, entityId, relay, repository), "entity"))
 
-  private var streamTerminated: Boolean = false
+  private var relayTerminated: Boolean = false
+  private var entityTerminated: Boolean = false
 
-  override final def receive: Receive = PartialFunction.empty
+  relay ! ValueEntityRelay.Connect(entity)
 
-  override final def preStart(): Unit = {
+  override def receive: Receive = {
+    case Terminated(`relay`) =>
+      relayTerminated = true
+      if (entityTerminated) {
+        context.stop(self)
+      }
+    case Terminated(`entity`) =>
+      entityTerminated = true
+      if (relayTerminated) {
+        context.stop(self)
+      } else relay ! ValueEntityRelay.Disconnect
+    case toParent if sender() == entity =>
+      context.parent ! toParent
+    case msg =>
+      entity forward msg
+  }
+
+  override def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
+}
+
+object ValueEntityRelay {
+  final case class Connect(entity: ActorRef)
+  final case class Connected(stream: ActorRef)
+  final case object Disconnect
+  final case class Fail(cause: Throwable)
+
+  def props(client: ValueEntityProtocolClient,
+            configuration: ValueEntity.Configuration)(implicit mat: Materializer): Props =
+    Props(new ValueEntityRelay(client, configuration))
+}
+
+final class ValueEntityRelay(client: ValueEntityProtocolClient, configuration: ValueEntity.Configuration)(
+    implicit mat: Materializer
+) extends Actor
+    with Stash {
+  import ValueEntityRelay._
+
+  override def receive: Receive = starting
+
+  def starting: Receive = {
+    case Connect(entity) => connect(entity)
+    case _ => stash()
+  }
+
+  def connect(entity: ActorRef): Unit = {
     client
       .handle(
         Source
-          .actorRef[ValueEntityStreamIn](configuration.sendQueueSize, OverflowStrategy.fail)
+          .actorRef[ValueEntityStreamIn](
+            { case Disconnect => CompletionStrategy.draining }: PartialFunction[Any, CompletionStrategy],
+            { case Fail(cause) => cause }: PartialFunction[Any, Throwable],
+            configuration.sendQueueSize,
+            OverflowStrategy.fail
+          )
           .mapMaterializedValue { ref =>
-            self ! Relay(ref)
+            self ! Connected(ref)
             NotUsed
           }
       )
       .runWith(Sink.actorRef(self, ValueEntity.StreamClosed, ValueEntity.StreamFailed.apply))
-    context.become(waitingForRelay)
+
+    context.become(connecting(entity))
   }
 
-  private[this] final def waitingForRelay: Receive = {
-    case Relay(relayRef) =>
-      // Cluster sharding URL encodes entity ids, so to extract it we need to decode.
-      val entityId = URLDecoder.decode(self.path.name, "utf-8")
-      val entity = context.watch(
-        context
-          .actorOf(ValueEntity.props(configuration, entityId, relayRef, repository), "entity")
-      )
-      context.become(forwarding(entity, relayRef))
+  def connecting(entity: ActorRef): Receive = {
+    case Connected(stream) =>
+      context.become(relaying(entity, stream))
       unstashAll()
     case _ => stash()
   }
 
-  private[this] final def forwarding(entity: ActorRef, relay: ActorRef): Receive = {
-    case Terminated(`entity`) =>
-      if (streamTerminated) {
-        context.stop(self)
-      } else {
-        relay ! Status.Success(CompletionStrategy.draining)
-        context.become(stopping)
-      }
-
+  def relaying(entity: ActorRef, stream: ActorRef): Receive = {
+    case Disconnect =>
+      stream ! Disconnect
+      context.become(disconnecting)
+    case fail: Fail =>
+      stream ! fail
+      context.become(disconnecting)
     case message if sender() == entity =>
-      context.parent ! message
-
-    case ValueEntity.StreamClosed =>
-      streamTerminated = true
-      entity forward ValueEntity.StreamClosed
-
-    case failed: ValueEntity.StreamFailed =>
-      streamTerminated = true
-      entity forward failed
-
+      stream ! message
     case message =>
-      entity forward message
+      entity ! message
+      if (streamTerminated(message)) context.stop(self)
   }
 
-  private def stopping: Receive = {
-    case ValueEntity.StreamClosed =>
-      context.stop(self)
-    case _: ValueEntity.StreamFailed =>
-      context.stop(self)
+  def disconnecting: Receive = {
+    case message if streamTerminated(message) => context.stop(self)
+    case _ => // ignore
   }
 
-  override def supervisorStrategy: SupervisorStrategy = SupervisorStrategy.stoppingStrategy
+  def streamTerminated(message: Any): Boolean = message match {
+    case ValueEntity.StreamClosed => true
+    case ValueEntity.StreamFailed => true
+    case _ => false
+  }
 }
 
 object ValueEntity {
@@ -203,9 +243,10 @@ final class ValueEntity(configuration: ValueEntity.Configuration,
               )
             )
           )
-          inited = true
+          ValueEntity.ReadStateSuccess(false) // not initialized yet!
+        } else {
+          ValueEntity.ReadStateSuccess(true) // already initialized!
         }
-        ValueEntity.ReadStateSuccess(inited)
       }
       .recover {
         case error => ValueEntity.ReadStateFailure(error)
@@ -271,7 +312,8 @@ final class ValueEntity(configuration: ValueEntity.Configuration,
 
   override final def receive: Receive = {
     case ValueEntity.ReadStateSuccess(initialize) =>
-      if (initialize) {
+      if (!initialize) {
+        inited = true
         context.become(running)
         unstashAll()
       }
@@ -354,14 +396,14 @@ final class ValueEntity(configuration: ValueEntity.Configuration,
       notifyOutstandingRequests("Unexpected Value entity termination")
       throw error
 
+    case ReceiveTimeout =>
+      context.parent ! ShardRegion.Passivate(stopMessage = ValueEntity.Stop)
+
     case ValueEntity.Stop =>
       stopped = true
       if (currentCommand == null) {
         context.stop(self)
       }
-
-    case ReceiveTimeout =>
-      context.parent ! ShardRegion.Passivate(stopMessage = ValueEntity.Stop)
   }
 
   private def performAction(

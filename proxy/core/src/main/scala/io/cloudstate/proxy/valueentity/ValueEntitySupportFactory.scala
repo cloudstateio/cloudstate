@@ -58,19 +58,19 @@ class ValueEntitySupportFactory(
 
     val repository = new JdbcRepositoryImpl(createStore(config.config))
 
-    log.debug("Starting CrudEntity for {}", entity.persistenceId)
+    log.debug("Starting ValueEntity for {}", entity.persistenceId)
     val clusterSharding = ClusterSharding(system)
     val clusterShardingSettings = ClusterShardingSettings(system)
-    val crudEntity = clusterSharding.start(
+    val valueEntity = clusterSharding.start(
       typeName = entity.persistenceId,
       entityProps = ValueEntitySupervisor.props(valueEntityClient, stateManagerConfig, repository),
       settings = clusterShardingSettings,
-      messageExtractor = new CrudEntityIdExtractor(config.numberOfShards),
+      messageExtractor = new ValueEntityIdExtractor(config.numberOfShards),
       allocationStrategy = new DynamicLeastShardAllocationStrategy(1, 10, 2, 0.0),
       handOffStopMessage = ValueEntity.Stop
     )
 
-    new ValueEntitySupport(crudEntity, config.proxyParallelism, config.relayTimeout)
+    new ValueEntitySupport(valueEntity, config.proxyParallelism, config.relayTimeout)
   }
 
   private def validate(serviceDescriptor: ServiceDescriptor,
@@ -80,14 +80,14 @@ class ValueEntitySupportFactory(
     if (streamedMethods.nonEmpty) {
       val offendingMethods = streamedMethods.map(_.method.getName).mkString(",")
       throw EntityDiscoveryException(
-        s"CRUD entities do not support streamed methods, but ${serviceDescriptor.getFullName} has the following streamed methods: ${offendingMethods}"
+        s"Value entities do not support streamed methods, but ${serviceDescriptor.getFullName} has the following streamed methods: ${offendingMethods}"
       )
     }
     val methodsWithoutKeys = methodDescriptors.values.filter(_.keyFieldsCount < 1)
     if (methodsWithoutKeys.nonEmpty) {
       val offendingMethods = methodsWithoutKeys.map(_.method.getName).mkString(",")
       throw EntityDiscoveryException(
-        s"""CRUD entities do not support methods whose parameters do not have at least one field marked as entity_key,
+        s"""Value entities do not support methods whose parameters do not have at least one field marked as entity_key,
             |but ${serviceDescriptor.getFullName} has the following methods without keys: $offendingMethods""".stripMargin
           .replaceAll("\n", " ")
       )
@@ -111,7 +111,7 @@ private class ValueEntitySupport(crudEntity: ActorRef, parallelism: Int, private
     (crudEntity ? command).mapTo[UserFunctionReply]
 }
 
-private final class CrudEntityIdExtractor(shards: Int) extends HashCodeMessageExtractor(shards) {
+private final class ValueEntityIdExtractor(shards: Int) extends HashCodeMessageExtractor(shards) {
   override final def entityId(message: Any): String = message match {
     case command: EntityCommand => command.entityId
   }
