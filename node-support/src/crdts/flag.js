@@ -55,12 +55,12 @@ function Flag() {
     return this;
   };
 
-  this.getAndResetDelta = function () {
-    if (delta) {
+  this.getAndResetDelta = function (initial) {
+    if (delta || initial) {
       delta = false;
       return {
         flag: {
-          value: true
+          value: currentValue
         }
       };
     } else {
@@ -73,22 +73,6 @@ function Flag() {
       throw new Error(util.format("Cannot apply delta %o to Flag", delta));
     }
     currentValue = currentValue || delta.flag.value;
-  };
-
-  this.getStateAndResetDelta = function () {
-    delta = false;
-    return {
-      flag: {
-        value: currentValue
-      }
-    };
-  };
-
-  this.applyState = function (state) {
-    if (!state.flag) {
-      throw new Error(util.format("Cannot apply state %o to Flag", state));
-    }
-    currentValue = state.flag.value;
   };
 
   this.toString = function () {

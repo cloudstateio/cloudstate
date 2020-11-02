@@ -23,7 +23,6 @@ const protobufHelper = require("../../src/protobuf-helper");
 const AnySupport = require("../../src/protobuf-any");
 
 const CrdtDelta = protobufHelper.moduleRoot.cloudstate.crdt.CrdtDelta;
-const CrdtState = protobufHelper.moduleRoot.cloudstate.crdt.CrdtState;
 
 const root = new protobuf.Root();
 root.loadSync(path.join(__dirname, "..", "example.proto"));
@@ -33,10 +32,6 @@ const anySupport = new AnySupport(root);
 
 function roundTripDelta(delta) {
   return CrdtDelta.decode(CrdtDelta.encode(delta).finish());
-}
-
-function roundTripState(state) {
-  return CrdtState.decode(CrdtState.encode(state).finish());
 }
 
 function toAny(value) {
@@ -51,14 +46,13 @@ function fromEntries(entries) {
   return entries.map(entry => {
     return {
       key: anySupport.deserialize(entry.key),
-      value: entry.value,
       delta: entry.delta
     }
   });
 }
 
 function toMapCounterEntry(key, value) {
-  return { key: toAny(key), value: { gcounter: { value : value } } };
+  return { key: toAny(key), delta: { gcounter: { increment : value } } };
 }
 
 describe("ORMap", () => {
@@ -67,22 +61,20 @@ describe("ORMap", () => {
     const map = new ORMap();
     map.size.should.equal(0);
     should.equal(map.getAndResetDelta(), null);
-    roundTripState(map.getStateAndResetDelta()).ormap.entries.should.be.empty;
   });
 
-  it("should reflect a state update", () => {
+  it("should reflect an initial delta", () => {
     const map = new ORMap();
-    map.applyState(roundTripState({
+    map.applyDelta(roundTripDelta({
       ormap: {
-        entries: [toMapCounterEntry("one", 5), toMapCounterEntry("two", 7)]
+        added: [toMapCounterEntry("one", 5), toMapCounterEntry("two", 7)]
       }
-    }), anySupport, crdts.createCrdtForState);
+    }), anySupport, crdts.createCrdtForDelta);
     map.size.should.equal(2);
     new Set(map.keys()).should.include("one", "two");
     map.asObject.one.value.should.equal(5);
     map.asObject.two.value.should.equal(7);
     should.equal(map.getAndResetDelta(), null);
-    roundTripState(map.getStateAndResetDelta()).ormap.entries.should.have.lengthOf(2);
   });
 
   it("should generate an add delta", () => {
@@ -93,7 +85,7 @@ describe("ORMap", () => {
     delta1.ormap.added.should.have.lengthOf(1);
     const entry = fromEntries(delta1.ormap.added)[0];
     entry.key.should.equal("one");
-    entry.value.gcounter.value.toNumber().should.equal(0);
+    entry.delta.gcounter.increment.toNumber().should.equal(0);
     should.equal(map.getAndResetDelta(), null);
 
     map.asObject.two = new crdts.GCounter();
@@ -103,7 +95,7 @@ describe("ORMap", () => {
     delta2.ormap.added.should.have.lengthOf(1);
     const entry2 = fromEntries(delta2.ormap.added)[0];
     entry2.key.should.equal("two");
-    entry2.value.gcounter.value.toNumber().should.equal(10);
+    entry2.delta.gcounter.increment.toNumber().should.equal(10);
     should.equal(map.getAndResetDelta(), null);
 
     delta2.ormap.updated.should.have.lengthOf(0);
@@ -233,16 +225,15 @@ describe("ORMap", () => {
     map.getAndResetDelta();
     map.applyDelta(roundTripDelta({
       ormap: {
-        added: [ { key: toAny("two"), value : {
-          gcounter: { value: 4 }
+        added: [ { key: toAny("two"), delta : {
+          gcounter: { increment: 4 }
         } } ]
       }
-    }), anySupport, crdts.createCrdtForState);
+    }), anySupport, crdts.createCrdtForDelta);
     map.size.should.equal(2);
     new Set(map.keys()).should.include("one", "two");
     map.asObject.two.value.should.equal(4);
     should.equal(map.getAndResetDelta(), null);
-    roundTripState(map.getStateAndResetDelta()).ormap.entries.should.have.lengthOf(2);
   });
 
   it("should reflect a delta remove", () => {
@@ -258,7 +249,6 @@ describe("ORMap", () => {
     map.size.should.equal(1);
     new Set(map.keys()).should.include("one");
     should.equal(map.getAndResetDelta(), null);
-    roundTripState(map.getStateAndResetDelta()).ormap.entries.should.have.lengthOf(1);
   });
 
   it("should reflect a delta clear", () => {
@@ -273,7 +263,6 @@ describe("ORMap", () => {
     }), anySupport);
     map.size.should.equal(0);
     should.equal(map.getAndResetDelta(), null);
-    roundTripState(map.getStateAndResetDelta()).ormap.entries.should.have.lengthOf(0);
   });
 
   it("should work with protobuf keys", () => {
@@ -300,4 +289,10 @@ describe("ORMap", () => {
     fromAnys(delta.ormap.removed)[0].foo.should.equal("bar");
   });
 
+  it("should support empty initial deltas (for ORMap added)", () => {
+    const map = new ORMap();
+    map.size.should.equal(0);
+    should.equal(map.getAndResetDelta(), null);
+    roundTripDelta(map.getAndResetDelta(/* initial = */ true)).ormap.added.should.have.lengthOf(0);
+  });
 });

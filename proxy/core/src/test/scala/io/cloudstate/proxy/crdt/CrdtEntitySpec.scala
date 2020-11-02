@@ -29,14 +29,11 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
 
   // We just use a PNCounter for testing of non CRDT specific functionality
   override protected type T = PNCounter
-  override protected type S = PNCounterState
   override protected type D = PNCounterDelta
 
   override protected def key(name: String) = PNCounterKey(name)
 
   override protected def initial = PNCounter.empty
-
-  override protected def extractState(state: CrdtState.State) = state.pncounter.value
 
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.pncounter.value
 
@@ -86,7 +83,7 @@ class CrdtEntitySpec extends AbstractCrdtEntitySpec {
       val cid = sendAndExpectCommand("cmd", command)
       sendAndExpectReply(cid, CrdtStateAction.Action.Empty, CrdtWriteConsistency.LOCAL)
       update(_ :+ 3)
-      expectState().value == 3
+      expectDelta().change == 3
     }
 
     "not send missed updates if there is still another command being handled" in {

@@ -1,11 +1,11 @@
-FROM node:8.15
+FROM node:12
 
 # Copy and install deps. This is done as a separate step as an optimization, so changes to the programs files
 # don't require the npm install to be redone
 RUN mkdir -p /opt/samples/js-crdts
 RUN mkdir -p /opt/protocols/example
 COPY node-support /opt/node-support
-COPY samples/js-shopping-cart/package.json /opt/samples/js-crdts/
+COPY samples/js-crdts/package.json /opt/samples/js-crdts/
 RUN cd /opt/node-support && npm install && cd /opt/samples/js-crdts && npm install
 
 # Now copy the entire app

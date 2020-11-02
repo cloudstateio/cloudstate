@@ -59,31 +59,31 @@ const Empty = protobufHelper.moduleRoot.google.protobuf.Empty;
  */
 const Clocks = protobufHelper.moduleRoot.cloudstate.crdt.CrdtClock;
 
-function createCrdtForState(state) {
-  if (state.gcounter) {
+function createCrdtForDelta(delta) {
+  if (delta.gcounter) {
     return new GCounter();
-  } else if (state.pncounter) {
+  } else if (delta.pncounter) {
     return new PNCounter();
-  } else if (state.gset) {
+  } else if (delta.gset) {
     return new GSet();
-  } else if (state.orset) {
+  } else if (delta.orset) {
     return new ORSet();
-  } else if (state.lwwregister) {
+  } else if (delta.lwwregister) {
     // It needs to be initialised with a value
     return new LWWRegister(Empty.create({}));
-  } else if (state.flag) {
+  } else if (delta.flag) {
     return new Flag();
-  } else if (state.ormap) {
+  } else if (delta.ormap) {
     return new ORMap();
-  } else if (state.vote) {
+  } else if (delta.vote) {
     return new Vote();
   } else {
-    throw new Error(util.format("Unknown CRDT: %o", state))
+    throw new Error(util.format("Unknown CRDT: %o", delta))
   }
 }
 
 module.exports = {
-  createCrdtForState: createCrdtForState,
+  createCrdtForDelta: createCrdtForDelta,
   GCounter: GCounter,
   PNCounter: PNCounter,
   GSet: GSet,

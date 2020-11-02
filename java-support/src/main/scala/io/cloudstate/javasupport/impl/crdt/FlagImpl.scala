@@ -17,7 +17,7 @@
 package io.cloudstate.javasupport.impl.crdt
 
 import io.cloudstate.javasupport.crdt.Flag
-import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtState, FlagDelta, FlagState}
+import io.cloudstate.protocol.crdt.{CrdtDelta, FlagDelta}
 
 private[crdt] final class FlagImpl extends InternalCrdt with Flag {
   override final val name = "Flag"
@@ -34,23 +34,14 @@ private[crdt] final class FlagImpl extends InternalCrdt with Flag {
 
   override def hasDelta: Boolean = deltaValue
 
-  override def delta: Option[CrdtDelta.Delta] =
-    if (hasDelta) {
-      Some(CrdtDelta.Delta.Flag(FlagDelta(deltaValue)))
-    } else None
+  override def delta: CrdtDelta.Delta =
+    CrdtDelta.Delta.Flag(FlagDelta(deltaValue))
 
   override def resetDelta(): Unit = deltaValue = false
-
-  override def state: CrdtState.State = CrdtState.State.Flag(FlagState(value))
 
   override val applyDelta = {
     case CrdtDelta.Delta.Flag(FlagDelta(value, _)) =>
       this.value |= value
-  }
-
-  override val applyState = {
-    case CrdtState.State.Flag(FlagState(value, _)) =>
-      this.value = value
   }
 
   override def toString = s"Flag($value)"

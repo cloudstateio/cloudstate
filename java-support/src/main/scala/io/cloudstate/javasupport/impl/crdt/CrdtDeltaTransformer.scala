@@ -17,30 +17,30 @@
 package io.cloudstate.javasupport.impl.crdt
 
 import io.cloudstate.javasupport.impl.AnySupport
-import io.cloudstate.protocol.crdt.CrdtState
+import io.cloudstate.protocol.crdt.CrdtDelta
 
-private[crdt] object CrdtStateTransformer {
+private[crdt] object CrdtDeltaTransformer {
 
-  def create(state: CrdtState, anySupport: AnySupport): InternalCrdt = {
-    val crdt = state.state match {
-      case CrdtState.State.Gcounter(_) =>
+  def create(delta: CrdtDelta, anySupport: AnySupport): InternalCrdt = {
+    val crdt = delta.delta match {
+      case CrdtDelta.Delta.Gcounter(_) =>
         new GCounterImpl
-      case CrdtState.State.Pncounter(_) =>
+      case CrdtDelta.Delta.Pncounter(_) =>
         new PNCounterImpl
-      case CrdtState.State.Gset(_) =>
+      case CrdtDelta.Delta.Gset(_) =>
         new GSetImpl[Any](anySupport)
-      case CrdtState.State.Orset(_) =>
+      case CrdtDelta.Delta.Orset(_) =>
         new ORSetImpl[Any](anySupport)
-      case CrdtState.State.Flag(_) =>
+      case CrdtDelta.Delta.Flag(_) =>
         new FlagImpl
-      case CrdtState.State.Lwwregister(_) =>
+      case CrdtDelta.Delta.Lwwregister(_) =>
         new LWWRegisterImpl[Any](anySupport)
-      case CrdtState.State.Ormap(_) =>
+      case CrdtDelta.Delta.Ormap(_) =>
         new ORMapImpl[Any, InternalCrdt](anySupport)
-      case CrdtState.State.Vote(_) =>
+      case CrdtDelta.Delta.Vote(_) =>
         new VoteImpl
     }
-    crdt.applyState(state.state)
+    crdt.applyDelta(delta.delta)
     crdt
   }
 

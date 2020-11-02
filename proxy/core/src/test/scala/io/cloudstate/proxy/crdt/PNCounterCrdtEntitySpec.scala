@@ -26,19 +26,16 @@ class PNCounterCrdtEntitySpec extends AbstractCrdtEntitySpec {
   import AbstractCrdtEntitySpec._
 
   override protected type T = PNCounter
-  override protected type S = PNCounterState
   override protected type D = PNCounterDelta
 
   override protected def key(name: String) = PNCounterKey(name)
 
   override protected def initial = PNCounter.empty
 
-  override protected def extractState(state: CrdtState.State) = state.pncounter.value
-
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.pncounter.value
 
   def create(value: Long) =
-    CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Pncounter(PNCounterState(value))))
+    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Pncounter(PNCounterDelta(value))))
 
   def updateCounter(update: Long) =
     CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Pncounter(PNCounterDelta(update))))
@@ -67,18 +64,18 @@ class PNCounterCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
     "be initialised from an empty counter" in {
       update(identity)
-      createAndExpectInit().value.value shouldBe 0
+      createAndExpectInit().value.change shouldBe 0
     }
 
     "be initialised from a counter with a value" in {
       update(_ :+ 5)
-      createAndExpectInit().value.value shouldBe 5
+      createAndExpectInit().value.change shouldBe 5
     }
 
     "push the full state when no entity exists" in {
       createAndExpectInit() shouldBe None
       update(_ :+ 5)
-      expectState().value shouldBe 5
+      expectDelta().change shouldBe 5
     }
 
     "detect and send increments to the user function" in {

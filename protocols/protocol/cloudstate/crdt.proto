@@ -54,9 +54,8 @@ option go_package = "github.com/cloudstateio/go-support/cloudstate/entity;entity
 service Crdt {
 
     // After invoking handle, the first message sent will always be a CrdtInit message, containing the entity ID, and,
-    // if it exists or is available, the current state of the entity. After that, one or more commands may be sent,
-    // as well as deltas as they arrive, and the entire state if either the entity is created, or the proxy wishes the
-    // user function to replace its entire state.
+    // if it exists or is available, a delta for the inital state of the entity. After that, one or more commands may
+    // be sent, as well as deltas as they arrive.
     //
     // The user function must respond with one reply per command in. They do not necessarily have to be sent in the same
     // order that the commands were sent, the command ID is used to correlate commands to replies.
@@ -70,25 +69,18 @@ message CrdtStreamIn {
         // Always sent first, and only once.
         CrdtInit init = 1;
 
-        // Sent to indicate the user function should replace its current state with this state. If the user function
-        // does not have a current state, either because the init function didn't send one and the user function hasn't
-        // updated the state itself in response to a command, or because the state was deleted, this must be sent before
-        // any deltas.
-        CrdtState state = 2;
-
-        // A delta to be applied to the current state. May be sent at any time as long as the user function already has
-        // state.
-        CrdtDelta changed = 3;
+        // A delta to be applied to the current state. May be sent at any time.
+        CrdtDelta delta = 2;
 
         // Delete the entity. May be sent at any time. The user function should clear its state when it receives this.
         // A proxy may decide to terminate the stream after sending this.
-        CrdtDelete deleted = 4;
+        CrdtDelete delete = 3;
 
         // A command, may be sent at any time.
-        Command command = 5;
+        Command command = 4;
 
         // A stream has been cancelled.
-        StreamCancelled stream_cancelled = 6;
+        StreamCancelled stream_cancelled = 5;
     }
 }
 
@@ -106,137 +98,9 @@ message CrdtStreamOut {
     }
 }
 
-// The CRDT state. This represents the full state of a CRDT. When received, a user function should replace the current
-// state with this, not apply it as a delta. This includes both for the top level CRDT, and embedded CRDTs, such as
-// the values of an ORMap.
-message CrdtState {
-    oneof state {
-        // A Grow-only Counter
-        GCounterState gcounter = 1;
-
-        // A Positve-Negative Counter
-        PNCounterState pncounter = 2;
-
-        // A Grow-only Set
-        GSetState gset = 3;
-
-        // An Observed-Removed Set
-        ORSetState orset = 4;
-
-        // A Last-Write-Wins Register
-        LWWRegisterState lwwregister = 5;
-
-        // A Flag
-        FlagState flag = 6;
-
-        // An Observed-Removed Map
-        ORMapState ormap = 7;
-
-        // A vote
-        VoteState vote = 8;
-    }
-}
-
-// A Grow-only counter
-//
-// A G-Counter can only be incremented, it can't be decremented.
-message GCounterState {
-
-    // The current value of the counter.
-    uint64 value = 1;
-}
-
-// A Positve-Negative Counter
-//
-// A PN-Counter can be both incremented and decremented.
-message PNCounterState {
-
-    // The current value of the counter.
-    int64 value = 1;
-}
-
-// A Grow-only Set
-//
-// A G-Set can only have items added, items cannot be removed.
-message GSetState {
-
-    // The current items in the set.
-    repeated google.protobuf.Any items = 1;
-}
-
-// An Observed-Removed Set
-//
-// An OR-Set may have items added and removed, with the condition that an item must be observed to be in the set before
-// it is removed.
-message ORSetState {
-
-    // The current items in the set.
-    repeated google.protobuf.Any items = 1;
-}
-
-// A Last-Write-Wins Register
-//
-// A LWW-Register holds a single value, with the current value being selected based on when it was last written.
-// The time of the last write may either be determined using the proxies clock, or may be based on a custom, domain
-// specific value.
-message LWWRegisterState {
-
-    // The current value of the register.
-    google.protobuf.Any value = 1;
-
-    // The clock to use if this state needs to be merged with another one.
-    CrdtClock clock = 2;
-
-    // The clock value if the clock in use is a custom clock.
-    int64 custom_clock_value = 3;
-}
-
-// A Flag
-//
-// A Flag is a boolean value, that once set to true, stays true.
-message FlagState {
-
-    // The current value of the flag.
-    bool value = 1;
-}
-
-// An Observed-Removed Map
-//
-// Like an OR-Set, an OR-Map may have items added and removed, with the condition that an item must be observed to be
-// in the map before it is removed. The values of the map are CRDTs themselves. Different keys are allowed to use
-// different CRDTs, and if an item is removed, and then replaced, the new value may be a different CRDT.
-message ORMapState {
-
-    // The entries of the map.
-    repeated ORMapEntry entries = 1;
-}
-
-// An OR-Map entry.
-message ORMapEntry {
-
-    // The entry key.
-    google.protobuf.Any key = 1;
-
-    // The value of the entry, a CRDT itself.
-    CrdtState value = 2;
-}
-
-// A Vote. This allows nodes to vote on something.
-message VoteState {
-
-    // The number of votes for
-    uint32 votes_for = 1;
-
-    // The total number of voters
-    uint32 total_voters = 2;
-
-    // The vote of the current node, which is included in the above two numbers
-    bool self_vote = 3;
-}
-
 // A CRDT delta
 //
-// Deltas only carry the change in value, not the full value (unless
+// Deltas only carry the change in value to be applied to the current (possibly empty) state.
 message CrdtDelta {
     oneof delta {
         GCounterDelta gcounter = 1;
@@ -283,7 +147,7 @@ message ORMapDelta {
     bool cleared = 1;
     repeated google.protobuf.Any removed = 2;
     repeated ORMapEntryDelta updated = 3;
-    repeated ORMapEntry added = 4;
+    repeated ORMapEntryDelta added = 4;
 }
 
 message ORMapEntryDelta {
@@ -294,18 +158,23 @@ message ORMapEntryDelta {
 }
 
 message VoteDelta {
-    // Only set by the user function to change the nodes current vote.
+    // Set by the proxy initially or when the vote has changed.
+    // Only set by the user function to change the node's current vote.
     bool self_vote = 1;
 
-    // Only set by the proxy to change the votes for and total voters.
+    // Only set by the proxy initially or when the vote has changed.
+    // Ignored by the proxy when set by the user function.
     int32 votes_for = 2;
+
+    // Only set by the proxy initially or when the vote has changed.
+    // Ignored by the proxy when set by the user function.
     int32 total_voters = 3;
 }
 
 message CrdtInit {
     string service_name = 1;
     string entity_id = 2;
-    CrdtState state = 3;
+    CrdtDelta delta = 3;
 }
 
 message CrdtDelete {
@@ -330,12 +199,11 @@ message CrdtReply {
 
 message CrdtStateAction {
     oneof action {
-        CrdtState create = 5;
-        CrdtDelta update = 6;
-        CrdtDelete delete = 7;
+        CrdtDelta update = 1;
+        CrdtDelete delete = 2;
     }
 
-    CrdtWriteConsistency write_consistency = 8;
+    CrdtWriteConsistency write_consistency = 3;
 }
 
 // May be sent as often as liked if the first reply set streamed to true
