@@ -155,7 +155,7 @@ const (
 // SpannerStore simply indicates the use of a Cloudstate-managed Spanner store.
 type SpannerStore struct {
 	// Project is the GCP project to use.
-	Project string `json:"string"`
+	Project string `json:"project"`
 
 	// Instance is the Spanner instance id.
 	Instance string `json:"instance"`
