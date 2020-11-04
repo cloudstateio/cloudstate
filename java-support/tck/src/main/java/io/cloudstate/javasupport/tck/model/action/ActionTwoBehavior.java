@@ -14,23 +14,17 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.action;
+package io.cloudstate.javasupport.tck.model.action;
 
-import io.cloudstate.javasupport.ServiceCall;
+import io.cloudstate.javasupport.action.*;
+import io.cloudstate.tck.model.Action.*;
 
-import java.util.Collection;
+@Action
+public class ActionTwoBehavior {
+  public ActionTwoBehavior() {}
 
-/** A forward reply. */
-public interface ForwardReply<T> extends ActionReply<T> {
-
-  /**
-   * The service call that is being forwarded to.
-   *
-   * @return The service call.
-   */
-  ServiceCall serviceCall();
-
-  ForwardReply<T> withEffects(Collection<Effect> effects);
-
-  ForwardReply<T> withEffects(Effect... effects);
+  @CallHandler
+  public Response call(OtherRequest request) {
+    return Response.newBuilder().build();
+  }
 }

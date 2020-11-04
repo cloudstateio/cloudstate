@@ -646,7 +646,6 @@ lazy val `java-support-tck` = (project in file("java-support/tck"))
     mainClass in Compile := Some("io.cloudstate.javasupport.tck.JavaSupportTck"),
     akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
     PB.protoSources in Compile += (baseDirectory in ThisBuild).value / "protocols" / "tck",
-    PB.targets in Compile := Seq(PB.gens.java -> (sourceManaged in Compile).value),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "11", "-target", "11"),
     assemblySettings("cloudstate-java-tck.jar")
   )

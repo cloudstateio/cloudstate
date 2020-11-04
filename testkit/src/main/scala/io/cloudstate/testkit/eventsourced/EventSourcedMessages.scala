@@ -17,13 +17,13 @@
 package io.cloudstate.testkit.eventsourced
 
 import com.google.protobuf.any.{Any => ScalaPbAny}
-import com.google.protobuf.empty.{Empty => ScalaPbEmpty}
-import com.google.protobuf.{StringValue, Any => JavaPbAny, Empty => JavaPbEmpty, Message => JavaPbMessage}
+import com.google.protobuf.{Message => JavaPbMessage}
 import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.event_sourced._
+import io.cloudstate.testkit.entity.EntityMessages
 import scalapb.{GeneratedMessage => ScalaPbMessage}
 
-object EventSourcedMessages {
+object EventSourcedMessages extends EntityMessages {
   import EventSourcedStreamIn.{Message => InMessage}
   import EventSourcedStreamOut.{Message => OutMessage}
 
@@ -68,8 +68,6 @@ object EventSourcedMessages {
   }
 
   val EmptyInMessage: InMessage = InMessage.Empty
-  val EmptyJavaMessage: JavaPbMessage = JavaPbEmpty.getDefaultInstance
-  val EmptyScalaMessage: ScalaPbMessage = ScalaPbEmpty.defaultInstance
 
   def init(serviceName: String, entityId: String): InMessage =
     init(serviceName, entityId, None)
@@ -155,58 +153,9 @@ object EventSourcedMessages {
   def failure(id: Long, description: String): OutMessage =
     OutMessage.Failure(Failure(id, description))
 
-  def clientActionReply(payload: Option[ScalaPbAny]): Option[ClientAction] =
-    Some(ClientAction(ClientAction.Action.Reply(Reply(payload))))
-
-  def clientActionForward(service: String, command: String, payload: Option[ScalaPbAny]): Option[ClientAction] =
-    Some(ClientAction(ClientAction.Action.Forward(Forward(service, command, payload))))
-
-  def clientActionFailure(description: String): Option[ClientAction] =
-    clientActionFailure(id = 0, description)
-
-  def clientActionFailure(id: Long, description: String): Option[ClientAction] =
-    clientActionFailure(id, description, restart = false)
-
-  def clientActionFailure(id: Long, description: String, restart: Boolean): Option[ClientAction] =
-    Some(ClientAction(ClientAction.Action.Failure(Failure(id, description, restart))))
-
   def persist(event: JavaPbMessage, events: JavaPbMessage*): Effects =
     Effects.empty.withEvents(event, events: _*)
 
   def persist(event: ScalaPbMessage, events: ScalaPbMessage*): Effects =
     Effects.empty.withEvents(event, events: _*)
-
-  def sideEffect(service: String, command: String, payload: JavaPbMessage): Effects =
-    sideEffect(service, command, messagePayload(payload), synchronous = false)
-
-  def sideEffect(service: String, command: String, payload: JavaPbMessage, synchronous: Boolean): Effects =
-    sideEffect(service, command, messagePayload(payload), synchronous)
-
-  def sideEffect(service: String, command: String, payload: ScalaPbMessage): Effects =
-    sideEffect(service, command, messagePayload(payload), synchronous = false)
-
-  def sideEffect(service: String, command: String, payload: ScalaPbMessage, synchronous: Boolean): Effects =
-    sideEffect(service, command, messagePayload(payload), synchronous)
-
-  def sideEffect(service: String, command: String, payload: Option[ScalaPbAny], synchronous: Boolean): Effects =
-    Effects.empty.withSideEffect(service, command, payload, synchronous)
-
-  def messagePayload(message: JavaPbMessage): Option[ScalaPbAny] =
-    Option(message).map(protobufAny)
-
-  def messagePayload(message: ScalaPbMessage): Option[ScalaPbAny] =
-    Option(message).map(protobufAny)
-
-  def protobufAny(message: JavaPbMessage): ScalaPbAny = message match {
-    case javaPbAny: JavaPbAny => ScalaPbAny.fromJavaProto(javaPbAny)
-    case _ => ScalaPbAny("type.googleapis.com/" + message.getDescriptorForType.getFullName, message.toByteString)
-  }
-
-  def protobufAny(message: ScalaPbMessage): ScalaPbAny = message match {
-    case scalaPbAny: ScalaPbAny => scalaPbAny
-    case _ => ScalaPbAny("type.googleapis.com/" + message.companion.scalaDescriptor.fullName, message.toByteString)
-  }
-
-  def primitiveString(value: String): ScalaPbAny =
-    ScalaPbAny("p.cloudstate.io/string", StringValue.of(value).toByteString)
 }

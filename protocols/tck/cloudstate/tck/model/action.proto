@@ -1,0 +1,134 @@
+// Copyright 2019 Lightbend Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//
+// == Cloudstate TCK model test for actions ==
+//
+
+syntax = "proto3";
+
+package cloudstate.tck.model.action;
+
+option java_package = "io.cloudstate.tck.model";
+option go_package = "github.com/cloudstateio/go-support/tck/action;action";
+
+//
+// The `ActionTckModel` service should be implemented in the following ways:
+//
+// - The `Process` methods receive `Request` messages with steps to take:
+//   - The `ProcessUnary` method receives a single Request and gives a single Response.
+//     Multiple request steps should be combined to give just one response, with subsequent steps taking precedence.
+//   - The `ProcessStreamedIn` method receives a stream of Requests and gives a single Response.
+//     All request steps should be combined to produce a single response after the request stream completes.
+//   - The `ProcessStreamedOut` method receives a single Request and gives a stream of Responses.
+//     The single request may contain multiple grouped steps, each group corresponding to an expected response.
+//   - The `ProcessStreamed` method receives a stream of Requests and gives a stream of Responses.
+//     Each request may contain multiple grouped steps, each group corresponding to an expected response.
+// - Request steps must be processed in order, and can require replying, forwarding, or failing, and side effects.
+// - The Request steps are grouped, for streamed Responses, where each group correlates with a Response.
+// - The `Process` methods must reply with the requested reply message, unless forwarding or failing.
+// - Forwarding and side effects must always be made to the second service `ActionTwo`.
+//
+service ActionTckModel {
+  rpc ProcessUnary(Request) returns (Response);
+  rpc ProcessStreamedIn(stream Request) returns (Response);
+  rpc ProcessStreamedOut(Request) returns (stream Response);
+  rpc ProcessStreamed(stream Request) returns (stream Response);
+}
+
+//
+// The `ActionTwo` service is only for verifying forwards and side effects.
+// The `Call` method is not required to do anything, and may simply return an empty `Response` message.
+//
+service ActionTwo {
+  rpc Call(OtherRequest) returns (Response);
+}
+
+//
+// A `Request` message contains the steps that the entity should process.
+// Steps are grouped for streamed responses. Steps must be processed in order.
+//
+message Request {
+  repeated ProcessGroup groups = 1;
+}
+
+//
+// A `ProcessGroup` contains the steps for one response.
+//
+message ProcessGroup {
+  repeated ProcessStep steps = 1;
+}
+
+//
+// Each `ProcessStep` is one of:
+//
+// - Reply: reply with the given message in a `Response`.
+// - Forward: forward to another service, in place of replying with a `Response`.
+// - Fail: fail the current `Process` command by sending a failure.
+// - SideEffect: add a side effect to the current reply, forward, or failure.
+//
+message ProcessStep {
+  oneof step {
+    Reply reply = 1;
+    Forward forward = 2;
+    Fail fail = 3;
+    SideEffect effect = 4;
+  }
+}
+
+//
+// Reply with a message in the reponse.
+//
+message Reply {
+  string message = 1;
+}
+
+//
+// Replace the response with a forward to `cloudstate.tck.model.ActionTwo/Call`.
+// The payload must be an `OtherRequest` message with the given `id`.
+//
+message Forward {
+  string id = 1;
+}
+
+//
+// Fail the current command with the given description `message`.
+//
+message Fail {
+  string message = 1;
+}
+
+//
+// Add a side effect to the reply, to `cloudstate.tck.model.ActionTwo/Call`.
+// The payload must be an `OtherRequest` message with the given `id`.
+// The side effect should be marked synchronous based on the given `synchronous` value.
+//
+message SideEffect {
+  string id = 1;
+  bool synchronous = 2;
+}
+
+//
+// The `Response` message must contain the message from the corresponding reply step.
+//
+message Response {
+  string message = 1;
+}
+
+//
+// The `OtherRequest` message must contain the id for the forward or side effect.
+//
+message OtherRequest {
+  string id = 1;
+}

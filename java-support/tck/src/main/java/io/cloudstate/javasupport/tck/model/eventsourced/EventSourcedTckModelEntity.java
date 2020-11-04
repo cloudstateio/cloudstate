@@ -20,6 +20,7 @@ import io.cloudstate.javasupport.Context;
 import io.cloudstate.javasupport.ServiceCall;
 import io.cloudstate.javasupport.ServiceCallRef;
 import io.cloudstate.javasupport.eventsourced.*;
+import io.cloudstate.tck.model.EventSourcedTwo;
 import io.cloudstate.tck.model.Eventsourced.*;
 import java.util.Optional;
 
@@ -32,9 +33,7 @@ public class EventSourcedTckModelEntity {
 
   public EventSourcedTckModelEntity(Context context) {
     serviceTwoCall =
-        context
-            .serviceCallFactory()
-            .lookup("cloudstate.tck.model.EventSourcedTwo", "Call", Request.class);
+        context.serviceCallFactory().lookup(EventSourcedTwo.name, "Call", Request.class);
   }
 
   @Snapshot

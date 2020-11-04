@@ -18,14 +18,25 @@ package io.cloudstate.javasupport.tck;
 
 import com.example.shoppingcart.Shoppingcart;
 import io.cloudstate.javasupport.CloudState;
+import io.cloudstate.javasupport.tck.model.action.ActionTckModelBehavior;
+import io.cloudstate.javasupport.tck.model.action.ActionTwoBehavior;
 import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedTckModelEntity;
 import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedTwoEntity;
 import io.cloudstate.samples.shoppingcart.ShoppingCartEntity;
+import io.cloudstate.tck.model.Action;
 import io.cloudstate.tck.model.Eventsourced;
 
 public final class JavaSupportTck {
   public static final void main(String[] args) throws Exception {
     new CloudState()
+        .registerAction(
+            new ActionTckModelBehavior(),
+            Action.getDescriptor().findServiceByName("ActionTckModel"),
+            Action.getDescriptor())
+        .registerAction(
+            new ActionTwoBehavior(),
+            Action.getDescriptor().findServiceByName("ActionTwo"),
+            Action.getDescriptor())
         .registerEventSourcedEntity(
             EventSourcedTckModelEntity.class,
             Eventsourced.getDescriptor().findServiceByName("EventSourcedTckModel"),

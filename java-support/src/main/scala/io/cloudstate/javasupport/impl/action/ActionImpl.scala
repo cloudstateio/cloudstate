@@ -82,6 +82,10 @@ final class ActionProtocolImpl(_system: ActorSystem, services: Map[String, Actio
             toOptionPbMetadata(forward.serviceCall().metadata())
           )
         )
+      case failure: FailureReply[JavaPbAny] =>
+        ActionResponse.Response.Failure(
+          Failure(description = failure.description())
+        )
       // ie, NoReply
       case _ => ActionResponse.Response.Empty
     }
@@ -259,6 +263,7 @@ final class ActionProtocolImpl(_system: ActorSystem, services: Map[String, Actio
 }
 
 trait ActionReplyImpl[T] extends ActionReply[T] {
+  override def isEmpty: Boolean = false
   def _effects: List[Effect]
   override def effects(): util.Collection[Effect] = _effects.asJava
 }
@@ -267,16 +272,31 @@ case class MessageReplyImpl[T](payload: T, metadata: Metadata, _effects: List[Ef
     extends MessageReply[T]
     with ActionReplyImpl[T] {
   def this(payload: T, metadata: Metadata) = this(payload, metadata, Nil)
-  override def withEffects(effect: Effect*): MessageReply[T] = MessageReplyImpl(payload, metadata, _effects ++ effect)
+  override def withEffects(effects: util.Collection[Effect]): MessageReply[T] = addEffects(effects.asScala)
+  override def withEffects(effects: Effect*): MessageReply[T] = addEffects(effects)
+  private def addEffects(effects: Iterable[Effect]): MessageReply[T] = copy(_effects = _effects ++ effects)
 }
 case class ForwardReplyImpl[T](serviceCall: ServiceCall, _effects: List[Effect])
     extends ForwardReply[T]
     with ActionReplyImpl[T] {
   def this(serviceCall: ServiceCall) = this(serviceCall, Nil)
-  override def withEffects(effect: Effect*): ForwardReply[T] = ForwardReplyImpl(serviceCall, _effects ++ effect)
+  override def withEffects(effects: util.Collection[Effect]): ForwardReply[T] = addEffects(effects.asScala)
+  override def withEffects(effects: Effect*): ForwardReply[T] = addEffects(effects)
+  private def addEffects(effects: Iterable[Effect]): ForwardReply[T] = copy(_effects = _effects ++ effects)
+}
+case class FailureReplyImpl[T](description: String, _effects: List[Effect])
+    extends FailureReply[T]
+    with ActionReplyImpl[T] {
+  def this(description: String) = this(description, Nil)
+  override def withEffects(effects: util.Collection[Effect]): FailureReply[T] = addEffects(effects.asScala)
+  override def withEffects(effects: Effect*): FailureReply[T] = addEffects(effects)
+  private def addEffects(effects: Iterable[Effect]): FailureReply[T] = copy(_effects = _effects ++ effects)
 }
 case class NoReply[T](_effects: List[Effect]) extends ActionReplyImpl[T] {
-  override def withEffects(effect: Effect*): ActionReply[T] = NoReply(_effects ++ effect)
+  override def isEmpty: Boolean = true
+  override def withEffects(effects: util.Collection[Effect]): NoReply[T] = addEffects(effects.asScala)
+  override def withEffects(effects: Effect*): NoReply[T] = addEffects(effects)
+  private def addEffects(effects: Iterable[Effect]): NoReply[T] = copy(_effects = _effects ++ effects)
 }
 object NoReply {
   private val instance = NoReply[Any](Nil)
