@@ -1420,6 +1420,9 @@ spec:
                   instance:
                     description: Instance is the Spanner instance id.
                     type: string
+                  project:
+                    description: Project is the GCP project to use.
+                    type: string
                   secret:
                     description: Secret the secret to read Spanner credentials from.
                       Must have a key.json file in it.
@@ -1429,12 +1432,9 @@ spec:
                           TODO: Add other useful fields. apiVersion, kind, uid?'
                         type: string
                     type: object
-                  string:
-                    description: Project is the GCP project to use.
-                    type: string
                 required:
                 - instance
-                - string
+                - project
                 type: object
             type: object
           status:
