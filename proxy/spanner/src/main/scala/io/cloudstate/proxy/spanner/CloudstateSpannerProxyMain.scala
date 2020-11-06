@@ -19,7 +19,6 @@ package io.cloudstate.proxy.spanner
 import akka.actor.{ActorSystem => ClassicSystem}
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.grpc.GrpcClientSettings
-import akka.stream.scaladsl.Source
 import com.google.auth.oauth2.GoogleCredentials
 import com.google.longrunning.OperationsClient
 import com.google.spanner.admin.database.v1.DatabaseAdminClient
@@ -122,7 +121,5 @@ object CloudstateSpannerProxyMain {
       ),
       "schema-check"
     )
-
-    Source(1 to 5)
   }
 }

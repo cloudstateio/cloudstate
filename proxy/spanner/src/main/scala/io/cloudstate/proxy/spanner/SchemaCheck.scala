@@ -110,43 +110,36 @@ object SchemaCheck {
         tryCreate(ddl).flatMap(await)
       }
 
-      Behaviors.receiveMessage {
-        case TryCreateSchema =>
-          context.pipeToSelf(tryCreateSchema()) {
-            case Failure(cause) => HandleFailure(cause)
-            case _ => HandleSuccess
-          }
-          Behaviors.same
+      def behavior(numberOfRetries: Int): Behavior[Command] =
+        Behaviors.receiveMessage {
+          case TryCreateSchema =>
+            context.pipeToSelf(tryCreateSchema()) {
+              case Failure(cause) => HandleFailure(cause)
+              case _ => HandleSuccess
+            }
+            Behaviors.same
 
-        case HandleFailure(t) if numberOfRetries <= 0 =>
-          context.log.error("Cannot create schema!", t)
-          CoordinatedShutdown(context.system).run(CreateSchemaFailure)
-          Behaviors.stopped
+          case HandleFailure(t) if numberOfRetries <= 0 =>
+            context.log.error("Cannot create schema!", t)
+            CoordinatedShutdown(context.system).run(CreateSchemaFailure)
+            Behaviors.stopped
 
-        case HandleFailure(t) =>
-          context.log.warn("Scheduling retry to create schema!", t)
-          context.scheduleOnce(retryDelay, context.self, TryCreateSchema)
-          SchemaCheck(
-            databaseName,
-            journalTable,
-            tagsTable,
-            deletionsTable,
-            snapshotsTable,
-            operationAwaitDelay,
-            operationAwaitMaxDuration,
-            adminClient,
-            operationsClient,
-            numberOfRetries - 1,
-            retryDelay
-          )
+          case HandleFailure(t) =>
+            context.log.warn("Scheduling retry to create schema!", t)
+            context.scheduleOnce(retryDelay, context.self, TryCreateSchema)
+            behavior(numberOfRetries - 1)
 
-        case HandleSuccess =>
-          context.log.info("Schema already existed or successfully created")
-          ready.success(true)
-          adminClient.close()
-          operationsClient.close()
-          Behaviors.stopped
-      }
+          case HandleSuccess =>
+            context.log.info("Schema already existed or successfully created")
+            ready.success(true)
+            adminClient.close()
+            operationsClient.close()
+            Behaviors.stopped
+        }
+
+      context.self ! TryCreateSchema
+
+      behavior(numberOfRetries)
     }
 
   private def alreadyExists(t: Throwable) =
