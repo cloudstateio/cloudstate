@@ -24,7 +24,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.testkit.InterceptService.InterceptorSettings
 import io.cloudstate.testkit.discovery.InterceptEntityDiscovery
 import io.cloudstate.testkit.eventsourced.InterceptEventSourcedService
-import io.cloudstate.testkit.valuentity.InterceptValueEntityService
+import io.cloudstate.testkit.valueentity.InterceptValueEntityService
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -37,7 +37,7 @@ final class InterceptService(settings: InterceptorSettings) {
   private val context = new InterceptorContext(settings.intercept.host, settings.intercept.port)
   private val entityDiscovery = new InterceptEntityDiscovery(context)
   private val eventSourced = new InterceptEventSourcedService(context)
-  private val valueEntity = new InterceptValueEntityService(context)
+  private val valueBased = new InterceptValueEntityService(context)
 
   import context.system
 
@@ -45,7 +45,7 @@ final class InterceptService(settings: InterceptorSettings) {
 
   Await.result(
     Http().bindAndHandleAsync(
-      handler = entityDiscovery.handler orElse eventSourced.handler orElse valueEntity.handler,
+      handler = entityDiscovery.handler orElse eventSourced.handler orElse valueBased.handler,
       interface = settings.bind.host,
       port = settings.bind.port
     ),
@@ -56,12 +56,12 @@ final class InterceptService(settings: InterceptorSettings) {
 
   def expectEventSourcedConnection(): InterceptEventSourcedService.Connection = eventSourced.expectConnection()
 
-  def expectCrudConnection(): InterceptValueEntityService.Connection = valueEntity.expectConnection()
+  def expectCrudConnection(): InterceptValueEntityService.Connection = valueBased.expectConnection()
 
   def terminate(): Unit = {
     entityDiscovery.terminate()
     eventSourced.terminate()
-    valueEntity.terminate()
+    valueBased.terminate()
     context.terminate()
   }
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// gRPC interface for common messages and services for CRUD Entity user functions.
+// gRPC interface for common messages and services for value-based Entity user functions.
 
 syntax = "proto3";
 
@@ -27,7 +27,7 @@ option java_package = "io.cloudstate.protocol";
 option go_package = "github.com/cloudstateio/go-support/cloudstate/entity;entity";
 
 // The Value Entity service
-service ValueEntityProtocol {
+service ValueEntity {
 
   // One stream will be established per active entity.
   // Once established, the first message sent will be Init, which contains the entity ID, and,

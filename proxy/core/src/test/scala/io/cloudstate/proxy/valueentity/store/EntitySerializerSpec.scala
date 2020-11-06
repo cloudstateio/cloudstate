@@ -19,7 +19,7 @@ package io.cloudstate.proxy.valueentity.store
 import akka.util.ByteString
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.google.protobuf.{ByteString => ProtobufByteString}
-import io.cloudstate.proxy.valueentity.store.JdbcRepositoryImpl.EntitySerializer
+import io.cloudstate.proxy.valueentity.store.RepositoryImpl.EntitySerializer
 import org.scalatest.{Matchers, WordSpecLike}
 
 class EntitySerializerSpec extends WordSpecLike with Matchers {

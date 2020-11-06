@@ -29,12 +29,12 @@ import io.cloudstate.javasupport.impl.action.{ActionProtocolImpl, ActionService}
 import io.cloudstate.javasupport.impl.eventsourced.{EventSourcedImpl, EventSourcedStatefulService}
 import io.cloudstate.javasupport.impl.{EntityDiscoveryImpl, ResolvedServiceCallFactory, ResolvedServiceMethod}
 import io.cloudstate.javasupport.impl.crdt.{CrdtImpl, CrdtStatefulService}
-import io.cloudstate.javasupport.impl.valueentity.{ValueEntityImpl, ValueEntityStatefulService}
+import io.cloudstate.javasupport.impl.entity.{ValueEntityImpl, ValueEntityStatefulService}
 import io.cloudstate.protocol.action.ActionProtocolHandler
 import io.cloudstate.protocol.crdt.CrdtHandler
-import io.cloudstate.protocol.value_entity.ValueEntityProtocolHandler
 import io.cloudstate.protocol.entity.EntityDiscoveryHandler
 import io.cloudstate.protocol.event_sourced.EventSourcedHandler
+import io.cloudstate.protocol.value_entity.ValueEntityHandler
 
 import scala.compat.java8.FutureConverters
 import scala.concurrent.Future
@@ -116,10 +116,10 @@ final class CloudStateRunner private[this] (
           val actionImpl = new ActionProtocolImpl(system, actionServices, rootContext)
           route orElse ActionProtocolHandler.partial(actionImpl)
 
-        case (route, (serviceClass, valueEntityServices: Map[String, ValueEntityStatefulService] @unchecked))
+        case (route, (serviceClass, entityServices: Map[String, ValueEntityStatefulService] @unchecked))
             if serviceClass == classOf[ValueEntityStatefulService] =>
-          val valueEntityImpl = new ValueEntityImpl(system, valueEntityServices, rootContext, configuration)
-          route orElse ValueEntityProtocolHandler.partial(valueEntityImpl)
+          val valueEntityImpl = new ValueEntityImpl(system, entityServices, rootContext, configuration)
+          route orElse ValueEntityHandler.partial(valueEntityImpl)
 
         case (_, (serviceClass, _)) =>
           sys.error(s"Unknown StatefulService: $serviceClass")

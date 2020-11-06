@@ -22,11 +22,7 @@ import akka.Done
 import akka.actor.{Actor, ActorLogging, ActorSystem, Props, Status}
 import akka.pattern.{BackoffOpts, BackoffSupervisor}
 import akka.util.Timeout
-import io.cloudstate.proxy.valueentity.store.{
-  JdbcSlickDatabase,
-  JdbcValueEntityTable,
-  JdbcValueEntityTableConfiguration
-}
+import io.cloudstate.proxy.valueentity.store.jdbc.{JdbcEntityTable, JdbcEntityTableConfiguration, JdbcSlickDatabase}
 import slick.jdbc.{H2Profile, JdbcProfile, MySQLProfile, PostgresProfile}
 import slick.jdbc.meta.MTable
 
@@ -36,12 +32,12 @@ import scala.util.{Failure, Success, Try}
 
 class SlickEnsureValueEntityTablesExistReadyCheck(system: ActorSystem) extends (() => Future[Boolean]) {
 
-  private val valueEntityConfig = system.settings.config.getConfig("cloudstate.proxy")
-  private val autoCreateTables = valueEntityConfig.getBoolean("jdbc.auto-create-tables")
+  private val entityConfig = system.settings.config.getConfig("cloudstate.proxy")
+  private val autoCreateTables = entityConfig.getBoolean("jdbc.auto-create-tables")
 
   private val check: () => Future[Boolean] = if (autoCreateTables) {
     // Get a hold of the cloudstate.proxy.value-entity-persistence-store.jdbc.database.slick database instance
-    val db = JdbcSlickDatabase(valueEntityConfig)
+    val db = JdbcSlickDatabase(entityConfig)
 
     val actor = system.actorOf(
       BackoffSupervisor.props(
@@ -87,16 +83,16 @@ private class EnsureValueEntityTablesExistsActor(db: JdbcSlickDatabase) extends 
 
   implicit val ec = context.dispatcher
 
-  private val stateCfg = new JdbcValueEntityTableConfiguration(
+  private val stateCfg = new JdbcEntityTableConfiguration(
     context.system.settings.config.getConfig("cloudstate.proxy.value-entity-persistence-store.jdbc-state-store")
   )
 
-  private val stateTable = new JdbcValueEntityTable {
-    override val valueEntityTableCfg: JdbcValueEntityTableConfiguration = stateCfg
+  private val stateTable = new JdbcEntityTable {
+    override val entityTableCfg: JdbcEntityTableConfiguration = stateCfg
     override val profile: JdbcProfile = EnsureValueEntityTablesExistsActor.this.profile
   }
 
-  private val stateStatements = stateTable.ValueEntityTableQuery.schema.createStatements.toSeq
+  private val stateStatements = stateTable.Entity.schema.createStatements.toSeq
 
   import akka.pattern.pipe
 

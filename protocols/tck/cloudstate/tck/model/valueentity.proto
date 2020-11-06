@@ -13,17 +13,17 @@
 // limitations under the License.
 
 //
-// == Cloudstate TCK model test for value-entity entities ==
+// == Cloudstate TCK model test for value-based entities ==
 //
 
 syntax = "proto3";
 
-package cloudstate.tck.model.valuentity;
+package cloudstate.tck.model.valueentity;
 
 import "cloudstate/entity_key.proto";
 
-option java_package = "io.cloudstate.tck.model.valuentity";
-option go_package = "github.com/cloudstateio/go-support/tck/valuentity;valuentity";
+option java_package = "io.cloudstate.tck.model.valueentity";
+option go_package = "github.com/cloudstateio/go-support/tck/valueentity;valueentity";
 
 //
 // The `ValueEntityTckModel` service should be implemented in the following ways:
@@ -35,14 +35,14 @@ option go_package = "github.com/cloudstateio/go-support/tck/valuentity;valuentit
 // - The `Process` method receives a `Request` message with actions to take.
 // - Request actions must be processed in order, and can require updating state, deleting state, forwarding, side effects, or failing.
 // - The `Process` method must reply with the state in a `Response`, after taking actions, unless forwarding or failing.
-// - Forwarding and side effects must always be made to the second service `CrudTwo`.
+// - Forwarding and side effects must always be made to the second service `ValueEntityTwo`.
 //
 service ValueEntityTckModel {
   rpc Process(Request) returns (Response);
 }
 
 //
-// The `ValueEntityTwo` service is only for verifying forward actions and side effects.
+// The `ValueBasedTwo` service is only for verifying forward actions and side effects.
 // The `Call` method is not required to do anything, and may simply return an empty `Response` message.
 //
 service ValueEntityTwo {
@@ -90,7 +90,7 @@ message Update {
 message Delete {}
 
 //
-// Replace the response with a forward to `cloudstate.tck.model.valuentity.ValueEntityTwo/Call`.
+// Replace the response with a forward to `cloudstate.tck.model.valueentity.ValueEntityTwo/Call`.
 // The payload must be a `Request` message with the given `id`.
 //
 message Forward {
@@ -98,7 +98,7 @@ message Forward {
 }
 
 //
-// Add a side effect to the reply, to `cloudstate.tck.model.valuentity.ValueEntityTwo/Call`.
+// Add a side effect to the reply, to `cloudstate.tck.model.valueentity.ValueEntityTwo/Call`.
 // The payload must be a `Request` message with the given `id`.
 // The side effect should be marked synchronous based on the given `synchronous` value.
 //

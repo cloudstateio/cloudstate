@@ -23,13 +23,14 @@ import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
 import akka.event.Logging
 import akka.grpc.GrpcClientSettings
 import akka.stream.Materializer
-import akka.stream.scaladsl.{Flow, Source}
+import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
 import io.cloudstate.protocol.entity.{Entity, Metadata}
 import io.cloudstate.protocol.event_sourced.EventSourcedClient
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
+import io.cloudstate.proxy.sharding.DynamicLeastShardAllocationStrategy
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.collection.JavaConverters._

@@ -16,7 +16,7 @@
 
 package io.cloudstate.javasupport.impl
 
-import io.cloudstate.javasupport.valueentity
+import io.cloudstate.javasupport.entity
 import io.cloudstate.javasupport.eventsourced
 import io.cloudstate.protocol.value_entity.ValueEntityInit
 import io.cloudstate.protocol.entity.{Command, Failure}
@@ -34,7 +34,7 @@ object EntityExceptions {
     def apply(command: Command, message: String): EntityException =
       EntityException(command.entityId, command.id, command.name, message)
 
-    def apply(context: valueentity.CommandContext[_], message: String): EntityException =
+    def apply(context: entity.CommandContext[_], message: String): EntityException =
       EntityException(context.entityId, context.commandId, context.commandName, message)
 
     def apply(context: eventsourced.CommandContext, message: String): EntityException =

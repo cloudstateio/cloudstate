@@ -126,8 +126,8 @@ lazy val root = (project in file("."))
     `java-support`,
     `java-support-docs`,
     `java-support-tck`,
+    `java-eventsourced-shopping-cart`,
     `java-shopping-cart`,
-    `java-valueentity-shopping-cart`,
     `java-pingpong`,
     `akka-client`,
     operator,
@@ -655,7 +655,7 @@ lazy val `java-support-docs` = (project in file("java-support/docs"))
   )
 
 lazy val `java-support-tck` = (project in file("java-support/tck"))
-  .dependsOn(`java-support`, `java-shopping-cart`, `java-valueentity-shopping-cart`)
+  .dependsOn(`java-support`, `java-shopping-cart`, `java-eventsourced-shopping-cart`)
   .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
   .settings(
     name := "cloudstate-java-tck",
@@ -667,6 +667,26 @@ lazy val `java-support-tck` = (project in file("java-support/tck"))
     PB.targets in Compile := Seq(PB.gens.java -> (sourceManaged in Compile).value),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "11", "-target", "11"),
     assemblySettings("cloudstate-java-tck.jar")
+  )
+
+lazy val `java-eventsourced-shopping-cart` = (project in file("samples/java-eventsourced-shopping-cart"))
+  .dependsOn(`java-support`)
+  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
+  .settings(
+    name := "java-eventsourced-shopping-cart",
+    dockerSettings,
+    mainClass in Compile := Some("io.cloudstate.samples.eventsourced.shoppingcart.Main"),
+    PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
+    akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
+    PB.protoSources in Compile ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "frontend", baseDir / "example")
+    },
+    PB.targets in Compile := Seq(
+        PB.gens.java -> (sourceManaged in Compile).value
+      ),
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "11", "-target", "11"),
+    assemblySettings("java-eventsourced-shopping-cart.jar")
   )
 
 lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
@@ -687,26 +707,6 @@ lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))
       ),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "11", "-target", "11"),
     assemblySettings("java-shopping-cart.jar")
-  )
-
-lazy val `java-valueentity-shopping-cart` = (project in file("samples/java-valueentity-shopping-cart"))
-  .dependsOn(`java-support`)
-  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
-  .settings(
-    name := "java-valueentity-shopping-cart",
-    dockerSettings,
-    mainClass in Compile := Some("io.cloudstate.samples.valueentity.shoppingcart.Main"),
-    PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
-    akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
-    PB.protoSources in Compile ++= {
-      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "frontend", baseDir / "example")
-    },
-    PB.targets in Compile := Seq(
-        PB.gens.java -> (sourceManaged in Compile).value
-      ),
-    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "11", "-target", "11"),
-    assemblySettings("java-valueentity-shopping-cart.jar")
   )
 
 lazy val `java-pingpong` = (project in file("samples/java-pingpong"))

@@ -21,7 +21,7 @@ import akka.grpc.GrpcClientSettings
 import akka.testkit.TestKit
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.testkit.eventsourced.TestEventSourcedProtocol
-import io.cloudstate.testkit.valuentity.TestValueEntityProtocol
+import io.cloudstate.testkit.valueentity.TestValueEntityProtocol
 
 final class TestProtocol(host: String, port: Int) {
   import TestProtocol._

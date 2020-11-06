@@ -17,18 +17,11 @@
 package io.cloudstate.tck
 
 import io.cloudstate.testkit.InterceptService
-import com.example.valueentity.shoppingcart.shoppingcart.{
-  LineItem,
-  RemoveShoppingCart,
-  AddLineItem,
-  Cart => ValueEntityCart,
-  GetShoppingCart,
-  RemoveLineItem,
-  ShoppingCart
-}
+import com.example.valueentity.shoppingcart.shoppingcart.{Cart => ValueEntityCart}
+import com.example.valueentity.shoppingcart.shoppingcart._
 import com.example.valueentity.shoppingcart.persistence.domain
 import io.cloudstate.protocol.value_entity.ValueEntityStreamOut
-import io.cloudstate.testkit.valuentity.{InterceptValueEntityService, ValueEntityMessages}
+import io.cloudstate.testkit.valueentity.{InterceptValueEntityService, ValueEntityMessages}
 import org.scalatest.MustMatchers
 
 import scala.collection.mutable

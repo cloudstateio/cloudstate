@@ -18,18 +18,18 @@ package io.cloudstate.proxy.valueentity
 
 import akka.Done
 import akka.actor.ActorSystem
+import akka.grpc.{GrpcClientSettings, GrpcServiceException}
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.{HttpRequest, Uri}
 import akka.http.scaladsl.unmarshalling.Unmarshal
-import akka.grpc.{GrpcClientSettings, GrpcServiceException}
 import akka.testkit.TestKit
 import io.cloudstate.proxy.TestProxy
-import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpec}
-import org.scalatest.concurrent.ScalaFutures
-import io.cloudstate.testkit.valuentity.{TestValueEntityService, ValueEntityMessages}
 import io.cloudstate.proxy.test.thing.{Key, Thing, ThingClient}
 import io.cloudstate.testkit.TestService
+import io.cloudstate.testkit.valueentity.{TestValueEntityService, ValueEntityMessages}
 import io.grpc.{Status, StatusRuntimeException}
+import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.{BeforeAndAfterAll, Matchers, WordSpec}
 
 class ExceptionHandlingSpec extends WordSpec with Matchers with BeforeAndAfterAll with ScalaFutures {
 

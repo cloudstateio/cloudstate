@@ -19,7 +19,6 @@ package io.cloudstate.tck
 import akka.actor.ActorSystem
 import akka.grpc.ServiceDescription
 import akka.testkit.TestKit
-import com.example.shoppingcart.persistence.domain
 import com.example.shoppingcart.shoppingcart._
 import com.example.valueentity.shoppingcart.shoppingcart.{
   AddLineItem => ValueEntityAddLineItem,
@@ -34,19 +33,18 @@ import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.protocol.action.ActionProtocol
 import io.cloudstate.protocol.crdt.Crdt
-import io.cloudstate.protocol.value_entity.ValueEntityProtocol
+import io.cloudstate.protocol.value_entity.ValueEntity
 import io.cloudstate.protocol.event_sourced._
-import io.cloudstate.tck.model.valuentity.valueentity.{ValueEntityTckModel, ValueEntityTwo}
+import io.cloudstate.tck.model.valueentity.valueentity.{ValueEntityTckModel, ValueEntityTwo}
 import io.cloudstate.testkit.InterceptService.InterceptorSettings
-import io.cloudstate.testkit.eventsourced.{EventSourcedMessages, InterceptEventSourcedService}
+import io.cloudstate.testkit.eventsourced.EventSourcedMessages
 import io.cloudstate.testkit.{InterceptService, ServiceAddress, TestClient, TestProtocol}
 import io.grpc.StatusRuntimeException
 import io.cloudstate.tck.model.eventsourced.{EventSourcedTckModel, EventSourcedTwo}
-import io.cloudstate.testkit.valuentity.ValueEntityMessages
+import io.cloudstate.testkit.valueentity.ValueEntityMessages
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 
-import scala.collection.mutable
 import scala.concurrent.duration._
 
 object CloudStateTCK {
@@ -122,7 +120,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         info.supportedEntityTypes must contain theSameElementsAs Seq(
           EventSourced.name,
           Crdt.name,
-          ValueEntityProtocol.name,
+          ValueEntity.name,
           ActionProtocol.name
         )
 
@@ -152,18 +150,19 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
 
         spec.entities.find(_.serviceName == ValueEntityTckModel.name).foreach { entity =>
           serviceNames must contain("ValueEntityTckModel")
-          entity.entityType mustBe ValueEntityProtocol.name
+          entity.entityType mustBe ValueEntity.name
           entity.persistenceId mustBe "value-entity-tck-model"
         }
 
         spec.entities.find(_.serviceName == ValueEntityTwo.name).foreach { entity =>
           serviceNames must contain("ValueEntityTwo")
-          entity.entityType mustBe ValueEntityProtocol.name
+          entity.entityType mustBe ValueEntity.name
+          entity.persistenceId mustBe "value-entity-tck-model-two"
         }
 
         spec.entities.find(_.serviceName == ValueEntityShoppingCart.name).foreach { entity =>
           serviceNames must contain("ShoppingCart")
-          entity.entityType mustBe ValueEntityProtocol.name
+          entity.entityType mustBe ValueEntity.name
           entity.persistenceId must not be empty
         }
 
@@ -461,33 +460,33 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
     // TODO convert this into a ScalaCheck generated test case
     "verifying app test: event-sourced shopping cart" must {
       import EventSourcedMessages._
-      import ShoppingCartVerifier._
+      import EventSourcedShoppingCartVerifier._
 
-      def verifyGetInitialEmptyCart(session: ShoppingCartVerifier, cartId: String): Unit = {
+      def verifyGetInitialEmptyCart(session: EventSourcedShoppingCartVerifier, cartId: String): Unit = {
         shoppingCartClient.getCart(GetShoppingCart(cartId)).futureValue mustBe Cart()
         session.verifyConnection()
         session.verifyGetInitialEmptyCart(cartId)
       }
 
-      def verifyGetCart(session: ShoppingCartVerifier, cartId: String, expected: Item*): Unit = {
+      def verifyGetCart(session: EventSourcedShoppingCartVerifier, cartId: String, expected: Item*): Unit = {
         val expectedCart = shoppingCart(expected: _*)
         shoppingCartClient.getCart(GetShoppingCart(cartId)).futureValue mustBe expectedCart
         session.verifyGetCart(cartId, expectedCart)
       }
 
-      def verifyAddItem(session: ShoppingCartVerifier, cartId: String, item: Item): Unit = {
+      def verifyAddItem(session: EventSourcedShoppingCartVerifier, cartId: String, item: Item): Unit = {
         val addLineItem = AddLineItem(cartId, item.id, item.name, item.quantity)
         shoppingCartClient.addItem(addLineItem).futureValue mustBe EmptyScalaMessage
         session.verifyAddItem(cartId, item)
       }
 
-      def verifyRemoveItem(session: ShoppingCartVerifier, cartId: String, itemId: String): Unit = {
+      def verifyRemoveItem(session: EventSourcedShoppingCartVerifier, cartId: String, itemId: String): Unit = {
         val removeLineItem = RemoveLineItem(cartId, itemId)
         shoppingCartClient.removeItem(removeLineItem).futureValue mustBe EmptyScalaMessage
         session.verifyRemoveItem(cartId, itemId)
       }
 
-      def verifyAddItemFailure(session: ShoppingCartVerifier, cartId: String, item: Item): Unit = {
+      def verifyAddItemFailure(session: EventSourcedShoppingCartVerifier, cartId: String, item: Item): Unit = {
         val addLineItem = AddLineItem(cartId, item.id, item.name, item.quantity)
         val error = shoppingCartClient.addItem(addLineItem).failed.futureValue
         error mustBe a[StatusRuntimeException]
@@ -495,7 +494,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         session.verifyAddItemFailure(cartId, item, description)
       }
 
-      def verifyRemoveItemFailure(session: ShoppingCartVerifier, cartId: String, itemId: String): Unit = {
+      def verifyRemoveItemFailure(session: EventSourcedShoppingCartVerifier, cartId: String, itemId: String): Unit = {
         val removeLineItem = RemoveLineItem(cartId, itemId)
         val error = shoppingCartClient.removeItem(removeLineItem).failed.futureValue
         error mustBe a[StatusRuntimeException]
@@ -549,8 +548,8 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
     }
 
     "verifying proxy test: HTTP API" must {
-      "verify the HTTP API for ShoppingCart service" in testFor(ShoppingCart) {
-        import ShoppingCartVerifier._
+      "verify the HTTP API for event-sourced ShoppingCart service" in testFor(ShoppingCart) {
+        import EventSourcedShoppingCartVerifier._
 
         def checkHttpRequest(path: String, body: String = null)(expected: => String): Unit = {
           val response = client.http.request(path, body)
@@ -607,7 +606,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         }
       }
 
-      "verify the HTTP API for Value Entity ShoppingCart service" in testFor(ValueEntityShoppingCart) {
+      "verify the HTTP API for value-based ShoppingCart service" in testFor(ValueEntityShoppingCart) {
         import ValueEntityShoppingCartVerifier._
 
         def checkHttpRequest(path: String, body: String = null)(expected: => String): Unit = {
@@ -680,9 +679,9 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
       }
     }
 
-    "verifying model test: value entities" must {
+    "verifying model test: value-based entities" must {
       import ValueEntityMessages._
-      import io.cloudstate.tck.model.valuentity.valueentity._
+      import io.cloudstate.tck.model.valueentity.valueentity._
 
       val ServiceTwo = ValueEntityTwo.name
 
@@ -727,9 +726,6 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
 
       def delete(): Effects =
         Effects.empty.withDeleteAction()
-
-      //def sideEffects(ids: String*): Effects =
-      //  ids.foldLeft(Effects.empty) { case (e, id) => e.withSideEffect(ServiceTwo, "Call", Request(id)) }
 
       def sideEffects(ids: String*): Effects =
         createSideEffects(synchronous = false, ids)
@@ -926,7 +922,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
       }
     }
 
-    "verifying app test: value entity shopping cart" must {
+    "verifying app test: value-based entity shopping cart" must {
       import ValueEntityMessages._
       import ValueEntityShoppingCartVerifier._
 
@@ -1014,78 +1010,5 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         verifyGetCart(session, "cart:1", Item("product:2", "Product2", 33)) // check final state
       }
     }
-  }
-}
-
-object ShoppingCartVerifier {
-  case class Item(id: String, name: String, quantity: Int)
-
-  def shoppingCartSession(interceptor: InterceptService): ShoppingCartVerifier = new ShoppingCartVerifier(interceptor)
-
-  def shoppingCart(items: Item*): Cart = Cart(items.map(i => LineItem(i.id, i.name, i.quantity)))
-}
-
-class ShoppingCartVerifier(interceptor: InterceptService) extends MustMatchers {
-  import EventSourcedMessages._
-  import ShoppingCartVerifier.Item
-
-  private val commandIds = mutable.Map.empty[String, Long]
-  private def nextCommandId(cartId: String): Long = commandIds.updateWith(cartId)(_.map(_ + 1).orElse(Some(1L))).get
-
-  private var connection: InterceptEventSourcedService.Connection = _
-
-  def verifyConnection(): Unit = connection = interceptor.expectEventSourcedConnection()
-
-  def verifyGetInitialEmptyCart(cartId: String): Unit = {
-    val commandId = nextCommandId(cartId)
-    connection.expectClient(init(ShoppingCart.name, cartId))
-    connection.expectClient(command(commandId, cartId, "GetCart", GetShoppingCart(cartId)))
-    connection.expectService(reply(commandId, Cart()))
-    connection.expectNoInteraction()
-  }
-
-  def verifyGetCart(cartId: String, expected: Cart): Unit = {
-    val commandId = nextCommandId(cartId)
-    connection.expectClient(command(commandId, cartId, "GetCart", GetShoppingCart(cartId)))
-    connection.expectService(reply(commandId, expected))
-    connection.expectNoInteraction()
-  }
-
-  def verifyAddItem(cartId: String, item: Item): Unit = {
-    val commandId = nextCommandId(cartId)
-    val addLineItem = AddLineItem(cartId, item.id, item.name, item.quantity)
-    val itemAdded = domain.ItemAdded(Some(domain.LineItem(item.id, item.name, item.quantity)))
-    connection.expectClient(command(commandId, cartId, "AddItem", addLineItem))
-    // shopping cart implementations may or may not have snapshots configured, so match without snapshot
-    val replied = connection.expectServiceMessage[EventSourcedStreamOut.Message.Reply]
-    replied.copy(value = replied.value.clearSnapshot) mustBe reply(commandId, EmptyScalaMessage, persist(itemAdded))
-    connection.expectNoInteraction()
-  }
-
-  def verifyRemoveItem(cartId: String, itemId: String): Unit = {
-    val commandId = nextCommandId(cartId)
-    val removeLineItem = RemoveLineItem(cartId, itemId)
-    val itemRemoved = domain.ItemRemoved(itemId)
-    connection.expectClient(command(commandId, cartId, "RemoveItem", removeLineItem))
-    // shopping cart implementations may or may not have snapshots configured, so match without snapshot
-    val replied = connection.expectServiceMessage[EventSourcedStreamOut.Message.Reply]
-    replied.copy(value = replied.value.clearSnapshot) mustBe reply(commandId, EmptyScalaMessage, persist(itemRemoved))
-    connection.expectNoInteraction()
-  }
-
-  def verifyAddItemFailure(cartId: String, item: Item, failure: String): Unit = {
-    val commandId = nextCommandId(cartId)
-    val addLineItem = AddLineItem(cartId, item.id, item.name, item.quantity)
-    connection.expectClient(command(commandId, cartId, "AddItem", addLineItem))
-    connection.expectService(actionFailure(commandId, failure))
-    connection.expectNoInteraction()
-  }
-
-  def verifyRemoveItemFailure(cartId: String, itemId: String, failure: String): Unit = {
-    val commandId = nextCommandId(cartId)
-    val removeLineItem = RemoveLineItem(cartId, itemId)
-    connection.expectClient(command(commandId, cartId, "RemoveItem", removeLineItem))
-    connection.expectService(actionFailure(commandId, failure))
-    connection.expectNoInteraction()
   }
 }

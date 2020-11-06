@@ -32,12 +32,12 @@ import com.typesafe.config.Config
 import io.cloudstate.protocol.action.ActionProtocol
 import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.crdt.Crdt
-import io.cloudstate.protocol.value_entity.ValueEntityProtocol
+import io.cloudstate.protocol.value_entity.ValueEntity
 import io.cloudstate.protocol.event_sourced.EventSourced
 import io.cloudstate.proxy.action.ActionProtocolSupportFactory
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
-import io.cloudstate.proxy.valueentity.ValueEntitySupportFactory
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
+import io.cloudstate.proxy.valueentity.EntitySupportFactory
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -139,7 +139,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
     } ++ {
       if (config.valueEntityEnabled)
         Map(
-          ValueEntityProtocol.name -> new ValueEntitySupportFactory(system, config, clientSettings)
+          ValueEntity.name -> new EntitySupportFactory(system, config, clientSettings)
         )
       else Map.empty
     }

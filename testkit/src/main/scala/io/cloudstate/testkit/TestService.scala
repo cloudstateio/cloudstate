@@ -22,7 +22,7 @@ import akka.testkit.{TestKit, TestProbe}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.testkit.discovery.TestEntityDiscoveryService
 import io.cloudstate.testkit.eventsourced.TestEventSourcedService
-import io.cloudstate.testkit.valuentity.TestValueEntityService
+import io.cloudstate.testkit.valueentity.TestValueEntityService
 
 import scala.concurrent.Await
 import scala.concurrent.duration._

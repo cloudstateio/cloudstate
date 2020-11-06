@@ -16,16 +16,16 @@
 
 package io.cloudstate.samples.shoppingcart;
 
-import io.cloudstate.javasupport.*;
-import com.example.shoppingcart.Shoppingcart;
+import com.example.valueentity.shoppingcart.Shoppingcart;
+import io.cloudstate.javasupport.CloudState;
 
 public final class Main {
   public static final void main(String[] args) throws Exception {
     new CloudState()
-        .registerEventSourcedEntity(
+        .registerEntity(
             ShoppingCartEntity.class,
             Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
-            com.example.shoppingcart.persistence.Domain.getDescriptor())
+            com.example.valueentity.shoppingcart.persistence.Domain.getDescriptor())
         .start()
         .toCompletableFuture()
         .get();

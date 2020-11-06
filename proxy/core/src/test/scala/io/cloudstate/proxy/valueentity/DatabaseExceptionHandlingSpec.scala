@@ -22,14 +22,14 @@ import akka.testkit.TestEvent.Mute
 import akka.testkit.{EventFilter, TestActorRef}
 import akka.util.ByteString
 import com.google.protobuf.any.{Any => ScalaPbAny}
-import io.cloudstate.protocol.value_entity.ValueEntityProtocolClient
 import com.google.protobuf.{ByteString => PbByteString}
-import io.cloudstate.proxy.valueentity.store.{JdbcRepositoryImpl, JdbcStore}
-import io.cloudstate.proxy.valueentity.store.JdbcStore.Key
+import io.cloudstate.protocol.value_entity.ValueEntityClient
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.telemetry.AbstractTelemetrySpec
+import io.cloudstate.proxy.valueentity.store.Store.Key
+import io.cloudstate.proxy.valueentity.store.{RepositoryImpl, Store}
 import io.cloudstate.testkit.TestService
-import io.cloudstate.testkit.valuentity.ValueEntityMessages
+import io.cloudstate.testkit.valueentity.ValueEntityMessages
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -53,7 +53,7 @@ class DatabaseExceptionHandlingSpec extends AbstractTelemetrySpec {
     sendQueueSize = 100
   )
 
-  "The ValueEntity" should {
+  "ValueEntity" should {
 
     "crash entity on init when loading state failures" in withTestKit(testkitConfig) { testKit =>
       import testKit._
@@ -62,8 +62,8 @@ class DatabaseExceptionHandlingSpec extends AbstractTelemetrySpec {
       silentDeadLettersAndUnhandledMessages
 
       val client =
-        ValueEntityProtocolClient(GrpcClientSettings.connectToServiceAt("localhost", service.port).withTls(false))
-      val repository = new JdbcRepositoryImpl(TestJdbcStore.storeWithGetFailure())
+        ValueEntityClient(GrpcClientSettings.connectToServiceAt("localhost", service.port).withTls(false))
+      val repository = new RepositoryImpl(TestJdbcStore.storeWithGetFailure())
       val entity = watch(system.actorOf(ValueEntitySupervisor.props(client, entityConfiguration, repository), "entity"))
 
       val connection = service.valueEntity.expectConnection()
@@ -71,8 +71,8 @@ class DatabaseExceptionHandlingSpec extends AbstractTelemetrySpec {
     }
 
     "crash entity on update state failures" in withTestKit(testkitConfig) { testKit =>
-      import testKit._
       import ValueEntityMessages._
+      import testKit._
       import system.dispatcher
 
       silentDeadLettersAndUnhandledMessages
@@ -80,8 +80,8 @@ class DatabaseExceptionHandlingSpec extends AbstractTelemetrySpec {
       val forwardReply = forwardReplyActor(testActor)
 
       val client =
-        ValueEntityProtocolClient(GrpcClientSettings.connectToServiceAt("localhost", service.port).withTls(false))
-      val repository = new JdbcRepositoryImpl(TestJdbcStore.storeWithUpdateFailure())
+        ValueEntityClient(GrpcClientSettings.connectToServiceAt("localhost", service.port).withTls(false))
+      val repository = new RepositoryImpl(TestJdbcStore.storeWithUpdateFailure())
       val entity = watch(system.actorOf(ValueEntitySupervisor.props(client, entityConfiguration, repository), "entity"))
       val emptyCommand = Some(protobufAny(EmptyJavaMessage))
 
@@ -97,8 +97,8 @@ class DatabaseExceptionHandlingSpec extends AbstractTelemetrySpec {
     }
 
     "crash entity on delete state failures" in withTestKit(testkitConfig) { testKit =>
-      import testKit._
       import ValueEntityMessages._
+      import testKit._
       import system.dispatcher
 
       silentDeadLettersAndUnhandledMessages
@@ -106,8 +106,8 @@ class DatabaseExceptionHandlingSpec extends AbstractTelemetrySpec {
       val forwardReply = forwardReplyActor(testActor)
 
       val client =
-        ValueEntityProtocolClient(GrpcClientSettings.connectToServiceAt("localhost", service.port).withTls(false))
-      val repository = new JdbcRepositoryImpl(TestJdbcStore.storeWithDeleteFailure())
+        ValueEntityClient(GrpcClientSettings.connectToServiceAt("localhost", service.port).withTls(false))
+      val repository = new RepositoryImpl(TestJdbcStore.storeWithDeleteFailure())
       val entity = watch(system.actorOf(ValueEntitySupervisor.props(client, entityConfiguration, repository), "entity"))
       val emptyCommand = Some(protobufAny(EmptyJavaMessage))
 
@@ -128,7 +128,7 @@ class DatabaseExceptionHandlingSpec extends AbstractTelemetrySpec {
     }
   }
 
-  private final class TestJdbcStore(status: String) extends JdbcStore[Key, ByteString] {
+  private final class TestJdbcStore(status: String) extends Store[Key, ByteString] {
     import TestJdbcStore.JdbcStoreStatus._
 
     private var store = Map.empty[Key, ByteString]
@@ -164,11 +164,11 @@ class DatabaseExceptionHandlingSpec extends AbstractTelemetrySpec {
       val deleteFailure = "DeleteFailure"
     }
 
-    def storeWithGetFailure(): JdbcStore[Key, ByteString] = new TestJdbcStore(JdbcStoreStatus.getFailure)
+    def storeWithGetFailure(): Store[Key, ByteString] = new TestJdbcStore(JdbcStoreStatus.getFailure)
 
-    def storeWithUpdateFailure(): JdbcStore[Key, ByteString] = new TestJdbcStore(JdbcStoreStatus.updateFailure)
+    def storeWithUpdateFailure(): Store[Key, ByteString] = new TestJdbcStore(JdbcStoreStatus.updateFailure)
 
-    def storeWithDeleteFailure(): JdbcStore[Key, ByteString] = new TestJdbcStore(JdbcStoreStatus.deleteFailure)
+    def storeWithDeleteFailure(): Store[Key, ByteString] = new TestJdbcStore(JdbcStoreStatus.deleteFailure)
   }
 
   private def silentDeadLettersAndUnhandledMessages(implicit system: ActorSystem): Unit = {

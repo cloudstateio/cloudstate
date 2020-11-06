@@ -16,100 +16,98 @@
 
 package io.cloudstate.samples.shoppingcart;
 
-import com.example.shoppingcart.Shoppingcart;
-import com.example.shoppingcart.persistence.Domain;
+import com.example.valueentity.shoppingcart.Shoppingcart;
+import com.example.valueentity.shoppingcart.persistence.Domain;
 import com.google.protobuf.Empty;
 import io.cloudstate.javasupport.EntityId;
-import io.cloudstate.javasupport.eventsourced.*;
+import io.cloudstate.javasupport.entity.CommandContext;
+import io.cloudstate.javasupport.entity.CommandHandler;
+import io.cloudstate.javasupport.entity.Entity;
 
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-/** An event sourced entity. */
-@EventSourcedEntity
+/** An value based entity. */
+@Entity(persistenceId = "value-entity-shopping-cart")
 public class ShoppingCartEntity {
+
   private final String entityId;
-  private final Map<String, Shoppingcart.LineItem> cart = new LinkedHashMap<>();
 
   public ShoppingCartEntity(@EntityId String entityId) {
     this.entityId = entityId;
   }
 
-  @Snapshot
-  public Domain.Cart snapshot() {
-    return Domain.Cart.newBuilder()
-        .addAllItems(cart.values().stream().map(this::convert).collect(Collectors.toList()))
-        .build();
-  }
-
-  @SnapshotHandler
-  public void handleSnapshot(Domain.Cart cart) {
-    this.cart.clear();
-    for (Domain.LineItem item : cart.getItemsList()) {
-      this.cart.put(item.getProductId(), convert(item));
-    }
-  }
-
-  @EventHandler
-  public void itemAdded(Domain.ItemAdded itemAdded) {
-    Shoppingcart.LineItem item = cart.get(itemAdded.getItem().getProductId());
-    if (item == null) {
-      item = convert(itemAdded.getItem());
-    } else {
-      item =
-          item.toBuilder()
-              .setQuantity(item.getQuantity() + itemAdded.getItem().getQuantity())
-              .build();
-    }
-    cart.put(item.getProductId(), item);
-  }
-
-  @EventHandler
-  public void itemRemoved(Domain.ItemRemoved itemRemoved) {
-    cart.remove(itemRemoved.getProductId());
+  @CommandHandler
+  public Shoppingcart.Cart getCart(CommandContext<Domain.Cart> ctx) {
+    Domain.Cart cart = ctx.getState().orElse(Domain.Cart.newBuilder().build());
+    List<Shoppingcart.LineItem> allItems =
+        cart.getItemsList().stream().map(this::convert).collect(Collectors.toList());
+    return Shoppingcart.Cart.newBuilder().addAllItems(allItems).build();
   }
 
   @CommandHandler
-  public Shoppingcart.Cart getCart() {
-    return Shoppingcart.Cart.newBuilder().addAllItems(cart.values()).build();
-  }
-
-  @CommandHandler
-  public Empty addItem(Shoppingcart.AddLineItem item, CommandContext ctx) {
+  public Empty addItem(Shoppingcart.AddLineItem item, CommandContext<Domain.Cart> ctx) {
     if (item.getQuantity() <= 0) {
-      ctx.fail("Cannot add negative quantity of to item" + item.getProductId());
+      ctx.fail("Cannot add negative quantity of to item " + item.getProductId());
     }
-    ctx.emit(
-        Domain.ItemAdded.newBuilder()
-            .setItem(
-                Domain.LineItem.newBuilder()
-                    .setProductId(item.getProductId())
-                    .setName(item.getName())
-                    .setQuantity(item.getQuantity())
-                    .build())
-            .build());
+
+    Domain.Cart cart = ctx.getState().orElse(Domain.Cart.newBuilder().build());
+    Domain.LineItem lineItem = updateItem(item, cart);
+    List<Domain.LineItem> lineItems = removeItemByProductId(cart, item.getProductId());
+    ctx.updateState(Domain.Cart.newBuilder().addAllItems(lineItems).addItems(lineItem).build());
     return Empty.getDefaultInstance();
   }
 
   @CommandHandler
-  public Empty removeItem(Shoppingcart.RemoveLineItem item, CommandContext ctx) {
-    if (!cart.containsKey(item.getProductId())) {
+  public Empty removeItem(Shoppingcart.RemoveLineItem item, CommandContext<Domain.Cart> ctx) {
+    Domain.Cart cart = ctx.getState().orElse(Domain.Cart.newBuilder().build());
+    Optional<Domain.LineItem> lineItem = findItemByProductId(cart, item.getProductId());
+
+    if (!lineItem.isPresent()) {
       ctx.fail("Cannot remove item " + item.getProductId() + " because it is not in the cart.");
     }
-    ctx.emit(Domain.ItemRemoved.newBuilder().setProductId(item.getProductId()).build());
+
+    List<Domain.LineItem> items = removeItemByProductId(cart, item.getProductId());
+    ctx.updateState(Domain.Cart.newBuilder().addAllItems(items).build());
     return Empty.getDefaultInstance();
   }
 
-  private Shoppingcart.LineItem convert(Domain.LineItem item) {
-    return Shoppingcart.LineItem.newBuilder()
+  @CommandHandler
+  public Empty removeCart(Shoppingcart.RemoveShoppingCart cart, CommandContext<Domain.Cart> ctx) {
+    ctx.deleteState();
+    return Empty.getDefaultInstance();
+  }
+
+  private Domain.LineItem updateItem(Shoppingcart.AddLineItem item, Domain.Cart cart) {
+    return findItemByProductId(cart, item.getProductId())
+        .map(li -> li.toBuilder().setQuantity(li.getQuantity() + item.getQuantity()).build())
+        .orElse(newItem(item));
+  }
+
+  private Domain.LineItem newItem(Shoppingcart.AddLineItem item) {
+    return Domain.LineItem.newBuilder()
         .setProductId(item.getProductId())
         .setName(item.getName())
         .setQuantity(item.getQuantity())
         .build();
   }
 
-  private Domain.LineItem convert(Shoppingcart.LineItem item) {
-    return Domain.LineItem.newBuilder()
+  private Optional<Domain.LineItem> findItemByProductId(Domain.Cart cart, String productId) {
+    Predicate<Domain.LineItem> lineItemExists =
+        lineItem -> lineItem.getProductId().equals(productId);
+    return cart.getItemsList().stream().filter(lineItemExists).findFirst();
+  }
+
+  private List<Domain.LineItem> removeItemByProductId(Domain.Cart cart, String productId) {
+    return cart.getItemsList().stream()
+        .filter(lineItem -> !lineItem.getProductId().equals(productId))
+        .collect(Collectors.toList());
+  }
+
+  private Shoppingcart.LineItem convert(Domain.LineItem item) {
+    return Shoppingcart.LineItem.newBuilder()
         .setProductId(item.getProductId())
         .setName(item.getName())
         .setQuantity(item.getQuantity())
