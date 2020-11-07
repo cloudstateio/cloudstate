@@ -581,6 +581,7 @@ lazy val `java-support` = (project in file("java-support"))
     javacOptions in (Compile, doc) ++= Seq(
         "-overview",
         ((javaSource in Compile).value / "overview.html").getAbsolutePath,
+        "--no-module-directories",
         "-notimestamp",
         "-doctitle",
         "Cloudstate Java Support"
