@@ -92,7 +92,7 @@ private class EnsureValueEntityTablesExistsActor(db: JdbcSlickDatabase) extends 
     override val profile: JdbcProfile = EnsureValueEntityTablesExistsActor.this.profile
   }
 
-  private val stateStatements = stateTable.Entity.schema.createStatements.toSeq
+  private val stateStatements = stateTable.EntityTable.schema.createStatements.toSeq
 
   import akka.pattern.pipe
 

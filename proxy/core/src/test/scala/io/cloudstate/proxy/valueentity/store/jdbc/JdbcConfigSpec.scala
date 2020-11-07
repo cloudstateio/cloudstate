@@ -66,23 +66,23 @@ class JdbcConfigSpec extends WordSpecLike with Matchers {
     def columnName(tableName: String, columnName: String) = s"$tableName.$columnName"
 
     "be configured with a schema name" in {
-      testTable.Entity.baseTableRow.schemaName shouldBe tableStateConfig.schemaName
+      testTable.EntityTable.baseTableRow.schemaName shouldBe tableStateConfig.schemaName
     }
 
     "be configured with a table name" in {
-      testTable.Entity.baseTableRow.tableName shouldBe tableStateConfig.tableName
+      testTable.EntityTable.baseTableRow.tableName shouldBe tableStateConfig.tableName
     }
 
     "be configured with a columns name" in {
-      testTable.Entity.baseTableRow.persistentId.toString shouldBe columnName(
+      testTable.EntityTable.baseTableRow.persistentId.toString shouldBe columnName(
         tableStateConfig.tableName,
         tableStateConfig.columnNames.persistentId
       )
-      testTable.Entity.baseTableRow.entityId.toString shouldBe columnName(
+      testTable.EntityTable.baseTableRow.entityId.toString shouldBe columnName(
         tableStateConfig.tableName,
         tableStateConfig.columnNames.entityId
       )
-      testTable.Entity.baseTableRow.state.toString shouldBe columnName(
+      testTable.EntityTable.baseTableRow.state.toString shouldBe columnName(
         tableStateConfig.tableName,
         tableStateConfig.columnNames.state
       )

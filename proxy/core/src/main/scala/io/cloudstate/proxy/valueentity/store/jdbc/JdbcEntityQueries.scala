@@ -26,16 +26,16 @@ private[store] class JdbcEntityQueries(val profile: JdbcProfile,
 
   import profile.api._
 
-  def selectByKey(key: Key): Query[EntityTable, EntityRow, Seq] =
-    Entity
+  def selectByKey(key: Key): Query[Entity, EntityRow, Seq] =
+    EntityTable
       .filter(_.persistentId === key.persistentId)
       .filter(_.entityId === key.entityId)
       .take(1)
 
-  def insertOrUpdate(row: EntityRow) = Entity.insertOrUpdate(row)
+  def insertOrUpdate(row: EntityRow) = EntityTable.insertOrUpdate(row)
 
   def deleteByKey(key: Key) =
-    Entity
+    EntityTable
       .filter(_.persistentId === key.persistentId)
       .filter(_.entityId === key.entityId)
       .delete

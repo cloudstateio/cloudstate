@@ -33,7 +33,7 @@ trait JdbcEntityTable {
 
   def entityTableCfg: JdbcEntityTableConfiguration
 
-  class EntityTable(tableTag: Tag)
+  class Entity(tableTag: Tag)
       extends Table[EntityRow](_tableTag = tableTag,
                                _schemaName = entityTableCfg.schemaName,
                                _tableName = entityTableCfg.tableName) {
@@ -47,5 +47,5 @@ trait JdbcEntityTable {
     val pk = primaryKey(s"${tableName}_pk", (persistentId, entityId))
   }
 
-  lazy val Entity = new TableQuery(tag => new EntityTable(tag))
+  lazy val EntityTable = new TableQuery(tag => new Entity(tag))
 }
