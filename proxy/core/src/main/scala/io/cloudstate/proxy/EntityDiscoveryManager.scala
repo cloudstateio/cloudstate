@@ -66,7 +66,6 @@ object EntityDiscoveryManager {
       relayOutputBufferSize: Int,
       maxInboundMessageSize: Long,
       gracefulTerminationTimeout: Timeout,
-      passivationTimeout: Timeout,
       numberOfShards: Int,
       proxyParallelism: Int,
       journalEnabled: Boolean,
@@ -83,15 +82,20 @@ object EntityDiscoveryManager {
            maxInboundMessageSize = config.getBytes("max-inbound-message-size"),
            relayOutputBufferSize = config.getInt("relay-buffer-size"),
            gracefulTerminationTimeout = Timeout(config.getDuration("graceful-termination-timeout").toMillis.millis),
-           passivationTimeout = Timeout(config.getDuration("passivation-timeout").toMillis.millis),
            numberOfShards = config.getInt("number-of-shards"),
            proxyParallelism = config.getInt("proxy-parallelism"),
-           journalEnabled = config.getBoolean("journal-enabled"),
+           journalEnabled = config.getBoolean("eventsourced-entity.journal-enabled"),
            config = config)
     }
 
     final def getConfig(path: String): Config =
       config.getConfig(path)
+
+    final def eventSourcedPassivation(): Timeout =
+      Timeout(config.getDuration("eventsourced-entity.passivation-timeout").toMillis.millis)
+
+    final def crdtPassivation(): Timeout =
+      Timeout(config.getDuration("crdt-entity.passivation-timeout").toMillis.millis)
 
     private def validate(): Unit = {
       require(proxyParallelism > 0, s"proxy-parallelism must be greater than 0 but was $proxyParallelism")

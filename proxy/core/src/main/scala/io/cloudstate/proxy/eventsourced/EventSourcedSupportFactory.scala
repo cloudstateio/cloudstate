@@ -23,7 +23,7 @@ import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
 import akka.event.Logging
 import akka.grpc.GrpcClientSettings
 import akka.stream.Materializer
-import akka.stream.scaladsl.{Flow, Source}
+import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
 import io.cloudstate.protocol.entity.{Entity, Metadata}
@@ -32,7 +32,6 @@ import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.collection.JavaConverters._
 
 class EventSourcedSupportFactory(
     system: ActorSystem,
@@ -52,7 +51,7 @@ class EventSourcedSupportFactory(
 
     val stateManagerConfig = EventSourcedEntity.Configuration(entity.serviceName,
                                                               entity.persistenceId,
-                                                              config.passivationTimeout,
+                                                              config.eventSourcedPassivation(),
                                                               config.relayOutputBufferSize)
 
     log.debug("Starting EventSourcedEntity for {}", entity.persistenceId)
