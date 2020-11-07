@@ -22,6 +22,15 @@ package io.cloudstate.proxy.spanner
  */
 object Schema {
 
+  def ddl(journalTable: String, tagsTable: String, deletionsTable: String, snapshotsTable: String): String =
+    List(
+      Schema.createJournalTableDdl(journalTable),
+      Schema.createTagsTableDdl(tagsTable, journalTable),
+      Schema.createDeletionsTableDdl(deletionsTable),
+      Schema.createTagsIndexDdl(tagsTable),
+      Schema.createSnapshotsTableDdl(snapshotsTable)
+    ).mkString
+
   def createJournalTableDdl(table: String): String =
     s"""|CREATE TABLE $table (
         |  persistence_id STRING(MAX) NOT NULL,
