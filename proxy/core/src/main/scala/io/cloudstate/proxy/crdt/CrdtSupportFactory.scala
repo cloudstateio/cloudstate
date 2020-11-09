@@ -56,7 +56,7 @@ class CrdtSupportFactory(system: ActorSystem,
 
     val crdtEntityConfig = CrdtEntity.Configuration(entity.serviceName,
                                                     entity.persistenceId,
-                                                    config.crdtPassivation(),
+                                                    config.crdtSettings.passivationTimeout,
                                                     config.relayOutputBufferSize,
                                                     3.seconds,
                                                     5.seconds)

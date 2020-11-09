@@ -51,7 +51,7 @@ class EventSourcedSupportFactory(
 
     val stateManagerConfig = EventSourcedEntity.Configuration(entity.serviceName,
                                                               entity.persistenceId,
-                                                              config.eventSourcedPassivation(),
+                                                              config.eventSourcedSettings.passivationTimeout,
                                                               config.relayOutputBufferSize)
 
     log.debug("Starting EventSourcedEntity for {}", entity.persistenceId)

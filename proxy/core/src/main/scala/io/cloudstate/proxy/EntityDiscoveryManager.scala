@@ -68,7 +68,8 @@ object EntityDiscoveryManager {
       gracefulTerminationTimeout: Timeout,
       numberOfShards: Int,
       proxyParallelism: Int,
-      journalEnabled: Boolean,
+      eventSourcedSettings: EventSourcedSettings,
+      crdtSettings: CrdtSettings,
       config: Config
   ) {
     validate()
@@ -84,18 +85,13 @@ object EntityDiscoveryManager {
            gracefulTerminationTimeout = Timeout(config.getDuration("graceful-termination-timeout").toMillis.millis),
            numberOfShards = config.getInt("number-of-shards"),
            proxyParallelism = config.getInt("proxy-parallelism"),
-           journalEnabled = config.getBoolean("eventsourced-entity.journal-enabled"),
+           eventSourcedSettings = new EventSourcedSettings(config),
+           crdtSettings = new CrdtSettings(config),
            config = config)
     }
 
     final def getConfig(path: String): Config =
       config.getConfig(path)
-
-    final def eventSourcedPassivation(): Timeout =
-      Timeout(config.getDuration("eventsourced-entity.passivation-timeout").toMillis.millis)
-
-    final def crdtPassivation(): Timeout =
-      Timeout(config.getDuration("crdt-entity.passivation-timeout").toMillis.millis)
 
     private def validate(): Unit = {
       require(proxyParallelism > 0, s"proxy-parallelism must be greater than 0 but was $proxyParallelism")
@@ -105,6 +101,23 @@ object EntityDiscoveryManager {
               "max-inbound-message-size must be greater than 0 but was $maxInboundMessageSize")
       require(maxInboundMessageSize <= Int.MaxValue,
               s"max-inbound-message-size exceeds the maximum allowed value of: ${Int.MaxValue}")
+    }
+  }
+
+  final case class EventSourcedSettings(journalEnabled: Boolean, passivationTimeout: Timeout) {
+    def this(config: Config) = {
+      this(
+        journalEnabled = config.getBoolean("eventsourced-entity.journal-enabled"),
+        passivationTimeout = Timeout(config.getDuration("eventsourced-entity.passivation-timeout").toMillis.millis)
+      )
+    }
+  }
+
+  final case class CrdtSettings(passivationTimeout: Timeout) {
+    def this(config: Config) = {
+      this(
+        passivationTimeout = Timeout(config.getDuration("crdt-entity.passivation-timeout").toMillis.millis)
+      )
     }
   }
 
@@ -172,7 +185,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
       Crdt.name -> new CrdtSupportFactory(system, config, entityDiscoveryClient, clientSettings),
       ActionProtocol.name -> new ActionProtocolSupportFactory(system, config, clientSettings)
     ) ++ {
-      if (config.journalEnabled)
+      if (config.eventSourcedSettings.journalEnabled)
         Map(
           EventSourced.name -> new EventSourcedSupportFactory(system, config, clientSettings)
         )
