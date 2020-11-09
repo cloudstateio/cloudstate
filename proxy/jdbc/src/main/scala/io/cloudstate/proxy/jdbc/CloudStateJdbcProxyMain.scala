@@ -30,7 +30,7 @@ object CloudStateJdbcProxyMain {
     val config = new CloudStateProxyMain.Configuration(actorSystem.settings.config.getConfig("cloudstate.proxy"))
     if (config.devMode) {
       new SlickEnsureTablesExistReadyCheck(actorSystem)
-      new SlickEnsureValueEntityTablesExistReadyCheck(actorSystem)
+      //new SlickEnsureValueEntityTablesExistReadyCheck(actorSystem)
     }
   }
 
