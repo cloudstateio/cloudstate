@@ -210,12 +210,14 @@ private object ActionReflection {
           val message = any.asInstanceOf[ActionReply[T]]
           message match {
             case envelope: MessageReply[T] =>
-              ActionReply.message(JavaPbAny
-                                    .newBuilder()
-                                    .setValue(resolvedType.toByteString(envelope.payload))
-                                    .setTypeUrl(resolvedType.typeUrl)
-                                    .build(),
-                                  envelope.metadata)
+              ActionReply
+                .message(JavaPbAny
+                           .newBuilder()
+                           .setValue(resolvedType.toByteString(envelope.payload))
+                           .setTypeUrl(resolvedType.typeUrl)
+                           .build(),
+                         envelope.metadata)
+                .withEffects(envelope.effects)
             case other => other.asInstanceOf[ActionReply[JavaPbAny]]
           }
         })

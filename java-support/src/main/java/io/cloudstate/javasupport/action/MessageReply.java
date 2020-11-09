@@ -18,6 +18,8 @@ package io.cloudstate.javasupport.action;
 
 import io.cloudstate.javasupport.Metadata;
 
+import java.util.Collection;
+
 /** A message reply. */
 public interface MessageReply<T> extends ActionReply<T> {
 
@@ -35,5 +37,7 @@ public interface MessageReply<T> extends ActionReply<T> {
    */
   Metadata metadata();
 
-  MessageReply<T> withEffects(Effect... effect);
+  MessageReply<T> withEffects(Collection<Effect> effects);
+
+  MessageReply<T> withEffects(Effect... effects);
 }
