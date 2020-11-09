@@ -32,6 +32,14 @@ import io.cloudstate.tck.model.valueentity.Valueentity;
 public final class JavaSupportTck {
   public static final void main(String[] args) throws Exception {
     new CloudState()
+        .registerAction(
+            new ActionTckModelBehavior(),
+            Action.getDescriptor().findServiceByName("ActionTckModel"),
+            Action.getDescriptor())
+        .registerAction(
+            new ActionTwoBehavior(),
+            Action.getDescriptor().findServiceByName("ActionTwo"),
+            Action.getDescriptor())
         .registerEntity(
             ValueEntityTckModelEntity.class,
             Valueentity.getDescriptor().findServiceByName("ValueEntityTckModel"),
@@ -43,14 +51,6 @@ public final class JavaSupportTck {
             ShoppingCartEntity.class,
             Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
             com.example.valueentity.shoppingcart.persistence.Domain.getDescriptor())
-        .registerAction(
-            new ActionTckModelBehavior(),
-            Action.getDescriptor().findServiceByName("ActionTckModel"),
-            Action.getDescriptor())
-        .registerAction(
-            new ActionTwoBehavior(),
-            Action.getDescriptor().findServiceByName("ActionTwo"),
-            Action.getDescriptor())
         .registerEventSourcedEntity(
             EventSourcedTckModelEntity.class,
             Eventsourced.getDescriptor().findServiceByName("EventSourcedTckModel"),

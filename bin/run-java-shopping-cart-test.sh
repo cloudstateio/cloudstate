@@ -115,6 +115,7 @@ done
 kubectl get deployment $deployment
 
 function fail_with_details {
+  echo "Failed:" "$@"
   echo
   echo "=== Operator logs ==="
   echo
@@ -141,7 +142,7 @@ function fail_with_details {
 # Wait for the deployment to be available
 echo
 echo "Waiting for deployment to be ready..."
-kubectl rollout status --timeout=1m deployment/$deployment || fail_with_details
+kubectl rollout status --timeout=5m deployment/$deployment || fail_with_details
 kubectl get deployment $deployment
 
 # Scale up the deployment, to test with akka clustering
