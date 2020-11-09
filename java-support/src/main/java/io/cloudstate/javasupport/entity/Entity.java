@@ -23,7 +23,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-/** An value based entity. */
+/** A value based entity. */
 @CloudStateAnnotation
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)

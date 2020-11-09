@@ -29,8 +29,8 @@ import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-/** An value based entity. */
-@Entity(persistenceId = "value-entity-shopping-cart")
+/** A value based entity. */
+@Entity(persistenceId = "shopping-cart")
 public class ShoppingCartEntity {
 
   private final String entityId;

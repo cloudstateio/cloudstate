@@ -21,7 +21,7 @@ import com.google.protobuf.Any;
 import java.util.Optional;
 
 /**
- * Low level interface for handling commands on an value based entity.
+ * Low level interface for handling commands on a value based entity.
  *
  * <p>Generally, this should not be needed, instead, a class annotated with the {@link
  * CommandHandler} and similar annotations should be used.

@@ -23,7 +23,7 @@ import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
 
 /**
- * Represents an in-memory implementation of the store for value-based entity.
+ * Represents an in-memory implementation of the store for value-based entities.
  */
 final class InMemoryStore extends Store[Key, ByteString] {
 

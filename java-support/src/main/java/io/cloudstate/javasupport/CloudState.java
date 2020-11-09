@@ -347,7 +347,7 @@ public final class CloudState {
   }
 
   /**
-   * Register an value based entity factory.
+   * Register a value based entity factory.
    *
    * <p>This is a low level API intended for custom (eg, non reflection based) mechanisms for
    * implementing the entity.

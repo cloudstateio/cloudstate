@@ -24,7 +24,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Marks a method on an value based entity as a command handler.
+ * Marks a method on a value based entity as a command handler.
  *
  * <p>This method will be invoked whenever the service call with name that matches this command
  * handlers name is invoked.

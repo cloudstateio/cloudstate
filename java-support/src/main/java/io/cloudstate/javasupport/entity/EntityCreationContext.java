@@ -19,6 +19,6 @@ package io.cloudstate.javasupport.entity;
 /**
  * Creation context for {@link Entity} annotated entities.
  *
- * <p>This may be accepted as an argument to the constructor of an value based entity.
+ * <p>This may be accepted as an argument to the constructor of a value based entity.
  */
 public interface EntityCreationContext extends EntityContext {}
