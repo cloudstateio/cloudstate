@@ -41,29 +41,27 @@ class SlickEnsureTablesExistReadyCheck(system: ActorSystem) extends (() => Futur
   // Get a hold of the cloudstate.proxy.value-entity-persistence-store.jdbc.database.slick database instance
   private val valueEntitySlickDatabase = JdbcSlickDatabase(proxyConfig)
 
-  private val check: () => Future[Boolean] = if (autoCreateTables) { () =>
-    {
-      tableCreateCombinations() match {
-        case Nil => Future.successful(true)
-        case combinations =>
-          val actor = system.actorOf(
-            BackoffSupervisor.props(
-              BackoffOpts.onFailure(
-                childProps = Props(new EnsureTablesExistsActor(combinations)),
-                childName = "jdbc-table-creator",
-                minBackoff = 3.seconds,
-                maxBackoff = 30.seconds,
-                randomFactor = 0.2
-              )
-            ),
-            "jdbc-table-creator-supervisor"
-          )
+  private val check: () => Future[Boolean] = if (autoCreateTables) {
+    tableCreateCombinations() match {
+      case Nil => () => Future.successful(true)
+      case combinations =>
+        val actor = system.actorOf(
+          BackoffSupervisor.props(
+            BackoffOpts.onFailure(
+              childProps = Props(new EnsureTablesExistsActor(combinations)),
+              childName = "jdbc-table-creator",
+              minBackoff = 3.seconds,
+              maxBackoff = 30.seconds,
+              randomFactor = 0.2
+            )
+          ),
+          "jdbc-table-creator-supervisor"
+        )
 
-          implicit val timeout = Timeout(proxyConfig.getDuration("jdbc.create-tables-timeout").toMillis.millis)
-          import akka.pattern.ask
+        implicit val timeout = Timeout(proxyConfig.getDuration("jdbc.create-tables-timeout").toMillis.millis)
+        import akka.pattern.ask
 
-          (actor ? EnsureTablesExistsActor.Ready).mapTo[Boolean]
-      }
+        () => (actor ? EnsureTablesExistsActor.Ready).mapTo[Boolean]
     }
   } else { () =>
     Future.successful(true)
