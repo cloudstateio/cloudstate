@@ -35,7 +35,7 @@ class EntityPassivateSpec extends AbstractTelemetrySpec {
 
   "ValueEntity" should {
 
-    "restart entity after passivation" in withTestKit(
+    "access the state after passivation" in withTestKit(
       """
         | include "test-in-memory"
         | akka {
@@ -68,38 +68,34 @@ class EntityPassivateSpec extends AbstractTelemetrySpec {
       )
 
       val repository = new RepositoryImpl(new InMemoryStore)
-      val entity = system.actorOf(ValueEntitySupervisor.props(client, entityConfiguration, repository), "entity")
-
+      val entity =
+        watch(system.actorOf(ValueEntitySupervisor.props(client, entityConfiguration, repository), "entity"))
       val emptyCommand = Some(protobufAny(EmptyJavaMessage))
 
       // init with empty state
       val connection = service.valueEntity.expectConnection()
       connection.expect(init("service", "entity"))
 
-      // first command command fails
+      // update entity state
       entity ! EntityCommand(entityId = "test", name = "command1", emptyCommand)
       connection.expect(command(1, "entity", "command1"))
-      connection.send(failure(1, "boom! failure"))
-      expectMsg(UserFunctionReply(clientActionFailure(0, "Unexpected Value entity failure")))
-      EventFilter.error("Unexpected Value entity failure - boom! failure", occurrences = 1)
-      connection.expectClosed()
-      //expectTerminated(entity) // should be expected!
-
-      // re-init entity with empty state and send command
-      val recreatedEntity =
-        system.actorOf(ValueEntitySupervisor.props(client, entityConfiguration, repository), "entity1")
-      val connection2 = service.valueEntity.expectConnection()
-      connection2.expect(init("service", "entity1"))
-      recreatedEntity ! EntityCommand(entityId = "test", name = "command2", emptyCommand)
-      connection2.expect(command(1, "entity1", "command2"))
-      val reply1 = ProtoAny("reply", ByteString.copyFromUtf8("reply1"))
-      connection2.send(reply(1, reply1))
-      expectMsg(UserFunctionReply(clientActionReply(messagePayload(reply1))))
+      val entityState = ProtoAny("state", ByteString.copyFromUtf8("state"))
+      connection.send(reply(1, EmptyJavaMessage, update(entityState)))
+      expectMsg(UserFunctionReply(clientActionReply(messagePayload(EmptyJavaMessage))))
 
       // passivate
-      recreatedEntity ! ValueEntity.Stop
-      connection2.expectClosed()
-    //expectTerminated(recreatedEntity) // should be expected!
+      entity ! ValueEntity.Stop
+      connection.expectClosed()
+      expectTerminated(entity)
+
+      // recreate the entity
+      eventually(timeout(5.seconds), interval(100.millis)) {
+        val recreatedEntity =
+          system.actorOf(ValueEntitySupervisor.props(client, entityConfiguration, repository), "entity")
+        val connection2 = service.valueEntity.expectConnection()
+        connection2.expect(init("service", "entity", state(entityState)))
+        connection2.close()
+      }
     }
 
   }
