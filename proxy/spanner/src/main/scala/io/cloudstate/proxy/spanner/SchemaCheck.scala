@@ -107,7 +107,7 @@ object SchemaCheck {
     }
 
   def tryCreateSchema(databaseName: String,
-                      ddl: String,
+                      ddl: Seq[String],
                       operationAwaitDelay: FiniteDuration,
                       operationAwaitMaxDuration: FiniteDuration,
                       adminClient: DatabaseAdminClient,
@@ -115,7 +115,7 @@ object SchemaCheck {
                       scheduler: Scheduler)(implicit ec: ExecutionContext): Future[Done] = {
     def tryCreate() =
       adminClient
-        .updateDatabaseDdl(UpdateDatabaseDdlRequest(databaseName, List(ddl)))
+        .updateDatabaseDdl(UpdateDatabaseDdlRequest(databaseName, ddl))
         .transform {
           case Success(o) =>
             Success(o)
