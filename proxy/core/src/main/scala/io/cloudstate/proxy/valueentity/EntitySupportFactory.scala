@@ -96,7 +96,7 @@ class EntitySupportFactory(
   }
 }
 
-private class EntitySupport(crudEntity: ActorRef, parallelism: Int, private implicit val relayTimeout: Timeout)
+private class EntitySupport(valueEntity: ActorRef, parallelism: Int, private implicit val relayTimeout: Timeout)
     extends EntityTypeSupport {
   import akka.pattern.ask
 
@@ -104,12 +104,12 @@ private class EntitySupport(crudEntity: ActorRef, parallelism: Int, private impl
                        metadata: Metadata): Flow[EntityCommand, UserFunctionReply, NotUsed] =
     Flow[EntityCommand].mapAsync(parallelism)(
       command =>
-        (crudEntity ? EntityTypeSupport.mergeStreamLevelMetadata(metadata, command))
+        (valueEntity ? EntityTypeSupport.mergeStreamLevelMetadata(metadata, command))
           .mapTo[UserFunctionReply]
     )
 
   override def handleUnary(command: EntityCommand): Future[UserFunctionReply] =
-    (crudEntity ? command).mapTo[UserFunctionReply]
+    (valueEntity ? command).mapTo[UserFunctionReply]
 }
 
 private final class EntityIdExtractor(shards: Int) extends HashCodeMessageExtractor(shards) {

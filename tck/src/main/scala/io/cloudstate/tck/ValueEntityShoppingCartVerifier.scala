@@ -48,7 +48,7 @@ class ValueEntityShoppingCartVerifier(interceptor: InterceptService) extends Mus
 
   private def nextCommandId(cartId: String): Long = commandIds.updateWith(cartId)(_.map(_ + 1).orElse(Some(1L))).get
 
-  def verifyConnection(): Unit = connection = interceptor.expectCrudConnection()
+  def verifyConnection(): Unit = connection = interceptor.expectValueBasedConnection()
 
   def verifyGetInitialEmptyCart(cartId: String): Unit = {
     val commandId = nextCommandId(cartId)

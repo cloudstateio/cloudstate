@@ -28,16 +28,16 @@ object ValueEntityMessages extends EntityMessages {
   import ValueEntityStreamOut.{Message => OutMessage}
   import ValueEntityAction.Action._
 
-  case class Effects(sideEffects: Seq[SideEffect] = Seq.empty, crudAction: Option[ValueEntityAction] = None) {
+  case class Effects(sideEffects: Seq[SideEffect] = Seq.empty, valueEntityAction: Option[ValueEntityAction] = None) {
 
     def withUpdateAction(message: JavaPbMessage): Effects =
-      copy(crudAction = Some(ValueEntityAction(Update(ValueEntityUpdate(messagePayload(message))))))
+      copy(valueEntityAction = Some(ValueEntityAction(Update(ValueEntityUpdate(messagePayload(message))))))
 
     def withUpdateAction(message: ScalaPbMessage): Effects =
-      copy(crudAction = Some(ValueEntityAction(Update(ValueEntityUpdate(messagePayload(message))))))
+      copy(valueEntityAction = Some(ValueEntityAction(Update(ValueEntityUpdate(messagePayload(message))))))
 
     def withDeleteAction(): Effects =
-      copy(crudAction = Some(ValueEntityAction(Delete(ValueEntityDelete()))))
+      copy(valueEntityAction = Some(ValueEntityAction(Delete(ValueEntityDelete()))))
 
     def withSideEffect(service: String, command: String, message: ScalaPbMessage, synchronous: Boolean): Effects =
       withSideEffect(service, command, messagePayload(message), synchronous)
@@ -98,7 +98,7 @@ object ValueEntityMessages extends EntityMessages {
     OutMessage.Reply(ValueEntityReply(id, clientActionReply(payload), Seq.empty, crudAction))
 
   private def reply(id: Long, payload: Option[ScalaPbAny], effects: Effects): OutMessage =
-    OutMessage.Reply(ValueEntityReply(id, clientActionReply(payload), effects.sideEffects, effects.crudAction))
+    OutMessage.Reply(ValueEntityReply(id, clientActionReply(payload), effects.sideEffects, effects.valueEntityAction))
 
   def forward(id: Long, service: String, command: String, payload: ScalaPbMessage): OutMessage =
     forward(id, service, command, payload, Effects.empty)
@@ -114,7 +114,7 @@ object ValueEntityMessages extends EntityMessages {
     replyAction(id, clientActionForward(service, command, payload), effects)
 
   private def replyAction(id: Long, action: Option[ClientAction], effects: Effects): OutMessage =
-    OutMessage.Reply(ValueEntityReply(id, action, effects.sideEffects, effects.crudAction))
+    OutMessage.Reply(ValueEntityReply(id, action, effects.sideEffects, effects.valueEntityAction))
 
   def actionFailure(id: Long, description: String): OutMessage =
     OutMessage.Reply(ValueEntityReply(id, clientActionFailure(id, description)))

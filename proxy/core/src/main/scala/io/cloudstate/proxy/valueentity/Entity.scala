@@ -198,7 +198,7 @@ object ValueEntity {
     Props(new ValueEntity(configuration, entityId, relay, repository))
 
   /**
-   * Used to ensure the action ids sent to the concurrency enforcer are indeed unique.
+   * Used to ensure the number of entity's actor created.
    */
   private val actorCounter = new AtomicLong(0)
 
@@ -298,7 +298,7 @@ final class ValueEntity(configuration: ValueEntity.Configuration,
     relay ! ValueEntityStreamIn(ValueEntityStreamIn.Message.Command(command))
   }
 
-  private final def esReplyToUfReply(reply: ValueEntityReply) =
+  private final def valueEntityReplyToUfReply(reply: ValueEntityReply) =
     UserFunctionReply(
       clientAction = reply.clientAction,
       sideEffects = reply.sideEffects
@@ -345,16 +345,16 @@ final class ValueEntity(configuration: ValueEntity.Configuration,
         case ValueEntitySOMsg.Reply(r) =>
           val commandId = currentCommand.commandId
           if (r.stateAction.isEmpty) {
-            currentCommand.replyTo ! esReplyToUfReply(r)
+            currentCommand.replyTo ! valueEntityReplyToUfReply(r)
             commandHandled()
           } else {
             r.stateAction.map { a =>
-              performAction(a) { _ =>
+              performAction(a) { () =>
                 // Make sure that the current request is still ours
                 if (currentCommand == null || currentCommand.commandId != commandId) {
                   crash("Unexpected Value entity behavior", "currentRequest changed before the state were persisted")
                 }
-                currentCommand.replyTo ! esReplyToUfReply(r)
+                currentCommand.replyTo ! valueEntityReplyToUfReply(r)
                 commandHandled()
               }.pipeTo(self)
             }
@@ -407,7 +407,7 @@ final class ValueEntity(configuration: ValueEntity.Configuration,
 
   private def performAction(
       action: ValueEntityAction
-  )(handler: Unit => Unit): Future[ValueEntity.DatabaseOperationWriteStatus] = {
+  )(handler: () => Unit): Future[ValueEntity.DatabaseOperationWriteStatus] = {
     import ValueEntityAction.Action._
 
     action.action match {
@@ -415,7 +415,7 @@ final class ValueEntity(configuration: ValueEntity.Configuration,
         repository
           .update(Key(persistenceId, entityId), value)
           .map { _ =>
-            handler(())
+            handler()
             ValueEntity.WriteStateSuccess
           }
           .recover {
@@ -426,7 +426,7 @@ final class ValueEntity(configuration: ValueEntity.Configuration,
         repository
           .delete(Key(persistenceId, entityId))
           .map { _ =>
-            handler(())
+            handler()
             ValueEntity.WriteStateSuccess
           }
           .recover {

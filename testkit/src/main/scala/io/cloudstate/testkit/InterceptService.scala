@@ -56,7 +56,7 @@ final class InterceptService(settings: InterceptorSettings) {
 
   def expectEventSourcedConnection(): InterceptEventSourcedService.Connection = eventSourced.expectConnection()
 
-  def expectCrudConnection(): InterceptValueEntityService.Connection = valueBased.expectConnection()
+  def expectValueBasedConnection(): InterceptValueEntityService.Connection = valueBased.expectConnection()
 
   def terminate(): Unit = {
     entityDiscovery.terminate()

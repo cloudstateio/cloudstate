@@ -73,18 +73,13 @@ class SlickEnsureTablesExistReadyCheck(system: ActorSystem) extends (() => Futur
     val config = system.settings.config
     val eventSourcedEnabled = config.getBoolean("cloudstate.proxy.journal-enabled")
     val valueEntityEnabled = config.getBoolean("cloudstate.proxy.value-entity-enabled")
-    (eventSourcedEnabled, valueEntityEnabled) match {
-      case (true, true) =>
-        Seq(
-          new EventSourcedSlickCreateTable(system, eventSourcedSlickDatabase),
-          new ValueEntitySlickCreateTable(system, valueEntitySlickDatabase)
-        )
-      case (true, false) =>
-        Seq(new EventSourcedSlickCreateTable(system, eventSourcedSlickDatabase))
-      case (false, true) =>
-        Seq(new ValueEntitySlickCreateTable(system, valueEntitySlickDatabase))
-      case (false, false) => Seq()
-    }
+
+    val eventSourcedCombinations =
+      if (eventSourcedEnabled) Seq(new EventSourcedSlickCreateTable(system, eventSourcedSlickDatabase)) else Seq.empty
+    val valueEntityCombinations =
+      if (valueEntityEnabled) Seq(new ValueEntitySlickCreateTable(system, valueEntitySlickDatabase)) else Seq.empty
+
+    eventSourcedCombinations ++ valueEntityCombinations
   }
 }
 

@@ -25,7 +25,7 @@ object Store {
 }
 
 /**
- * Represents an low level interface for accessing a native database.
+ * Represents a low level interface for accessing a native database.
  *
  * @tparam K the type for database key
  * @tparam V the type for database value
