@@ -71,13 +71,13 @@ class MockCall {
 }
 
 const call = new MockCall();
-function createHandler(commandHandler, state = undefined, otherHandlers = {}) {
+function createHandler(commandHandler, delta = undefined, otherHandlers = {}) {
   otherHandlers.commandHandlers = {
     DoSomething: commandHandler
   };
-  return create(otherHandlers, state);
+  return create(otherHandlers, delta);
 }
-function create(handlers = {}, state = undefined) {
+function create(handlers = {}, delta = undefined) {
   const entity = new support.CrdtSupport(root, ExampleService, {
     ...{
       commandHandlers: {
@@ -93,7 +93,7 @@ function create(handlers = {}, state = undefined) {
   }, {});
   return entity.create(call, CrdtInit.decode(CrdtInit.encode({
     entityId: "foo",
-    state: state
+    delta: delta
   }).finish()));
 }
 
@@ -148,7 +148,6 @@ function send(handler, streamIn) {
 
 function assertHasNoAction(reply) {
   if (reply.stateAction !== null) {
-    should.equal(reply.stateAction.create, null);
     should.equal(reply.stateAction.update, null);
     should.equal(reply.stateAction.delete, null);
   }
@@ -167,27 +166,28 @@ describe("CrdtHandler", () => {
     anySupport.deserialize(reply.clientAction.reply.payload).field.should.equal(outMsg.field);
   });
 
-  it("should populate state with the state from init if present", () => {
+  it("should populate state with the initial delta from init if present", () => {
     const handler = createHandler((cmd, ctx) => {
       ctx.state.value.should.equal(5);
       return outMsg;
     }, {
       gcounter: {
-        value: 5
+        increment: 5
       }
     });
 
     assertHasNoAction(handleCommand(handler, inMsg));
   });
 
-  it("should create state a new state is set", () => {
+  it("should create state when a new state is set", () => {
     const handler = createHandler((cmd, ctx) => {
       ctx.state = new crdts.GCounter();
       return outMsg;
     });
 
     const reply = handleCommand(handler, inMsg);
-    reply.stateAction.create.gcounter.value.toNumber().should.equal(0);
+    assertHasNoAction(reply);
+    anySupport.deserialize(reply.clientAction.reply.payload).field.should.equal(outMsg.field);
   });
 
   it("should send an update when the state is updated", () => {
@@ -196,58 +196,39 @@ describe("CrdtHandler", () => {
       return outMsg;
     }, {
       gcounter: {
-        value: 5
+        increment: 5
       }
     });
     const reply = handleCommand(handler, inMsg);
     reply.stateAction.update.gcounter.increment.toNumber().should.equal(3);
   });
 
-  it("should set the state when it receives a state message", () => {
+  it("should set the state when it receives an initial delta", () => {
     const handler = createHandler((cmd, ctx) => {
       ctx.state.value.should.equal(5);
       return outMsg;
     });
     send(handler, {
-      state: {
+      delta: {
         gcounter: {
-          value: 5
+          increment: 5
         }
       }
     });
     assertHasNoAction(handleCommand(handler, inMsg));
   });
 
-  it("should replace the state when it receives a state message", () => {
-    const handler = createHandler((cmd, ctx) => {
-      ctx.state.value.should.equal(5);
-      return outMsg;
-    }, {
-      gcounter: {
-        value: 2
-      }
-    });
-    send(handler, {
-      state: {
-        gcounter: {
-          value: 5
-        }
-      }
-    });
-    assertHasNoAction(handleCommand(handler, inMsg));
-  });
-
-  it("should update the state when it receives a changed message", () => {
+  it("should update the state when it receives a delta message", () => {
     const handler = createHandler((cmd, ctx) => {
       ctx.state.value.should.equal(7);
       return outMsg;
     }, {
       gcounter: {
-        value: 2
+        increment: 2
       }
     });
     send(handler, {
-      changed: {
+      delta: {
         gcounter: {
           increment: 5
         }
@@ -262,7 +243,7 @@ describe("CrdtHandler", () => {
       return outMsg;
     }, {
       gcounter: {
-        value: 2
+        increment: 2
       }
     });
     const reply = handleCommand(handler, inMsg);
@@ -291,14 +272,14 @@ describe("CrdtHandler", () => {
       },
     }, {
       gcounter: {
-        value: 2
+        increment: 2
       }
     });
 
     const reply = handleCommand(handler, inMsg, "StreamSomething", 5, true);
     reply.streamed.should.be.true;
     send(handler, {
-      changed: {
+      delta: {
         gcounter: {
           increment: 3
         }
@@ -362,7 +343,7 @@ describe("CrdtHandler", () => {
 
     handleCommand(handler, inMsg, "StreamSomething", 5, true);
     send(handler, {
-      changed: {
+      delta: {
         gcounter: {
           increment: 3
         }
@@ -371,7 +352,7 @@ describe("CrdtHandler", () => {
     const streamed = call.get().streamedMessage;
     streamed.endStream.should.be.true;
     send(handler, {
-      changed: {
+      delta: {
         gcounter: {
           increment: 3
         }
@@ -393,7 +374,7 @@ describe("CrdtHandler", () => {
       }
     }, {
       gcounter: {
-        value: 2
+        increment: 2
       }
     });
 

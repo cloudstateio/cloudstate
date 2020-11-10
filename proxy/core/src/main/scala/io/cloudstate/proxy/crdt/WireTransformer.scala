@@ -31,7 +31,7 @@ object WireTransformer {
   private[this] final val Zero = BigInt(0)
 
   private def voteState(vote: Vote)(implicit clusterState: CurrentClusterState,
-                                    selfUniqueAddress: SelfUniqueAddress): VoteState = {
+                                    selfUniqueAddress: SelfUniqueAddress): VoteDelta = {
     var votesFor = 0
     var votes = 0
     var selfVote = false
@@ -46,35 +46,35 @@ object WireTransformer {
         }
       }
     }
-    VoteState(votesFor, votes, selfVote)
+    VoteDelta(selfVote, votesFor, votes)
   }
 
-  def toWireState(state: ReplicatedData)(implicit clusterState: CurrentClusterState,
-                                         selfUniqueAddress: SelfUniqueAddress): CrdtState = {
-    import CrdtState.{State => S}
+  def initialDelta(data: ReplicatedData)(implicit clusterState: CurrentClusterState,
+                                         selfUniqueAddress: SelfUniqueAddress): CrdtDelta = {
+    import CrdtDelta.{Delta => D}
 
-    CrdtState(state match {
+    CrdtDelta(data match {
       case gcounter: GCounter =>
-        S.Gcounter(GCounterState(gcounter.value.toLong))
+        D.Gcounter(GCounterDelta(gcounter.value.toLong))
       case pncounter: PNCounter =>
-        S.Pncounter(PNCounterState(pncounter.value.toLong))
+        D.Pncounter(PNCounterDelta(pncounter.value.toLong))
       case gset: GSet[ProtoAny @unchecked] =>
-        S.Gset(GSetState(gset.elements.toSeq))
+        D.Gset(GSetDelta(gset.elements.toSeq))
       case orset: ORSet[ProtoAny @unchecked] =>
-        S.Orset(ORSetState(orset.elements.toSeq))
+        D.Orset(ORSetDelta(added = orset.elements.toSeq))
       case lwwregister: LWWRegister[ProtoAny @unchecked] =>
-        S.Lwwregister(LWWRegisterState(Some(lwwregister.value)))
+        D.Lwwregister(LWWRegisterDelta(Some(lwwregister.value)))
       case flag: Flag =>
-        S.Flag(FlagState(flag.enabled))
+        D.Flag(FlagDelta(flag.enabled))
       case ormap: ORMap[ProtoAny @unchecked, ReplicatedData @unchecked] =>
-        S.Ormap(ORMapState(ormap.entries.map {
-          case (k, value) => ORMapEntry(Some(k), Some(toWireState(value)))
+        D.Ormap(ORMapDelta(added = ormap.entries.map {
+          case (k, value) => ORMapEntryDelta(Some(k), Some(initialDelta(value)))
         }.toSeq))
       case vote: Vote =>
-        S.Vote(voteState(vote))
+        D.Vote(voteState(vote))
       case _ =>
         // todo handle better
-        throw new RuntimeException("Unknown CRDT: " + state)
+        throw new RuntimeException("Unknown CRDT: " + data)
     })
   }
 
@@ -166,8 +166,9 @@ object WireTransformer {
             }
 
             added.foldLeft(withUpdated) {
-              case (ormap, ORMapEntry(Some(key), Some(state), _)) =>
-                ormap.put(selfUniqueAddress, key, stateToCrdt(state))
+              case (ormap, ORMapEntryDelta(Some(key), Some(delta), _)) =>
+                val (initial, modify) = deltaToUpdate(delta)
+                ormap.updated(selfUniqueAddress, key, initial)(modify)
             }
 
           case other => throw IncompatibleCrdtChange(s"ORMap is incompatible with CRDT $other")
@@ -185,25 +186,6 @@ object WireTransformer {
     }
   }
 
-  def stateToCrdt(state: CrdtState)(implicit selfUniqueAddress: SelfUniqueAddress): ReplicatedData = {
-    import CrdtState.{State => S}
-    state.state match {
-      case S.Gcounter(GCounterState(value, _)) => GCounter.empty :+ value
-      case S.Pncounter(PNCounterState(value, _)) => PNCounter.empty :+ value
-      case S.Gset(GSetState(items, _)) => items.foldLeft(GSet.empty[ProtoAny])((gset, item) => gset + item)
-      case S.Orset(ORSetState(items, _)) => items.foldLeft(ORSet.empty[ProtoAny])((orset, item) => orset :+ item)
-      case S.Lwwregister(LWWRegisterState(value, clock, customClockValue, _)) =>
-        LWWRegister(selfUniqueAddress, value.getOrElse(ProtoAny.defaultInstance), toDdataClock(clock, customClockValue))
-      case S.Flag(FlagState(value, _)) => if (value) Flag.Enabled else Flag.Disabled
-      case S.Ormap(ORMapState(items, _)) =>
-        items.foldLeft(ORMap.empty[ProtoAny, ReplicatedData]) {
-          case (ormap, ORMapEntry(Some(key), Some(state), _)) => ormap.put(selfUniqueAddress, key, stateToCrdt(state))
-        }
-      case S.Vote(VoteState(_, _, selfVote, _)) => Vote.empty.vote(selfVote)
-      case S.Empty => throw UserFunctionProtocolError("Unknown state or state not set")
-    }
-  }
-
   private sealed trait ORMapEntryAction
 
   private object ORMapEntryAction {
@@ -212,9 +194,9 @@ object WireTransformer {
 
     case class UpdateEntry(key: ProtoAny, delta: CrdtDelta) extends ORMapEntryAction
 
-    case class AddEntry(entry: ORMapEntry) extends ORMapEntryAction
+    case class AddEntry(key: ProtoAny, delta: CrdtDelta) extends ORMapEntryAction
 
-    case class DeleteThenAdd(key: ProtoAny, state: CrdtState) extends ORMapEntryAction
+    case class DeleteThenAdd(key: ProtoAny, delta: CrdtDelta) extends ORMapEntryAction
 
   }
 
@@ -351,11 +333,11 @@ object WireTransformer {
             } else {
 
               val changes = ormap.entries.map {
-                case (k, value) if !old.contains(k) => AddEntry(ORMapEntry(Some(k), Some(toWireState(value))))
+                case (k, value) if !old.contains(k) => AddEntry(k, initialDelta(value))
                 case (k, value) =>
                   detectChange(old.entries(k), value) match {
                     case NoChange => NoAction
-                    case IncompatibleChange => DeleteThenAdd(k, toWireState(value))
+                    case IncompatibleChange => DeleteThenAdd(k, initialDelta(value))
                     case Updated(delta) => UpdateEntry(k, delta)
                   }
               }.toSeq
@@ -369,8 +351,8 @@ object WireTransformer {
                 case UpdateEntry(key, delta) => ORMapEntryDelta(Some(key), Some(delta))
               }
               val added = changes.collect {
-                case AddEntry(entry) => entry
-                case DeleteThenAdd(key, state) => ORMapEntry(Some(key), Some(state))
+                case AddEntry(key, delta) => ORMapEntryDelta(Some(key), Some(delta))
+                case DeleteThenAdd(key, delta) => ORMapEntryDelta(Some(key), Some(delta))
               }
 
               if (allDeleted.isEmpty && updated.isEmpty && added.isEmpty) {

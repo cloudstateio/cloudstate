@@ -17,7 +17,7 @@
 package io.cloudstate.javasupport.impl.crdt
 
 import io.cloudstate.javasupport.crdt.PNCounter
-import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtState, PNCounterDelta, PNCounterState}
+import io.cloudstate.protocol.crdt.{CrdtDelta, PNCounterDelta}
 
 private[crdt] final class PNCounterImpl extends InternalCrdt with PNCounter {
   override final val name = "PNCounter"
@@ -36,23 +36,14 @@ private[crdt] final class PNCounterImpl extends InternalCrdt with PNCounter {
 
   override def hasDelta: Boolean = deltaValue != 0
 
-  override def delta: Option[CrdtDelta.Delta] =
-    if (hasDelta) {
-      Some(CrdtDelta.Delta.Pncounter(PNCounterDelta(deltaValue)))
-    } else None
+  override def delta: CrdtDelta.Delta =
+    CrdtDelta.Delta.Pncounter(PNCounterDelta(deltaValue))
 
   override def resetDelta(): Unit = deltaValue = 0
-
-  override def state: CrdtState.State = CrdtState.State.Pncounter(PNCounterState(value))
 
   override val applyDelta = {
     case CrdtDelta.Delta.Pncounter(PNCounterDelta(increment, _)) =>
       value += increment
-  }
-
-  override val applyState = {
-    case CrdtState.State.Pncounter(PNCounterState(value, _)) =>
-      this.value = value
   }
 
   override def toString = s"PNCounter($value)"

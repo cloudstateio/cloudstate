@@ -19,14 +19,9 @@ const Flag = require("../../src/crdts/flag");
 const protobufHelper = require("../../src/protobuf-helper");
 
 const CrdtDelta = protobufHelper.moduleRoot.cloudstate.crdt.CrdtDelta;
-const CrdtState = protobufHelper.moduleRoot.cloudstate.crdt.CrdtState;
 
 function roundTripDelta(delta) {
   return CrdtDelta.decode(CrdtDelta.encode(delta).finish());
-}
-
-function roundTripState(state) {
-  return CrdtState.decode(CrdtState.encode(state).finish());
 }
 
 describe("Flag", () => {
@@ -34,11 +29,12 @@ describe("Flag", () => {
   it("should be disabled when instantiated", () => {
     const flag = new Flag();
     flag.value.should.be.false;
+    should.equal(flag.getAndResetDelta(), null);
   });
 
-  it("should reflect a state update", () => {
+  it("should reflect an initial delta", () => {
     const flag = new Flag();
-    flag.applyState(roundTripState({
+    flag.applyDelta(roundTripDelta({
       flag: {
         value: true
       }
@@ -58,17 +54,17 @@ describe("Flag", () => {
 
   it("should generate deltas", () => {
     const flag = new Flag();
+    should.equal(flag.getAndResetDelta(), null);
     flag.enable();
     roundTripDelta(flag.getAndResetDelta()).flag.value.should.be.true;
     should.equal(flag.getAndResetDelta(), null);
   });
 
-  it("should return its state", () => {
+  it("should support empty initial deltas (for ORMap added)", () => {
     const flag = new Flag();
-    roundTripState(flag.getStateAndResetDelta()).flag.value.should.be.false;
-    flag.enable();
-    roundTripState(flag.getStateAndResetDelta()).flag.value.should.be.true;
+    flag.value.should.be.false;
     should.equal(flag.getAndResetDelta(), null);
+    roundTripDelta(flag.getAndResetDelta(/* initial = */ true)).flag.value.should.be.false;
   });
-  
+
 });

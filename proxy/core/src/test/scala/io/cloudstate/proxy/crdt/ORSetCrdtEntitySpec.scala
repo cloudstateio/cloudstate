@@ -17,7 +17,7 @@
 package io.cloudstate.proxy.crdt
 
 import akka.cluster.ddata.{ORSet, ORSetKey}
-import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtReply, CrdtState, CrdtStateAction, ORSetDelta, ORSetState}
+import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtStateAction, ORSetDelta}
 import com.google.protobuf.any.{Any => ProtoAny}
 
 import scala.concurrent.duration._
@@ -27,19 +27,16 @@ class ORSetCrdtEntitySpec extends AbstractCrdtEntitySpec {
   import AbstractCrdtEntitySpec._
 
   override protected type T = ORSet[ProtoAny]
-  override protected type S = ORSetState
   override protected type D = ORSetDelta
 
   override protected def key(name: String) = ORSetKey(name)
 
   override protected def initial = ORSet.empty
 
-  override protected def extractState(state: CrdtState.State) = state.orset.value
-
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.orset.value
 
   def createSet(elements: ProtoAny*) =
-    CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Orset(ORSetState(elements))))
+    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Orset(ORSetDelta(added = elements))))
 
   def updateSet(added: Seq[ProtoAny] = Nil, removed: Seq[ProtoAny] = Nil, cleared: Boolean = false) =
     CrdtStateAction.Action.Update(
@@ -70,22 +67,22 @@ class ORSetCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
     "be initialised from an empty set" in {
       update(identity)
-      createAndExpectInit().value.items shouldBe empty
+      createAndExpectInit().value.added shouldBe empty
     }
 
     "be initialised from a non empty set" in {
       update { s =>
         s :+ element1 :+ element2
       }
-      createAndExpectInit().value.items should contain theSameElementsAs Seq(element1, element2)
+      createAndExpectInit().value.added should contain theSameElementsAs Seq(element1, element2)
     }
 
-    "push the full state when no entity exists" in {
+    "push the full state as initial delta when no entity exists" in {
       createAndExpectInit() shouldBe None
       update { s =>
         s :+ element1 :+ element2
       }
-      expectState().items should contain theSameElementsAs Seq(element1, element2)
+      expectDelta().added should contain theSameElementsAs Seq(element1, element2)
     }
 
     "detect and send additions to the user function" in {

@@ -96,8 +96,8 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
     val service =
       services.getOrElse(init.serviceName, throw new RuntimeException(s"Service not found: ${init.serviceName}"))
 
-    val runner = new EntityRunner(service, init.entityId, init.state.map { state =>
-      CrdtStateTransformer.create(state, service.anySupport)
+    val runner = new EntityRunner(service, init.entityId, init.delta.map { delta =>
+      CrdtDeltaTransformer.create(delta, service.anySupport)
     })
 
     Flow[CrdtStreamIn]
@@ -105,15 +105,11 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
         in.message match {
           case In.Command(command) =>
             runner.handleCommand(command)
-          case In.Changed(delta) =>
+          case In.Delta(delta) =>
             runner.handleDelta(delta).map { msg =>
               CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(msg))
             }
-          case In.State(state) =>
-            runner.handleState(state).map { msg =>
-              CrdtStreamOut(CrdtStreamOut.Message.StreamedMessage(msg))
-            }
-          case In.Deleted(_) =>
+          case In.Delete(_) =>
             // ???
             Nil
           case In.StreamCancelled(cancelled) =>
@@ -133,7 +129,6 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
 
   private class EntityRunner(service: CrdtStatefulService, entityId: String, private var crdt: Option[InternalCrdt]) {
 
-    private var crdtIsNew = false
     private var subscribers = Map.empty[Long, function.Function[SubscriptionContext, Optional[JavaPbAny]]]
     private var cancelListeners = Map.empty[Long, (function.Consumer[StreamCancelledContext], Metadata)]
     private val entity = {
@@ -148,18 +143,10 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
 
     private def verifyNoDelta(scope: String): Unit =
       crdt match {
-        case Some(changed) if changed.hasDelta && !crdtIsNew =>
+        case Some(changed) if changed.hasDelta =>
           throw new RuntimeException(s"CRDT was changed during $scope, this is not allowed.")
         case _ =>
       }
-
-    def handleState(state: CrdtState): List[CrdtStreamedMessage] = {
-      crdt match {
-        case Some(existing) => existing.applyState(state.state)
-        case None => CrdtStateTransformer.create(state, service.anySupport)
-      }
-      notifySubscribers()
-    }
 
     def handleDelta(delta: CrdtDelta): List[CrdtStreamedMessage] = {
       crdt match {
@@ -427,7 +414,6 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
           throw new RuntimeException("This entity already has a CRDT created for it!")
         }
         crdt = Some(newCrdt)
-        crdtIsNew = true
         newCrdt
       }
 
@@ -443,27 +429,10 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
 
       final def createCrdtAction(): Option[CrdtStateAction] = crdt match {
         case Some(c) =>
-          if (crdtIsNew) {
-            if (c.hasDelta) {
-              crdtIsNew = false
-              if (deleted) {
-                crdt = None
-                None
-              } else {
-                c.resetDelta()
-                Some(CrdtStateAction(action = CrdtStateAction.Action.Create(CrdtState(c.state))))
-              }
-            } else if (deleted) {
-              crdtIsNew = false
-              crdt = None
-              None
-            } else {
-              None
-            }
-          } else if (deleted) {
+          if (deleted) {
             Some(CrdtStateAction(action = CrdtStateAction.Action.Delete(CrdtDelete())))
           } else if (c.hasDelta) {
-            val delta = c.delta.get
+            val delta = c.delta
             c.resetDelta()
             Some(CrdtStateAction(action = CrdtStateAction.Action.Update(CrdtDelta(delta))))
           } else {

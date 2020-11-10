@@ -85,8 +85,8 @@ function PNCounter() {
     return this;
   };
 
-  this.getAndResetDelta = function () {
-    if (!delta.isZero()) {
+  this.getAndResetDelta = function (initial) {
+    if (!delta.isZero() || initial) {
       const crdtDelta = {
         pncounter: {
           change: delta
@@ -104,23 +104,6 @@ function PNCounter() {
       throw new Error(util.format("Cannot apply delta %o to PNCounter", delta));
     }
     currentValue = currentValue.add(delta.pncounter.change);
-  };
-
-
-  this.getStateAndResetDelta = function () {
-    delta = Long.ZERO;
-    return {
-      pncounter: {
-        value: currentValue
-      }
-    };
-  };
-
-  this.applyState = function (state) {
-    if (!state.pncounter) {
-      throw new Error(util.format("Cannot apply state %o to PNCounter", state));
-    }
-    currentValue = Long.fromValue(state.pncounter.value);
   };
 
   this.toString = function () {

@@ -29,8 +29,8 @@
   "//": "https://npm.community/t/npm-install-does-not-install-transitive-dependencies-of-local-dependency/2264",
   "dependencies": {
     "@grpc/proto-loader": "^0.1.0",
-    "google-protobuf": "^3.0.0",
-    "grpc": "1.23.3",
+    "google-protobuf": "^3.11.4",
+    "grpc": "^1.24.2",
     "cloudstate": "file:../../node-support"
   },
   "devDependencies": {

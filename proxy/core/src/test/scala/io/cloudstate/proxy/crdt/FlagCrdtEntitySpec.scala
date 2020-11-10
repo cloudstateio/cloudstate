@@ -16,7 +16,7 @@
 
 package io.cloudstate.proxy.crdt
 
-import akka.cluster.ddata.{Flag, FlagKey, GCounter, GCounterKey}
+import akka.cluster.ddata.{Flag, FlagKey}
 import io.cloudstate.protocol.crdt._
 import io.cloudstate.protocol.entity.UserFunctionError
 
@@ -27,26 +27,23 @@ class FlagCrdtEntitySpec extends AbstractCrdtEntitySpec {
   import AbstractCrdtEntitySpec._
 
   override protected type T = Flag
-  override protected type S = FlagState
   override protected type D = FlagDelta
 
   override protected def key(name: String) = FlagKey(name)
 
   override protected def initial = Flag.empty
 
-  override protected def extractState(state: CrdtState.State) = state.flag.value
-
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.flag.value
 
   def create(value: Boolean) =
-    CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Flag(FlagState(value))))
+    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Flag(FlagDelta(value))))
 
   def enable(value: Boolean = true) =
     CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Flag(FlagDelta(value))))
 
   "The Flag CrdtEntity" should {
 
-    "allow creating an a new flag" in {
+    "allow creating a new flag" in {
       createAndExpectInit() shouldBe None
       val cid = sendAndExpectCommand("cmd", command)
       sendAndExpectReply(cid, create(false))
@@ -76,10 +73,10 @@ class FlagCrdtEntitySpec extends AbstractCrdtEntitySpec {
       createAndExpectInit().value.value shouldBe true
     }
 
-    "push the full state when no entity exists" in {
+    "push the full state as initial delta when no entity exists" in {
       createAndExpectInit() shouldBe None
       update(_.switchOn)
-      expectState().value shouldBe true
+      expectDelta().value shouldBe true
     }
 
     "detect and enabled to the user function" in {

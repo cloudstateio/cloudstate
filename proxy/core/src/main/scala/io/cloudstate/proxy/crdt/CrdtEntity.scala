@@ -209,25 +209,25 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
 
   private def sendDelete(): Unit = {
     if (relay != null) {
-      sendToRelay(CrdtStreamIn.Message.Deleted(CrdtDelete.defaultInstance))
+      sendToRelay(CrdtStreamIn.Message.Delete(CrdtDelete.defaultInstance))
       relay ! Status.Success(())
       relay = null
     }
     replicator ! Unsubscribe(key, self)
   }
 
-  private def maybeStart() =
+  private def maybeStart(): Unit =
     if (relay != null && state != null) {
       log.debug("{} - Received relay and state, starting.", entityId)
 
-      val wireState = state.map(WireTransformer.toWireState)
+      val initialDelta = state.map(WireTransformer.initialDelta)
 
       sendToRelay(
         CrdtStreamIn.Message.Init(
           CrdtInit(
             serviceName = configuration.serviceName,
             entityId = entityId,
-            state = wireState
+            delta = initialDelta
           )
         )
       )
@@ -248,11 +248,11 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
             case CrdtChange.IncompatibleChange =>
               throw new RuntimeException(s"Incompatible CRDT change from $value to $data for entity $entityId")
             case CrdtChange.Updated(delta) =>
-              sendToRelay(CrdtStreamIn.Message.Changed(delta))
+              sendToRelay(CrdtStreamIn.Message.Delta(delta))
           }
         }
       case None =>
-        sendToRelay(CrdtStreamIn.Message.State(WireTransformer.toWireState(data)))
+        sendToRelay(CrdtStreamIn.Message.Delta(WireTransformer.initialDelta(data)))
     }
     state = Some(data)
   }
@@ -492,18 +492,6 @@ final class CrdtEntity(client: Crdt, configuration: CrdtEntity.Configuration, en
     stateAction.action match {
       case CrdtStateAction.Action.Empty =>
         sendReplyToInitiator(commandId, userFunctionReply, false)
-
-      case CrdtStateAction.Action.Create(create) =>
-        if (state.isDefined) {
-          crash("Cannot create already created entity")
-        } else {
-          val crdt = WireTransformer.stateToCrdt(create)
-          state = Some(WireTransformer.stateToCrdt(create))
-          replicator ! Update(key,
-                              crdt,
-                              toDdataWriteConsistency(stateAction.writeConsistency),
-                              Some(InitiatorReply(commandId, userFunctionReply, endStream)))(identity)
-        }
 
       case CrdtStateAction.Action.Delete(_) =>
         replicator ! Delete(key,

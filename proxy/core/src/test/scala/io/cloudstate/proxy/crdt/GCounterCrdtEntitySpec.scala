@@ -27,26 +27,23 @@ class GCounterCrdtEntitySpec extends AbstractCrdtEntitySpec {
   import AbstractCrdtEntitySpec._
 
   override protected type T = GCounter
-  override protected type S = GCounterState
   override protected type D = GCounterDelta
 
   override protected def key(name: String) = GCounterKey(name)
 
   override protected def initial = GCounter.empty
 
-  override protected def extractState(state: CrdtState.State) = state.gcounter.value
-
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.gcounter.value
 
   def create(value: Long) =
-    CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Gcounter(GCounterState(value))))
+    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Gcounter(GCounterDelta(value))))
 
   def updateCounter(increment: Long) =
     CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Gcounter(GCounterDelta(increment))))
 
   "The GCounter CrdtEntity" should {
 
-    "allow creating an a new counter" in {
+    "allow creating a new counter" in {
       createAndExpectInit() shouldBe None
       val cid = sendAndExpectCommand("cmd", command)
       sendAndExpectReply(cid, create(0))
@@ -68,18 +65,18 @@ class GCounterCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
     "be initialised from an empty counter" in {
       update(identity)
-      createAndExpectInit().value.value shouldBe 0
+      createAndExpectInit().value.increment shouldBe 0
     }
 
     "be initialised from a counter with a value" in {
       update(_ :+ 5)
-      createAndExpectInit().value.value shouldBe 5
+      createAndExpectInit().value.increment shouldBe 5
     }
 
-    "push the full state when no entity exists" in {
+    "push the full state as initial delta when no entity exists" in {
       createAndExpectInit() shouldBe None
       update(_ :+ 5)
-      expectState().value shouldBe 5
+      expectDelta().increment shouldBe 5
     }
 
     "detect and send increments to the user function" in {

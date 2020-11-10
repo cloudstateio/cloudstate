@@ -27,20 +27,17 @@ class ORMapCrdtEntitySpec extends AbstractCrdtEntitySpec {
   import AbstractCrdtEntitySpec._
 
   override protected type T = ORMap[ProtoAny, ReplicatedData]
-  override protected type S = ORMapState
   override protected type D = ORMapDelta
 
   override protected def key(name: String) = ORMapKey(name)
 
   override protected def initial = ORMap.empty
 
-  override protected def extractState(state: CrdtState.State) = state.ormap.value
-
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.ormap.value
 
   def mapCounterEntries(elements: (ProtoAny, Int)*) =
     elements.map {
-      case (k, v) => ORMapEntry(Some(k), Some(createCounter(v)))
+      case (k, v) => ORMapEntryDelta(Some(k), Some(createCounter(v)))
     }
 
   def mapCounterDeltas(elements: (ProtoAny, Int)*) =
@@ -48,10 +45,10 @@ class ORMapCrdtEntitySpec extends AbstractCrdtEntitySpec {
       case (k, v) => ORMapEntryDelta(Some(k), Some(updateCounter(v)))
     }
 
-  def createMap(elements: Seq[ORMapEntry]) =
-    CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Ormap(ORMapState(elements))))
+  def createMap(elements: Seq[ORMapEntryDelta]) =
+    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Ormap(ORMapDelta(added = elements))))
 
-  def updateMap(added: Seq[(ProtoAny, CrdtState)] = Nil,
+  def updateMap(added: Seq[(ProtoAny, CrdtDelta)] = Nil,
                 removed: Seq[ProtoAny] = Nil,
                 updated: Seq[(ProtoAny, CrdtDelta)] = Nil,
                 cleared: Boolean = false) =
@@ -59,7 +56,7 @@ class ORMapCrdtEntitySpec extends AbstractCrdtEntitySpec {
       CrdtDelta(
         CrdtDelta.Delta.Ormap(
           ORMapDelta(
-            added = added.map(e => ORMapEntry(Some(e._1), Some(e._2))),
+            added = added.map(e => ORMapEntryDelta(Some(e._1), Some(e._2))),
             updated = updated.map(e => ORMapEntryDelta(Some(e._1), Some(e._2))),
             removed = removed,
             cleared = cleared
@@ -69,7 +66,7 @@ class ORMapCrdtEntitySpec extends AbstractCrdtEntitySpec {
     )
 
   def createCounter(value: Int) =
-    CrdtState(CrdtState.State.Gcounter(GCounterState(value)))
+    CrdtDelta(CrdtDelta.Delta.Gcounter(GCounterDelta(value)))
 
   def updateCounter(increment: Int) =
     CrdtDelta(CrdtDelta.Delta.Gcounter(GCounterDelta(increment)))
@@ -111,23 +108,22 @@ class ORMapCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
     "be initialised from an empty map" in {
       update(identity)
-      createAndExpectInit().value.entries shouldBe empty
+      createAndExpectInit().value.added shouldBe empty
     }
 
     "be initialised from a non empty set" in {
       update { s =>
         s :+ (element1 -> (GCounter.empty :+ 2)) :+ (element2 -> (GCounter.empty :+ 5))
       }
-      createAndExpectInit().value.entries should contain theSameElementsAs mapCounterEntries(element1 -> 2,
-                                                                                             element2 -> 5)
+      createAndExpectInit().value.added should contain theSameElementsAs mapCounterEntries(element1 -> 2, element2 -> 5)
     }
 
-    "push the full state when no entity exists" in {
+    "push the full state as initial delta when no entity exists" in {
       createAndExpectInit() shouldBe None
       update { s =>
         s :+ (element1 -> (GCounter.empty :+ 2)) :+ (element2 -> (GCounter.empty :+ 5))
       }
-      expectState().entries should contain theSameElementsAs mapCounterEntries(element1 -> 2, element2 -> 5)
+      expectDelta().added should contain theSameElementsAs mapCounterEntries(element1 -> 2, element2 -> 5)
     }
 
     "detect and send additions to the user function" in {
@@ -226,7 +222,7 @@ class ORMapCrdtEntitySpec extends AbstractCrdtEntitySpec {
         if (delta.added.isEmpty) expectDelta().added
         else delta.added
       added should contain theSameElementsAs Seq(
-        ORMapEntry(Some(element1), Some(CrdtState(CrdtState.State.Pncounter(PNCounterState(5)))))
+        ORMapEntryDelta(Some(element1), Some(CrdtDelta(CrdtDelta.Delta.Pncounter(PNCounterDelta(5)))))
       )
     }
 
