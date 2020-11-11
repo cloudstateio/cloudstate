@@ -12,7 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// This is the public API offered by the shopping cart entity.
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// This is a duplication of the shopping cart in the shoppingcart directory.
+// This duplication is because the TCK cannot run multiple services separately yet.
+// The tests are run in combination. We need the duplication because it is not possible
+// to register multiple services for the same proto file.
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+// This is the public API offered by the shopping cart value-based entity.
 syntax = "proto3";
 
 import "google/protobuf/empty.proto";
