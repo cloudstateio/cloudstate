@@ -22,7 +22,7 @@ import slick.lifted.{MappedProjection, ProvenShape}
 
 object JdbcEntityTable {
 
-  case class EntityRow(key: Key, state: Array[Byte])
+  case class EntityRow(key: Key, typeUrl: String, state: Array[Byte])
 }
 
 trait JdbcEntityTable {
@@ -37,11 +37,12 @@ trait JdbcEntityTable {
       extends Table[EntityRow](_tableTag = tableTag,
                                _schemaName = entityTableCfg.schemaName,
                                _tableName = entityTableCfg.tableName) {
-    def * : ProvenShape[EntityRow] = (key, state) <> (EntityRow.tupled, EntityRow.unapply)
+    def * : ProvenShape[EntityRow] = (key, typeUrl, state) <> (EntityRow.tupled, EntityRow.unapply)
 
     val persistentId: Rep[String] =
       column[String](entityTableCfg.columnNames.persistentId, O.Length(255, varying = true))
     val entityId: Rep[String] = column[String](entityTableCfg.columnNames.entityId, O.Length(255, varying = true))
+    val typeUrl: Rep[String] = column[String](entityTableCfg.columnNames.typeUrl, O.Length(255, varying = true))
     val state: Rep[Array[Byte]] = column[Array[Byte]](entityTableCfg.columnNames.state)
     val key: MappedProjection[Key, (String, String)] = (persistentId, entityId) <> (Key.tupled, Key.unapply)
     val pk = primaryKey(s"${tableName}_pk", (persistentId, entityId))

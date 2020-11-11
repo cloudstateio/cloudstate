@@ -43,6 +43,7 @@ class JdbcConfigSpec extends WordSpecLike with Matchers {
     |          columnNames {
     |            persistentId = "persistent_id"
     |            entityId = "entity_id"
+    |            typeUrl = "type_url"
     |            state = "state"
     |          }
     |        }
@@ -82,6 +83,10 @@ class JdbcConfigSpec extends WordSpecLike with Matchers {
         tableStateConfig.tableName,
         tableStateConfig.columnNames.entityId
       )
+      testTable.EntityTable.baseTableRow.typeUrl.toString shouldBe columnName(
+        tableStateConfig.tableName,
+        tableStateConfig.columnNames.typeUrl
+      )
       testTable.EntityTable.baseTableRow.state.toString shouldBe columnName(
         tableStateConfig.tableName,
         tableStateConfig.columnNames.state
@@ -92,7 +97,7 @@ class JdbcConfigSpec extends WordSpecLike with Matchers {
   "EntityTableConfig" should {
     "be correctly represent as string" in {
       testTable.entityTableCfg.toString shouldBe
-      "JdbcEntityTableConfiguration(value_entity_state,None,JdbcEntityTableColumnNames(persistent_id,entity_id,state))"
+      "JdbcEntityTableConfiguration(value_entity_state,None,JdbcEntityTableColumnNames(persistent_id,entity_id,type_url,state))"
     }
   }
 

@@ -20,6 +20,7 @@ import akka.actor.ActorSystem
 import akka.util.ByteString
 import io.cloudstate.proxy.valueentity.store.Store
 import io.cloudstate.proxy.valueentity.store.Store.Key
+import io.cloudstate.proxy.valueentity.store.Store.Value
 import io.cloudstate.proxy.valueentity.store.jdbc.JdbcEntityTable.EntityRow
 
 import scala.concurrent.Future
@@ -35,14 +36,14 @@ final class JdbcStore(system: ActorSystem) extends Store {
   import slickDatabase.profile.api._
   import system.dispatcher
 
-  override def get(key: Key): Future[Option[ByteString]] =
+  override def get(key: Key): Future[Option[Value]] =
     for {
       rows <- db.run(queries.selectByKey(key).result)
-    } yield rows.headOption.map(r => ByteString(r.state))
+    } yield rows.headOption.map(r => Value(r.typeUrl, ByteString(r.state)))
 
-  override def update(key: Key, value: ByteString): Future[Unit] =
+  override def update(key: Key, value: Value): Future[Unit] =
     for {
-      _ <- db.run(queries.insertOrUpdate(EntityRow(key, value.toByteBuffer.array())))
+      _ <- db.run(queries.insertOrUpdate(EntityRow(key, value.typeUrl, value.state.toByteBuffer.array())))
     } yield ()
 
   override def delete(key: Key): Future[Unit] =

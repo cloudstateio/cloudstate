@@ -26,9 +26,10 @@ class JdbcEntityTableColumnNames(config: Config) {
 
   val persistentId: String = cfg.getString("persistentId")
   val entityId: String = cfg.getString("entityId")
+  val typeUrl: String = cfg.getString("typeUrl")
   val state: String = cfg.getString("state")
 
-  override def toString: String = s"JdbcEntityTableColumnNames($persistentId,$entityId,$state)"
+  override def toString: String = s"JdbcEntityTableColumnNames($persistentId,$entityId,$typeUrl,$state)"
 }
 
 class JdbcEntityTableConfiguration(config: Config) {

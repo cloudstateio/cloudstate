@@ -24,6 +24,9 @@ object Store {
 
   case class Key(persistentId: String, entityId: String)
 
+  /** Value to persist with its type url and its content */
+  case class Value(typeUrl: String, state: ByteString)
+
 }
 
 /**
@@ -37,7 +40,7 @@ trait Store {
    * @param key to retrieve data for
    * @return Some(data) if data exists for the key and None otherwise
    */
-  def get(key: Store.Key): Future[Option[ByteString]]
+  def get(key: Store.Key): Future[Option[Store.Value]]
 
   /**
    * Insert the data with the given key if it not already exists.
@@ -46,7 +49,7 @@ trait Store {
    * @param key  to insert or update the entity
    * @param value that should be persisted
    */
-  def update(key: Store.Key, value: ByteString): Future[Unit]
+  def update(key: Store.Key, value: Store.Value): Future[Unit]
 
   /**
    * Delete the data for the given key.

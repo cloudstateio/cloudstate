@@ -20,13 +20,13 @@ import akka.actor.{Actor, ActorRef, ActorSystem}
 import akka.grpc.GrpcClientSettings
 import akka.testkit.TestEvent.Mute
 import akka.testkit.{EventFilter, TestActorRef}
-import akka.util.ByteString
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.google.protobuf.{ByteString => PbByteString}
 import io.cloudstate.protocol.value_entity.ValueEntityClient
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.telemetry.AbstractTelemetrySpec
 import io.cloudstate.proxy.valueentity.store.Store.Key
+import io.cloudstate.proxy.valueentity.store.Store.Value
 import io.cloudstate.proxy.valueentity.store.{RepositoryImpl, Store}
 import io.cloudstate.testkit.TestService
 import io.cloudstate.testkit.valueentity.ValueEntityMessages
@@ -131,14 +131,14 @@ class DatabaseExceptionHandlingSpec extends AbstractTelemetrySpec {
   private final class TestJdbcStore(status: String) extends Store {
     import TestJdbcStore.JdbcStoreStatus._
 
-    private var store = Map.empty[Key, ByteString]
+    private var store = Map.empty[Key, Value]
 
-    override def get(key: Key): Future[Option[ByteString]] =
+    override def get(key: Key): Future[Option[Value]] =
       status match {
         case `getFailure` => Future.failed(new RuntimeException("Database GET access failed because of boom!"))
         case _ => Future.successful(store.get(key))
       }
-    override def update(key: Key, value: ByteString): Future[Unit] =
+    override def update(key: Key, value: Value): Future[Unit] =
       status match {
         case `updateFailure` => Future.failed(new RuntimeException("Database Update access failed because of boom!"))
         case _ =>

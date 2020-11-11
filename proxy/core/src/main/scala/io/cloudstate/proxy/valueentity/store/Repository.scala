@@ -16,7 +16,6 @@
 
 package io.cloudstate.proxy.valueentity.store
 
-import akka.grpc.ProtobufSerializer
 import akka.util.ByteString
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.google.protobuf.{ByteString => PbByteString}
@@ -30,69 +29,45 @@ import scala.concurrent.{ExecutionContext, Future}
 trait Repository {
 
   /**
-   * Retrieve the payload for the given key.
+   * Retrieve the entity for the given key.
    *
-   * @param key to retrieve payload for
+   * @param key to retrieve entity for
    * @return Some(payload) if payload exists for the key and None otherwise
    */
   def get(key: Key): Future[Option[ScalaPbAny]]
 
   /**
-   * Insert the entity payload with the given key if it not already exists.
-   * Update the entity payload at the given key if it already exists.
+   * Insert the entity with the given key if it not already exists.
+   * Update the entity at the given key if it already exists.
    *
    * @param key  to insert or update the entity
-   * @param payload that should be persisted
+   * @param entity to persist
    */
-  def update(key: Key, payload: ScalaPbAny): Future[Unit]
+  def update(key: Key, entity: ScalaPbAny): Future[Unit]
 
   /**
    * Delete the entity with the given key.
    *
-   * @param key to delete data.
+   * @param key to delete the entity.
    */
   def delete(key: Key): Future[Unit]
 
 }
 
-object RepositoryImpl {
-
-  private[store] final object EntitySerializer extends ProtobufSerializer[ScalaPbAny] {
-    private val separator = ByteString("|")
-
-    override final def serialize(entity: ScalaPbAny): ByteString =
-      if (entity.value.isEmpty) {
-        ByteString(entity.typeUrl) ++ separator ++ ByteString.empty
-      } else {
-        ByteString(entity.typeUrl) ++ separator ++ ByteString.fromArrayUnsafe(entity.value.toByteArray)
-      }
-
-    override final def deserialize(bytes: ByteString): ScalaPbAny = {
-      val separatorIndex = bytes.indexOf(separator.head)
-      val (typeUrl, value) = bytes.splitAt(separatorIndex)
-      ScalaPbAny(typeUrl.utf8String, PbByteString.copyFrom(value.tail.toByteBuffer))
-    }
-  }
-
-}
-
-class RepositoryImpl(store: Store, serializer: ProtobufSerializer[ScalaPbAny])(
-    implicit ec: ExecutionContext
-) extends Repository {
-
-  def this(store: Store)(implicit ec: ExecutionContext) =
-    this(store, RepositoryImpl.EntitySerializer)
+class RepositoryImpl(store: Store)(implicit ec: ExecutionContext) extends Repository {
 
   def get(key: Key): Future[Option[ScalaPbAny]] =
     store
       .get(key)
       .map {
-        case Some(value) => Some(serializer.deserialize(value))
+        case Some(entity) =>
+          Some(ScalaPbAny(entity.typeUrl, PbByteString.copyFrom(entity.state.toByteBuffer)))
+
         case None => None
       }
 
   def update(key: Key, entity: ScalaPbAny): Future[Unit] =
-    store.update(key, serializer.serialize(entity))
+    store.update(key, Store.Value(entity.typeUrl, ByteString.fromArrayUnsafe(entity.value.toByteArray)))
 
   def delete(key: Key): Future[Unit] = store.delete(key)
 }

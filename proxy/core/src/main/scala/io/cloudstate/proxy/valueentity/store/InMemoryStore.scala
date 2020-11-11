@@ -17,8 +17,8 @@
 package io.cloudstate.proxy.valueentity.store
 
 import akka.actor.ActorSystem
-import akka.util.ByteString
 import io.cloudstate.proxy.valueentity.store.Store.Key
+import io.cloudstate.proxy.valueentity.store.Store.Value
 
 import scala.collection.concurrent.TrieMap
 import scala.concurrent.Future
@@ -28,12 +28,12 @@ import scala.concurrent.Future
  */
 final class InMemoryStore(system: ActorSystem) extends Store {
 
-  private var store = TrieMap.empty[Key, ByteString]
+  private var store = TrieMap.empty[Key, Value]
 
-  override def get(key: Key): Future[Option[ByteString]] = Future.successful(store.get(key))
+  override def get(key: Key): Future[Option[Value]] = Future.successful(store.get(key))
 
-  override def update(key: Key, value: ByteString): Future[Unit] = {
-    store += key -> value
+  override def update(key: Key, entity: Value): Future[Unit] = {
+    store += key -> entity
     Future.unit
   }
 
