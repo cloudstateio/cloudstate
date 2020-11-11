@@ -33,7 +33,6 @@ import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.sharding.DynamicLeastShardAllocationStrategy
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.collection.JavaConverters._
 
 class EventSourcedSupportFactory(
     system: ActorSystem,
@@ -53,7 +52,7 @@ class EventSourcedSupportFactory(
 
     val stateManagerConfig = EventSourcedEntity.Configuration(entity.serviceName,
                                                               entity.persistenceId,
-                                                              config.passivationTimeout,
+                                                              config.eventSourcedSettings.passivationTimeout,
                                                               config.relayOutputBufferSize)
 
     log.debug("Starting EventSourcedEntity for {}", entity.persistenceId)

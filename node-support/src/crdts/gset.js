@@ -100,8 +100,8 @@ function GSet() {
     return this;
   };
 
-  this.getAndResetDelta = function () {
-    if (delta.size > 0) {
+  this.getAndResetDelta = function (initial) {
+    if (delta.size > 0 || initial) {
       const crdtDelta = {
         gset: {
           added: Array.from(delta)
@@ -126,34 +126,6 @@ function GSet() {
       });
     } else {
       debug("GSet delta with no items to add?");
-    }
-  };
-
-  this.getStateAndResetDelta = function () {
-    delta.clear();
-    const items = [];
-    currentValue.forEach((value, key) => {
-      const serialized = AnySupport.serialize(value, true, true);
-      items.push(serialized);
-    });
-    return {
-      gset: {
-        items: items
-      }
-    };
-  };
-
-  this.applyState = function (state, anySupport) {
-    if (!state.gset) {
-      throw new Error(util.format("Cannot apply state %o to GSet", state));
-    }
-    currentValue.clear();
-    if (state.gset.items !== undefined) {
-      state.gset.items.forEach(element => {
-        const value = anySupport.deserialize(element);
-        const comparable = AnySupport.toComparable(value);
-        currentValue.set(comparable, value);
-      });
     }
   };
 

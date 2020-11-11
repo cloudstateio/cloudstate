@@ -20,14 +20,9 @@ const PNCounter = require("../../src/crdts/pncounter");
 const protobufHelper = require("../../src/protobuf-helper");
 
 const CrdtDelta = protobufHelper.moduleRoot.cloudstate.crdt.CrdtDelta;
-const CrdtState = protobufHelper.moduleRoot.cloudstate.crdt.CrdtState;
 
 function roundTripDelta(delta) {
   return CrdtDelta.decode(CrdtDelta.encode(delta).finish());
-}
-
-function roundTripState(state) {
-  return CrdtState.decode(CrdtState.encode(state).finish());
 }
 
 describe("PNCounter", () => {
@@ -35,23 +30,7 @@ describe("PNCounter", () => {
   it("should have a value of zero when instantiated", () => {
     const counter = new PNCounter();
     counter.value.should.equal(0);
-  });
-
-  it("should reflect a state update", () => {
-    const counter = new PNCounter();
-    counter.applyState(roundTripState({
-      pncounter: {
-        value: 10
-      }
-    }));
-    counter.value.should.equal(10);
-    // Try changing it again
-    counter.applyState(roundTripState({
-      pncounter: {
-        value: -5
-      }
-    }));
-    counter.value.should.equal(-5);
+    should.equal(counter.getAndResetDelta(), null);
   });
 
   it("should reflect a delta update", () => {
@@ -85,21 +64,13 @@ describe("PNCounter", () => {
     should.equal(counter.getAndResetDelta(), null);
   });
 
-  it("should return its state", () => {
-    const counter = new PNCounter();
-    counter.increment(10);
-    counter.value.should.equal(10);
-    roundTripState(counter.getStateAndResetDelta()).pncounter.value.toNumber().should.equal(10);
-    should.equal(counter.getAndResetDelta(), null);
-  });
-
   it("should support long values", () => {
     const impossibleDouble = Long.ZERO.add(Number.MAX_SAFE_INTEGER).add(1);
     const counter = new PNCounter();
     counter.increment(Number.MAX_SAFE_INTEGER);
     counter.increment(1);
     counter.longValue.should.eql(impossibleDouble);
-    roundTripState(counter.getStateAndResetDelta()).pncounter.value.should.eql(impossibleDouble);
+    roundTripDelta(counter.getAndResetDelta()).pncounter.change.should.eql(impossibleDouble);
   });
 
   it("should support incrementing by long values", () => {
@@ -108,7 +79,13 @@ describe("PNCounter", () => {
     counter.increment(impossibleDouble);
     counter.longValue.should.eql(impossibleDouble);
     roundTripDelta(counter.getAndResetDelta()).pncounter.change.should.eql(impossibleDouble);
-    roundTripState(counter.getStateAndResetDelta()).pncounter.value.should.eql(impossibleDouble);
+  });
+
+  it("should support empty initial deltas (for ORMap added)", () => {
+    const counter = new PNCounter();
+    counter.value.should.equal(0);
+    should.equal(counter.getAndResetDelta(), null);
+    roundTripDelta(counter.getAndResetDelta(/* initial = */ true)).pncounter.change.toNumber().should.equal(0);
   });
 
 });

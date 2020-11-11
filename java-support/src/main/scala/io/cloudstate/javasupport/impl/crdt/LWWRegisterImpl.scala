@@ -20,7 +20,7 @@ import java.util.Objects
 
 import io.cloudstate.javasupport.crdt.LWWRegister
 import io.cloudstate.javasupport.impl.AnySupport
-import io.cloudstate.protocol.crdt.{CrdtClock, CrdtDelta, CrdtState, LWWRegisterDelta, LWWRegisterState}
+import io.cloudstate.protocol.crdt.{CrdtClock, CrdtDelta, LWWRegisterDelta}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 
 private[crdt] final class LWWRegisterImpl[T](anySupport: AnySupport) extends InternalCrdt with LWWRegister[T] {
@@ -44,10 +44,8 @@ private[crdt] final class LWWRegisterImpl[T](anySupport: AnySupport) extends Int
 
   override def hasDelta: Boolean = deltaValue.isDefined
 
-  override def delta: Option[CrdtDelta.Delta] =
-    if (hasDelta) {
-      Some(CrdtDelta.Delta.Lwwregister(LWWRegisterDelta(deltaValue, convertClock(clock), customClockValue)))
-    } else None
+  override def delta: CrdtDelta.Delta =
+    CrdtDelta.Delta.Lwwregister(LWWRegisterDelta(deltaValue, convertClock(clock), customClockValue))
 
   override def resetDelta(): Unit = {
     deltaValue = None
@@ -55,18 +53,8 @@ private[crdt] final class LWWRegisterImpl[T](anySupport: AnySupport) extends Int
     customClockValue = 0
   }
 
-  override def state: CrdtState.State =
-    CrdtState.State.Lwwregister(
-      LWWRegisterState(Some(anySupport.encodeScala(value)), convertClock(clock), customClockValue)
-    )
-
   override val applyDelta = {
     case CrdtDelta.Delta.Lwwregister(LWWRegisterDelta(Some(any), _, _, _)) =>
-      this.value = anySupport.decode(any).asInstanceOf[T]
-  }
-
-  override val applyState = {
-    case CrdtState.State.Lwwregister(LWWRegisterState(Some(any), _, _, _)) =>
       this.value = anySupport.decode(any).asInstanceOf[T]
   }
 

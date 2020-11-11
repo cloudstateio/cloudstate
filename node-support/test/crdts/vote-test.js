@@ -19,18 +19,13 @@ const Vote = require("../../src/crdts/vote");
 const protobufHelper = require("../../src/protobuf-helper");
 
 const CrdtDelta = protobufHelper.moduleRoot.cloudstate.crdt.CrdtDelta;
-const CrdtState = protobufHelper.moduleRoot.cloudstate.crdt.CrdtState;
 
 function roundTripDelta(delta) {
   return CrdtDelta.decode(CrdtDelta.encode(delta).finish());
 }
 
-function roundTripState(state) {
-  return CrdtState.decode(CrdtState.encode(state).finish());
-}
-
-function voteState(totalVoters, votesFor, selfVote) {
-  return roundTripState({
+function voteDelta(totalVoters, votesFor, selfVote) {
+  return roundTripDelta({
     vote: {
       totalVoters: totalVoters,
       votesFor: votesFor,
@@ -46,19 +41,21 @@ describe("Vote", () => {
     vote.votesFor.should.equal(0);
     vote.totalVoters.should.equal(1);
     vote.vote.should.equal(false);
+    should.equal(vote.getAndResetDelta(), null);
   });
 
-  it("should reflect a state update", () => {
+  it("should reflect an initial delta", () => {
     const vote = new Vote();
-    vote.applyState(voteState(5, 3, true));
+    vote.applyDelta(voteDelta(5, 3, true));
     vote.votesFor.should.equal(3);
     vote.totalVoters.should.equal(5);
     vote.vote.should.equal(true);
+    should.equal(vote.getAndResetDelta(), null);
   });
 
   it("should reflect a delta update", () => {
     const vote = new Vote();
-    vote.applyState(voteState(5, 3, false))
+    vote.applyDelta(voteDelta(5, 3, false))
     vote.applyDelta(roundTripDelta({
       vote: {
         totalVoters: 4,
@@ -85,64 +82,58 @@ describe("Vote", () => {
     vote.vote.should.equal(false);
   });
 
-  it("should return its state", () => {
-    const vote = new Vote();
-    const state1 = roundTripState(vote.getStateAndResetDelta());
-    state1.vote.selfVote.should.be.false;
-    state1.vote.votesFor.should.equal(0);
-    state1.vote.totalVoters.should.equal(1);
-
-    vote.vote = true;
-    const state2 = roundTripState(vote.getStateAndResetDelta());
-    state2.vote.selfVote.should.be.true;
-    state2.vote.votesFor.should.equal(1);
-    state2.vote.totalVoters.should.equal(1);
-
-    should.equal(vote.getAndResetDelta(), null);
-  });
-
   it("should correctly calculate a majority vote", () => {
     const vote = new Vote();
-    vote.applyState(voteState(5, 3, true));
+    vote.applyDelta(voteDelta(5, 3, true));
     vote.majority.should.equal(true);
-    vote.applyState(voteState(5, 2, true));
+    vote.applyDelta(voteDelta(5, 2, true));
     vote.majority.should.equal(false);
-    vote.applyState(voteState(6, 3, true));
+    vote.applyDelta(voteDelta(6, 3, true));
     vote.majority.should.equal(false);
-    vote.applyState(voteState(6, 4, true));
+    vote.applyDelta(voteDelta(6, 4, true));
     vote.majority.should.equal(true);
-    vote.applyState(voteState(1, 0, false));
+    vote.applyDelta(voteDelta(1, 0, false));
     vote.majority.should.equal(false);
-    vote.applyState(voteState(1, 1, true));
+    vote.applyDelta(voteDelta(1, 1, true));
     vote.majority.should.equal(true);
   });
 
   it("should correctly calculate an at least one vote", () => {
     const vote = new Vote();
-    vote.applyState(voteState(1, 0, false));
+    vote.applyDelta(voteDelta(1, 0, false));
     vote.atLeastOne.should.equal(false);
-    vote.applyState(voteState(5, 0, false));
+    vote.applyDelta(voteDelta(5, 0, false));
     vote.atLeastOne.should.equal(false);
-    vote.applyState(voteState(1, 1, true));
+    vote.applyDelta(voteDelta(1, 1, true));
     vote.atLeastOne.should.equal(true);
-    vote.applyState(voteState(5, 1, true));
+    vote.applyDelta(voteDelta(5, 1, true));
     vote.atLeastOne.should.equal(true);
-    vote.applyState(voteState(5, 3, true));
+    vote.applyDelta(voteDelta(5, 3, true));
     vote.atLeastOne.should.equal(true);
   });
 
   it("should correctly calculate an all votes", () => {
     const vote = new Vote();
-    vote.applyState(voteState(1, 0, false));
+    vote.applyDelta(voteDelta(1, 0, false));
     vote.all.should.equal(false);
-    vote.applyState(voteState(5, 0, false));
+    vote.applyDelta(voteDelta(5, 0, false));
     vote.all.should.equal(false);
-    vote.applyState(voteState(1, 1, true));
+    vote.applyDelta(voteDelta(1, 1, true));
     vote.all.should.equal(true);
-    vote.applyState(voteState(5, 3, true));
+    vote.applyDelta(voteDelta(5, 3, true));
     vote.all.should.equal(false);
-    vote.applyState(voteState(5, 5, true));
+    vote.applyDelta(voteDelta(5, 5, true));
     vote.all.should.equal(true);
+  });
+
+  it("should support empty initial deltas (for ORMap added)", () => {
+    const vote = new Vote();
+    vote.votesFor.should.equal(0);
+    vote.totalVoters.should.equal(1);
+    vote.vote.should.equal(false);
+    should.equal(vote.getAndResetDelta(), null);
+    const delta = roundTripDelta(vote.getAndResetDelta(/* initial = */ true))
+    delta.vote.selfVote.should.be.false;
   });
 
 });

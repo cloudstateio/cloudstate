@@ -76,8 +76,8 @@ function GCounter() {
     return this;
   };
 
-  this.getAndResetDelta = function () {
-    if (delta.greaterThan(0)) {
+  this.getAndResetDelta = function (initial) {
+    if (delta.greaterThan(0) || initial) {
       const crdtDelta = {
         gcounter: {
           increment: delta
@@ -95,22 +95,6 @@ function GCounter() {
       throw new Error(util.format("Cannot apply delta %o to GCounter", delta));
     }
     currentValue = currentValue.add(delta.gcounter.increment);
-  };
-
-  this.getStateAndResetDelta = function () {
-    delta = Long.UZERO;
-    return {
-      gcounter: {
-        value: currentValue
-      }
-    };
-  };
-
-  this.applyState = function (state) {
-    if (!state.gcounter) {
-      throw new Error(util.format("Cannot apply state %o to GCounter", state));
-    }
-    currentValue = Long.fromValue(state.gcounter.value);
   };
 
   this.toString = function () {

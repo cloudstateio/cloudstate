@@ -22,8 +22,6 @@ const protobufHelper = require("../../src/protobuf-helper");
 const AnySupport = require("../../src/protobuf-any");
 
 const CrdtDelta = protobufHelper.moduleRoot.cloudstate.crdt.CrdtDelta;
-const CrdtState = protobufHelper.moduleRoot.cloudstate.crdt.CrdtState;
-
 const root = new protobuf.Root();
 root.loadSync(path.join(__dirname, "..", "example.proto"));
 root.resolveAll();
@@ -32,10 +30,6 @@ const anySupport = new AnySupport(root);
 
 function roundTripDelta(delta) {
   return CrdtDelta.decode(CrdtDelta.encode(delta).finish());
-}
-
-function roundTripState(state) {
-  return CrdtState.decode(CrdtState.encode(state).finish());
 }
 
 function toAny(value) {
@@ -52,20 +46,19 @@ describe("GSet", () => {
     const set = new GSet();
     set.size.should.equal(0);
     should.equal(set.getAndResetDelta(), null);
-    roundTripState(set.getStateAndResetDelta()).gset.items.should.be.empty;
   });
 
-  it("should reflect a state update", () => {
+  it("should reflect an initial delta", () => {
     const set = new GSet();
-    set.applyState(roundTripState({
+    should.equal(set.getAndResetDelta(), null);
+    set.applyDelta(roundTripDelta({
       gset: {
-        items: [toAny("one"), toAny("two")]
+        added: [toAny("one"), toAny("two")]
       }
     }), anySupport);
     set.size.should.equal(2);
     new Set(set).should.include("one", "two");
     should.equal(set.getAndResetDelta(), null);
-    roundTripState(set.getStateAndResetDelta()).gset.items.should.have.lengthOf(2);
   });
 
   it("should generate an add delta", () => {
@@ -94,7 +87,9 @@ describe("GSet", () => {
 
   it("should reflect a delta add", () => {
     const set = new GSet().add("one");
-    set.getAndResetDelta();
+    const delta1 = roundTripDelta(set.getAndResetDelta());
+    delta1.gset.added.should.have.lengthOf(1);
+    fromAnys(delta1.gset.added).should.include("one");
     set.applyDelta(roundTripDelta({
       gset: {
         added: [toAny("two")]
@@ -103,7 +98,6 @@ describe("GSet", () => {
     set.size.should.equal(2);
     new Set(set).should.include("one", "two");
     should.equal(set.getAndResetDelta(), null);
-    roundTripState(set.getStateAndResetDelta()).gset.items.should.have.lengthOf(2);
   });
 
   it("should work with protobuf types", () => {
@@ -130,6 +124,13 @@ describe("GSet", () => {
     const delta = roundTripDelta(set.getAndResetDelta());
     delta.gset.added.should.have.lengthOf(1);
     fromAnys(delta.gset.added)[0].foo.should.equal("baz");
+  });
+
+  it("should support empty initial deltas (for ORMap added)", () => {
+    const set = new GSet();
+    set.size.should.equal(0);
+    should.equal(set.getAndResetDelta(), null);
+    roundTripDelta(set.getAndResetDelta(/* initial = */ true)).gset.added.should.have.lengthOf(0);
   });
 
 });

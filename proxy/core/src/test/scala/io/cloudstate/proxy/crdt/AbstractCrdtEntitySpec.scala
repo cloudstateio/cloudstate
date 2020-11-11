@@ -94,12 +94,10 @@ abstract class AbstractCrdtEntitySpec
   private var idSeq = 0
 
   protected type T <: ReplicatedData
-  protected type S
   protected type D
 
   protected def key(name: String): Key[T]
   protected def initial: T
-  protected def extractState(state: CrdtState.State): S
   protected def extractDelta(delta: CrdtDelta.Delta): D
 
   override implicit def patienceConfig: PatienceConfig = PatienceConfig(Span(3, Seconds), Span(200, Millis))
@@ -134,14 +132,9 @@ abstract class AbstractCrdtEntitySpec
     (expectCommand(name, payload, true), streamProbe)
   }
 
-  protected def expectState(): S =
-    inside(toUserFunction.expectMsgType[CrdtStreamIn].message) {
-      case CrdtStreamIn.Message.State(state) => extractState(state.state)
-    }
-
   protected def expectDelta(): D =
     inside(toUserFunction.expectMsgType[CrdtStreamIn].message) {
-      case CrdtStreamIn.Message.Changed(delta) => extractDelta(delta.delta)
+      case CrdtStreamIn.Message.Delta(delta) => extractDelta(delta.delta)
     }
 
   protected def sendAndExpectReply(
@@ -208,7 +201,7 @@ abstract class AbstractCrdtEntitySpec
         cid
     }
 
-  protected def createAndExpectInit(): Option[S] = {
+  protected def createAndExpectInit(): Option[D] = {
     toUserFunction = TestProbe()
     entityDiscovery = TestProbe()
     entity = system.actorOf(
@@ -239,10 +232,10 @@ abstract class AbstractCrdtEntitySpec
 
     val init = toUserFunction.expectMsgType[CrdtStreamIn]
     inside(init.message) {
-      case CrdtStreamIn.Message.Init(CrdtInit(serviceName, eid, state, _)) =>
+      case CrdtStreamIn.Message.Init(CrdtInit(serviceName, eid, delta, _)) =>
         serviceName should ===(ServiceName)
         eid should ===(entityId)
-        state.map(s => extractState(s.state))
+        delta.map(d => extractDelta(d.delta))
     }
   }
 

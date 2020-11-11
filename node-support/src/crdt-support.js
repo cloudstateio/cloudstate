@@ -124,8 +124,8 @@ class CrdtSupport {
 
   create(call, init) {
     const handler = new CrdtHandler(this, call, init.entityId);
-    if (init.state) {
-      handler.handleState(init.state)
+    if (init.delta) {
+      handler.handleInitialDelta(init.delta)
     }
     return handler;
   }
@@ -286,16 +286,6 @@ class CrdtHandler {
       };
       this.currentState = null;
       this.handleStateChange();
-    } else if (this.currentState !== null && ctx.noState) {
-      if (ctx.defaultValue && this.currentState.getAndResetDelta() === null) {
-        // No action, the entity wasn't touched from its default
-      } else {
-        ctx.commandDebug("Creating entity");
-        ctx.reply.stateAction = {
-          create: this.currentState.getStateAndResetDelta()
-        };
-        this.handleStateChange();
-      }
     } else if (this.currentState !== null) {
       const delta = this.currentState.getAndResetDelta();
       if (delta != null) {
@@ -371,12 +361,12 @@ class CrdtHandler {
     debug("%s [%s] - " + msg, ...[this.streamId, this.entityId].concat(args));
   }
 
-  handleState(state) {
-    this.streamDebug("Handling state %s", state.state);
+  handleInitialDelta(delta) {
+    this.streamDebug("Handling initial delta for CRDT type %s", delta.delta);
     if (this.currentState === null) {
-      this.currentState = crdts.createCrdtForState(state);
+      this.currentState = crdts.createCrdtForDelta(delta);
     }
-    this.currentState.applyState(state, this.entity.anySupport, crdts.createCrdtForState);
+    this.currentState.applyDelta(delta, this.entity.anySupport, crdts.createCrdtForDelta);
     this.entity.onStateSet(this.currentState, this.entityId);
   }
 
@@ -506,16 +496,14 @@ class CrdtHandler {
   }
 
   handleCrdtStreamIn(crdtStreamIn) {
-    if (crdtStreamIn.state) {
-      this.streamDebug("Received state for CRDT type %s", crdtStreamIn.state.state);
-      this.handleState(crdtStreamIn.state);
+    if (crdtStreamIn.delta && this.currentState === null) {
+      this.handleInitialDelta(crdtStreamIn.delta)
+    } else if (crdtStreamIn.delta) {
+      this.streamDebug("Received delta for CRDT type %s", crdtStreamIn.delta.delta);
+      this.currentState.applyDelta(crdtStreamIn.delta, this.entity.anySupport, crdts.createCrdtForState);
       this.handleStateChange();
-    } else if (crdtStreamIn.changed) {
-      this.streamDebug("Received delta for CRDT type %s", crdtStreamIn.changed.delta);
-      this.currentState.applyDelta(crdtStreamIn.changed, this.entity.anySupport, crdts.createCrdtForState);
-      this.handleStateChange();
-    } else if (crdtStreamIn.deleted) {
-      this.streamDebug("Received CRDT deleted");
+    } else if (crdtStreamIn.delete) {
+      this.streamDebug("Received CRDT delete");
       this.currentState = null;
       this.handleStateChange();
     } else if (crdtStreamIn.command) {

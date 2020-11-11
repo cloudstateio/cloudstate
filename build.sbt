@@ -45,7 +45,7 @@ val AkkaVersion = "2.6.9"
 val AkkaHttpVersion = "10.1.12" // Note: sync with Akka HTTP version in Akka gRPC
 val AkkaManagementVersion = "1.0.8"
 val AkkaPersistenceCassandraVersion = "0.102"
-val AkkaPersistenceSpannerVersion = "1.0.0-RC3"
+val AkkaPersistenceSpannerVersion = "1.0.0-RC4"
 val PrometheusClientVersion = "0.9.0"
 val ScalaTestVersion = "3.0.8"
 val ProtobufVersion = "3.11.4" // Note: sync with Protobuf version in Akka gRPC and ScalaPB
@@ -448,7 +448,9 @@ lazy val `proxy-spanner` = (project in file("proxy/spanner"))
     libraryDependencies ++= Seq(
         "com.lightbend.akka" %% "akka-persistence-spanner" % AkkaPersistenceSpannerVersion,
         akkaDependency("akka-cluster-typed"), // Transitive dependency of akka-persistence-spanner
-        akkaDependency("akka-persistence-typed") // Transitive dependency of akka-persistence-spanner
+        akkaDependency("akka-persistence-typed"), // Transitive dependency of akka-persistence-spanner
+        akkaDependency("akka-actor-testkit-typed") % Test,
+        "org.scalatest" %% "scalatest" % ScalaTestVersion % Test
       ),
     fork in run := true,
     mainClass in Compile := Some("io.cloudstate.proxy.spanner.CloudstateSpannerProxyMain"),

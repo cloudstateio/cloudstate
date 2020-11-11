@@ -38,14 +38,13 @@ function LWWRegister(value, clock = Clocks.DEFAULT, customClockValue = 0) {
     throw new Error("LWWRegister must be instantiated with an initial value.")
   }
   // Make sure the value can be serialized.
-  AnySupport.serialize(value, true, true);
+  let serializedValue = AnySupport.serialize(value, true, true);
   let currentValue = value;
-  let currentClock = clock;
-  let currentCustomClockValue = customClockValue;
+  // Always start with the initialized value as the delta, to send this value to the proxy
   let delta = {
-    value: null,
-    clock: null,
-    customClockValue: 0
+    value: serializedValue,
+    clock: clock,
+    customClockValue: customClockValue
   };
 
   /**
@@ -80,19 +79,21 @@ function LWWRegister(value, clock = Clocks.DEFAULT, customClockValue = 0) {
       delta.customClockValue = customClockValue;
     }
     currentValue = value;
-    currentClock = clock;
-    currentCustomClockValue = customClockValue;
     return this;
   };
+
+  this.resetDelta = function() {
+    delta = {
+      value: null,
+      clock: null,
+      customClockValue: 0
+    };
+  }
 
   this.getAndResetDelta = function () {
     if (delta.value !== null) {
       const toReturn = delta;
-      delta = {
-        value: null,
-        clock: null,
-        customClockValue: 0
-      };
+      this.resetDelta();
       return {
         lwwregister: toReturn
       };
@@ -105,31 +106,8 @@ function LWWRegister(value, clock = Clocks.DEFAULT, customClockValue = 0) {
     if (!delta.lwwregister) {
       throw new Error(util.format("Cannot apply delta %o to LWWRegister", delta));
     }
+    this.resetDelta();
     currentValue = anySupport.deserialize(delta.lwwregister.value);
-  };
-
-  this.getStateAndResetDelta = function () {
-    delta = {
-      value: null,
-      clock: null,
-      customClockValue: 0
-    };
-    return {
-      lwwregister: {
-        value: AnySupport.serialize(currentValue, true, true),
-        clock: currentClock,
-        customClockValue: currentCustomClockValue
-      }
-    };
-  };
-
-  this.applyState = function (state, anySupport) {
-    if (!state.lwwregister) {
-      throw new Error(util.format("Cannot apply state %o to ORSet", state));
-    }
-    currentValue = anySupport.deserialize(state.lwwregister.value);
-    currentClock = state.lwwregister.clock;
-    currentCustomClockValue = state.lwwregister.customClockValue;
   };
 
   this.toString = function () {
