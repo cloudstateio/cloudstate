@@ -16,6 +16,7 @@
 
 package io.cloudstate.proxy.valueentity.store
 
+import akka.actor.ActorSystem
 import akka.util.ByteString
 import io.cloudstate.proxy.valueentity.store.Store.Key
 
@@ -25,7 +26,7 @@ import scala.concurrent.Future
 /**
  * Represents an in-memory implementation of the store for value-based entities.
  */
-final class InMemoryStore extends Store[Key, ByteString] {
+final class InMemoryStore(system: ActorSystem) extends Store {
 
   private var store = TrieMap.empty[Key, ByteString]
 

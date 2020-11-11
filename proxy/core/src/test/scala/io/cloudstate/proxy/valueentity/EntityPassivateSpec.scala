@@ -67,7 +67,7 @@ class EntityPassivateSpec extends AbstractTelemetrySpec {
         sendQueueSize = 100
       )
 
-      val repository = new RepositoryImpl(new InMemoryStore)
+      val repository = new RepositoryImpl(new InMemoryStore(system))
       val entity =
         watch(system.actorOf(ValueEntitySupervisor.props(client, entityConfiguration, repository), "entity"))
       val emptyCommand = Some(protobufAny(EmptyJavaMessage))

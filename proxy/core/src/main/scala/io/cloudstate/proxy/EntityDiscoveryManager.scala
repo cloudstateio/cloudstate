@@ -55,7 +55,7 @@ object EntityDiscoveryManager {
       gracefulTerminationTimeout: Timeout,
       numberOfShards: Int,
       proxyParallelism: Int,
-      valueEntityEnabled: Boolean,
+      valueEntitySettings: ValueEntitySettings,
       eventSourcedSettings: EventSourcedSettings,
       crdtSettings: CrdtSettings,
       config: Config
@@ -73,7 +73,7 @@ object EntityDiscoveryManager {
            gracefulTerminationTimeout = Timeout(config.getDuration("graceful-termination-timeout").toMillis.millis),
            numberOfShards = config.getInt("number-of-shards"),
            proxyParallelism = config.getInt("proxy-parallelism"),
-           valueEntityEnabled = config.getBoolean("value-entity-enabled"),
+           valueEntitySettings = new ValueEntitySettings(config),
            eventSourcedSettings = new EventSourcedSettings(config),
            crdtSettings = new CrdtSettings(config),
            config = config)
@@ -90,6 +90,15 @@ object EntityDiscoveryManager {
               "max-inbound-message-size must be greater than 0 but was $maxInboundMessageSize")
       require(maxInboundMessageSize <= Int.MaxValue,
               s"max-inbound-message-size exceeds the maximum allowed value of: ${Int.MaxValue}")
+    }
+  }
+
+  final case class ValueEntitySettings(enabled: Boolean, passivationTimeout: Timeout) {
+    def this(config: Config) = {
+      this(
+        enabled = config.getBoolean("value-entity.enabled"),
+        passivationTimeout = Timeout(config.getDuration("value-entity.passivation-timeout").toMillis.millis)
+      )
     }
   }
 
@@ -154,7 +163,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
         )
       else Map.empty
     } ++ {
-      if (config.valueEntityEnabled)
+      if (config.valueEntitySettings.enabled)
         Map(
           ValueEntity.name -> new EntitySupportFactory(system, config, clientSettings)
         )

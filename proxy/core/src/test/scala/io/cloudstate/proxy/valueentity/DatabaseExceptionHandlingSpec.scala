@@ -128,7 +128,7 @@ class DatabaseExceptionHandlingSpec extends AbstractTelemetrySpec {
     }
   }
 
-  private final class TestJdbcStore(status: String) extends Store[Key, ByteString] {
+  private final class TestJdbcStore(status: String) extends Store {
     import TestJdbcStore.JdbcStoreStatus._
 
     private var store = Map.empty[Key, ByteString]
@@ -164,11 +164,11 @@ class DatabaseExceptionHandlingSpec extends AbstractTelemetrySpec {
       val deleteFailure = "DeleteFailure"
     }
 
-    def storeWithGetFailure(): Store[Key, ByteString] = new TestJdbcStore(JdbcStoreStatus.getFailure)
+    def storeWithGetFailure(): Store = new TestJdbcStore(JdbcStoreStatus.getFailure)
 
-    def storeWithUpdateFailure(): Store[Key, ByteString] = new TestJdbcStore(JdbcStoreStatus.updateFailure)
+    def storeWithUpdateFailure(): Store = new TestJdbcStore(JdbcStoreStatus.updateFailure)
 
-    def storeWithDeleteFailure(): Store[Key, ByteString] = new TestJdbcStore(JdbcStoreStatus.deleteFailure)
+    def storeWithDeleteFailure(): Store = new TestJdbcStore(JdbcStoreStatus.deleteFailure)
   }
 
   private def silentDeadLettersAndUnhandledMessages(implicit system: ActorSystem): Unit = {

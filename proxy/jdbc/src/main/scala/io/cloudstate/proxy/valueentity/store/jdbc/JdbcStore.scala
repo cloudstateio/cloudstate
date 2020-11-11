@@ -16,20 +16,24 @@
 
 package io.cloudstate.proxy.valueentity.store.jdbc
 
+import akka.actor.ActorSystem
 import akka.util.ByteString
 import io.cloudstate.proxy.valueentity.store.Store
 import io.cloudstate.proxy.valueentity.store.Store.Key
 import io.cloudstate.proxy.valueentity.store.jdbc.JdbcEntityTable.EntityRow
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.Future
 
-private[store] final class JdbcStore(slickDatabase: JdbcSlickDatabase, queries: JdbcEntityQueries)(
-    implicit ec: ExecutionContext
-) extends Store[Key, ByteString] {
+final class JdbcStore(system: ActorSystem) extends Store {
+
+  private val config = system.settings.config.getConfig("cloudstate.proxy")
+  private val slickDatabase = JdbcSlickDatabase(config)
+  private val tableConfiguration = new JdbcEntityTableConfiguration(config.getConfig("value-entity.persistence.jdbc"))
+  private val queries = new JdbcEntityQueries(slickDatabase.profile, tableConfiguration)
+  private val db = slickDatabase.database
 
   import slickDatabase.profile.api._
-
-  private val db = slickDatabase.database
+  import system.dispatcher
 
   override def get(key: Key): Future[Option[ByteString]] =
     for {

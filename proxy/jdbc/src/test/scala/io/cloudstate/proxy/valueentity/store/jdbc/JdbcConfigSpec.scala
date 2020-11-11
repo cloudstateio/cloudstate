@@ -22,39 +22,39 @@ import slick.jdbc.JdbcProfile
 
 class JdbcConfigSpec extends WordSpecLike with Matchers {
   private val config: Config = ConfigFactory.parseString("""
-          |cloudstate.proxy {
-          | value-entity-enabled = true
-          | value-entity-persistence-store {
-          |  store-type = "jdbc"
-          |  jdbc.database.slick {
-          |    profile = "slick.jdbc.PostgresProfile$"
-          |    connectionPool = disabled
-          |    driver = "org.postgresql.Driver"
-          |    url = "jdbc:postgresql://localhost:5432/cloudstate"
-          |    user = "cloudstate"
-          |    password = "cloudstate"
-          |  }
-          |
-          |  jdbc-state-store {
-          |   tables {
-          |     state {
-          |      tableName = "value_entity_state"
-          |      schemaName = ""
-          |      columnNames {
-          |        persistentId = "persistent_id"
-          |        entityId = "entity_id"
-          |        state = "state"
-          |      }
-          |     }
-          |   }
-          |  }
-          | }
-          |}
-          |
-      """.stripMargin)
+    |cloudstate.proxy {
+    |  value-entity.enabled = true
+    |  value-entity.persistence {
+    |    store = "jdbc"
+    |    jdbc {
+    |      slick {
+    |        profile = "slick.jdbc.PostgresProfile$"
+    |        connectionPool = disabled
+    |        driver = "org.postgresql.Driver"
+    |        url = "jdbc:postgresql://localhost:5432/cloudstate"
+    |        user = "cloudstate"
+    |        password = "cloudstate"
+    |      }
+    |
+    |      tables {
+    |        state {
+    |          tableName = "value_entity_state"
+    |          schemaName = ""
+    |          columnNames {
+    |            persistentId = "persistent_id"
+    |            entityId = "entity_id"
+    |            state = "state"
+    |          }
+    |        }
+    |      }
+    |    }
+    |  }
+    |}
+    |
+  """.stripMargin)
 
   private val tableStateConfig = new JdbcEntityTableConfiguration(
-    config.getConfig("cloudstate.proxy.value-entity-persistence-store.jdbc-state-store")
+    config.getConfig("cloudstate.proxy.value-entity.persistence.jdbc")
   )
 
   private val testTable = new JdbcEntityTable {

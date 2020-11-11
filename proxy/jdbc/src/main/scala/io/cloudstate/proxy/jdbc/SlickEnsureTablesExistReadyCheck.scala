@@ -38,7 +38,7 @@ class SlickEnsureTablesExistReadyCheck(system: ActorSystem) extends (() => Futur
   private val eventSourcedSlickDatabase =
     SlickExtension(system).database(ConfigFactory.parseMap(Map(ConfigKeys.useSharedDb -> "slick").asJava))
 
-  // Get a hold of the cloudstate.proxy.value-entity-persistence-store.jdbc.database.slick database instance
+  // Get a hold of the cloudstate.proxy.value-entity.persistence.jdbc.slick database instance
   private val valueEntitySlickDatabase = JdbcSlickDatabase(proxyConfig)
 
   private val check: () => Future[Boolean] = if (autoCreateTables) {
@@ -71,8 +71,8 @@ class SlickEnsureTablesExistReadyCheck(system: ActorSystem) extends (() => Futur
 
   private def tableCreateCombinations(): Seq[SlickCreateTables] = {
     val config = system.settings.config
-    val eventSourcedEnabled = config.getBoolean("cloudstate.proxy.journal-enabled")
-    val valueEntityEnabled = config.getBoolean("cloudstate.proxy.value-entity-enabled")
+    val eventSourcedEnabled = config.getBoolean("cloudstate.proxy.eventsourced-entity.journal-enabled")
+    val valueEntityEnabled = config.getBoolean("cloudstate.proxy.value-entity.enabled")
 
     val eventSourcedCombinations =
       if (eventSourcedEnabled) Seq(new EventSourcedSlickCreateTable(system, eventSourcedSlickDatabase)) else Seq.empty

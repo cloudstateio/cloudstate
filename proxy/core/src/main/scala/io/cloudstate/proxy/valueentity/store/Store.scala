@@ -16,6 +16,8 @@
 
 package io.cloudstate.proxy.valueentity.store
 
+import akka.util.ByteString
+
 import scala.concurrent.Future
 
 object Store {
@@ -25,12 +27,9 @@ object Store {
 }
 
 /**
- * Represents a low level interface for accessing a native database.
- *
- * @tparam K the type for database key
- * @tparam V the type for database value
+ * A persistent store for value-based entities.
  */
-trait Store[K, V] {
+trait Store {
 
   /**
    * Retrieve the data for the given key.
@@ -38,7 +37,7 @@ trait Store[K, V] {
    * @param key to retrieve data for
    * @return Some(data) if data exists for the key and None otherwise
    */
-  def get(key: K): Future[Option[V]]
+  def get(key: Store.Key): Future[Option[ByteString]]
 
   /**
    * Insert the data with the given key if it not already exists.
@@ -47,13 +46,13 @@ trait Store[K, V] {
    * @param key  to insert or update the entity
    * @param value that should be persisted
    */
-  def update(key: K, value: V): Future[Unit]
+  def update(key: Store.Key, value: ByteString): Future[Unit]
 
   /**
    * Delete the data for the given key.
    *
    * @param key to delete data.
    */
-  def delete(key: K): Future[Unit]
+  def delete(key: Store.Key): Future[Unit]
 
 }

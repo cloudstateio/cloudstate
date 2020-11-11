@@ -45,6 +45,7 @@ val AkkaVersion = "2.6.9"
 val AkkaHttpVersion = "10.1.12" // Note: sync with Akka HTTP version in Akka gRPC
 val AkkaManagementVersion = "1.0.8"
 val AkkaPersistenceCassandraVersion = "0.102"
+val AkkaPersistenceJdbcVersion = "3.5.2"
 val AkkaPersistenceSpannerVersion = "1.0.0-RC4"
 val PrometheusClientVersion = "0.9.0"
 val ScalaTestVersion = "3.0.8"
@@ -54,9 +55,6 @@ val Slf4jSimpleVersion = "1.7.30"
 val GraalVersion = "20.1.0"
 val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debianslim-jre"
 val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
-val SlickVersion = "3.3.2"
-val SlickHikariVersion = "3.3.2"
-val AkkaPersistenceJdbcVersion = "3.5.2"
 
 val excludeTheseDependencies: Seq[ExclusionRule] = Seq(
   ExclusionRule("io.netty", "netty"), // grpc-java is using grpc-netty-shaded
@@ -78,14 +76,6 @@ def akkaDiscoveryDependency(name: String, excludeThese: ExclusionRule*) =
 
 def akkaPersistenceCassandraDependency(name: String, excludeThese: ExclusionRule*) =
   "com.typesafe.akka" %% name % AkkaPersistenceCassandraVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
-
-def akkaPersistenceJdbcDependency(name: String, excludeThese: ExclusionRule*) =
-  "com.github.dnvriend" %% name % AkkaPersistenceJdbcVersion excludeAll (excludeThese: _*)
-
-val excludeSlickDependencies: Seq[ExclusionRule] = Seq(
-  ExclusionRule("com.typesafe.slick", "slick"), // slick core
-  ExclusionRule("com.typesafe.slick", "slick-hikaricp") //slick hikari
-)
 
 def common: Seq[Setting[_]] = automateHeaderSettings(Compile, Test) ++ Seq(
   headerMappings := headerMappings.value ++ Seq(
@@ -414,10 +404,8 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
         "io.prometheus" % "simpleclient" % PrometheusClientVersion,
         "io.prometheus" % "simpleclient_common" % PrometheusClientVersion,
-        "org.slf4j" % "slf4j-simple" % Slf4jSimpleVersion,
+        "org.slf4j" % "slf4j-simple" % Slf4jSimpleVersion
         //"ch.qos.logback"                 % "logback-classic"                   % "1.2.3", // Doesn't work well with SubstrateVM: https://github.com/vmencik/akka-graal-native/blob/master/README.md#logging
-        "com.typesafe.slick" %% "slick" % SlickVersion,
-        "com.typesafe.slick" %% "slick-hikaricp" % SlickHikariVersion
       ),
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
@@ -444,7 +432,6 @@ lazy val `proxy-spanner` = (project in file("proxy/spanner"))
     common,
     name := "cloudstate-proxy-spanner",
     dependencyOverrides += "io.grpc" % "grpc-netty-shaded" % GrpcNettyShadedVersion,
-    excludeDependencies ++= excludeSlickDependencies,
     libraryDependencies ++= Seq(
         "com.lightbend.akka" %% "akka-persistence-spanner" % AkkaPersistenceSpannerVersion,
         akkaDependency("akka-cluster-typed"), // Transitive dependency of akka-persistence-spanner
@@ -469,7 +456,6 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
     common,
     name := "cloudstate-proxy-cassandra",
     dependencyOverrides += "io.grpc" % "grpc-netty-shaded" % GrpcNettyShadedVersion,
-    excludeDependencies ++= excludeSlickDependencies,
     libraryDependencies ++= Seq(
         akkaPersistenceCassandraDependency("akka-persistence-cassandra", ExclusionRule("com.github.jnr")),
         akkaPersistenceCassandraDependency("akka-persistence-cassandra-launcher") % Test
@@ -492,9 +478,8 @@ lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
     name := "cloudstate-proxy-jdbc",
     dependencyOverrides += "io.grpc" % "grpc-netty-shaded" % GrpcNettyShadedVersion,
     libraryDependencies ++= Seq(
-        //"com.github.dnvriend" %% "akka-persistence-jdbc" % "3.5.2"
-        // remove Slick as dependency from akka-persistence-jdbc which is already in the poxy-core
-        akkaPersistenceJdbcDependency("akka-persistence-jdbc", ExclusionRule("com.typesafe.slick"))
+        "com.github.dnvriend" %% "akka-persistence-jdbc" % AkkaPersistenceJdbcVersion,
+        "org.scalatest" %% "scalatest" % ScalaTestVersion % Test
       ),
     fork in run := true,
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain")

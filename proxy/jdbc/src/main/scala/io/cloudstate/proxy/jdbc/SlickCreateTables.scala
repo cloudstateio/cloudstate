@@ -172,7 +172,7 @@ class ValueEntitySlickCreateTable(override val system: ActorSystem, slickDb: Jdb
   import profile.api._
 
   private val tableCfg = new JdbcEntityTableConfiguration(
-    system.settings.config.getConfig("cloudstate.proxy.value-entity-persistence-store.jdbc-state-store")
+    system.settings.config.getConfig("cloudstate.proxy.value-entity.persistence.jdbc")
   )
 
   private val table = new JdbcEntityTable {

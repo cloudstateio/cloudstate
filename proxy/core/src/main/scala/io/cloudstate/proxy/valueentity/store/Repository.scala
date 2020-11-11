@@ -76,11 +76,11 @@ object RepositoryImpl {
 
 }
 
-class RepositoryImpl(store: Store[Key, ByteString], serializer: ProtobufSerializer[ScalaPbAny])(
+class RepositoryImpl(store: Store, serializer: ProtobufSerializer[ScalaPbAny])(
     implicit ec: ExecutionContext
 ) extends Repository {
 
-  def this(store: Store[Key, ByteString])(implicit ec: ExecutionContext) =
+  def this(store: Store)(implicit ec: ExecutionContext) =
     this(store, RepositoryImpl.EntitySerializer)
 
   def get(key: Key): Future[Option[ScalaPbAny]] =

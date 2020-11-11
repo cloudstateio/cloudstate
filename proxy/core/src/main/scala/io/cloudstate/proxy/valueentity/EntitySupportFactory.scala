@@ -17,7 +17,7 @@
 package io.cloudstate.proxy.valueentity
 
 import akka.NotUsed
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ActorRef, ActorSystem, ExtendedActorSystem}
 import akka.cluster.sharding.ShardRegion.HashCodeMessageExtractor
 import akka.cluster.sharding.{ClusterSharding, ClusterShardingSettings}
 import akka.event.Logging
@@ -31,17 +31,17 @@ import io.cloudstate.protocol.value_entity.ValueEntityClient
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.sharding.DynamicLeastShardAllocationStrategy
-import io.cloudstate.proxy.valueentity.store.{RepositoryImpl, StoreSupport}
+import io.cloudstate.proxy.valueentity.store.{RepositoryImpl, Store}
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.{Failure, Success}
 
 class EntitySupportFactory(
     system: ActorSystem,
     config: EntityDiscoveryManager.Configuration,
     grpcClientSettings: GrpcClientSettings
 )(implicit ec: ExecutionContext, mat: Materializer)
-    extends EntityTypeSupportFactory
-    with StoreSupport {
+    extends EntityTypeSupportFactory {
 
   private final val log = Logging.getLogger(system, this.getClass)
 
@@ -54,10 +54,20 @@ class EntitySupportFactory(
 
     val stateManagerConfig = ValueEntity.Configuration(entity.serviceName,
                                                        entity.persistenceId,
-                                                       config.passivationTimeout,
+                                                       config.valueEntitySettings.passivationTimeout,
                                                        config.relayOutputBufferSize)
 
-    val repository = new RepositoryImpl(createStore(config.config))
+    val store: Store = {
+      val storeType = config.config.getString("value-entity.persistence.store")
+      val className = config.config.getString(s"value-entity.persistence.$storeType.store-class")
+      val args = List(classOf[ActorSystem] -> system)
+      system.asInstanceOf[ExtendedActorSystem].dynamicAccess.createInstanceFor[Store](className, args) match {
+        case Success(result) => result
+        case Failure(t) => throw new RuntimeException(s"Failed to create Value Entity store [$storeType]", t)
+      }
+    }
+
+    val repository = new RepositoryImpl(store)
 
     log.debug("Starting ValueEntity for {}", entity.persistenceId)
     val clusterSharding = ClusterSharding(system)
