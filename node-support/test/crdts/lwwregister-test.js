@@ -24,7 +24,6 @@ const protobufHelper = require("../../src/protobuf-helper");
 const AnySupport = require("../../src/protobuf-any");
 
 const CrdtDelta = protobufHelper.moduleRoot.cloudstate.crdt.CrdtDelta;
-const CrdtState = protobufHelper.moduleRoot.cloudstate.crdt.CrdtState;
 
 const root = new protobuf.Root();
 root.loadSync(path.join(__dirname, "..", "example.proto"));
@@ -34,10 +33,6 @@ const anySupport = new AnySupport(root);
 
 function roundTripDelta(delta) {
   return CrdtDelta.decode(CrdtDelta.encode(delta).finish());
-}
-
-function roundTripState(state) {
-  return CrdtState.decode(CrdtState.encode(state).finish());
 }
 
 function toAny(value) {
@@ -53,20 +48,20 @@ describe("LWWRegister", () => {
   it("should be instantiated with a value", () => {
     const register = new LWWRegister(Example.create({ field1: "foo" }));
     register.value.field1.should.equal("foo");
-    should.equal(register.getAndResetDelta(), null);
-    const state = roundTripState(register.getStateAndResetDelta()).lwwregister;
-    fromAny(state.value).field1.should.equal("foo");
-    state.clock.should.eql(Clocks.DEFAULT);
+    const initial = roundTripDelta(register.getAndResetDelta()).lwwregister;
+    fromAny(initial.value).field1.should.equal("foo");
+    initial.clock.should.eql(Clocks.DEFAULT);
   });
 
-  it("should reflect a state update", () => {
+  it("should reflect an initial delta", () => {
     const register = new LWWRegister(Example.create({ field1: "bar" }));
-    register.applyState(roundTripState({
+    register.applyDelta(roundTripDelta({
       lwwregister: {
         value: toAny(Example.create({ field1: "foo" }))
       }
     }), anySupport);
     register.value.field1.should.equal("foo");
+    should.equal(register.getAndResetDelta(), null);
   });
 
   it("should generate a delta", () => {
@@ -99,12 +94,11 @@ describe("LWWRegister", () => {
     }), anySupport);
     register.value.field1.should.equal("bar");
     should.equal(register.getAndResetDelta(), null);
-    fromAny(roundTripState(register.getStateAndResetDelta()).lwwregister.value).field1.should.equal("bar");
   });
 
   it("should work with primitive types", () => {
     const register = new LWWRegister("blah");
-    fromAny(register.getStateAndResetDelta().lwwregister.value).should.equal("blah");
+    register.value.should.equal("blah");
     register.value = "hello";
     register.value.should.equal("hello");
     const delta = roundTripDelta(register.getAndResetDelta());
@@ -113,7 +107,7 @@ describe("LWWRegister", () => {
 
   it("should work with json types", () => {
     const register = new LWWRegister({ foo: "bar" });
-    fromAny(register.getStateAndResetDelta().lwwregister.value).should.eql({ foo: "bar" });
+    register.value.foo.should.equal("bar");
     register.value = { foo: "baz" };
     register.value.foo.should.equal("baz");
     const delta = roundTripDelta(register.getAndResetDelta());

@@ -17,7 +17,7 @@
 package io.cloudstate.javasupport.impl.crdt
 
 import io.cloudstate.javasupport.crdt.GCounter
-import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtState, GCounterDelta, GCounterState}
+import io.cloudstate.protocol.crdt.{CrdtDelta, GCounterDelta}
 
 private[crdt] final class GCounterImpl extends InternalCrdt with GCounter {
   override final val name = "GCounter"
@@ -37,23 +37,14 @@ private[crdt] final class GCounterImpl extends InternalCrdt with GCounter {
 
   override def hasDelta: Boolean = deltaValue != 0
 
-  override def delta: Option[CrdtDelta.Delta] =
-    if (hasDelta) {
-      Some(CrdtDelta.Delta.Gcounter(GCounterDelta(deltaValue)))
-    } else None
+  override def delta: CrdtDelta.Delta =
+    CrdtDelta.Delta.Gcounter(GCounterDelta(deltaValue))
 
   override def resetDelta(): Unit = deltaValue = 0
-
-  override def state: CrdtState.State = CrdtState.State.Gcounter(GCounterState(value))
 
   override val applyDelta = {
     case CrdtDelta.Delta.Gcounter(GCounterDelta(increment, _)) =>
       value += increment
-  }
-
-  override val applyState = {
-    case CrdtState.State.Gcounter(GCounterState(value, _)) =>
-      this.value = value
   }
 
   override def toString = s"GCounter($value)"

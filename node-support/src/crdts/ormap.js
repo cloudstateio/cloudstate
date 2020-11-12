@@ -248,7 +248,7 @@ function ORMap() {
    * @return {module:cloudstate.crdt.ORMap} This map.
    */
   this.set = function(key, value) {
-    if (!value.hasOwnProperty("getStateAndResetDelta")) {
+    if (!value.hasOwnProperty("getAndResetDelta")) {
       throw new Error(util.format("Cannot add %o with value %o to ORMap, only CRDTs may be added as values.", key, value))
     }
     const comparable = AnySupport.toComparable(key);
@@ -311,14 +311,14 @@ function ORMap() {
     return this;
   };
 
-  this.getAndResetDelta = function() {
+  this.getAndResetDelta = function(initial) {
     const updateDeltas = [];
-    const addedStates = [];
+    const addedDeltas = [];
     currentValue.forEach((value, key) => {
       if (delta.added.has(key)) {
-        addedStates.push({
+        addedDeltas.push({
           key: delta.added.get(key),
-          value: value.value.getStateAndResetDelta()
+          delta: value.value.getAndResetDelta(/* initial = */ true)
         });
       } else {
         const entryDelta = value.value.getAndResetDelta();
@@ -331,12 +331,12 @@ function ORMap() {
       }
     });
 
-    if (delta.cleared || delta.removed.size > 0 || updateDeltas.length > 0 || addedStates.length > 0) {
+    if (delta.cleared || delta.removed.size > 0 || updateDeltas.length > 0 || addedDeltas.length > 0 || initial) {
       const crdtDelta = {
         ormap: {
           cleared: delta.cleared,
           removed: Array.from(delta.removed.values()),
-          added: addedStates,
+          added: addedDeltas,
           updated: updateDeltas
         }
       };
@@ -349,7 +349,7 @@ function ORMap() {
     }
   };
 
-  this.applyDelta = function(delta, anySupport, createCrdtForState) {
+  this.applyDelta = function(delta, anySupport, createCrdtForDelta) {
     if (!delta.ormap) {
       throw new Error(util.format("Cannot apply delta %o to ORMap", delta));
     }
@@ -369,8 +369,8 @@ function ORMap() {
     }
     if (delta.ormap.added !== undefined) {
       delta.ormap.added.forEach(entry => {
-        const state = createCrdtForState(entry.value);
-        state.applyState(entry.value);
+        const value = createCrdtForDelta(entry.delta);
+        value.applyDelta(entry.delta);
         const key = anySupport.deserialize(entry.key);
         const comparable = AnySupport.toComparable(key);
         if (currentValue.has(comparable)) {
@@ -378,7 +378,7 @@ function ORMap() {
         } else {
           currentValue.set(comparable, {
             key: key,
-            value: state
+            value: value
           });
         }
       });
@@ -392,44 +392,6 @@ function ORMap() {
         } else {
           debug("Delta instructed to update key [%o], but it's not present in the ORMap.", key);
         }
-      });
-    }
-  };
-
-  this.getStateAndResetDelta = function() {
-    delta.cleared = false;
-    delta.removed.clear();
-    delta.added.clear();
-    const entries = [];
-    currentValue.forEach((value) => {
-      const key = AnySupport.serialize(value.key, true, true);
-      entries.push({
-        key: key,
-        value: value.value.getStateAndResetDelta()
-      });
-    });
-    return {
-      ormap: {
-        entries: entries
-      }
-    };
-  };
-
-  this.applyState = function(state, anySupport, createCrdtForState) {
-    if (!state.ormap) {
-      throw new Error(util.format("Cannot apply state %o to ORMap", state));
-    }
-    currentValue.clear();
-    if (state.ormap.entries !== undefined) {
-      state.ormap.entries.forEach(entry => {
-        const key = anySupport.deserialize(entry.key);
-        const comparable = AnySupport.toComparable(key);
-        const state = createCrdtForState(entry.value);
-        state.applyState(entry.value);
-        currentValue.set(comparable, {
-          key: key,
-          value: state
-        });
       });
     }
   };

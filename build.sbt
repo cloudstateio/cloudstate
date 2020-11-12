@@ -45,7 +45,8 @@ val AkkaVersion = "2.6.9"
 val AkkaHttpVersion = "10.1.12" // Note: sync with Akka HTTP version in Akka gRPC
 val AkkaManagementVersion = "1.0.8"
 val AkkaPersistenceCassandraVersion = "0.102"
-val AkkaPersistenceSpannerVersion = "1.0.0-RC3"
+val AkkaPersistenceJdbcVersion = "3.5.2"
+val AkkaPersistenceSpannerVersion = "1.0.0-RC4"
 val PrometheusClientVersion = "0.9.0"
 val ScalaTestVersion = "3.0.8"
 val ProtobufVersion = "3.11.4" // Note: sync with Protobuf version in Akka gRPC and ScalaPB
@@ -107,14 +108,15 @@ headerSources in Compile ++= {
 
 lazy val root = (project in file("."))
   .enablePlugins(NoPublish)
-// Don't forget to add your sbt module here!
-// A missing module here can lead to failing Travis test results
+  // Don't forget to add your sbt module here!
+  // A missing module here can lead to failing Travis test results
   .aggregate(
     `protocols`,
     `proxy`,
     `java-support`,
     `java-support-docs`,
     `java-support-tck`,
+    `java-eventsourced-shopping-cart`,
     `java-shopping-cart`,
     `java-pingpong`,
     `akka-client`,
@@ -433,7 +435,9 @@ lazy val `proxy-spanner` = (project in file("proxy/spanner"))
     libraryDependencies ++= Seq(
         "com.lightbend.akka" %% "akka-persistence-spanner" % AkkaPersistenceSpannerVersion,
         akkaDependency("akka-cluster-typed"), // Transitive dependency of akka-persistence-spanner
-        akkaDependency("akka-persistence-typed") // Transitive dependency of akka-persistence-spanner
+        akkaDependency("akka-persistence-typed"), // Transitive dependency of akka-persistence-spanner
+        akkaDependency("akka-actor-testkit-typed") % Test,
+        "org.scalatest" %% "scalatest" % ScalaTestVersion % Test
       ),
     fork in run := true,
     mainClass in Compile := Some("io.cloudstate.proxy.spanner.CloudstateSpannerProxyMain"),
@@ -474,7 +478,8 @@ lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
     name := "cloudstate-proxy-jdbc",
     dependencyOverrides += "io.grpc" % "grpc-netty-shaded" % GrpcNettyShadedVersion,
     libraryDependencies ++= Seq(
-        "com.github.dnvriend" %% "akka-persistence-jdbc" % "3.5.2"
+        "com.github.dnvriend" %% "akka-persistence-jdbc" % AkkaPersistenceJdbcVersion,
+        "org.scalatest" %% "scalatest" % ScalaTestVersion % Test
       ),
     fork in run := true,
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain")
@@ -581,6 +586,7 @@ lazy val `java-support` = (project in file("java-support"))
     javacOptions in (Compile, doc) ++= Seq(
         "-overview",
         ((javaSource in Compile).value / "overview.html").getAbsolutePath,
+        "--no-module-directories",
         "-notimestamp",
         "-doctitle",
         "Cloudstate Java Support"
@@ -637,7 +643,7 @@ lazy val `java-support-docs` = (project in file("java-support/docs"))
   )
 
 lazy val `java-support-tck` = (project in file("java-support/tck"))
-  .dependsOn(`java-support`, `java-shopping-cart`)
+  .dependsOn(`java-support`, `java-shopping-cart`, `java-eventsourced-shopping-cart`)
   .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
   .settings(
     name := "cloudstate-java-tck",
@@ -648,6 +654,26 @@ lazy val `java-support-tck` = (project in file("java-support/tck"))
     PB.protoSources in Compile += (baseDirectory in ThisBuild).value / "protocols" / "tck",
     javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "11", "-target", "11"),
     assemblySettings("cloudstate-java-tck.jar")
+  )
+
+lazy val `java-eventsourced-shopping-cart` = (project in file("samples/java-eventsourced-shopping-cart"))
+  .dependsOn(`java-support`)
+  .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
+  .settings(
+    name := "java-eventsourced-shopping-cart",
+    dockerSettings,
+    mainClass in Compile := Some("io.cloudstate.samples.eventsourced.shoppingcart.Main"),
+    PB.generate in Compile := (PB.generate in Compile).dependsOn(PB.generate in (`java-support`, Compile)).value,
+    akkaGrpcGeneratedLanguages := Seq(AkkaGrpc.Java),
+    PB.protoSources in Compile ++= {
+      val baseDir = (baseDirectory in ThisBuild).value / "protocols"
+      Seq(baseDir / "frontend", baseDir / "example")
+    },
+    PB.targets in Compile := Seq(
+        PB.gens.java -> (sourceManaged in Compile).value
+      ),
+    javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "11", "-target", "11"),
+    assemblySettings("java-eventsourced-shopping-cart.jar")
   )
 
 lazy val `java-shopping-cart` = (project in file("samples/java-shopping-cart"))

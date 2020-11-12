@@ -120,7 +120,10 @@ function Vote() {
     }
   });
 
-  this.getAndResetDelta = function () {
+  this.getAndResetDelta = function (initial) {
+    if (initial) {
+      delta = currentSelfVote;
+    }
     if (delta !== null) {
       const vote = delta;
       delta = null;
@@ -138,28 +141,9 @@ function Vote() {
     if (!delta.vote) {
       throw new Error(util.format("Cannot apply delta %o to Vote", delta));
     }
+    currentSelfVote = delta.vote.selfVote;
     currentVotesFor = delta.vote.votesFor;
     currentTotalVoters = delta.vote.totalVoters;
-  };
-
-  this.getStateAndResetDelta = function () {
-    delta = null;
-    return {
-      vote: {
-        selfVote: currentSelfVote,
-        totalVoters: currentTotalVoters,
-        votesFor: currentVotesFor
-      }
-    };
-  };
-
-  this.applyState = function (state) {
-    if (!state.vote) {
-      throw new Error(util.format("Cannot apply state %o to Vote", state));
-    }
-    currentSelfVote = state.vote.selfVote;
-    currentVotesFor = state.vote.votesFor;
-    currentTotalVoters = state.vote.totalVoters;
   };
 
   this.toString = function () {

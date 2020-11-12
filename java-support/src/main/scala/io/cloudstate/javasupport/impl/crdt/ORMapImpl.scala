@@ -22,7 +22,7 @@ import java.util.{function, Map}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import io.cloudstate.javasupport.crdt.{Crdt, CrdtFactory, ORMap}
 import io.cloudstate.javasupport.impl.AnySupport
-import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtState, ORMapDelta, ORMapEntry, ORMapEntryDelta, ORMapState}
+import io.cloudstate.protocol.crdt.{CrdtDelta, ORMapDelta, ORMapEntryDelta}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -150,27 +150,24 @@ private[crdt] final class ORMapImpl[K, V <: InternalCrdt](anySupport: AnySupport
       value.values().asScala.exists(_.hasDelta)
     }
 
-  override def delta: Option[CrdtDelta.Delta] =
-    if (hasDelta) {
-      val updated = (value.asScala -- this.added.keySet().asScala).collect {
-        case (key, changed) if changed.hasDelta =>
-          ORMapEntryDelta(Some(anySupport.encodeScala(key)), changed.delta.map(CrdtDelta(_)))
-      }
-      val added = this.added.asScala.values.map {
-        case (key, crdt) => ORMapEntry(Some(key), Some(CrdtState(crdt.state)))
-      }
+  override def delta: CrdtDelta.Delta = {
+    val updated = (value.asScala -- this.added.keySet().asScala).collect {
+      case (key, changed) if changed.hasDelta =>
+        ORMapEntryDelta(Some(anySupport.encodeScala(key)), Some(CrdtDelta(changed.delta)))
+    }
+    val added = this.added.asScala.values.map {
+      case (key, crdt) => ORMapEntryDelta(Some(key), Some(CrdtDelta(crdt.delta)))
+    }
 
-      Some(
-        CrdtDelta.Delta.Ormap(
-          ORMapDelta(
-            cleared = cleared,
-            removed = removed.asScala.toVector,
-            updated = updated.toVector,
-            added = added.toVector
-          )
-        )
+    CrdtDelta.Delta.Ormap(
+      ORMapDelta(
+        cleared = cleared,
+        removed = removed.asScala.toVector,
+        updated = updated.toVector,
+        added = added.toVector
       )
-    } else None
+    )
+  }
 
   override def resetDelta(): Unit = {
     cleared = false
@@ -178,15 +175,6 @@ private[crdt] final class ORMapImpl[K, V <: InternalCrdt](anySupport: AnySupport
     removed.clear()
     value.values().asScala.foreach(_.resetDelta())
   }
-
-  override def state: CrdtState.State =
-    CrdtState.State.Ormap(
-      ORMapState(
-        value.asScala.map {
-          case (key, crdt) => ORMapEntry(Some(anySupport.encodeScala(key)), Some(CrdtState(crdt.state)))
-        }.toVector
-      )
-    )
 
   override val applyDelta = {
     case CrdtDelta.Delta.Ormap(ORMapDelta(cleared, removed, updated, added, _)) =>
@@ -204,19 +192,9 @@ private[crdt] final class ORMapImpl[K, V <: InternalCrdt](anySupport: AnySupport
           }
       }
       added.foreach {
-        case ORMapEntry(Some(key), Some(state), _) =>
+        case ORMapEntryDelta(Some(key), Some(delta), _) =>
           value.put(anySupport.decode(key).asInstanceOf[K],
-                    CrdtStateTransformer.create(state, anySupport).asInstanceOf[V])
-      }
-  }
-
-  override val applyState = {
-    case CrdtState.State.Ormap(ORMapState(values, _)) =>
-      value.clear()
-      values.foreach {
-        case ORMapEntry(Some(key), Some(state), _) =>
-          value.put(anySupport.decode(key).asInstanceOf[K],
-                    CrdtStateTransformer.create(state, anySupport).asInstanceOf[V])
+                    CrdtDeltaTransformer.create(delta, anySupport).asInstanceOf[V])
       }
   }
 

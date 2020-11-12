@@ -17,7 +17,7 @@
 package io.cloudstate.javasupport.impl.crdt
 
 import io.cloudstate.javasupport.crdt.Vote
-import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtState, VoteDelta, VoteState}
+import io.cloudstate.protocol.crdt.{CrdtDelta, VoteDelta}
 
 private[crdt] final class VoteImpl extends InternalCrdt with Vote {
   override final val name = "Vote"
@@ -49,26 +49,16 @@ private[crdt] final class VoteImpl extends InternalCrdt with Vote {
 
   override def hasDelta: Boolean = selfVoteChanged
 
-  override def delta: Option[CrdtDelta.Delta] =
-    if (selfVoteChanged) {
-      Some(CrdtDelta.Delta.Vote(VoteDelta(selfVote)))
-    } else None
+  override def delta: CrdtDelta.Delta =
+    CrdtDelta.Delta.Vote(VoteDelta(selfVote))
 
   override def resetDelta(): Unit = selfVoteChanged = false
 
-  override def state: CrdtState.State = CrdtState.State.Vote(VoteState(votesFor, voters, selfVote))
-
   override val applyDelta = {
-    case CrdtDelta.Delta.Vote(VoteDelta(_, votesFor, totalVoters, _)) =>
+    case CrdtDelta.Delta.Vote(VoteDelta(selfVote, votesFor, totalVoters, _)) =>
+      this.selfVote = selfVote
       this.voters = totalVoters
       this.votesFor = votesFor
-  }
-
-  override val applyState = {
-    case CrdtState.State.Vote(VoteState(votesFor, voters, selfVote, _)) =>
-      this.voters = voters
-      this.votesFor = votesFor
-      this.selfVote = selfVote
   }
 
   override def toString = s"Vote($selfVote)"

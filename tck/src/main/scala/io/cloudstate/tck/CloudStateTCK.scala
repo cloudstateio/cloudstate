@@ -19,23 +19,32 @@ package io.cloudstate.tck
 import akka.actor.ActorSystem
 import akka.grpc.ServiceDescription
 import akka.testkit.TestKit
-import com.example.shoppingcart.persistence.domain
-import com.example.shoppingcart.shoppingcart._
+import com.example.shoppingcart.shoppingcart.{
+  ShoppingCart => EventSourcedShoppingCart,
+  ShoppingCartClient => EventSourcedShoppingCartClient
+}
+import com.example.valueentity.shoppingcart.shoppingcart.{
+  ShoppingCart => ValueEntityShoppingCart,
+  ShoppingCartClient => ValueEntityShoppingCartClient
+}
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.protocol.action._
 import io.cloudstate.protocol.crdt.Crdt
+import io.cloudstate.protocol.value_entity.ValueEntity
 import io.cloudstate.protocol.event_sourced._
+import io.cloudstate.tck.model.valueentity.valueentity.{ValueEntityTckModel, ValueEntityTwo}
 import io.cloudstate.tck.model.action.{ActionTckModel, ActionTwo}
 import io.cloudstate.testkit.InterceptService.InterceptorSettings
-import io.cloudstate.testkit.eventsourced.{EventSourcedMessages, InterceptEventSourcedService}
+import io.cloudstate.testkit.eventsourced.EventSourcedMessages
 import io.cloudstate.testkit.{InterceptService, ServiceAddress, TestClient, TestProtocol}
 import io.grpc.StatusRuntimeException
 import io.cloudstate.tck.model.eventsourced.{EventSourcedTckModel, EventSourcedTwo}
+import io.cloudstate.testkit.valueentity.ValueEntityMessages
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
-import scala.collection.mutable
+
 import scala.concurrent.duration._
 
 object CloudStateTCK {
@@ -66,7 +75,8 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
   private[this] final val system = ActorSystem("CloudStateTCK", ConfigFactory.load("tck"))
 
   private[this] final val client = TestClient(settings.proxy.host, settings.proxy.port)
-  private[this] final val shoppingCartClient = ShoppingCartClient(client.settings)(system)
+  private[this] final val eventSourcedShoppingCartClient = EventSourcedShoppingCartClient(client.settings)(system)
+  private[this] final val valueEntityShoppingCartClient = ValueEntityShoppingCartClient(client.settings)(system)
 
   private[this] final val protocol = TestProtocol(settings.service.host, settings.service.port)
 
@@ -79,7 +89,8 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
     interceptor = new InterceptService(InterceptorSettings(bind = settings.tck, intercept = settings.service))
 
   override def afterAll(): Unit =
-    try shoppingCartClient.close().futureValue
+    try eventSourcedShoppingCartClient.close().futureValue
+    finally try valueEntityShoppingCartClient.close().futureValue
     finally try client.terminate()
     finally try protocol.terminate()
     finally interceptor.terminate()
@@ -110,6 +121,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         info.supportedEntityTypes must contain theSameElementsAs Seq(
           EventSourced.name,
           Crdt.name,
+          ValueEntity.name,
           ActionProtocol.name
         )
 
@@ -141,9 +153,27 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           entity.entityType mustBe EventSourced.name
         }
 
-        spec.entities.find(_.serviceName == ShoppingCart.name).foreach { entity =>
+        spec.entities.find(_.serviceName == EventSourcedShoppingCart.name).foreach { entity =>
           serviceNames must contain("ShoppingCart")
           entity.entityType mustBe EventSourced.name
+          entity.persistenceId must not be empty
+        }
+
+        spec.entities.find(_.serviceName == ValueEntityTckModel.name).foreach { entity =>
+          serviceNames must contain("ValueEntityTckModel")
+          entity.entityType mustBe ValueEntity.name
+          entity.persistenceId mustBe "value-entity-tck-model"
+        }
+
+        spec.entities.find(_.serviceName == ValueEntityTwo.name).foreach { entity =>
+          serviceNames must contain("ValueEntityTwo")
+          entity.entityType mustBe ValueEntity.name
+          entity.persistenceId mustBe "value-entity-tck-model-two"
+        }
+
+        spec.entities.find(_.serviceName == ValueEntityShoppingCart.name).foreach { entity =>
+          serviceNames must contain("ShoppingCart")
+          entity.entityType mustBe ValueEntity.name
           entity.persistenceId must not be empty
         }
 
@@ -833,44 +863,45 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
 
     // TODO convert this into a ScalaCheck generated test case
     "verifying app test: event-sourced shopping cart" must {
+      import com.example.shoppingcart.shoppingcart._
       import EventSourcedMessages._
-      import ShoppingCartVerifier._
+      import EventSourcedShoppingCartVerifier._
 
-      def verifyGetInitialEmptyCart(session: ShoppingCartVerifier, cartId: String): Unit = {
-        shoppingCartClient.getCart(GetShoppingCart(cartId)).futureValue mustBe Cart()
+      def verifyGetInitialEmptyCart(session: EventSourcedShoppingCartVerifier, cartId: String): Unit = {
+        eventSourcedShoppingCartClient.getCart(GetShoppingCart(cartId)).futureValue mustBe Cart()
         session.verifyConnection()
         session.verifyGetInitialEmptyCart(cartId)
       }
 
-      def verifyGetCart(session: ShoppingCartVerifier, cartId: String, expected: Item*): Unit = {
+      def verifyGetCart(session: EventSourcedShoppingCartVerifier, cartId: String, expected: Item*): Unit = {
         val expectedCart = shoppingCart(expected: _*)
-        shoppingCartClient.getCart(GetShoppingCart(cartId)).futureValue mustBe expectedCart
+        eventSourcedShoppingCartClient.getCart(GetShoppingCart(cartId)).futureValue mustBe expectedCart
         session.verifyGetCart(cartId, expectedCart)
       }
 
-      def verifyAddItem(session: ShoppingCartVerifier, cartId: String, item: Item): Unit = {
+      def verifyAddItem(session: EventSourcedShoppingCartVerifier, cartId: String, item: Item): Unit = {
         val addLineItem = AddLineItem(cartId, item.id, item.name, item.quantity)
-        shoppingCartClient.addItem(addLineItem).futureValue mustBe EmptyScalaMessage
+        eventSourcedShoppingCartClient.addItem(addLineItem).futureValue mustBe EmptyScalaMessage
         session.verifyAddItem(cartId, item)
       }
 
-      def verifyRemoveItem(session: ShoppingCartVerifier, cartId: String, itemId: String): Unit = {
+      def verifyRemoveItem(session: EventSourcedShoppingCartVerifier, cartId: String, itemId: String): Unit = {
         val removeLineItem = RemoveLineItem(cartId, itemId)
-        shoppingCartClient.removeItem(removeLineItem).futureValue mustBe EmptyScalaMessage
+        eventSourcedShoppingCartClient.removeItem(removeLineItem).futureValue mustBe EmptyScalaMessage
         session.verifyRemoveItem(cartId, itemId)
       }
 
-      def verifyAddItemFailure(session: ShoppingCartVerifier, cartId: String, item: Item): Unit = {
+      def verifyAddItemFailure(session: EventSourcedShoppingCartVerifier, cartId: String, item: Item): Unit = {
         val addLineItem = AddLineItem(cartId, item.id, item.name, item.quantity)
-        val error = shoppingCartClient.addItem(addLineItem).failed.futureValue
+        val error = eventSourcedShoppingCartClient.addItem(addLineItem).failed.futureValue
         error mustBe a[StatusRuntimeException]
         val description = error.asInstanceOf[StatusRuntimeException].getStatus.getDescription
         session.verifyAddItemFailure(cartId, item, description)
       }
 
-      def verifyRemoveItemFailure(session: ShoppingCartVerifier, cartId: String, itemId: String): Unit = {
+      def verifyRemoveItemFailure(session: EventSourcedShoppingCartVerifier, cartId: String, itemId: String): Unit = {
         val removeLineItem = RemoveLineItem(cartId, itemId)
-        val error = shoppingCartClient.removeItem(removeLineItem).failed.futureValue
+        val error = eventSourcedShoppingCartClient.removeItem(removeLineItem).failed.futureValue
         error mustBe a[StatusRuntimeException]
         val description = error.asInstanceOf[StatusRuntimeException].getStatus.getDescription
         session.verifyRemoveItemFailure(cartId, itemId, description)
@@ -922,8 +953,8 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
     }
 
     "verifying proxy test: HTTP API" must {
-      "verify the HTTP API for ShoppingCart service" in testFor(ShoppingCart) {
-        import ShoppingCartVerifier._
+      "verify the HTTP API for event-sourced ShoppingCart service" in testFor(EventSourcedShoppingCart) {
+        import EventSourcedShoppingCartVerifier._
 
         def checkHttpRequest(path: String, body: String = null)(expected: => String): Unit = {
           val response = client.http.request(path, body)
@@ -979,80 +1010,416 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           """[{"productId":"B14623482","name":"Basic","quantity":1.0}]"""
         }
       }
+
+      "verify the HTTP API for value-based ShoppingCart service" in testFor(ValueEntityShoppingCart) {
+        import ValueEntityShoppingCartVerifier._
+
+        def checkHttpRequest(path: String, body: String = null)(expected: => String): Unit = {
+          val response = client.http.request(path, body)
+          val expectedResponse = expected
+          response.futureValue mustBe expectedResponse
+        }
+
+        val session = shoppingCartSession(interceptor)
+
+        checkHttpRequest("ve/carts/foo") {
+          session.verifyConnection()
+          session.verifyGetInitialEmptyCart("foo")
+          """{"items":[]}"""
+        }
+
+        checkHttpRequest("ve/cart/foo/items/add", """{"productId": "A14362347", "name": "Deluxe", "quantity": 5}""") {
+          session.verifyAddItem("foo", Item("A14362347", "Deluxe", 5), Cart(Item("A14362347", "Deluxe", 5)))
+          "{}"
+        }
+
+        checkHttpRequest("ve/cart/foo/items/add", """{"productId": "B14623482", "name": "Basic", "quantity": 1}""") {
+          session.verifyAddItem("foo",
+                                Item("B14623482", "Basic", 1),
+                                Cart(Item("A14362347", "Deluxe", 5), Item("B14623482", "Basic", 1)))
+          "{}"
+        }
+
+        checkHttpRequest("ve/cart/foo/items/add", """{"productId": "A14362347", "name": "Deluxe", "quantity": 2}""") {
+          session.verifyAddItem("foo",
+                                Item("A14362347", "Deluxe", 2),
+                                Cart(Item("B14623482", "Basic", 1), Item("A14362347", "Deluxe", 7)))
+          "{}"
+        }
+
+        checkHttpRequest("ve/carts/foo") {
+          session.verifyGetCart("foo", shoppingCart(Item("B14623482", "Basic", 1), Item("A14362347", "Deluxe", 7)))
+          """{"items":[{"productId":"B14623482","name":"Basic","quantity":1},{"productId":"A14362347","name":"Deluxe","quantity":7}]}"""
+        }
+
+        checkHttpRequest("ve/carts/foo/items") {
+          session.verifyGetCart("foo", shoppingCart(Item("B14623482", "Basic", 1), Item("A14362347", "Deluxe", 7)))
+          """[{"productId":"B14623482","name":"Basic","quantity":1.0},{"productId":"A14362347","name":"Deluxe","quantity":7.0}]"""
+        }
+
+        checkHttpRequest("ve/cart/foo/items/A14362347/remove", "") {
+          session.verifyRemoveItem("foo", "A14362347", Cart(Item("B14623482", "Basic", 1)))
+          "{}"
+        }
+
+        checkHttpRequest("ve/carts/foo") {
+          session.verifyGetCart("foo", shoppingCart(Item("B14623482", "Basic", 1)))
+          """{"items":[{"productId":"B14623482","name":"Basic","quantity":1}]}"""
+        }
+
+        checkHttpRequest("ve/carts/foo/items") {
+          session.verifyGetCart("foo", shoppingCart(Item("B14623482", "Basic", 1)))
+          """[{"productId":"B14623482","name":"Basic","quantity":1.0}]"""
+        }
+
+        checkHttpRequest("ve/carts/foo/remove", """{"userId": "foo"}""") {
+          session.verifyRemoveCart("foo")
+          "{}"
+        }
+
+        checkHttpRequest("ve/carts/foo") {
+          session.verifyGetCart("foo", shoppingCart())
+          """{"items":[]}"""
+        }
+      }
     }
 
-  }
-}
+    "verifying model test: value-based entities" must {
+      import ValueEntityMessages._
+      import io.cloudstate.tck.model.valueentity.valueentity._
 
-object ShoppingCartVerifier {
-  case class Item(id: String, name: String, quantity: Int)
+      val ServiceTwo = ValueEntityTwo.name
 
-  def shoppingCartSession(interceptor: InterceptService): ShoppingCartVerifier = new ShoppingCartVerifier(interceptor)
+      var entityId: Int = 0
+      def nextEntityId(): String = { entityId += 1; s"entity:$entityId" }
 
-  def shoppingCart(items: Item*): Cart = Cart(items.map(i => LineItem(i.id, i.name, i.quantity)))
-}
+      def valueEntityTest(test: String => Any): Unit =
+        testFor(ValueEntityTckModel, ValueEntityTwo)(test(nextEntityId()))
 
-class ShoppingCartVerifier(interceptor: InterceptService) extends MustMatchers {
-  import EventSourcedMessages._
-  import ShoppingCartVerifier.Item
+      def updateState(value: String): RequestAction =
+        RequestAction(RequestAction.Action.Update(Update(value)))
 
-  private val commandIds = mutable.Map.empty[String, Long]
-  private def nextCommandId(cartId: String): Long = commandIds.updateWith(cartId)(_.map(_ + 1).orElse(Some(1L))).get
+      def updateStates(values: String*): Seq[RequestAction] =
+        values.map(updateState)
 
-  private var connection: InterceptEventSourcedService.Connection = _
+      def deleteState(): RequestAction =
+        RequestAction(RequestAction.Action.Delete(Delete()))
 
-  def verifyConnection(): Unit = connection = interceptor.expectEventSourcedConnection()
+      def updateAndDeleteActions(values: String*): Seq[RequestAction] =
+        values.map(updateState) :+ deleteState()
 
-  def verifyGetInitialEmptyCart(cartId: String): Unit = {
-    val commandId = nextCommandId(cartId)
-    connection.expectClient(init(ShoppingCart.name, cartId))
-    connection.expectClient(command(commandId, cartId, "GetCart", GetShoppingCart(cartId)))
-    connection.expectService(reply(commandId, Cart()))
-    connection.expectNoInteraction()
-  }
+      def deleteBetweenUpdateActions(first: String, second: String): Seq[RequestAction] =
+        Seq(updateState(first), deleteState(), updateState(second))
 
-  def verifyGetCart(cartId: String, expected: Cart): Unit = {
-    val commandId = nextCommandId(cartId)
-    connection.expectClient(command(commandId, cartId, "GetCart", GetShoppingCart(cartId)))
-    connection.expectService(reply(commandId, expected))
-    connection.expectNoInteraction()
-  }
+      def forwardTo(id: String): RequestAction =
+        RequestAction(RequestAction.Action.Forward(Forward(id)))
 
-  def verifyAddItem(cartId: String, item: Item): Unit = {
-    val commandId = nextCommandId(cartId)
-    val addLineItem = AddLineItem(cartId, item.id, item.name, item.quantity)
-    val itemAdded = domain.ItemAdded(Some(domain.LineItem(item.id, item.name, item.quantity)))
-    connection.expectClient(command(commandId, cartId, "AddItem", addLineItem))
-    // shopping cart implementations may or may not have snapshots configured, so match without snapshot
-    val replied = connection.expectServiceMessage[EventSourcedStreamOut.Message.Reply]
-    replied.copy(value = replied.value.clearSnapshot) mustBe reply(commandId, EmptyScalaMessage, persist(itemAdded))
-    connection.expectNoInteraction()
-  }
+      def sideEffectTo(id: String, synchronous: Boolean = false): RequestAction =
+        RequestAction(RequestAction.Action.Effect(Effect(id, synchronous)))
 
-  def verifyRemoveItem(cartId: String, itemId: String): Unit = {
-    val commandId = nextCommandId(cartId)
-    val removeLineItem = RemoveLineItem(cartId, itemId)
-    val itemRemoved = domain.ItemRemoved(itemId)
-    connection.expectClient(command(commandId, cartId, "RemoveItem", removeLineItem))
-    // shopping cart implementations may or may not have snapshots configured, so match without snapshot
-    val replied = connection.expectServiceMessage[EventSourcedStreamOut.Message.Reply]
-    replied.copy(value = replied.value.clearSnapshot) mustBe reply(commandId, EmptyScalaMessage, persist(itemRemoved))
-    connection.expectNoInteraction()
-  }
+      def sideEffectsTo(ids: String*): Seq[RequestAction] =
+        ids.map(id => sideEffectTo(id))
 
-  def verifyAddItemFailure(cartId: String, item: Item, failure: String): Unit = {
-    val commandId = nextCommandId(cartId)
-    val addLineItem = AddLineItem(cartId, item.id, item.name, item.quantity)
-    connection.expectClient(command(commandId, cartId, "AddItem", addLineItem))
-    connection.expectService(actionFailure(commandId, failure))
-    connection.expectNoInteraction()
-  }
+      def failWith(message: String): RequestAction =
+        RequestAction(RequestAction.Action.Fail(Fail(message)))
 
-  def verifyRemoveItemFailure(cartId: String, itemId: String, failure: String): Unit = {
-    val commandId = nextCommandId(cartId)
-    val removeLineItem = RemoveLineItem(cartId, itemId)
-    connection.expectClient(command(commandId, cartId, "RemoveItem", removeLineItem))
-    connection.expectService(actionFailure(commandId, failure))
-    connection.expectNoInteraction()
+      def persisted(value: String): ScalaPbAny =
+        protobufAny(Persisted(value))
+
+      def update(value: String): Effects =
+        Effects.empty.withUpdateAction(persisted(value))
+
+      def delete(): Effects =
+        Effects.empty.withDeleteAction()
+
+      def sideEffects(ids: String*): Effects =
+        createSideEffects(synchronous = false, ids)
+
+      def synchronousSideEffects(ids: String*): Effects =
+        createSideEffects(synchronous = true, ids)
+
+      def createSideEffects(synchronous: Boolean, ids: Seq[String]): Effects =
+        ids.foldLeft(Effects.empty) { case (e, id) => e.withSideEffect(ServiceTwo, "Call", Request(id), synchronous) }
+
+      "verify initial empty state" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id)))
+          .expect(reply(1, Response()))
+          .passivate()
+      }
+
+      "verify update state" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, updateStates("A"))))
+          .expect(reply(1, Response("A"), update("A")))
+          .send(command(2, id, "Process", Request(id)))
+          .expect(reply(2, Response("A")))
+          .passivate()
+      }
+
+      "verify delete state" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, updateStates("A"))))
+          .expect(reply(1, Response("A"), update("A")))
+          .send(command(2, id, "Process", Request(id, Seq(deleteState()))))
+          .expect(reply(2, Response(), delete()))
+          .send(command(3, id, "Process", Request(id)))
+          .expect(reply(3, Response()))
+          .passivate()
+      }
+
+      "verify sub invocations with multiple update states" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, updateStates("A", "B", "C"))))
+          .expect(reply(1, Response("C"), update("C")))
+          .send(command(2, id, "Process", Request(id)))
+          .expect(reply(2, Response("C")))
+          .passivate()
+      }
+
+      "verify sub invocations with multiple update states and delete states" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, updateAndDeleteActions("A", "B"))))
+          .expect(reply(1, Response(), delete()))
+          .send(command(2, id, "Process", Request(id)))
+          .expect(reply(2, Response()))
+          .passivate()
+      }
+
+      "verify sub invocations with update, delete and update states" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, deleteBetweenUpdateActions("A", "B"))))
+          .expect(reply(1, Response("B"), update("B")))
+          .send(command(2, id, "Process", Request(id)))
+          .expect(reply(2, Response("B")))
+          .passivate()
+      }
+
+      "verify rehydration after passivation" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, updateStates("A"))))
+          .expect(reply(1, Response("A"), update("A")))
+          .send(command(2, id, "Process", Request(id, updateStates("B"))))
+          .expect(reply(2, Response("B"), update("B")))
+          .send(command(3, id, "Process", Request(id, updateStates("C"))))
+          .expect(reply(3, Response("C"), update("C")))
+          .send(command(4, id, "Process", Request(id, updateStates("D"))))
+          .expect(reply(4, Response("D"), update("D")))
+          .passivate()
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id, state(persisted("D"))))
+          .send(command(1, id, "Process", Request(id, updateStates("E"))))
+          .expect(reply(1, Response("E"), update("E")))
+          .send(command(2, id, "Process", Request(id)))
+          .expect(reply(2, Response("E")))
+          .passivate()
+      }
+
+      "verify reply with multiple side effects" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, sideEffectsTo("1", "2", "3"))))
+          .expect(reply(1, Response(), sideEffects("1", "2", "3")))
+          .passivate()
+      }
+
+      "verify reply with side effect to second service" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id)))))
+          .expect(reply(1, Response(), sideEffects(id)))
+          .passivate()
+      }
+
+      "verify reply with multiple side effects and state" in valueEntityTest { id =>
+        val actions = updateStates("A", "B", "C", "D", "E") ++ sideEffectsTo("1", "2", "3")
+        val effects = sideEffects("1", "2", "3").withUpdateAction(persisted("E"))
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, actions)))
+          .expect(reply(1, Response("E"), effects))
+          .passivate()
+      }
+
+      "verify synchronous side effect to second service" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id, synchronous = true)))))
+          .expect(reply(1, Response(), synchronousSideEffects(id)))
+          .passivate()
+      }
+
+      "verify forward to second service" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(forwardTo(id)))))
+          .expect(forward(1, ServiceTwo, "Call", Request(id)))
+          .passivate()
+      }
+
+      "verify forward with updated state to second service" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(updateState("A"), forwardTo(id)))))
+          .expect(forward(1, ServiceTwo, "Call", Request(id), update("A")))
+          .passivate()
+      }
+
+      "verify forward and side effect to second service" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id), forwardTo(id)))))
+          .expect(forward(1, ServiceTwo, "Call", Request(id), sideEffects(id)))
+          .passivate()
+      }
+
+      "verify failure action" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(failWith("expected failure")))))
+          .expect(actionFailure(1, "expected failure"))
+          .passivate()
+      }
+
+      "verify connection after failure action" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(updateState("A")))))
+          .expect(reply(1, Response("A"), update("A")))
+          .send(command(2, id, "Process", Request(id, Seq(failWith("expected failure")))))
+          .expect(actionFailure(2, "expected failure"))
+          .send(command(3, id, "Process", Request(id)))
+          .expect(reply(3, Response("A")))
+          .passivate()
+      }
+
+      "verify failure action do not allow side effects" in valueEntityTest { id =>
+        protocol.valueEntity
+          .connect()
+          .send(init(ValueEntityTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id), failWith("expected failure")))))
+          .expect(actionFailure(1, "expected failure"))
+          .passivate()
+      }
+    }
+
+    "verifying app test: value-based entity shopping cart" must {
+      import com.example.valueentity.shoppingcart.shoppingcart.{
+        AddLineItem => ValueEntityAddLineItem,
+        Cart => ValueEntityCart,
+        GetShoppingCart => ValueEntityGetShoppingCart,
+        RemoveLineItem => ValueEntityRemoveLineItem
+      }
+      import ValueEntityMessages._
+      import ValueEntityShoppingCartVerifier._
+
+      def verifyGetInitialEmptyCart(session: ValueEntityShoppingCartVerifier, cartId: String): Unit = {
+        valueEntityShoppingCartClient.getCart(ValueEntityGetShoppingCart(cartId)).futureValue mustBe ValueEntityCart()
+        session.verifyConnection()
+        session.verifyGetInitialEmptyCart(cartId)
+      }
+
+      def verifyGetCart(session: ValueEntityShoppingCartVerifier, cartId: String, expected: Item*): Unit = {
+        val expectedCart = shoppingCart(expected: _*)
+        valueEntityShoppingCartClient.getCart(ValueEntityGetShoppingCart(cartId)).futureValue mustBe expectedCart
+        session.verifyGetCart(cartId, expectedCart)
+      }
+
+      def verifyAddItem(session: ValueEntityShoppingCartVerifier, cartId: String, item: Item, expected: Cart): Unit = {
+        val addLineItem = ValueEntityAddLineItem(cartId, item.id, item.name, item.quantity)
+        valueEntityShoppingCartClient.addItem(addLineItem).futureValue mustBe EmptyScalaMessage
+        session.verifyAddItem(cartId, item, expected)
+      }
+
+      def verifyRemoveItem(session: ValueEntityShoppingCartVerifier,
+                           cartId: String,
+                           itemId: String,
+                           expected: Cart): Unit = {
+        val removeLineItem = ValueEntityRemoveLineItem(cartId, itemId)
+        valueEntityShoppingCartClient.removeItem(removeLineItem).futureValue mustBe EmptyScalaMessage
+        session.verifyRemoveItem(cartId, itemId, expected)
+      }
+
+      def verifyAddItemFailure(session: ValueEntityShoppingCartVerifier, cartId: String, item: Item): Unit = {
+        val addLineItem = ValueEntityAddLineItem(cartId, item.id, item.name, item.quantity)
+        val error = valueEntityShoppingCartClient.addItem(addLineItem).failed.futureValue
+        error mustBe a[StatusRuntimeException]
+        val description = error.asInstanceOf[StatusRuntimeException].getStatus.getDescription
+        session.verifyAddItemFailure(cartId, item, description)
+      }
+
+      def verifyRemoveItemFailure(session: ValueEntityShoppingCartVerifier, cartId: String, itemId: String): Unit = {
+        val removeLineItem = ValueEntityRemoveLineItem(cartId, itemId)
+        val error = valueEntityShoppingCartClient.removeItem(removeLineItem).failed.futureValue
+        error mustBe a[StatusRuntimeException]
+        val description = error.asInstanceOf[StatusRuntimeException].getStatus.getDescription
+        session.verifyRemoveItemFailure(cartId, itemId, description)
+      }
+
+      "verify get cart, add item, remove item, and failures" in testFor(ValueEntityShoppingCart) {
+        val session = shoppingCartSession(interceptor)
+        verifyGetInitialEmptyCart(session, "cart:1") // initial empty state
+
+        // add the first product and pass the expected state
+        verifyAddItem(session, "cart:1", Item("product:1", "Product1", 1), Cart(Item("product:1", "Product1", 1)))
+
+        // add the second product and pass the expected state
+        verifyAddItem(
+          session,
+          "cart:1",
+          Item("product:2", "Product2", 2),
+          Cart(Item("product:1", "Product1", 1), Item("product:2", "Product2", 2))
+        )
+
+        // increase first product and pass the expected state
+        verifyAddItem(
+          session,
+          "cart:1",
+          Item("product:1", "Product1", 11),
+          Cart(Item("product:2", "Product2", 2), Item("product:1", "Product1", 12))
+        )
+
+        // increase second product and pass the expected state
+        verifyAddItem(
+          session,
+          "cart:1",
+          Item("product:2", "Product2", 31),
+          Cart(Item("product:1", "Product1", 12), Item("product:2", "Product2", 33))
+        )
+
+        verifyGetCart(session, "cart:1", Item("product:1", "Product1", 12), Item("product:2", "Product2", 33)) // check state
+
+        // remove first product and pass the expected state
+        verifyRemoveItem(session, "cart:1", "product:1", Cart(Item("product:2", "Product2", 33)))
+        verifyAddItemFailure(session, "cart:1", Item("product:2", "Product2", -7)) // add negative quantity
+        verifyAddItemFailure(session, "cart:1", Item("product:1", "Product1", 0)) // add zero quantity
+        verifyRemoveItemFailure(session, "cart:1", "product:1") // remove non-existing product
+        verifyGetCart(session, "cart:1", Item("product:2", "Product2", 33)) // check final state
+      }
+    }
   }
 }

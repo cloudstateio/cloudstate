@@ -25,7 +25,7 @@ import io.cloudstate.javasupport.impl.{AnySupport, ReflectionHelper, ResolvedEnt
 
 import scala.collection.concurrent.TrieMap
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
-import io.cloudstate.javasupport.impl.eventsourced.EventSourcedImpl.EntityException
+import io.cloudstate.javasupport.impl.EntityExceptions.EntityException
 import io.cloudstate.javasupport.{EntityFactory, ServiceCallFactory}
 
 /**

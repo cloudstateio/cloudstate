@@ -27,19 +27,16 @@ class LWWRegisterCrdtEntitySpec extends AbstractCrdtEntitySpec {
   import AbstractCrdtEntitySpec._
 
   override protected type T = LWWRegister[ProtoAny]
-  override protected type S = LWWRegisterState
   override protected type D = LWWRegisterDelta
 
   override protected def key(name: String) = LWWRegisterKey(name)
 
   override protected def initial = LWWRegister.create(element1)
 
-  override protected def extractState(state: CrdtState.State) = state.lwwregister.value
-
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.lwwregister.value
 
   def create(element: ProtoAny) =
-    CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Lwwregister(LWWRegisterState(value = Some(element)))))
+    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Lwwregister(LWWRegisterDelta(value = Some(element)))))
 
   def updateRegister(element: ProtoAny, clock: CrdtClock = CrdtClock.DEFAULT, customClockValue: Long = 0) =
     CrdtStateAction.Action.Update(
@@ -66,10 +63,10 @@ class LWWRegisterCrdtEntitySpec extends AbstractCrdtEntitySpec {
       createAndExpectInit().value.value.value /* value! value! value! */ shouldBe element1
     }
 
-    "push the full state when no entity exists" in {
+    "push the full state as initial delta when no entity exists" in {
       createAndExpectInit() shouldBe None
       update(identity)
-      expectState().value.value shouldBe element1
+      expectDelta().value.value shouldBe element1
     }
 
     "detect and send changes in the register" in {

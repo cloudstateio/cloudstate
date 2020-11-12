@@ -21,7 +21,7 @@ import java.util
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import io.cloudstate.javasupport.crdt.ORSet
 import io.cloudstate.javasupport.impl.AnySupport
-import io.cloudstate.protocol.crdt.{CrdtDelta, CrdtState, ORSetDelta, ORSetState}
+import io.cloudstate.protocol.crdt.{CrdtDelta, ORSetDelta}
 
 import scala.collection.JavaConverters._
 
@@ -100,21 +100,14 @@ private[crdt] class ORSetImpl[T](anySupport: AnySupport) extends util.AbstractSe
 
   override def hasDelta: Boolean = cleared || !added.isEmpty || !removed.isEmpty
 
-  override def delta: Option[CrdtDelta.Delta] =
-    if (hasDelta) {
-      Some(
-        CrdtDelta.Delta.Orset(ORSetDelta(cleared, removed = removed.asScala.toVector, added = added.asScala.toVector))
-      )
-    } else None
+  override def delta: CrdtDelta.Delta =
+    CrdtDelta.Delta.Orset(ORSetDelta(cleared, removed = removed.asScala.toVector, added = added.asScala.toVector))
 
   override def resetDelta(): Unit = {
     cleared = false
     added.clear()
     removed.clear()
   }
-
-  override def state: CrdtState.State =
-    CrdtState.State.Orset(ORSetState(value.asScala.toSeq.map(anySupport.encodeScala)))
 
   override val applyDelta = {
     case CrdtDelta.Delta.Orset(ORSetDelta(cleared, removed, added, _)) =>
@@ -123,12 +116,6 @@ private[crdt] class ORSetImpl[T](anySupport: AnySupport) extends util.AbstractSe
       }
       value.removeAll(removed.map(e => anySupport.decode(e).asInstanceOf[T]).asJava)
       value.addAll(added.map(e => anySupport.decode(e).asInstanceOf[T]).asJava)
-  }
-
-  override val applyState = {
-    case CrdtState.State.Orset(ORSetState(value, _)) =>
-      this.value.clear()
-      this.value.addAll(value.map(e => anySupport.decode(e).asInstanceOf[T]).asJava)
   }
 
   override def toString = s"ORSet(${value.asScala.mkString(",")})"

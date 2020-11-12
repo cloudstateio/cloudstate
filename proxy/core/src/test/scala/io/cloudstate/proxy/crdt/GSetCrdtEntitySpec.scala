@@ -27,19 +27,16 @@ class GSetCrdtEntitySpec extends AbstractCrdtEntitySpec {
   import AbstractCrdtEntitySpec._
 
   override protected type T = GSet[ProtoAny]
-  override protected type S = GSetState
   override protected type D = GSetDelta
 
   override protected def key(name: String) = GSetKey(name)
 
   override protected def initial = GSet.empty
 
-  override protected def extractState(state: CrdtState.State) = state.gset.value
-
   override protected def extractDelta(delta: CrdtDelta.Delta) = delta.gset.value
 
   def createSet(elements: ProtoAny*) =
-    CrdtStateAction.Action.Create(CrdtState(CrdtState.State.Gset(GSetState(elements))))
+    CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Gset(GSetDelta(elements))))
 
   def updateSet(elements: ProtoAny*) =
     CrdtStateAction.Action.Update(CrdtDelta(CrdtDelta.Delta.Gset(GSetDelta(elements))))
@@ -68,22 +65,22 @@ class GSetCrdtEntitySpec extends AbstractCrdtEntitySpec {
 
     "be initialised from an empty set" in {
       update(identity)
-      createAndExpectInit().value.items shouldBe empty
+      createAndExpectInit().value.added shouldBe empty
     }
 
     "be initialised from a non empty set" in {
       update { s =>
         s + element1 + element2
       }
-      createAndExpectInit().value.items should contain theSameElementsAs Seq(element1, element2)
+      createAndExpectInit().value.added should contain theSameElementsAs Seq(element1, element2)
     }
 
-    "push the full state when no entity exists" in {
+    "push the full state as initial delta when no entity exists" in {
       createAndExpectInit() shouldBe None
       update { s =>
         s + element1 + element2
       }
-      expectState().items should contain theSameElementsAs Seq(element1, element2)
+      expectDelta().added should contain theSameElementsAs Seq(element1, element2)
     }
 
     "detect and send additions to the user function" in {

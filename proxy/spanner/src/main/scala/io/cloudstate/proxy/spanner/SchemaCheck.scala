@@ -18,14 +18,14 @@ package io.cloudstate.proxy.spanner
 
 import akka.actor.typed.scaladsl.Behaviors
 import akka.Done
-import akka.actor.typed.Behavior
+import akka.actor.typed.{Behavior, Scheduler}
 import akka.actor.typed.scaladsl.adapter.TypedSchedulerOps
 import akka.actor.CoordinatedShutdown
 import akka.pattern.after
 import com.google.longrunning.{GetOperationRequest, Operation, OperationsClient}
 import com.google.spanner.admin.database.v1.{DatabaseAdminClient, UpdateDatabaseDdlRequest}
 import io.grpc.{Status, StatusRuntimeException}
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success}
 
@@ -64,56 +64,20 @@ object SchemaCheck {
     Behaviors.setup { context =>
       import context.executionContext
 
-      def tryCreateSchema() = {
-        def tryCreate(ddl: String) =
-          adminClient
-            .updateDatabaseDdl(UpdateDatabaseDdlRequest(databaseName, List(ddl)))
-            .transform {
-              case Success(o) =>
-                Success(o)
-              case Failure(t) if alreadyExists(t) =>
-                Success(Operation(done = true, result = Operation.Result.Empty))
-              case other =>
-                other
-            }
-
-        def await(operation: Operation): Future[Done] = {
-          val deadline = operationAwaitMaxDuration.fromNow
-          def loop(o: Operation): Future[Done] =
-            if (deadline.hasTimeLeft())
-              operationsClient
-                .getOperation(GetOperationRequest(o.name))
-                .flatMap { o =>
-                  if (o.done)
-                    Future.successful(Done)
-                  else
-                    after(operationAwaitDelay, context.system.scheduler.toClassic)(loop(o))
-                } else
-              Future.failed(
-                new IllegalStateException(s"Operation ${operation.name} not done after $operationAwaitMaxDuration!")
-              )
-          if (operation.done)
-            Future.successful(Done)
-          else
-            loop(operation)
-        }
-
-        val ddl =
-          List(
-            Schema.createJournalTableDdl(journalTable),
-            Schema.createTagsTableDdl(tagsTable, journalTable),
-            Schema.createDeletionsTableDdl(deletionsTable),
-            Schema.createTagsIndexDdl(tagsTable),
-            Schema.createSnapshotsTableDdl(snapshotsTable)
-          ).mkString
-
-        tryCreate(ddl).flatMap(await)
-      }
+      val ddl = Schema.ddl(journalTable, tagsTable, deletionsTable, snapshotsTable)
 
       def behavior(numberOfRetries: Int): Behavior[Command] =
         Behaviors.receiveMessage {
           case TryCreateSchema =>
-            context.pipeToSelf(tryCreateSchema()) {
+            val tryCreateSchemaResult =
+              tryCreateSchema(databaseName,
+                              ddl,
+                              operationAwaitDelay,
+                              operationAwaitMaxDuration,
+                              adminClient,
+                              operationsClient,
+                              context.system.scheduler)
+            context.pipeToSelf(tryCreateSchemaResult) {
               case Failure(cause) => HandleFailure(cause)
               case _ => HandleSuccess
             }
@@ -141,6 +105,49 @@ object SchemaCheck {
 
       behavior(numberOfRetries)
     }
+
+  def tryCreateSchema(databaseName: String,
+                      ddl: Seq[String],
+                      operationAwaitDelay: FiniteDuration,
+                      operationAwaitMaxDuration: FiniteDuration,
+                      adminClient: DatabaseAdminClient,
+                      operationsClient: OperationsClient,
+                      scheduler: Scheduler)(implicit ec: ExecutionContext): Future[Done] = {
+    def tryCreate() =
+      adminClient
+        .updateDatabaseDdl(UpdateDatabaseDdlRequest(databaseName, ddl))
+        .transform {
+          case Success(o) =>
+            Success(o)
+          case Failure(t) if alreadyExists(t) =>
+            Success(Operation(done = true, result = Operation.Result.Empty))
+          case other =>
+            other
+        }
+
+    def await(operation: Operation): Future[Done] = {
+      val deadline = operationAwaitMaxDuration.fromNow
+      def loop(o: Operation): Future[Done] =
+        if (deadline.hasTimeLeft())
+          operationsClient
+            .getOperation(GetOperationRequest(o.name))
+            .flatMap { o =>
+              if (o.done)
+                Future.successful(Done)
+              else
+                after(operationAwaitDelay, scheduler.toClassic)(loop(o))
+            } else
+          Future.failed(
+            new IllegalStateException(s"Operation ${operation.name} not done after $operationAwaitMaxDuration!")
+          )
+      if (operation.done)
+        Future.successful(Done)
+      else
+        loop(operation)
+    }
+
+    tryCreate().flatMap(await)
+  }
 
   private def alreadyExists(t: Throwable) =
     t match {

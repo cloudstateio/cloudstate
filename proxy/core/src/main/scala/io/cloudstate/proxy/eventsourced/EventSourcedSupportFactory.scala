@@ -30,6 +30,7 @@ import io.cloudstate.protocol.entity.{Entity, Metadata}
 import io.cloudstate.protocol.event_sourced.EventSourcedClient
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
+import io.cloudstate.proxy.sharding.DynamicLeastShardAllocationStrategy
 
 import scala.concurrent.{ExecutionContext, Future}
 

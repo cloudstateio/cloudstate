@@ -20,10 +20,13 @@ import akka.actor.ActorSystem;
 import akka.stream.Materializer;
 import com.typesafe.config.Config;
 import com.google.protobuf.Descriptors;
+import io.cloudstate.javasupport.impl.entity.AnnotationBasedEntitySupport;
+import io.cloudstate.javasupport.entity.Entity;
 import io.cloudstate.javasupport.action.Action;
 import io.cloudstate.javasupport.action.ActionHandler;
 import io.cloudstate.javasupport.crdt.CrdtEntity;
 import io.cloudstate.javasupport.crdt.CrdtEntityFactory;
+import io.cloudstate.javasupport.entity.EntityFactory;
 import io.cloudstate.javasupport.eventsourced.EventSourcedEntity;
 import io.cloudstate.javasupport.eventsourced.EventSourcedEntityFactory;
 import io.cloudstate.javasupport.impl.AnySupport;
@@ -31,6 +34,7 @@ import io.cloudstate.javasupport.impl.action.AnnotationBasedActionSupport;
 import io.cloudstate.javasupport.impl.action.ActionService;
 import io.cloudstate.javasupport.impl.crdt.AnnotationBasedCrdtSupport;
 import io.cloudstate.javasupport.impl.crdt.CrdtStatefulService;
+import io.cloudstate.javasupport.impl.entity.ValueEntityStatefulService;
 import io.cloudstate.javasupport.impl.eventsourced.AnnotationBasedEventSourcedSupport;
 import io.cloudstate.javasupport.impl.eventsourced.EventSourcedStatefulService;
 
@@ -145,7 +149,7 @@ public final class CloudState {
   }
 
   /**
-   * Register an event sourced entity factor.
+   * Register an event sourced entity factory.
    *
    * <p>This is a low level API intended for custom (eg, non reflection based) mechanisms for
    * implementing the entity.
@@ -296,6 +300,75 @@ public final class CloudState {
     ActionService service = new ActionService(actionHandler, descriptor, anySupport);
 
     services.put(descriptor.getFullName(), system -> service);
+
+    return this;
+  }
+
+  /**
+   * Register an annotated value based entity.
+   *
+   * <p>The entity class must be annotated with {@link Entity}.
+   *
+   * @param entityClass The entity class.
+   * @param descriptor The descriptor for the service that this entity implements.
+   * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
+   *     types when needed.
+   * @return This stateful service builder.
+   */
+  public CloudState registerEntity(
+      Class<?> entityClass,
+      Descriptors.ServiceDescriptor descriptor,
+      Descriptors.FileDescriptor... additionalDescriptors) {
+
+    Entity entity = entityClass.getAnnotation(Entity.class);
+    if (entity == null) {
+      throw new IllegalArgumentException(
+          entityClass + " does not declare an " + Entity.class + " annotation!");
+    }
+
+    final String persistenceId;
+    if (entity.persistenceId().isEmpty()) {
+      persistenceId = entityClass.getSimpleName();
+    } else {
+      persistenceId = entity.persistenceId();
+    }
+
+    final AnySupport anySupport = newAnySupport(additionalDescriptors);
+    ValueEntityStatefulService service =
+        new ValueEntityStatefulService(
+            new AnnotationBasedEntitySupport(entityClass, anySupport, descriptor),
+            descriptor,
+            anySupport,
+            persistenceId);
+
+    services.put(descriptor.getFullName(), system -> service);
+
+    return this;
+  }
+
+  /**
+   * Register a value based entity factory.
+   *
+   * <p>This is a low level API intended for custom (eg, non reflection based) mechanisms for
+   * implementing the entity.
+   *
+   * @param factory The value based entity factory.
+   * @param descriptor The descriptor for the service that this entity implements.
+   * @param persistenceId The persistence id for this entity.
+   * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
+   *     types when needed.
+   * @return This stateful service builder.
+   */
+  public CloudState registerEntity(
+      EntityFactory factory,
+      Descriptors.ServiceDescriptor descriptor,
+      String persistenceId,
+      Descriptors.FileDescriptor... additionalDescriptors) {
+    services.put(
+        descriptor.getFullName(),
+        system ->
+            new ValueEntityStatefulService(
+                factory, descriptor, newAnySupport(additionalDescriptors), persistenceId));
 
     return this;
   }
