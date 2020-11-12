@@ -1416,6 +1416,52 @@ spec:
                     description: Port to connect to. Defaults to 5432.
                     format: int32
                     type: integer
+                  ssl:
+                    description: SSL configuration for the Postgres connection.
+                    properties:
+                      cert:
+                        description: Cert is the key of the client certificate in
+                          the secret. This must be a PEM encoded X509 certificate.
+                          It is ignored if using a PKCS-12 keychain.
+                        type: string
+                      key:
+                        description: Key is the key of the private key for the client
+                          to use in the secret. This must be a PKCS-12 keychain or
+                          a PKCS-8 DER encoded key. If encrypted, the password should
+                          be specified in sslPassword.
+                        type: string
+                      mode:
+                        description: 'Mode is the mode that should be used for SSL.
+                          The value here matches the modes supported by the postgres
+                          libpq client library: https://www.postgresql.org/docs/9.1/libpq-ssl.html
+                          Valid values are disable, allow, prefer, require, verify-ca
+                          and verify-full. Defaults to disable.'
+                        enum:
+                        - disable
+                        - allow
+                        - prefer
+                        - require
+                        - verify-ca
+                        - verify-full
+                        type: string
+                      password:
+                        description: Password is the password to use to decrypt the
+                          sslKey.
+                        type: string
+                      rootCert:
+                        description: RootCert is the key of the root certificate in
+                          the secret. This must be a PEM encoded X509 certificate.
+                        type: string
+                      secret:
+                        description: Secret is the secret that contain any SSL certificates
+                          or keys.
+                        properties:
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                        type: object
+                    type: object
                 type: object
               spanner:
                 description: SpannerStore uses a Spanner store managed by the Cloudstate

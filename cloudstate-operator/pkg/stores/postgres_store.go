@@ -59,6 +59,16 @@ const (
 	postgresUsernameEnvVar = "POSTGRES_USERNAME"
 	postgresPasswordEnvVar = "POSTGRES_PASSWORD"
 
+	postgresSSLEnvVar         = "POSTGRES_SSL"
+	postgresSSLModeEnvVar     = "POSTGRES_SSL_MODE"
+	postgresSSLRootCertEnvVar = "POSTGRES_SSL_ROOT_CERT"
+	postgresSSLCertEnvVar     = "POSTGRES_SSL_CERT"
+	postgresSSLKeyEnvVar      = "POSTGRES_SSL_KEY"
+	postgresSSLPasswordEnvVar = "POSTGRES_SSL_PASSWORD"
+
+	postgresSSLSecretMount = "/var/run/secrets/postgres"
+	postgresSSLVolumeName  = "postgres-ssl"
+
 	PostgresGoogleCloudSQLInstanceNotReady cloudstate.CloudstateConditionType = "CloudSqlInstanceNotReady"
 	PostgresGoogleCloudSQLDatabaseNotReady cloudstate.CloudstateConditionType = "CloudSqlDatabaseNotReady"
 	PostgresGoogleCloudSQLUserNotReady     cloudstate.CloudstateConditionType = "CloudSqlUserNotReady"
@@ -196,6 +206,41 @@ func (s *PostgresStore) injectUnmanagedStoreConfig(cloudstateSidecarContainer *c
 	if secret != nil {
 		appendSecretEnvVar(cloudstateSidecarContainer, postgresUsernameEnvVar, *secret, usernameKey)
 		appendSecretEnvVar(cloudstateSidecarContainer, postgresPasswordEnvVar, *secret, passwordKey)
+	}
+
+	// SSL config
+	if spec.SSL != nil && spec.SSL.Mode != "" && spec.SSL.Mode != cloudstate.PostgresSSLModeDisable {
+		appendEnvVar(cloudstateSidecarContainer, postgresSSLEnvVar, "true")
+		appendEnvVar(cloudstateSidecarContainer, postgresSSLModeEnvVar, string(spec.SSL.Mode))
+
+		if spec.SSL.Secret != nil && spec.SSL.Secret.Name != "" {
+			pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{
+				Name: postgresSSLVolumeName,
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: spec.SSL.Secret.Name,
+					},
+				},
+			})
+			cloudstateSidecarContainer.VolumeMounts = append(cloudstateSidecarContainer.VolumeMounts, corev1.VolumeMount{
+				Name:      postgresSSLVolumeName,
+				MountPath: postgresSSLSecretMount,
+				ReadOnly:  true,
+			})
+
+			if spec.SSL.RootCert != "" {
+				appendEnvVar(cloudstateSidecarContainer, postgresSSLRootCertEnvVar, postgresSSLSecretMount+"/"+spec.SSL.RootCert)
+			}
+			if spec.SSL.Cert != "" {
+				appendEnvVar(cloudstateSidecarContainer, postgresSSLCertEnvVar, postgresSSLSecretMount+"/"+spec.SSL.Cert)
+			}
+			if spec.SSL.Key != "" {
+				appendEnvVar(cloudstateSidecarContainer, postgresSSLKeyEnvVar, postgresSSLSecretMount+"/"+spec.SSL.Key)
+			}
+			if spec.SSL.Password != "" {
+				appendEnvVar(cloudstateSidecarContainer, postgresSSLPasswordEnvVar, spec.SSL.Password)
+			}
+		}
 	}
 }
 

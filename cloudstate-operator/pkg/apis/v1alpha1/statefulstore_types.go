@@ -57,6 +57,10 @@ type PostgresStore struct {
 	// +optional
 	Credentials *PostgresCredentials `json:"credentials,omitempty"`
 
+	// SSL configuration for the Postgres connection.
+	// +optional
+	SSL *PostgresSSL `json:"ssl,omitempty"`
+
 	// GoogleCloudSQL may used to automatically provision a Google CloudSQL instance.
 	// Do not specify a host, port or credentials if this is used.
 	// +optional
@@ -81,6 +85,68 @@ type PostgresCredentials struct {
 	// +optional
 	DatabaseKey string `json:"databaseKey,omitempty"`
 }
+
+// PostgressSSL is the configuration for Postgres SSL connections.
+type PostgresSSL struct {
+	// Mode is the mode that should be used for SSL.
+	// The value here matches the modes supported by the postgres libpq client library:
+	// https://www.postgresql.org/docs/9.1/libpq-ssl.html
+	// Valid values are disable, allow, prefer, require, verify-ca and verify-full. Defaults to disable.
+	// +optional
+	Mode PostgresSSLMode `json:"mode,omitempty"`
+
+	// Secret is the secret that contain any SSL certificates or keys.
+	// +optional
+	Secret *corev1.LocalObjectReference `json:"secret,omitempty"`
+
+	// RootCert is the key of the root certificate in the secret. This must be a PEM encoded X509 certificate.
+	// +optional
+	RootCert string `json:"rootCert,omitempty"`
+
+	// Cert is the key of the client certificate in the secret. This must be a PEM encoded X509 certificate.
+	// It is ignored if using a PKCS-12 keychain.
+	// +optional
+	Cert string `json:"cert,omitempty"`
+
+	// Key is the key of the private key for the client to use in the secret. This must be a PKCS-12 keychain or a
+	// PKCS-8 DER encoded key. If encrypted, the password should be specified in sslPassword.
+	// +optional
+	Key string `json:"key,omitempty"`
+
+	// Password is the password to use to decrypt the sslKey.
+	// +optional
+	Password string `json:"password,omitempty"`
+}
+
+// PostgresSSLMode is the mode for SSL in postgres.
+// +kubebuilder:validation:Enum=disable;allow;prefer;require;verify-ca;verify-full
+type PostgresSSLMode string
+
+const (
+	// PostgresSSLModeDisable disable SSL, use if you don't care about security and don't want to pay the overhead
+	// for encryption.
+	PostgresSSLModeDisable PostgresSSLMode = "disable"
+
+	// PostgresSSLModeAllow allow SSL, use if you don't care about security but will pay the overhead for encryption
+	// if the server insists on it.
+	PostgresSSLModeAllow PostgresSSLMode = "allow"
+
+	// PostgresSSLModePrefer prefer SSL, use if you don't care about encryption but will pay the overhead of encryption
+	// if the server supports it.
+	PostgresSSLModePrefer PostgresSSLMode = "prefer"
+
+	// PostgresSSLModeRequire require SSL, use if you want your data to be encrypted, and you accept the overhead. You
+	// trust that the network will make sure you always connect to the server you want.
+	PostgresSSLModeRequire PostgresSSLMode = "require"
+
+	// PostgresSSLModeVerifyCA verify CA SSL, use if you want your data encrypted, and you accept the overhead. You
+	// want to be sure that you connect to a server that you trust.
+	PostgresSSLModeVerifyCA PostgresSSLMode = "verify-ca"
+
+	// PostgresSSLModeVerifyFull verify full SSL, use if you want your data encrypted, and you accept the overhead. You
+	// want to be sure that you connect to a server you trust, and that it's the one you specify.
+	PostgresSSLModeVerifyFull PostgresSSLMode = "verify-full"
+)
 
 // GoogleCloudSQLPostgresStore creates a managed Postgres instance for the StatefulService.
 type GoogleCloudSQLPostgresStore struct {
