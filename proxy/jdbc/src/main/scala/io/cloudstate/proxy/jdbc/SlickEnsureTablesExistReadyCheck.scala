@@ -16,61 +16,71 @@
 
 package io.cloudstate.proxy.jdbc
 
-import java.sql.Connection
-
 import akka.Done
 import akka.actor.{Actor, ActorLogging, ActorSystem, Props, Status}
 import akka.pattern.{BackoffOpts, BackoffSupervisor}
-import akka.persistence.jdbc.config.{ConfigKeys, JournalTableConfiguration, SnapshotTableConfiguration}
-import akka.persistence.jdbc.journal.dao.JournalTables
-import akka.persistence.jdbc.snapshot.dao.SnapshotTables
-import akka.persistence.jdbc.util.{SlickDatabase, SlickExtension}
+import akka.persistence.jdbc.config.ConfigKeys
+import akka.persistence.jdbc.util.SlickExtension
 import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
-import slick.jdbc.meta.MTable
-import slick.jdbc.H2Profile
-import slick.jdbc.JdbcProfile
-import slick.jdbc.MySQLProfile
-import slick.jdbc.PostgresProfile
+import io.cloudstate.proxy.valueentity.store.jdbc.JdbcSlickDatabase
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.concurrent.duration._
 import scala.concurrent.Future
-import scala.util.Failure
-import scala.util.Success
-import scala.util.Try
 
 class SlickEnsureTablesExistReadyCheck(system: ActorSystem) extends (() => Future[Boolean]) {
 
-  private val jdbcConfig = system.settings.config.getConfig("cloudstate.proxy.jdbc")
-  private val autoCreateTables = jdbcConfig.getBoolean("auto-create-tables")
+  private val proxyConfig = system.settings.config.getConfig("cloudstate.proxy")
+  private val autoCreateTables = proxyConfig.getBoolean("jdbc.auto-create-tables")
+
+  // Get a hold of the akka-jdbc slick database instance
+  private val eventSourcedSlickDatabase =
+    SlickExtension(system).database(ConfigFactory.parseMap(Map(ConfigKeys.useSharedDb -> "slick").asJava))
+
+  // Get a hold of the cloudstate.proxy.value-entity.persistence.jdbc.slick database instance
+  private val valueEntitySlickDatabase = JdbcSlickDatabase(proxyConfig)
 
   private val check: () => Future[Boolean] = if (autoCreateTables) {
-    // Get a hold of the akka-jdbc slick database instance
-    val db = SlickExtension(system).database(ConfigFactory.parseMap(Map(ConfigKeys.useSharedDb -> "slick").asJava))
-
-    val actor = system.actorOf(
-      BackoffSupervisor.props(
-        BackoffOpts.onFailure(
-          childProps = Props(new EnsureTablesExistsActor(db)),
-          childName = "jdbc-table-creator",
-          minBackoff = 3.seconds,
-          maxBackoff = 30.seconds,
-          randomFactor = 0.2
+    tableCreateCombinations() match {
+      case Nil => () => Future.successful(true)
+      case combinations =>
+        val actor = system.actorOf(
+          BackoffSupervisor.props(
+            BackoffOpts.onFailure(
+              childProps = Props(new EnsureTablesExistsActor(combinations)),
+              childName = "jdbc-table-creator",
+              minBackoff = 3.seconds,
+              maxBackoff = 30.seconds,
+              randomFactor = 0.2
+            )
+          ),
+          "jdbc-table-creator-supervisor"
         )
-      ),
-      "jdbc-table-creator-supervisor"
-    )
 
-    implicit val timeout = Timeout(10.seconds) // TODO make configurable?
-    import akka.pattern.ask
+        implicit val timeout = Timeout(proxyConfig.getDuration("jdbc.create-tables-timeout").toMillis.millis)
+        import akka.pattern.ask
 
-    () => (actor ? EnsureTablesExistsActor.Ready).mapTo[Boolean]
+        () => (actor ? EnsureTablesExistsActor.Ready).mapTo[Boolean]
+    }
   } else { () =>
     Future.successful(true)
   }
 
   override def apply(): Future[Boolean] = check()
+
+  private def tableCreateCombinations(): Seq[SlickCreateTables] = {
+    val config = system.settings.config
+    val eventSourcedEnabled = config.getBoolean("cloudstate.proxy.eventsourced-entity.journal-enabled")
+    val valueEntityEnabled = config.getBoolean("cloudstate.proxy.value-entity.enabled")
+
+    val eventSourcedCombinations =
+      if (eventSourcedEnabled) Seq(new EventSourcedSlickCreateTable(system, eventSourcedSlickDatabase)) else Seq.empty
+    val valueEntityCombinations =
+      if (valueEntityEnabled) Seq(new ValueEntitySlickCreateTable(system, valueEntitySlickDatabase)) else Seq.empty
+
+    eventSourcedCombinations ++ valueEntityCombinations
+  }
 }
 
 private object EnsureTablesExistsActor {
@@ -82,56 +92,16 @@ private object EnsureTablesExistsActor {
 /**
  * Copied/adapted from https://github.com/lagom/lagom/blob/60897ef752ddbfc28553d3726b8fdb830a3ebdc4/persistence-jdbc/core/src/main/scala/com/lightbend/lagom/internal/persistence/jdbc/SlickProvider.scala
  */
-private class EnsureTablesExistsActor(db: SlickDatabase) extends Actor with ActorLogging {
+private class EnsureTablesExistsActor(tables: Seq[SlickCreateTables]) extends Actor with ActorLogging {
 
+  import context.dispatcher
+  import akka.pattern.pipe
   import EnsureTablesExistsActor._
 
-  private val profile = db.profile
-
-  import profile.api._
-
-  implicit val ec = context.dispatcher
-
-  private val journalCfg = new JournalTableConfiguration(context.system.settings.config.getConfig("jdbc-read-journal"))
-  private val snapshotCfg = new SnapshotTableConfiguration(
-    context.system.settings.config.getConfig("jdbc-snapshot-store")
-  )
-
-  private val journalTables = new JournalTables {
-    override val journalTableCfg: JournalTableConfiguration = journalCfg
-    override val profile: JdbcProfile = EnsureTablesExistsActor.this.profile
-  }
-
-  private val snapshotTables = new SnapshotTables {
-    override val snapshotTableCfg: SnapshotTableConfiguration = snapshotCfg
-    override val profile: JdbcProfile = EnsureTablesExistsActor.this.profile
-  }
-
-  private val journalStatements =
-    profile match {
-      case H2Profile =>
-        // Work around https://github.com/slick/slick/issues/763
-        journalTables.JournalTable.schema.createStatements
-          .map(_.replace("GENERATED BY DEFAULT AS IDENTITY(START WITH 1)", "AUTO_INCREMENT"))
-          .toSeq
-      case MySQLProfile =>
-        // Work around https://github.com/slick/slick/issues/1437
-        journalTables.JournalTable.schema.createStatements
-          .map(_.replace("AUTO_INCREMENT", "AUTO_INCREMENT UNIQUE"))
-          .toSeq
-      case _ => journalTables.JournalTable.schema.createStatements.toSeq
-    }
-
-  private val snapshotStatements = snapshotTables.SnapshotTable.schema.createStatements.toSeq
-
-  import akka.pattern.pipe
-
-  db.database.run {
-    for {
-      _ <- createTable(journalStatements, tableExists(journalCfg.schemaName, journalCfg.tableName))
-      _ <- createTable(snapshotStatements, tableExists(snapshotCfg.schemaName, snapshotCfg.tableName))
-    } yield Done.getInstance()
-  } pipeTo self
+  Future
+    .sequence(tables.map(c => c.run()))
+    .map(_ => Done.getInstance())
+    .pipeTo(self)
 
   override def receive: Receive = {
     case Done => context become done
@@ -142,106 +112,4 @@ private class EnsureTablesExistsActor(db: SlickDatabase) extends Actor with Acto
   private def done: Receive = {
     case Ready => sender() ! true
   }
-
-  private def createTable(schemaStatements: Seq[String], tableExists: (Vector[MTable], Option[String]) => Boolean) =
-    for {
-      currentSchema <- getCurrentSchema
-      tables <- getTables(currentSchema)
-      _ <- createTableInternal(tables, currentSchema, schemaStatements, tableExists)
-    } yield Done.getInstance()
-
-  private def createTableInternal(
-      tables: Vector[MTable],
-      currentSchema: Option[String],
-      schemaStatements: Seq[String],
-      tableExists: (Vector[MTable], Option[String]) => Boolean
-  ) =
-    if (tableExists(tables, currentSchema)) {
-      DBIO.successful(())
-    } else {
-      if (log.isDebugEnabled) {
-        log.debug("Creating table, executing: " + schemaStatements.mkString("; "))
-      }
-
-      DBIO
-        .sequence(schemaStatements.map { s =>
-          SimpleDBIO { ctx =>
-            val stmt = ctx.connection.createStatement()
-            try {
-              stmt.executeUpdate(s)
-            } finally {
-              stmt.close()
-            }
-          }
-        })
-        .asTry
-        .flatMap {
-          case Success(_) => DBIO.successful(())
-          case Failure(f) =>
-            getTables(currentSchema).map { tables =>
-              if (tableExists(tables, currentSchema)) {
-                log.debug("Table creation failed, but table existed after it was created, ignoring failure", f)
-                ()
-              } else {
-                throw f
-              }
-            }
-        }
-    }
-
-  private def getTables(currentSchema: Option[String]) =
-    // Calling MTable.getTables without parameters fails on MySQL
-    // See https://github.com/lagom/lagom/issues/446
-    // and https://github.com/slick/slick/issues/1692
-    profile match {
-      case _: MySQLProfile =>
-        MTable.getTables(currentSchema, None, Option("%"), None)
-      case _ =>
-        MTable.getTables(None, currentSchema, Option("%"), None)
-    }
-
-  private def getCurrentSchema: DBIO[Option[String]] =
-    SimpleDBIO(ctx => tryGetSchema(ctx.connection).getOrElse(null)).flatMap { schema =>
-      if (schema == null) {
-        // Not all JDBC drivers support the getSchema method:
-        // some always return null.
-        // In that case, fall back to vendor-specific queries.
-        profile match {
-          case _: H2Profile =>
-            sql"SELECT SCHEMA();".as[String].headOption
-          case _: MySQLProfile =>
-            sql"SELECT DATABASE();".as[String].headOption
-          case _: PostgresProfile =>
-            sql"SELECT current_schema();".as[String].headOption
-          case _ =>
-            DBIO.successful(None)
-        }
-      } else DBIO.successful(Some(schema))
-    }
-
-  // Some older JDBC drivers don't implement Connection.getSchema
-  // (including some builds of H2). This causes them to throw an
-  // AbstractMethodError at runtime.
-  // Because Try$.apply only catches NonFatal errors, and AbstractMethodError
-  // is considered fatal, we need to construct the Try explicitly.
-  private def tryGetSchema(connection: Connection): Try[String] =
-    try Success(connection.getSchema)
-    catch {
-      case e: AbstractMethodError =>
-        Failure(new IllegalStateException("Database driver does not support Connection.getSchema", e))
-    }
-
-  private def tableExists(
-      schemaName: Option[String],
-      tableName: String
-  )(tables: Vector[MTable], currentSchema: Option[String]): Boolean =
-    tables.exists { t =>
-      profile match {
-        case _: MySQLProfile =>
-          t.name.catalog.orElse(currentSchema) == schemaName.orElse(currentSchema) && t.name.name == tableName
-        case _ =>
-          t.name.schema.orElse(currentSchema) == schemaName.orElse(currentSchema) && t.name.name == tableName
-      }
-    }
-
 }

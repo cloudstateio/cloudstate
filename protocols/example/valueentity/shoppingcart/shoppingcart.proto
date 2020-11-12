@@ -1,0 +1,92 @@
+// Copyright 2019 Lightbend Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// This is a duplication of the shopping cart in the shoppingcart directory.
+// This duplication is because the TCK cannot run multiple services separately yet.
+// The tests are run in combination. We need the duplication because it is not possible
+// to register multiple services for the same proto file.
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+// This is the public API offered by the shopping cart value-based entity.
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "cloudstate/entity_key.proto";
+import "cloudstate/eventing.proto";
+import "google/api/annotations.proto";
+import "google/api/http.proto";
+import "google/api/httpbody.proto";
+
+package com.example.valueentity.shoppingcart;
+
+option go_package = "github.com/cloudstateio/go-support/example/valueentity/shoppingcart;shoppingcart";
+
+message AddLineItem {
+    string user_id = 1 [(.cloudstate.entity_key) = true];
+    string product_id = 2;
+    string name = 3;
+    int32 quantity = 4;
+}
+
+message RemoveLineItem {
+    string user_id = 1 [(.cloudstate.entity_key) = true];
+    string product_id = 2;
+}
+
+message GetShoppingCart {
+    string user_id = 1 [(.cloudstate.entity_key) = true];
+}
+
+message RemoveShoppingCart {
+    string user_id = 1 [(.cloudstate.entity_key) = true];
+}
+
+message LineItem {
+    string product_id = 1;
+    string name = 2;
+    int32 quantity = 3;
+}
+
+message Cart {
+    repeated LineItem items = 1;
+}
+
+service ShoppingCart {
+    rpc AddItem(AddLineItem) returns (google.protobuf.Empty) {
+        option (google.api.http) = {
+            post: "/ve/cart/{user_id}/items/add",
+            body: "*",
+        };
+        option (.cloudstate.eventing).in = "items";
+    }
+
+    rpc RemoveItem(RemoveLineItem) returns (google.protobuf.Empty) {
+        option (google.api.http).post = "/ve/cart/{user_id}/items/{product_id}/remove";
+    }
+
+    rpc GetCart(GetShoppingCart) returns (Cart) {
+        option (google.api.http) = {
+            get: "/ve/carts/{user_id}",
+            additional_bindings: {
+                get: "/ve/carts/{user_id}/items",
+                response_body: "items"
+            }
+        };
+    }
+
+    rpc RemoveCart(RemoveShoppingCart) returns (google.protobuf.Empty) {
+        option (google.api.http).post = "/ve/carts/{user_id}/remove";
+    }
+}

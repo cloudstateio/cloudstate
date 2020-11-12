@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.cloudstate.proxy.eventsourced
+package io.cloudstate.proxy.sharding
 
 import akka.actor.ActorRef
 import akka.cluster.sharding.ShardCoordinator.ShardAllocationStrategy

@@ -16,8 +16,10 @@
 
 package io.cloudstate.javasupport.tck;
 
-import com.example.shoppingcart.Shoppingcart;
+import com.example.valueentity.shoppingcart.Shoppingcart;
 import io.cloudstate.javasupport.CloudState;
+import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityTckModelEntity;
+import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityTwoEntity;
 import io.cloudstate.javasupport.tck.model.action.ActionTckModelBehavior;
 import io.cloudstate.javasupport.tck.model.action.ActionTwoBehavior;
 import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedTckModelEntity;
@@ -25,6 +27,7 @@ import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedTwoEntity;
 import io.cloudstate.samples.shoppingcart.ShoppingCartEntity;
 import io.cloudstate.tck.model.Action;
 import io.cloudstate.tck.model.Eventsourced;
+import io.cloudstate.tck.model.valueentity.Valueentity;
 
 public final class JavaSupportTck {
   public static final void main(String[] args) throws Exception {
@@ -37,6 +40,17 @@ public final class JavaSupportTck {
             new ActionTwoBehavior(),
             Action.getDescriptor().findServiceByName("ActionTwo"),
             Action.getDescriptor())
+        .registerEntity(
+            ValueEntityTckModelEntity.class,
+            Valueentity.getDescriptor().findServiceByName("ValueEntityTckModel"),
+            Valueentity.getDescriptor())
+        .registerEntity(
+            ValueEntityTwoEntity.class,
+            Valueentity.getDescriptor().findServiceByName("ValueEntityTwo"))
+        .registerEntity(
+            ShoppingCartEntity.class,
+            Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
+            com.example.valueentity.shoppingcart.persistence.Domain.getDescriptor())
         .registerEventSourcedEntity(
             EventSourcedTckModelEntity.class,
             Eventsourced.getDescriptor().findServiceByName("EventSourcedTckModel"),
@@ -45,8 +59,8 @@ public final class JavaSupportTck {
             EventSourcedTwoEntity.class,
             Eventsourced.getDescriptor().findServiceByName("EventSourcedTwo"))
         .registerEventSourcedEntity(
-            ShoppingCartEntity.class,
-            Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
+            io.cloudstate.samples.eventsourced.shoppingcart.ShoppingCartEntity.class,
+            com.example.shoppingcart.Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
             com.example.shoppingcart.persistence.Domain.getDescriptor())
         .start()
         .toCompletableFuture()

@@ -150,10 +150,11 @@ jobs:
           sbt 'dockerBuildCore publishLocal' \
             'dockerBuildPostgres publishLocal' \
             'dockerBuildCassandra publishLocal' \
-            java-shopping-cart/docker:publishLocal
+            java-shopping-cart/docker:publishLocal \
+            java-eventsourced-shopping-cart/docker:publishLocal
     - save_docker_image:
         tar_file: cloudstate-sbt-images.tar
-        docker_image: cloudstateio/cloudstate-proxy-core:latest cloudstateio/cloudstate-proxy-postgres:latest cloudstateio/cloudstate-proxy-cassandra:latest cloudstateio/java-shopping-cart:latest
+        docker_image: cloudstateio/cloudstate-proxy-core:latest cloudstateio/cloudstate-proxy-postgres:latest cloudstateio/cloudstate-proxy-cassandra:latest cloudstateio/java-shopping-cart:latest cloudstateio/java-eventsourced-shopping-cart:latest
     - persist_to_workspace:
         root: /tmp/workspace
         paths:
@@ -249,14 +250,20 @@ jobs:
           name: Install Cassandra
           command: bin/install-cassandra.sh
       - run:
-          name: Run shopping cart test (InMemory)
+          name: Run value-based shopping cart test (InMemory)
           command: bin/run-java-shopping-cart-test.sh InMemory --no-build
       - run:
-          name: Run shopping cart test (Postgres)
+          name: Run value-based shopping cart test (Postgres)
           command: bin/run-java-shopping-cart-test.sh Postgres --no-build
       - run:
-          name: Run shopping cart test (Cassandra)
-          command: bin/run-java-shopping-cart-test.sh Cassandra --no-build
+          name: Run eventsourced shopping cart test (InMemory)
+          command: bin/run-java-eventsourced-shopping-cart-test.sh InMemory --no-build
+      - run:
+          name: Run eventsourced shopping cart test (Postgres)
+          command: bin/run-java-eventsourced-shopping-cart-test.sh Postgres --no-build
+      - run:
+          name: Run eventsourced shopping cart test (Cassandra)
+          command: bin/run-java-eventsourced-shopping-cart-test.sh Cassandra --no-build
 
   native-image-smoke-test:
     parameters:
@@ -300,6 +307,9 @@ jobs:
           - run:
               name: Load in memory image
               command: docker image load < /tmp/workspace/cloudstate-proxy-native-core.tar
+          - run:
+              name: Run value-based shopping cart test (InMemory)
+              command: bin/run-java-shopping-cart-test.sh InMemory --no-build
       - when:
           condition:
             equal: [ Postgres, << parameters.proxy-store >> ]
@@ -309,6 +319,9 @@ jobs:
                 command: |
                   bin/install-postgres.sh
                   docker image load < /tmp/workspace/cloudstate-proxy-native-postgres.tar
+            - run:
+                name: Run value-based shopping cart test (Postgres)
+                command: bin/run-java-shopping-cart-test.sh Postgres --no-build
       - when:
           condition:
             equal: [ Cassandra, << parameters.proxy-store >> ]
@@ -319,8 +332,8 @@ jobs:
                   bin/install-cassandra.sh
                   docker image load < /tmp/workspace/cloudstate-proxy-native-cassandra.tar
       - run:
-          name: Run shopping cart test (<< parameters.proxy-store >>)
-          command: bin/run-java-shopping-cart-test.sh << parameters.proxy-store >> --no-build
+          name: Run eventsourced shopping cart test (<< parameters.proxy-store >>)
+          command: bin/run-java-eventsourced-shopping-cart-test.sh << parameters.proxy-store >> --no-build
 
   publish-native-images:
     machine: true

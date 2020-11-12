@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Run the Java shopping cart sample as a test, with a given persistence store.
+# Run the Java value-based Entity shopping cart sample as a test, with a given persistence store.
 #
-# run-java-shopping-cart-test.sh [inmemory|postgres|cassandra]
+# run-java-shopping-cart-test.sh [inmemory|postgres]
 
 set -e
 
@@ -27,7 +27,7 @@ done
 set -- "${residual[@]}"
 store="$1"
 
-# Build the java shopping cart
+# Build the java value-based entity shopping cart
 if [ "$build" == true ] ; then
   echo
   echo "Building java-shopping-cart ..."
@@ -40,7 +40,7 @@ statefulservice="shopping-cart-$statefulstore"
 
 case "$store" in
 
-  postgres ) # deploy the shopping-cart with postgres store
+  postgres ) # deploy the value-based entity-shopping-cart with postgres store
 
   statefulstore="postgres"
   statefulservice="shopping-cart-$statefulstore"
@@ -72,40 +72,7 @@ spec:
 YAML
 ;;
 
-  cassandra ) # deploy the shopping-cart with cassandra store
-
-  statefulstore="cassandra"
-  statefulservice="shopping-cart-$statefulstore"
-
-  kubectl apply -f - <<YAML
-apiVersion: cloudstate.io/v1alpha1
-kind: StatefulStore
-metadata:
-  name: $statefulstore
-spec:
-  cassandra:
-    host: cassandra.default.svc.cluster.local
-    credentials:
-      secret:
-        name: cassandra-credentials
----
-apiVersion: cloudstate.io/v1alpha1
-kind: StatefulService
-metadata:
-  name: $statefulservice
-spec:
-  storeConfig:
-    statefulStore:
-      name: $statefulstore
-    database: shoppingcart
-  containers:
-    - image: cloudstateio/java-shopping-cart:latest
-      imagePullPolicy: Never
-      name: user-function
-YAML
-;;
-
-  inmemory | * ) # deploy the shopping-cart with in-memory store
+  inmemory | * ) # deploy the value-based entity-shopping-cart with in-memory store
 
   statefulstore="inmemory"
   statefulservice="shopping-cart-$statefulstore"
@@ -175,7 +142,7 @@ function fail_with_details {
 # Wait for the deployment to be available
 echo
 echo "Waiting for deployment to be ready..."
-kubectl rollout status --timeout=1m deployment/$deployment || fail_with_details
+kubectl rollout status --timeout=5m deployment/$deployment || fail_with_details
 kubectl get deployment $deployment
 
 # Scale up the deployment, to test with akka clustering
@@ -191,11 +158,11 @@ kubectl rollout status --timeout=5m deployment/$deployment || fail_with_details
 kubectl get deployment $deployment
 [ $(kubectl get deployment $deployment -o "jsonpath={.status.availableReplicas}") -eq 3 ] || fail_with_details "Expected 3 available replicas"
 
-# Expose the shopping-cart service
+# Expose the value-based entity-shopping-cart service
 nodeport="$deployment-node-port"
 kubectl expose deployment $deployment --name=$nodeport --port=8013 --type=NodePort
 
-# Get the URL for the shopping-cart service
+# Get the URL for the value-based entity-shopping-cart service
 url=$(minikube service $nodeport --url)
 
 # Now we use the REST interface to test it (because it's easier to use curl than a grpc
@@ -208,11 +175,11 @@ non_empty_cart='{"items":[{"productId":"foo","name":"A foo","quantity":10}]}'
 for i in {1..9} ; do
   cart_id="test$i"
   echo
-  echo "Testing shopping cart $cart_id ..."
+  echo "Testing value-based entity shopping cart $cart_id ..."
 
   initial_cart=''
   for attempt in {1..5} ; do
-    initial_cart=$(curl -s $url/carts/$cart_id || echo '')
+    initial_cart=$(curl -s $url/ve/carts/$cart_id || echo '')
     [ -n "$initial_cart" ] && break || sleep 1
   done
 
@@ -225,16 +192,28 @@ for i in {1..9} ; do
       echo "Initial request for $cart_id succeeded."
   fi
 
-  curl -s -X POST $url/cart/$cart_id/items/add -H "Content-Type: application/json" -d "$post" > /dev/null
+  curl -s -X POST $url/ve/cart/$cart_id/items/add -H "Content-Type: application/json" -d "$post" > /dev/null
 
-  new_cart=$(curl -s $url/carts/$cart_id)
+  new_cart=$(curl -s $url/ve/carts/$cart_id)
   if [[ "$non_empty_cart" != "$new_cart" ]]
   then
       echo "Expected '$non_empty_cart'"
       echo "But got '$new_cart'"
       fail_with_details
   else
-      echo "Shopping cart update for $cart_id succeeded."
+      echo "Value-based Entity shopping cart update for $cart_id succeeded."
+  fi
+
+  curl -s -X POST $url/ve/carts/$cart_id/remove -H "Content-Type: application/json" -d '{"userId": "'"$cart_id"'"}' > /dev/null
+
+  deleted_cart=$(curl -s $url/ve/carts/$cart_id)
+  if [[ "$empty_cart" != "$deleted_cart" ]]
+  then
+      echo "Expected '$empty_cart'"
+      echo "But got '$deleted_cart'"
+      fail_with_details
+  else
+      echo "Value-based Entity shopping cart delete for $cart_id succeeded."
   fi
 done
 
@@ -246,7 +225,7 @@ if [ "$logs" == true ] ; then
   kubectl logs -l cloudstate.io/stateful-service=$statefulservice -c cloudstate-sidecar --tail=-1
 fi
 
-# Delete shopping-cart
+# Delete value-based entity-shopping-cart
 if [ "$delete" == true ] ; then
   echo
   echo "Deleting $statefulservice ..."

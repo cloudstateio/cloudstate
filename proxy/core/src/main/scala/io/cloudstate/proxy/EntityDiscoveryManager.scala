@@ -17,19 +17,13 @@
 package io.cloudstate.proxy
 
 import akka.Done
-import akka.actor.{Actor, ActorLogging, CoordinatedShutdown, PoisonPill, Props, Status}
+import akka.actor.{Actor, ActorLogging, CoordinatedShutdown, Props, Status}
 import akka.cluster.Cluster
 import akka.util.Timeout
 import akka.pattern.pipe
 import akka.stream.scaladsl.RunnableGraph
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.Http.ServerBinding
-import akka.cluster.singleton.{
-  ClusterSingletonManager,
-  ClusterSingletonManagerSettings,
-  ClusterSingletonProxy,
-  ClusterSingletonProxySettings
-}
 import akka.grpc.GrpcClientSettings
 import akka.stream.Materializer
 import com.google.protobuf.DescriptorProtos
@@ -38,19 +32,12 @@ import com.typesafe.config.Config
 import io.cloudstate.protocol.action.ActionProtocol
 import io.cloudstate.protocol.entity._
 import io.cloudstate.protocol.crdt.Crdt
+import io.cloudstate.protocol.value_entity.ValueEntity
 import io.cloudstate.protocol.event_sourced.EventSourced
-import io.cloudstate.proxy.autoscaler.Autoscaler.ScalerFactory
-import io.cloudstate.proxy.autoscaler.{
-  Autoscaler,
-  AutoscalerSettings,
-  ClusterMembershipFacadeImpl,
-  KubernetesDeploymentScaler,
-  NoAutoscaler,
-  NoScaler
-}
 import io.cloudstate.proxy.action.ActionProtocolSupportFactory
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
+import io.cloudstate.proxy.valueentity.EntitySupportFactory
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -68,6 +55,7 @@ object EntityDiscoveryManager {
       gracefulTerminationTimeout: Timeout,
       numberOfShards: Int,
       proxyParallelism: Int,
+      valueEntitySettings: ValueEntitySettings,
       eventSourcedSettings: EventSourcedSettings,
       crdtSettings: CrdtSettings,
       config: Config
@@ -85,6 +73,7 @@ object EntityDiscoveryManager {
            gracefulTerminationTimeout = Timeout(config.getDuration("graceful-termination-timeout").toMillis.millis),
            numberOfShards = config.getInt("number-of-shards"),
            proxyParallelism = config.getInt("proxy-parallelism"),
+           valueEntitySettings = new ValueEntitySettings(config),
            eventSourcedSettings = new EventSourcedSettings(config),
            crdtSettings = new CrdtSettings(config),
            config = config)
@@ -101,6 +90,15 @@ object EntityDiscoveryManager {
               "max-inbound-message-size must be greater than 0 but was $maxInboundMessageSize")
       require(maxInboundMessageSize <= Int.MaxValue,
               s"max-inbound-message-size exceeds the maximum allowed value of: ${Int.MaxValue}")
+    }
+  }
+
+  final case class ValueEntitySettings(enabled: Boolean, passivationTimeout: Timeout) {
+    def this(config: Config) = {
+      this(
+        enabled = config.getBoolean("value-entity.enabled"),
+        passivationTimeout = Timeout(config.getDuration("value-entity.passivation-timeout").toMillis.millis)
+      )
     }
   }
 
@@ -154,32 +152,6 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
       .withChannelBuilderOverrides(_.maxInboundMessageSize(config.maxInboundMessageSize.toInt))
       .withTls(false)
   private[this] final val entityDiscoveryClient = EntityDiscoveryClient(clientSettings)
-  private[this] final val autoscaler = {
-    val autoscalerSettings = AutoscalerSettings(system)
-    if (autoscalerSettings.enabled) {
-      val managerSettings = ClusterSingletonManagerSettings(system)
-      val proxySettings = ClusterSingletonProxySettings(system)
-
-      val scalerFactory: ScalerFactory = (autoscaler, factory) => {
-        if (config.devMode) factory.actorOf(Props(new NoScaler(autoscaler)), "noScaler")
-        else factory.actorOf(KubernetesDeploymentScaler.props(autoscaler), "kubernetesDeploymentScaler")
-      }
-
-      val singleton = context.actorOf(
-        ClusterSingletonManager.props(
-          Autoscaler.props(autoscalerSettings, scalerFactory, new ClusterMembershipFacadeImpl(Cluster(system))),
-          terminationMessage = PoisonPill,
-          managerSettings
-        ),
-        "autoscaler"
-      )
-
-      context.actorOf(ClusterSingletonProxy.props(singleton.path.toStringWithoutAddress, proxySettings),
-                      "autoscalerProxy")
-    } else {
-      context.actorOf(Props(new NoAutoscaler), "noAutoscaler")
-    }
-  }
 
   private final val supportFactories: Map[String, UserFunctionTypeSupportFactory] = Map(
       Crdt.name -> new CrdtSupportFactory(system, config, entityDiscoveryClient, clientSettings),
@@ -188,6 +160,12 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
       if (config.eventSourcedSettings.journalEnabled)
         Map(
           EventSourced.name -> new EventSourcedSupportFactory(system, config, clientSettings)
+        )
+      else Map.empty
+    } ++ {
+      if (config.valueEntitySettings.enabled)
+        Map(
+          ValueEntity.name -> new EntitySupportFactory(system, config, clientSettings)
         )
       else Map.empty
     }
