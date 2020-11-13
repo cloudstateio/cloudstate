@@ -44,7 +44,8 @@ import scala.util.control.NonFatal
 final class ValueEntityStatefulService(val factory: EntityFactory,
                                        override val descriptor: Descriptors.ServiceDescriptor,
                                        val anySupport: AnySupport,
-                                       override val persistenceId: String)
+                                       override val persistenceId: String,
+                                       override val passivationTimeout: Int)
     extends Service {
 
   override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] =

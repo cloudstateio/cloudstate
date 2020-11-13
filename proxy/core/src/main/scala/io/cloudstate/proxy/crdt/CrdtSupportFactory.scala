@@ -18,6 +18,7 @@ package io.cloudstate.proxy.crdt
 
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets.UTF_8
+import java.util.concurrent.TimeUnit
 
 import akka.{Done, NotUsed}
 import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
@@ -34,7 +35,6 @@ import io.cloudstate.protocol.entity.{Entity, EntityDiscovery, Metadata}
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 
-import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 
@@ -54,12 +54,7 @@ class CrdtSupportFactory(system: ActorSystem,
 
     validate(serviceDescriptor, methodDescriptors)
 
-    val crdtEntityConfig = CrdtEntity.Configuration(entity.serviceName,
-                                                    entity.persistenceId,
-                                                    config.crdtSettings.passivationTimeout,
-                                                    config.relayOutputBufferSize,
-                                                    3.seconds,
-                                                    5.seconds)
+    val crdtEntityConfig = crdtEntityConfiguration(config, entity)
 
     log.debug("Starting CrdtEntity for {}", entity.serviceName)
 
@@ -98,6 +93,24 @@ class CrdtSupportFactory(system: ActorSystem,
         "but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}"
       )
     }
+  }
+
+  private def crdtEntityConfiguration(config: EntityDiscoveryManager.Configuration,
+                                      entity: Entity): CrdtEntity.Configuration = {
+    val passivationTimeout = if (entity.passivationTimeout > 0) {
+      Timeout(Duration(entity.passivationTimeout, TimeUnit.SECONDS).toMillis.millis)
+    } else {
+      config.crdtSettings.passivationTimeout
+    }
+
+    CrdtEntity.Configuration(
+      entity.serviceName,
+      entity.persistenceId,
+      passivationTimeout,
+      config.relayOutputBufferSize,
+      3.seconds, // TODO make it configurable
+      5.seconds // TODO make it configurable
+    )
   }
 }
 

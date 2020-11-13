@@ -16,6 +16,8 @@
 
 package io.cloudstate.proxy.valueentity
 
+import java.util.concurrent.TimeUnit
+
 import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem, ExtendedActorSystem}
 import akka.cluster.sharding.ShardRegion.HashCodeMessageExtractor
@@ -33,6 +35,7 @@ import io.cloudstate.proxy._
 import io.cloudstate.proxy.sharding.DynamicLeastShardAllocationStrategy
 import io.cloudstate.proxy.valueentity.store.{RepositoryImpl, Store}
 
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
@@ -52,10 +55,7 @@ class EntitySupportFactory(
                                       methodDescriptors: Map[String, EntityMethodDescriptor]): EntityTypeSupport = {
     validate(serviceDescriptor, methodDescriptors)
 
-    val stateManagerConfig = ValueEntity.Configuration(entity.serviceName,
-                                                       entity.persistenceId,
-                                                       config.valueEntitySettings.passivationTimeout,
-                                                       config.relayOutputBufferSize)
+    val entityConfig = entityConfiguration(config, entity)
 
     val store: Store = {
       val storeType = config.config.getString("value-entity.persistence.store")
@@ -74,7 +74,7 @@ class EntitySupportFactory(
     val clusterShardingSettings = ClusterShardingSettings(system)
     val valueEntity = clusterSharding.start(
       typeName = entity.persistenceId,
-      entityProps = ValueEntitySupervisor.props(valueEntityClient, stateManagerConfig, repository),
+      entityProps = ValueEntitySupervisor.props(valueEntityClient, entityConfig, repository),
       settings = clusterShardingSettings,
       messageExtractor = new EntityIdExtractor(config.numberOfShards),
       allocationStrategy = new DynamicLeastShardAllocationStrategy(1, 10, 2, 0.0),
@@ -103,6 +103,22 @@ class EntitySupportFactory(
           .replaceAll("\n", " ")
       )
     }
+  }
+
+  private def entityConfiguration(config: EntityDiscoveryManager.Configuration,
+                                  entity: Entity): ValueEntity.Configuration = {
+    val passivationTimeout = if (entity.passivationTimeout > 0) {
+      Timeout(Duration(entity.passivationTimeout, TimeUnit.SECONDS).toMillis.millis)
+    } else {
+      config.valueEntitySettings.passivationTimeout
+    }
+
+    ValueEntity.Configuration(
+      entity.serviceName,
+      entity.persistenceId,
+      passivationTimeout,
+      config.relayOutputBufferSize
+    )
   }
 }
 

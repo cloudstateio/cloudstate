@@ -262,6 +262,9 @@ message Entity {
     // The ID to namespace state by. How this is used depends on the type of entity, for example,
     // event sourced entities will prefix this to the persistence id.
     string persistence_id = 3;
+
+    // The idle timeout, in seconds, after which an entity is passivated.
+    int32 passivation_timeout = 4;
 }
 
 message UserFunctionError {

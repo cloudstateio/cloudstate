@@ -125,12 +125,15 @@ public final class CloudState {
 
     final String persistenceId;
     final int snapshotEvery;
+    final int passivationTimeout;
     if (entity.persistenceId().isEmpty()) {
       persistenceId = entityClass.getSimpleName();
       snapshotEvery = 0; // Default
+      passivationTimeout = 0; // Default
     } else {
       persistenceId = entity.persistenceId();
       snapshotEvery = entity.snapshotEvery();
+      passivationTimeout = entity.passivationTimeout();
     }
 
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
@@ -141,7 +144,8 @@ public final class CloudState {
             descriptor,
             anySupport,
             persistenceId,
-            snapshotEvery);
+            snapshotEvery,
+            passivationTimeout);
 
     services.put(descriptor.getFullName(), system -> service);
 
@@ -169,6 +173,7 @@ public final class CloudState {
       Descriptors.ServiceDescriptor descriptor,
       String persistenceId,
       int snapshotEvery,
+      int passivationTimeout,
       Descriptors.FileDescriptor... additionalDescriptors) {
     services.put(
         descriptor.getFullName(),
@@ -178,7 +183,8 @@ public final class CloudState {
                 descriptor,
                 newAnySupport(additionalDescriptors),
                 persistenceId,
-                snapshotEvery));
+                snapshotEvery,
+                passivationTimeout));
 
     return this;
   }
@@ -205,13 +211,21 @@ public final class CloudState {
           entityClass + " does not declare an " + CrdtEntity.class + " annotation!");
     }
 
+    final int passivationTimeout;
+    if (entity.passivationTimeout() == 0) {
+      passivationTimeout = 0; // Default
+    } else {
+      passivationTimeout = entity.passivationTimeout();
+    }
+
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
 
     CrdtStatefulService service =
         new CrdtStatefulService(
             new AnnotationBasedCrdtSupport(entityClass, anySupport, descriptor),
             descriptor,
-            anySupport);
+            anySupport,
+            passivationTimeout);
 
     services.put(descriptor.getFullName(), system -> service);
 
@@ -233,11 +247,13 @@ public final class CloudState {
   public CloudState registerCrdtEntity(
       CrdtEntityFactory factory,
       Descriptors.ServiceDescriptor descriptor,
+      int passivationTimeout,
       Descriptors.FileDescriptor... additionalDescriptors) {
     services.put(
         descriptor.getFullName(),
         system ->
-            new CrdtStatefulService(factory, descriptor, newAnySupport(additionalDescriptors)));
+            new CrdtStatefulService(
+                factory, descriptor, newAnySupport(additionalDescriptors), passivationTimeout));
 
     return this;
   }
@@ -327,10 +343,13 @@ public final class CloudState {
     }
 
     final String persistenceId;
+    final int passivationTimeout;
     if (entity.persistenceId().isEmpty()) {
       persistenceId = entityClass.getSimpleName();
+      passivationTimeout = 0; // Default
     } else {
       persistenceId = entity.persistenceId();
+      passivationTimeout = entity.passivationTimeout();
     }
 
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
@@ -339,7 +358,8 @@ public final class CloudState {
             new AnnotationBasedEntitySupport(entityClass, anySupport, descriptor),
             descriptor,
             anySupport,
-            persistenceId);
+            persistenceId,
+            passivationTimeout);
 
     services.put(descriptor.getFullName(), system -> service);
 
@@ -363,12 +383,17 @@ public final class CloudState {
       EntityFactory factory,
       Descriptors.ServiceDescriptor descriptor,
       String persistenceId,
+      int passivationTimeout,
       Descriptors.FileDescriptor... additionalDescriptors) {
     services.put(
         descriptor.getFullName(),
         system ->
             new ValueEntityStatefulService(
-                factory, descriptor, newAnySupport(additionalDescriptors), persistenceId));
+                factory,
+                descriptor,
+                newAnySupport(additionalDescriptors),
+                persistenceId,
+                passivationTimeout));
 
     return this;
   }

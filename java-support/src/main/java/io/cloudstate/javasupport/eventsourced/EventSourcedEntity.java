@@ -31,7 +31,7 @@ public @interface EventSourcedEntity {
   /**
    * The name of the persistence id.
    *
-   * <p>If not specifed, defaults to the entities unqualified classname. It's strongly recommended
+   * <p>If not specified, defaults to the entities unqualified classname. It's strongly recommended
    * that you specify it explicitly.
    */
   String persistenceId() default "";
@@ -42,4 +42,11 @@ public @interface EventSourcedEntity {
    * snapshot at-or-after that number of events.
    */
   int snapshotEvery() default 0;
+
+  /**
+   * Specifies the idle time of the entity before it is passivated. Zero and any negative value mean
+   * use default from configuration file. Any positive value means the entity is passivated after
+   * the idle time.
+   */
+  int passivationTimeout() default 0;
 }

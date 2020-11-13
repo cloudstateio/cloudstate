@@ -49,11 +49,12 @@ import io.cloudstate.protocol.entity.{Command, Failure, StreamCancelled}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.google.protobuf.{Any => JavaPbAny}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 final class CrdtStatefulService(val factory: CrdtEntityFactory,
                                 override val descriptor: Descriptors.ServiceDescriptor,
-                                val anySupport: AnySupport)
+                                val anySupport: AnySupport,
+                                override val passivationTimeout: Int)
     extends Service {
   override final val entityType = Crdt.name
 

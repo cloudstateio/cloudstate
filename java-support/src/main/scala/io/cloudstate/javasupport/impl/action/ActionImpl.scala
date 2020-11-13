@@ -31,7 +31,7 @@ import io.cloudstate.protocol.entity.{Failure, Forward, Reply, SideEffect, Metad
 
 import scala.concurrent.Future
 import scala.compat.java8.FutureConverters._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 final class ActionService(val actionHandler: ActionHandler,
                           override val descriptor: Descriptors.ServiceDescriptor,
@@ -45,6 +45,8 @@ final class ActionService(val actionHandler: ActionHandler,
     }
 
   override final val entityType = ActionProtocol.name
+
+  override final val passivationTimeout = 0
 }
 
 final class ActionProtocolImpl(_system: ActorSystem, services: Map[String, ActionService], rootContext: Context)

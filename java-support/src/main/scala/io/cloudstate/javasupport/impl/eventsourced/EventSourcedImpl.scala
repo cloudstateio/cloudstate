@@ -52,7 +52,8 @@ final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
                                         override val descriptor: Descriptors.ServiceDescriptor,
                                         val anySupport: AnySupport,
                                         override val persistenceId: String,
-                                        val snapshotEvery: Int)
+                                        val snapshotEvery: Int,
+                                        override val passivationTimeout: Int)
     extends Service {
 
   override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] =
@@ -64,7 +65,12 @@ final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
   override final val entityType = EventSourced.name
   final def withSnapshotEvery(snapshotEvery: Int): EventSourcedStatefulService =
     if (snapshotEvery != this.snapshotEvery)
-      new EventSourcedStatefulService(this.factory, this.descriptor, this.anySupport, this.persistenceId, snapshotEvery)
+      new EventSourcedStatefulService(this.factory,
+                                      this.descriptor,
+                                      this.anySupport,
+                                      this.persistenceId,
+                                      snapshotEvery,
+                                      this.passivationTimeout)
     else
       this
 }

@@ -162,8 +162,7 @@ final class CloudStateRunner private[this] (
 }
 
 /**
- * StatefulService describes an entitiy type in a way which makes it possible
- * to deploy.
+ * Service describes an entity type in a way which makes it possible to deploy.
  */
 trait Service {
 
@@ -174,15 +173,24 @@ trait Service {
 
   /**
    * Possible values are: "", "", "".
-   * @return the type of entity represented by this StatefulService
+   * @return the type of entity represented by this service
    */
   def entityType: String
 
   /**
-   * @return the persistence identifier used for the the entities represented by this service
+   * @return the persistence identifier used for the entities represented by this service
    */
   def persistenceId: String = descriptor.getName
 
-  // TODO JavaDoc
+  /**
+   * @return the idle time after which entities represented by this service should be passivated
+   */
+  def passivationTimeout: Int
+
+  /**
+   * @return a dictionary of service methods (Protobuf Descriptors.MethodDescriptor) classified by method name.
+   *         The dictionary values represent a mapping of Protobuf Descriptors.MethodDescriptor with its input
+   *         and output types (see [[io.cloudstate.javasupport.impl.ResolvedServiceMethod]])
+   */
   def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]]
 }

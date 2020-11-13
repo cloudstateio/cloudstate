@@ -16,6 +16,8 @@
 
 package io.cloudstate.proxy.eventsourced
 
+import java.util.concurrent.TimeUnit
+
 import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
 import akka.cluster.sharding.ShardRegion.HashCodeMessageExtractor
@@ -32,6 +34,7 @@ import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.sharding.DynamicLeastShardAllocationStrategy
 
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 class EventSourcedSupportFactory(
@@ -50,17 +53,14 @@ class EventSourcedSupportFactory(
                                       methodDescriptors: Map[String, EntityMethodDescriptor]): EntityTypeSupport = {
     validate(serviceDescriptor, methodDescriptors)
 
-    val stateManagerConfig = EventSourcedEntity.Configuration(entity.serviceName,
-                                                              entity.persistenceId,
-                                                              config.eventSourcedSettings.passivationTimeout,
-                                                              config.relayOutputBufferSize)
+    val eventSourcedEntityConfig = eventSourcedEntityConfiguration(config, entity)
 
     log.debug("Starting EventSourcedEntity for {}", entity.persistenceId)
     val clusterSharding = ClusterSharding(system)
     val clusterShardingSettings = ClusterShardingSettings(system)
     val eventSourcedEntity = clusterSharding.start(
       typeName = entity.persistenceId,
-      entityProps = EventSourcedEntitySupervisor.props(eventSourcedClient, stateManagerConfig),
+      entityProps = EventSourcedEntitySupervisor.props(eventSourcedClient, eventSourcedEntityConfig),
       settings = clusterShardingSettings,
       messageExtractor = new EntityIdExtractor(config.numberOfShards),
       allocationStrategy = new DynamicLeastShardAllocationStrategy(1, 10, 2, 0.0),
@@ -88,6 +88,20 @@ class EventSourcedSupportFactory(
         "but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}"
       )
     }
+  }
+
+  private def eventSourcedEntityConfiguration(config: EntityDiscoveryManager.Configuration,
+                                              entity: Entity): EventSourcedEntity.Configuration = {
+    val passivationTimeout = if (entity.passivationTimeout > 0) {
+      Timeout(Duration(entity.passivationTimeout, TimeUnit.SECONDS).toMillis.millis)
+    } else {
+      config.eventSourcedSettings.passivationTimeout
+    }
+
+    EventSourcedEntity.Configuration(entity.serviceName,
+                                     entity.persistenceId,
+                                     passivationTimeout,
+                                     config.relayOutputBufferSize)
   }
 }
 

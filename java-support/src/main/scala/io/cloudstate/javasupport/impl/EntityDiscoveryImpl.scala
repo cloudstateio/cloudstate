@@ -72,7 +72,7 @@ class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, Service]) e
 
     val entities = services.map {
       case (name, service) =>
-        Entity(service.entityType, name, service.persistenceId)
+        Entity(service.entityType, name, service.persistenceId, service.passivationTimeout)
     }.toSeq
 
     Future.successful(EntitySpec(fileDescriptorSet, entities, Some(serviceInfo)))

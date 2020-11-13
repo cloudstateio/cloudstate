@@ -40,4 +40,12 @@ import java.lang.annotation.Target;
 @CloudStateAnnotation
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface CrdtEntity {}
+public @interface CrdtEntity {
+
+  /**
+   * Specifies the idle time of the entity before it is passivated. Zero and any negative value mean
+   * use default from configuration file. Any positive value means the entity is passivated after
+   * the idle time.
+   */
+  int passivationTimeout() default 0;
+}
