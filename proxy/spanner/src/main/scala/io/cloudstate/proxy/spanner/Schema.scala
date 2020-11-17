@@ -40,6 +40,9 @@ object Schema {
         |  ser_manifest STRING(MAX) NOT NULL,
         |  write_time TIMESTAMP NOT NULL OPTIONS (allow_commit_timestamp=true),
         |  writer_uuid STRING(MAX) NOT NULL,
+        |  meta BYTES(MAX),
+        |  meta_ser_id INT64,
+        |  meta_ser_manifest STRING(MAX),
         |) PRIMARY KEY (persistence_id, sequence_nr)""".stripMargin
 
   def createTagsTableDdl(table: String, journalTable: String): String =
@@ -73,7 +76,10 @@ object Schema {
         |  timestamp TIMESTAMP NOT NULL,
         |  ser_id INT64 NOT NULL,
         |  ser_manifest STRING(MAX) NOT NULL,
-        |  snapshot BYTES(MAX)
+        |  snapshot BYTES(MAX),
+        |  meta BYTES(MAX),
+        |  meta_ser_id INT64,
+        |  meta_ser_manifest STRING(MAX),
         |) PRIMARY KEY (persistence_id, sequence_nr)""".stripMargin
 
   private def tagsIndexName(table: String) =
