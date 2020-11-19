@@ -1,0 +1,337 @@
+// Copyright 2019 Lightbend Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//
+// == Cloudstate TCK model test for CRDT entites ==
+//
+
+syntax = "proto3";
+
+package cloudstate.tck.model.crdt;
+
+import "cloudstate/entity_key.proto";
+
+option java_package = "io.cloudstate.tck.model";
+option go_package = "github.com/cloudstateio/go-support/tck/crdt;crdt";
+
+//
+// The `CrdtTckModel` service should be implemented in the following ways:
+//
+// - The type of CRDT is determined by the prefix of the entity id, separated with a hyphen, which will be one of:
+//     `GCounter`, `PNCounter`, `GSet`, `ORSet`, `LWWRegister`, `Flag`, `ORMap`, or `Vote`.
+// - For GSet, ORSet, or LWWRegister CRDTs, the values are expected to be strings.
+// - For ORMap CRDTs, the keys are expected to be strings, and the values are based on the key.
+//   The type of CRDT for ORMap values is determined by the prefix of the key, in the same way as with entity ids,
+//   so that processing for ORMaps is effectively a nested version of the processing for other CRDT types.
+// - The `Process` method receives a `Request` message with actions to take.
+// - Request actions must be processed in order, and can require updating state, forwarding, side effects, or failing.
+// - The `Process` method must return the updated state in a `Response`, unless forwarding or failing.
+// - Forwarding and side effects must always be made to the second service `CrdtTwo`.
+// - The `ProcessStreamed` method receives a `StreamedRequest` message with streaming actions to take.
+// - The `ProcessStreamed` method must stream the current state in a `Response`, on any changes.
+// - A `StreamedRequest` message may have an end state, an update to apply on stream cancellation, or side effects.
+service CrdtTckModel {
+  rpc Process(Request) returns (Response);
+  rpc ProcessStreamed(StreamedRequest) returns (stream Response);
+}
+
+//
+// The `CrdtTwo` service is only for verifying forwards and side effects.
+// The `Call` method is not required to do anything, and may simply return an empty `Response` message.
+//
+service CrdtTwo {
+  rpc Call(Request) returns (Response);
+}
+
+//
+// A `Request` message contains any actions that the entity should process.
+// Actions must be processed in order. Any actions after a `Fail` may be ignored.
+//
+message Request {
+  string id = 1 [(.cloudstate.entity_key) = true];
+  repeated RequestAction actions = 2;
+}
+
+//
+// A `StreamedRequest` message contains actions for streamed responses.
+// If `end_state` is set, it specifies a target state for ending the stream.
+// If `cancel_update` is set, it specifies an update to apply when the stream is cancelled.
+// If `effects` is set, it specifies side effects to return with every streamed response.
+//
+message StreamedRequest {
+  string id = 1 [(.cloudstate.entity_key) = true];
+  State end_state = 2;
+  Update cancel_update = 3;
+  repeated Effect effects = 4;
+}
+
+//
+// Each `RequestAction` is one of:
+//
+// - Update: update the CRDT and return the updated state in the `Response`.
+// - Forward: forward to another service, in place of replying with a `Response`.
+// - Fail: fail the current `Process` command by sending a failure.
+// - Effect: add a side effect to the current reply, forward, or failure.
+// - Delete: request for the CRDT to be deleted.
+//
+message RequestAction {
+  oneof action {
+    Update update = 1;
+    Delete delete = 2;
+    Forward forward = 3;
+    Fail fail = 4;
+    Effect effect = 5;
+  }
+}
+
+//
+// Update the CRDT, with specific update values for particular CRDT types.
+//
+message Update {
+  oneof update {
+    GCounterUpdate gcounter = 1;
+    PNCounterUpdate pncounter = 2;
+    GSetUpdate gset = 3;
+    ORSetUpdate orset = 4;
+    LWWRegisterUpdate lwwregister = 5;
+    FlagUpdate flag = 6;
+    ORMapUpdate ormap = 7;
+    VoteUpdate vote = 8;
+  }
+
+  UpdateWriteConsistency write_consistency = 9;
+}
+
+//
+// Update a GCounter CRDT with an increment.
+//
+message GCounterUpdate {
+  uint64 increment = 1;
+}
+
+//
+// Update a PNCounter CRDT with a change.
+//
+message PNCounterUpdate {
+  sint64 change = 1;
+}
+
+//
+// Update a GSet CRDT with an additional element.
+//
+message GSetUpdate {
+  string add = 1;
+}
+
+//
+// Update an ORSet CRDT by adding or removing elements, or clearing the set.
+//
+message ORSetUpdate {
+  oneof action {
+    string add = 1;
+    string remove = 2;
+    bool clear = 3;
+  }
+}
+
+//
+// Update an LWWRegister CRDT with a new value.
+//
+message LWWRegisterUpdate {
+  string value = 1;
+  LWWRegisterClock clock = 2;
+}
+
+//
+// Clock for LWWRegister updates.
+//
+message LWWRegisterClock {
+  LWWRegisterClockType clockType = 1;
+  int64 customClockValue = 2;
+}
+
+//
+// Type of clock for LWWRegister updates.
+//
+enum LWWRegisterClockType {
+  DEFAULT = 0;
+  REVERSE = 1;
+  CUSTOM = 2;
+  CUSTOM_AUTO_INCREMENT = 3;
+}
+
+//
+// Update a Flag CRDT by enabling it.
+//
+message FlagUpdate {}
+
+//
+// Update an ORMap CRDT by adding, updating, or removing entries, or clearing the map.
+// Value types are determined by the prefix of the key.
+//
+message ORMapUpdate {
+  oneof action {
+    string add = 1;
+    ORMapEntryUpdate update = 2;
+    string remove = 3;
+    bool clear = 4;
+  }
+}
+
+//
+// Update for an ORMap entry.
+//
+message ORMapEntryUpdate {
+  string key = 1;
+  Update update = 2;
+}
+
+//
+// Update a Vote CRDT's self vote.
+//
+message VoteUpdate {
+  bool self_vote = 1;
+}
+
+//
+// The CRDT write consistency setting to use for updates.
+//
+enum UpdateWriteConsistency {
+  LOCAL = 0;
+  MAJORITY = 1;
+  ALL = 2;
+}
+
+//
+// Delete the CRDT.
+//
+message Delete {}
+
+//
+// Replace the response with a forward to `cloudstate.tck.model.CrdtTwo/Call`.
+// The payload must be an `OtherRequest` message with the given `id`.
+//
+message Forward {
+  string id = 1;
+}
+
+//
+// Fail the current command with the given description `message`.
+//
+message Fail {
+  string message = 1;
+}
+
+//
+// Add a side effect to the reply, to `cloudstate.tck.model.CrdtTwo/Call`.
+// The payload must be an `OtherRequest` message with the given `id`.
+// The side effect should be marked synchronous based on the given `synchronous` value.
+//
+message Effect {
+  string id = 1;
+  bool synchronous = 2;
+}
+
+//
+// The `Response` message must contain the updated state of the CRDT.
+//
+message Response {
+  State state = 1;
+}
+
+//
+// Current state of a CRDT, with specific values for particular CRDT types.
+//
+message State {
+  oneof value {
+    GCounterValue gcounter = 1;
+    PNCounterValue pncounter = 2;
+    GSetValue gset = 3;
+    ORSetValue orset = 4;
+    LWWRegisterValue lwwregister = 5;
+    FlagValue flag = 6;
+    ORMapValue ormap = 7;
+    VoteValue vote = 8;
+  }
+}
+
+//
+// The current state of a GCounter CRDT.
+//
+message GCounterValue {
+  uint64 value = 1;
+}
+
+//
+// The current state of a PNCounter CRDT.
+//
+message PNCounterValue {
+  int64 value = 1;
+}
+
+//
+// The current state of a GSet CRDT.
+// Elements should be sorted, for testing of responses.
+//
+message GSetValue {
+  repeated string elements = 1;
+}
+
+//
+// The current state of an ORSet CRDT.
+// Elements should be sorted, for testing of responses.
+//
+message ORSetValue {
+  repeated string elements = 1;
+}
+
+//
+// The current state of an LWWRegister CRDT.
+// Always a string in the TCK model tests.
+//
+message LWWRegisterValue {
+  string value = 1;
+}
+
+//
+// The current state of a Flag CRDT.
+//
+message FlagValue {
+  bool value = 1;
+}
+
+//
+// The current state of an ORMap CRDT.
+// Entries should be sorted by key, for testing of responses.
+//
+message ORMapValue {
+  repeated ORMapEntryValue entries = 1;
+}
+
+//
+// The current state of an ORMap entry.
+//
+message ORMapEntryValue {
+  string key = 1;
+  State value = 2;
+}
+
+//
+// The current state of a Vote CRDT.
+//
+message VoteValue {
+    bool self_vote = 1;
+    int32 votes_for = 2;
+    int32 total_voters = 3;
+}

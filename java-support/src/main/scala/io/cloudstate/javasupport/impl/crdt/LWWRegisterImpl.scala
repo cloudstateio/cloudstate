@@ -33,9 +33,11 @@ private[crdt] final class LWWRegisterImpl[T](anySupport: AnySupport) extends Int
   override def set(value: T, clock: LWWRegister.Clock, customClockValue: Long): T = {
     Objects.requireNonNull(value)
     val old = this.value
-    if (this.value != value) {
+    if (this.value != value || this.clock != clock || this.customClockValue != customClockValue) {
       deltaValue = Some(anySupport.encodeScala(value))
       this.value = value
+      this.clock = clock
+      this.customClockValue = customClockValue
     }
     old
   }
@@ -55,6 +57,7 @@ private[crdt] final class LWWRegisterImpl[T](anySupport: AnySupport) extends Int
 
   override val applyDelta = {
     case CrdtDelta.Delta.Lwwregister(LWWRegisterDelta(Some(any), _, _, _)) =>
+      resetDelta()
       this.value = anySupport.decode(any).asInstanceOf[T]
   }
 
