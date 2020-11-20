@@ -1043,18 +1043,18 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         checkHttpRequest("ve/cart/foo/items/add", """{"productId": "A14362347", "name": "Deluxe", "quantity": 2}""") {
           session.verifyAddItem("foo",
                                 Item("A14362347", "Deluxe", 2),
-                                Cart(Item("B14623482", "Basic", 1), Item("A14362347", "Deluxe", 7)))
+                                Cart(Item("A14362347", "Deluxe", 7), Item("B14623482", "Basic", 1)))
           "{}"
         }
 
         checkHttpRequest("ve/carts/foo") {
-          session.verifyGetCart("foo", shoppingCart(Item("B14623482", "Basic", 1), Item("A14362347", "Deluxe", 7)))
-          """{"items":[{"productId":"B14623482","name":"Basic","quantity":1},{"productId":"A14362347","name":"Deluxe","quantity":7}]}"""
+          session.verifyGetCart("foo", shoppingCart(Item("A14362347", "Deluxe", 7), Item("B14623482", "Basic", 1)))
+          """{"items":[{"productId":"A14362347","name":"Deluxe","quantity":7},{"productId":"B14623482","name":"Basic","quantity":1}]}"""
         }
 
         checkHttpRequest("ve/carts/foo/items") {
-          session.verifyGetCart("foo", shoppingCart(Item("B14623482", "Basic", 1), Item("A14362347", "Deluxe", 7)))
-          """[{"productId":"B14623482","name":"Basic","quantity":1.0},{"productId":"A14362347","name":"Deluxe","quantity":7.0}]"""
+          session.verifyGetCart("foo", shoppingCart(Item("A14362347", "Deluxe", 7), Item("B14623482", "Basic", 1)))
+          """[{"productId":"A14362347","name":"Deluxe","quantity":7.0},{"productId":"B14623482","name":"Basic","quantity":1.0}]"""
         }
 
         checkHttpRequest("ve/cart/foo/items/A14362347/remove", "") {
@@ -1400,7 +1400,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           session,
           "cart:1",
           Item("product:1", "Product1", 11),
-          Cart(Item("product:2", "Product2", 2), Item("product:1", "Product1", 12))
+          Cart(Item("product:1", "Product1", 12), Item("product:2", "Product2", 2))
         )
 
         // increase second product and pass the expected state
