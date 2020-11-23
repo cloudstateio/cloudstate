@@ -24,6 +24,7 @@ import io.cloudstate.javasupport.entity.CommandContext;
 import io.cloudstate.javasupport.entity.CommandHandler;
 import io.cloudstate.javasupport.entity.Entity;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -43,7 +44,10 @@ public class ShoppingCartEntity {
   public Shoppingcart.Cart getCart(CommandContext<Domain.Cart> ctx) {
     Domain.Cart cart = ctx.getState().orElse(Domain.Cart.newBuilder().build());
     List<Shoppingcart.LineItem> allItems =
-        cart.getItemsList().stream().map(this::convert).collect(Collectors.toList());
+        cart.getItemsList().stream()
+            .map(this::convert)
+            .sorted(Comparator.comparing(Shoppingcart.LineItem::getProductId))
+            .collect(Collectors.toList());
     return Shoppingcart.Cart.newBuilder().addAllItems(allItems).build();
   }
 
@@ -56,7 +60,9 @@ public class ShoppingCartEntity {
     Domain.Cart cart = ctx.getState().orElse(Domain.Cart.newBuilder().build());
     Domain.LineItem lineItem = updateItem(item, cart);
     List<Domain.LineItem> lineItems = removeItemByProductId(cart, item.getProductId());
-    ctx.updateState(Domain.Cart.newBuilder().addAllItems(lineItems).addItems(lineItem).build());
+    lineItems.add(lineItem);
+    lineItems.sort(Comparator.comparing(Domain.LineItem::getProductId));
+    ctx.updateState(Domain.Cart.newBuilder().addAllItems(lineItems).build());
     return Empty.getDefaultInstance();
   }
 
@@ -70,6 +76,7 @@ public class ShoppingCartEntity {
     }
 
     List<Domain.LineItem> items = removeItemByProductId(cart, item.getProductId());
+    items.sort(Comparator.comparing(Domain.LineItem::getProductId));
     ctx.updateState(Domain.Cart.newBuilder().addAllItems(items).build());
     return Empty.getDefaultInstance();
   }
