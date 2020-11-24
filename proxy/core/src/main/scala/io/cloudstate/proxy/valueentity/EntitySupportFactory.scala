@@ -28,14 +28,14 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
-import io.cloudstate.protocol.entity.{Entity, Metadata}
+import io.cloudstate.protocol.entity.EntityPassivationStrategy.Strategy
+import io.cloudstate.protocol.entity.{Entity, Metadata, TimeoutPassivationStrategy}
 import io.cloudstate.protocol.value_entity.ValueEntityClient
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.sharding.DynamicLeastShardAllocationStrategy
 import io.cloudstate.proxy.valueentity.store.{RepositoryImpl, Store}
 
-import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success}
 
@@ -55,7 +55,12 @@ class EntitySupportFactory(
                                       methodDescriptors: Map[String, EntityMethodDescriptor]): EntityTypeSupport = {
     validate(serviceDescriptor, methodDescriptors)
 
-    val entityConfig = entityConfiguration(config, entity)
+    val entityConfig = ValueEntity.Configuration(
+      entity.serviceName,
+      entity.persistenceId,
+      passivationTimeout(entity),
+      config.relayOutputBufferSize
+    )
 
     val store: Store = {
       val storeType = config.config.getString("value-entity.persistence.store")
@@ -105,21 +110,19 @@ class EntitySupportFactory(
     }
   }
 
-  private def entityConfiguration(config: EntityDiscoveryManager.Configuration,
-                                  entity: Entity): ValueEntity.Configuration = {
-    val passivationTimeout = if (entity.passivationTimeout > 0) {
-      Timeout(Duration(entity.passivationTimeout, TimeUnit.SECONDS).toMillis.millis)
-    } else {
-      config.valueEntitySettings.passivationTimeout
-    }
+  private def passivationTimeout(entity: Entity): Timeout =
+    entity.passivationStrategy match {
+      case Some(strategy) =>
+        strategy.strategy match {
+          case Strategy.Timeout(TimeoutPassivationStrategy(timeout, _)) =>
+            Timeout(timeout, TimeUnit.MILLISECONDS)
+        }
 
-    ValueEntity.Configuration(
-      entity.serviceName,
-      entity.persistenceId,
-      passivationTimeout,
-      config.relayOutputBufferSize
-    )
-  }
+      case _ =>
+        throw EntityDiscoveryException(
+          s"Value based entity ${entity.persistenceId} should have a passivation strategy configured"
+        )
+    }
 }
 
 private class EntitySupport(valueEntity: ActorRef, parallelism: Int, private implicit val relayTimeout: Timeout)

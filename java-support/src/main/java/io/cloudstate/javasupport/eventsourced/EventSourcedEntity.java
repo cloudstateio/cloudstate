@@ -42,11 +42,4 @@ public @interface EventSourcedEntity {
    * snapshot at-or-after that number of events.
    */
   int snapshotEvery() default 0;
-
-  /**
-   * Specifies the idle time of the entity before it is passivated. Zero and any negative value mean
-   * use default from configuration file. Any positive value means the entity is passivated after
-   * the idle time.
-   */
-  int passivationTimeout() default 0;
 }

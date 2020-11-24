@@ -16,23 +16,20 @@
 
 package io.cloudstate.javasupport.entity;
 
-import io.cloudstate.javasupport.impl.CloudStateAnnotation;
+import io.cloudstate.javasupport.PassivationStrategy;
+import io.cloudstate.javasupport.impl.entity.ValueEntityOptionsImpl;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+/** Root entity options for all value based entities. */
+public interface EntityOptions extends io.cloudstate.javasupport.EntityOptions {
 
-/** A value based entity. */
-@CloudStateAnnotation
-@Target(ElementType.TYPE)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface Entity {
+  EntityOptions withPassivationStrategy(PassivationStrategy strategy);
+
   /**
-   * The name of the persistence id.
+   * Create a default entity option for a value based entity.
    *
-   * <p>If not specified, defaults to the entity's unqualified classname. It's strongly recommended
-   * that you specify it explicitly.
+   * @return the entity option
    */
-  String persistenceId() default "";
+  static EntityOptions defaults() {
+    return new ValueEntityOptionsImpl(PassivationStrategy.defaultTimeout());
+  }
 }

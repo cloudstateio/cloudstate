@@ -20,6 +20,9 @@ import akka.actor.ActorSystem;
 import akka.stream.Materializer;
 import com.typesafe.config.Config;
 import com.google.protobuf.Descriptors;
+import io.cloudstate.javasupport.crdt.CrdtEntityOptions;
+import io.cloudstate.javasupport.entity.EntityOptions;
+import io.cloudstate.javasupport.eventsourced.EventSourcedEntityOptions;
 import io.cloudstate.javasupport.impl.entity.AnnotationBasedEntitySupport;
 import io.cloudstate.javasupport.entity.Entity;
 import io.cloudstate.javasupport.action.Action;
@@ -39,6 +42,7 @@ import io.cloudstate.javasupport.impl.eventsourced.AnnotationBasedEventSourcedSu
 import io.cloudstate.javasupport.impl.eventsourced.EventSourcedStatefulService;
 
 import akka.Done;
+
 import java.util.concurrent.CompletionStage;
 import java.util.HashMap;
 import java.util.Map;
@@ -117,6 +121,29 @@ public final class CloudState {
       Descriptors.ServiceDescriptor descriptor,
       Descriptors.FileDescriptor... additionalDescriptors) {
 
+    return registerEventSourcedEntity(
+        entityClass, descriptor, EventSourcedEntityOptions.defaults(), additionalDescriptors);
+  }
+
+  /**
+   * Register an annotated event sourced entity.
+   *
+   * <p>The entity class must be annotated with {@link
+   * io.cloudstate.javasupport.eventsourced.EventSourcedEntity}.
+   *
+   * @param entityClass The entity class.
+   * @param descriptor The descriptor for the service that this entity implements.
+   * @param entityOptions The entity options.
+   * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
+   *     types when needed.
+   * @return This stateful service builder.
+   */
+  public CloudState registerEventSourcedEntity(
+      Class<?> entityClass,
+      Descriptors.ServiceDescriptor descriptor,
+      EventSourcedEntityOptions entityOptions,
+      Descriptors.FileDescriptor... additionalDescriptors) {
+
     EventSourcedEntity entity = entityClass.getAnnotation(EventSourcedEntity.class);
     if (entity == null) {
       throw new IllegalArgumentException(
@@ -125,15 +152,12 @@ public final class CloudState {
 
     final String persistenceId;
     final int snapshotEvery;
-    final int passivationTimeout;
     if (entity.persistenceId().isEmpty()) {
       persistenceId = entityClass.getSimpleName();
       snapshotEvery = 0; // Default
-      passivationTimeout = 0; // Default
     } else {
       persistenceId = entity.persistenceId();
       snapshotEvery = entity.snapshotEvery();
-      passivationTimeout = entity.passivationTimeout();
     }
 
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
@@ -145,7 +169,7 @@ public final class CloudState {
             anySupport,
             persistenceId,
             snapshotEvery,
-            passivationTimeout);
+            entityOptions);
 
     services.put(descriptor.getFullName(), system -> service);
 
@@ -164,6 +188,7 @@ public final class CloudState {
    * @param snapshotEvery Specifies how snapshots of the entity state should be made: Zero means use
    *     default from configuration file. (Default) Any negative value means never snapshot. Any
    *     positive value means snapshot at-or-after that number of events.
+   * @param entityOptions the options for this entity.
    * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
    *     types when needed.
    * @return This stateful service builder.
@@ -173,8 +198,9 @@ public final class CloudState {
       Descriptors.ServiceDescriptor descriptor,
       String persistenceId,
       int snapshotEvery,
-      int passivationTimeout,
+      EventSourcedEntityOptions entityOptions,
       Descriptors.FileDescriptor... additionalDescriptors) {
+
     services.put(
         descriptor.getFullName(),
         system ->
@@ -184,7 +210,7 @@ public final class CloudState {
                 newAnySupport(additionalDescriptors),
                 persistenceId,
                 snapshotEvery,
-                passivationTimeout));
+                entityOptions));
 
     return this;
   }
@@ -205,17 +231,32 @@ public final class CloudState {
       Descriptors.ServiceDescriptor descriptor,
       Descriptors.FileDescriptor... additionalDescriptors) {
 
+    return registerCrdtEntity(
+        entityClass, descriptor, CrdtEntityOptions.defaults(), additionalDescriptors);
+  }
+
+  /**
+   * Register an annotated CRDT entity.
+   *
+   * <p>The entity class must be annotated with {@link io.cloudstate.javasupport.crdt.CrdtEntity}.
+   *
+   * @param entityClass The entity class.
+   * @param descriptor The descriptor for the service that this entity implements.
+   * @param entityOptions The options for this entity.
+   * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
+   *     types when needed.
+   * @return This stateful service builder.
+   */
+  public CloudState registerCrdtEntity(
+      Class<?> entityClass,
+      Descriptors.ServiceDescriptor descriptor,
+      CrdtEntityOptions entityOptions,
+      Descriptors.FileDescriptor... additionalDescriptors) {
+
     CrdtEntity entity = entityClass.getAnnotation(CrdtEntity.class);
     if (entity == null) {
       throw new IllegalArgumentException(
           entityClass + " does not declare an " + CrdtEntity.class + " annotation!");
-    }
-
-    final int passivationTimeout;
-    if (entity.passivationTimeout() == 0) {
-      passivationTimeout = 0; // Default
-    } else {
-      passivationTimeout = entity.passivationTimeout();
     }
 
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
@@ -225,7 +266,7 @@ public final class CloudState {
             new AnnotationBasedCrdtSupport(entityClass, anySupport, descriptor),
             descriptor,
             anySupport,
-            passivationTimeout);
+            entityOptions);
 
     services.put(descriptor.getFullName(), system -> service);
 
@@ -240,6 +281,7 @@ public final class CloudState {
    *
    * @param factory The CRDT factory.
    * @param descriptor The descriptor for the service that this entity implements.
+   * @param entityOptions The options for this entity.
    * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
    *     types when needed.
    * @return This stateful service builder.
@@ -247,13 +289,14 @@ public final class CloudState {
   public CloudState registerCrdtEntity(
       CrdtEntityFactory factory,
       Descriptors.ServiceDescriptor descriptor,
-      int passivationTimeout,
+      CrdtEntityOptions entityOptions,
       Descriptors.FileDescriptor... additionalDescriptors) {
+
     services.put(
         descriptor.getFullName(),
         system ->
             new CrdtStatefulService(
-                factory, descriptor, newAnySupport(additionalDescriptors), passivationTimeout));
+                factory, descriptor, newAnySupport(additionalDescriptors), entityOptions));
 
     return this;
   }
@@ -336,6 +379,27 @@ public final class CloudState {
       Descriptors.ServiceDescriptor descriptor,
       Descriptors.FileDescriptor... additionalDescriptors) {
 
+    return registerEntity(entityClass, descriptor, EntityOptions.defaults(), additionalDescriptors);
+  }
+
+  /**
+   * Register an annotated value based entity.
+   *
+   * <p>The entity class must be annotated with {@link Entity}.
+   *
+   * @param entityClass The entity class.
+   * @param descriptor The descriptor for the service that this entity implements.
+   * @param entityOptions The options for this entity.
+   * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
+   *     types when needed.
+   * @return This stateful service builder.
+   */
+  public CloudState registerEntity(
+      Class<?> entityClass,
+      Descriptors.ServiceDescriptor descriptor,
+      EntityOptions entityOptions,
+      Descriptors.FileDescriptor... additionalDescriptors) {
+
     Entity entity = entityClass.getAnnotation(Entity.class);
     if (entity == null) {
       throw new IllegalArgumentException(
@@ -343,13 +407,10 @@ public final class CloudState {
     }
 
     final String persistenceId;
-    final int passivationTimeout;
     if (entity.persistenceId().isEmpty()) {
       persistenceId = entityClass.getSimpleName();
-      passivationTimeout = 0; // Default
     } else {
       persistenceId = entity.persistenceId();
-      passivationTimeout = entity.passivationTimeout();
     }
 
     final AnySupport anySupport = newAnySupport(additionalDescriptors);
@@ -359,7 +420,7 @@ public final class CloudState {
             descriptor,
             anySupport,
             persistenceId,
-            passivationTimeout);
+            entityOptions);
 
     services.put(descriptor.getFullName(), system -> service);
 
@@ -375,6 +436,7 @@ public final class CloudState {
    * @param factory The value based entity factory.
    * @param descriptor The descriptor for the service that this entity implements.
    * @param persistenceId The persistence id for this entity.
+   * @param entityOptions The options for this entity.
    * @param additionalDescriptors Any additional descriptors that should be used to look up protobuf
    *     types when needed.
    * @return This stateful service builder.
@@ -383,8 +445,9 @@ public final class CloudState {
       EntityFactory factory,
       Descriptors.ServiceDescriptor descriptor,
       String persistenceId,
-      int passivationTimeout,
+      EntityOptions entityOptions,
       Descriptors.FileDescriptor... additionalDescriptors) {
+
     services.put(
         descriptor.getFullName(),
         system ->
@@ -393,7 +456,7 @@ public final class CloudState {
                 descriptor,
                 newAnySupport(additionalDescriptors),
                 persistenceId,
-                passivationTimeout));
+                entityOptions));
 
     return this;
   }

@@ -45,8 +45,6 @@ final class ActionService(val actionHandler: ActionHandler,
     }
 
   override final val entityType = ActionProtocol.name
-
-  override final val passivationTimeout = 0
 }
 
 final class ActionProtocolImpl(_system: ActorSystem, services: Map[String, ActionService], rootContext: Context)

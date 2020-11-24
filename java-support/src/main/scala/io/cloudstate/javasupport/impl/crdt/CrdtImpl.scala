@@ -29,6 +29,7 @@ import io.cloudstate.javasupport.crdt.{
   CrdtContext,
   CrdtCreationContext,
   CrdtEntityFactory,
+  CrdtEntityOptions,
   StreamCancelledContext,
   StreamedCommandContext,
   SubscriptionContext
@@ -54,8 +55,14 @@ import scala.jdk.CollectionConverters._
 final class CrdtStatefulService(val factory: CrdtEntityFactory,
                                 override val descriptor: Descriptors.ServiceDescriptor,
                                 val anySupport: AnySupport,
-                                override val passivationTimeout: Int)
+                                override val entityOptions: Option[CrdtEntityOptions])
     extends Service {
+
+  def this(factory: CrdtEntityFactory,
+           descriptor: Descriptors.ServiceDescriptor,
+           anySupport: AnySupport,
+           entityOptions: CrdtEntityOptions) = this(factory, descriptor, anySupport, Some(entityOptions))
+
   override final val entityType = Crdt.name
 
   override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] =

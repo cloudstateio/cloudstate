@@ -14,25 +14,23 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.entity;
+package io.cloudstate.javasupport.crdt;
 
-import io.cloudstate.javasupport.impl.CloudStateAnnotation;
+import io.cloudstate.javasupport.EntityOptions;
+import io.cloudstate.javasupport.PassivationStrategy;
+import io.cloudstate.javasupport.impl.crdt.CrdtEntityOptionsImpl;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+/** Root entity options for all CRDT. */
+public interface CrdtEntityOptions extends EntityOptions {
 
-/** A value based entity. */
-@CloudStateAnnotation
-@Target(ElementType.TYPE)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface Entity {
+  CrdtEntityOptions withPassivationStrategy(PassivationStrategy strategy);
+
   /**
-   * The name of the persistence id.
+   * Create a default CRDT entity option.
    *
-   * <p>If not specified, defaults to the entity's unqualified classname. It's strongly recommended
-   * that you specify it explicitly.
+   * @return the entity option
    */
-  String persistenceId() default "";
+  static CrdtEntityOptions defaults() {
+    return new CrdtEntityOptionsImpl(PassivationStrategy.defaultTimeout());
+  }
 }

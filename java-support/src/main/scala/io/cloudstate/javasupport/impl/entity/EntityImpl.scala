@@ -45,8 +45,15 @@ final class ValueEntityStatefulService(val factory: EntityFactory,
                                        override val descriptor: Descriptors.ServiceDescriptor,
                                        val anySupport: AnySupport,
                                        override val persistenceId: String,
-                                       override val passivationTimeout: Int)
+                                       override val entityOptions: Option[EntityOptions])
     extends Service {
+
+  def this(factory: EntityFactory,
+           descriptor: Descriptors.ServiceDescriptor,
+           anySupport: AnySupport,
+           persistenceId: String,
+           entityOptions: EntityOptions) =
+    this(factory, descriptor, anySupport, persistenceId, Some(entityOptions))
 
   override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] =
     factory match {

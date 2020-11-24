@@ -14,25 +14,19 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.entity;
+package io.cloudstate.javasupport;
 
-import io.cloudstate.javasupport.impl.CloudStateAnnotation;
+/** Options used for configuring an entity. */
+public interface EntityOptions {
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
+  /** @return the passivation strategy for an entity */
+  PassivationStrategy passivationStrategy();
 
-/** A value based entity. */
-@CloudStateAnnotation
-@Target(ElementType.TYPE)
-@Retention(RetentionPolicy.RUNTIME)
-public @interface Entity {
   /**
-   * The name of the persistence id.
+   * Create an entity option with the given passivation strategy.
    *
-   * <p>If not specified, defaults to the entity's unqualified classname. It's strongly recommended
-   * that you specify it explicitly.
+   * @param strategy to be used
+   * @return the entity option
    */
-  String persistenceId() default "";
+  EntityOptions withPassivationStrategy(PassivationStrategy strategy);
 }

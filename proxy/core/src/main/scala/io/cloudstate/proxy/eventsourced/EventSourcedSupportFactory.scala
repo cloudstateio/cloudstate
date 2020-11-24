@@ -28,13 +28,13 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
-import io.cloudstate.protocol.entity.{Entity, Metadata}
+import io.cloudstate.protocol.entity.EntityPassivationStrategy.Strategy
+import io.cloudstate.protocol.entity.{Entity, Metadata, TimeoutPassivationStrategy}
 import io.cloudstate.protocol.event_sourced.EventSourcedClient
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.sharding.DynamicLeastShardAllocationStrategy
 
-import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 class EventSourcedSupportFactory(
@@ -53,7 +53,12 @@ class EventSourcedSupportFactory(
                                       methodDescriptors: Map[String, EntityMethodDescriptor]): EntityTypeSupport = {
     validate(serviceDescriptor, methodDescriptors)
 
-    val eventSourcedEntityConfig = eventSourcedEntityConfiguration(config, entity)
+    val eventSourcedEntityConfig = EventSourcedEntity.Configuration(
+      entity.serviceName,
+      entity.persistenceId,
+      passivationTimeout(entity),
+      config.relayOutputBufferSize
+    )
 
     log.debug("Starting EventSourcedEntity for {}", entity.persistenceId)
     val clusterSharding = ClusterSharding(system)
@@ -83,26 +88,26 @@ class EventSourcedSupportFactory(
     val methodsWithoutKeys = methodDescriptors.values.filter(_.keyFieldsCount < 1)
     if (methodsWithoutKeys.nonEmpty) {
       val offendingMethods = methodsWithoutKeys.map(_.method.getName).mkString(",")
-      throw new EntityDiscoveryException(
-        s"Event sourced entities do not support methods whose parameters do not have at least one field marked as entity_key, " +
-        "but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}"
+      throw EntityDiscoveryException(
+        s"""Event sourced entities do not support methods whose parameters do not have at least one field marked as entity_key,
+            |but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}""".stripMargin
+          .replaceAll("\n", " ")
       )
     }
   }
 
-  private def eventSourcedEntityConfiguration(config: EntityDiscoveryManager.Configuration,
-                                              entity: Entity): EventSourcedEntity.Configuration = {
-    val passivationTimeout = if (entity.passivationTimeout > 0) {
-      Timeout(Duration(entity.passivationTimeout, TimeUnit.SECONDS).toMillis.millis)
-    } else {
-      config.eventSourcedSettings.passivationTimeout
+  private def passivationTimeout(entity: Entity): Timeout =
+    entity.passivationStrategy match {
+      case Some(passivationStrategy) =>
+        passivationStrategy.strategy match {
+          case Strategy.Timeout(TimeoutPassivationStrategy(timeout, _)) =>
+            Timeout(timeout, TimeUnit.MILLISECONDS)
+        }
+      case _ =>
+        throw EntityDiscoveryException(
+          s"Event sourced entity ${entity.persistenceId} should have a passivation strategy configured"
+        )
     }
-
-    EventSourcedEntity.Configuration(entity.serviceName,
-                                     entity.persistenceId,
-                                     passivationTimeout,
-                                     config.relayOutputBufferSize)
-  }
 }
 
 private class EventSourcedSupport(eventSourcedEntity: ActorRef,

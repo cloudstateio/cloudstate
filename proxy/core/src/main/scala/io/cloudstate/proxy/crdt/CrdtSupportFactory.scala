@@ -31,7 +31,8 @@ import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
 import io.cloudstate.protocol.crdt.CrdtClient
-import io.cloudstate.protocol.entity.{Entity, EntityDiscovery, Metadata}
+import io.cloudstate.protocol.entity.EntityPassivationStrategy.Strategy
+import io.cloudstate.protocol.entity.{Entity, EntityDiscovery, Metadata, TimeoutPassivationStrategy}
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 
@@ -54,7 +55,14 @@ class CrdtSupportFactory(system: ActorSystem,
 
     validate(serviceDescriptor, methodDescriptors)
 
-    val crdtEntityConfig = crdtEntityConfiguration(config, entity)
+    val crdtEntityConfig = CrdtEntity.Configuration(
+      entity.serviceName,
+      entity.persistenceId,
+      passivationTimeout(entity),
+      config.relayOutputBufferSize,
+      3.seconds, // TODO make it configurable
+      5.seconds // TODO make it configurable
+    )
 
     log.debug("Starting CrdtEntity for {}", entity.serviceName)
 
@@ -88,30 +96,27 @@ class CrdtSupportFactory(system: ActorSystem,
     val methodsWithoutKeys = methodDescriptors.values.filter(_.keyFieldsCount < 1)
     if (methodsWithoutKeys.nonEmpty) {
       val offendingMethods = methodsWithoutKeys.map(_.method.getName).mkString(",")
-      throw new EntityDiscoveryException(
-        s"CRDT entities do not support methods whose parameters do not have at least one field marked as entity_key, " +
-        "but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}"
+      throw EntityDiscoveryException(
+        s"""CRDT entities do not support methods whose parameters do not have at least one field marked as entity_key,
+            |but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}""".stripMargin
+          .replaceAll("\n", " ")
       )
     }
   }
 
-  private def crdtEntityConfiguration(config: EntityDiscoveryManager.Configuration,
-                                      entity: Entity): CrdtEntity.Configuration = {
-    val passivationTimeout = if (entity.passivationTimeout > 0) {
-      Timeout(Duration(entity.passivationTimeout, TimeUnit.SECONDS).toMillis.millis)
-    } else {
-      config.crdtSettings.passivationTimeout
-    }
+  private def passivationTimeout(entity: Entity): Timeout =
+    entity.passivationStrategy match {
+      case Some(strategy) =>
+        strategy.strategy match {
+          case Strategy.Timeout(TimeoutPassivationStrategy(timeout, _)) =>
+            Timeout(timeout, TimeUnit.MILLISECONDS)
+        }
 
-    CrdtEntity.Configuration(
-      entity.serviceName,
-      entity.persistenceId,
-      passivationTimeout,
-      config.relayOutputBufferSize,
-      3.seconds, // TODO make it configurable
-      5.seconds // TODO make it configurable
-    )
-  }
+      case _ =>
+        throw EntityDiscoveryException(
+          s"Crdt entity ${entity.persistenceId} should have a passivation strategy configured"
+        )
+    }
 }
 
 private class CrdtSupport(crdtEntity: ActorRef, parallelism: Int, private implicit val relayTimeout: Timeout)

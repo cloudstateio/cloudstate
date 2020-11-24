@@ -263,8 +263,22 @@ message Entity {
     // event sourced entities will prefix this to the persistence id.
     string persistence_id = 3;
 
-    // The idle timeout, in seconds, after which an entity is passivated.
-    int32 passivation_timeout = 4;
+    // The passivation strategy for the entity.
+    EntityPassivationStrategy passivation_strategy = 4;
+}
+
+// A passivation strategy for the entity which is sent to the proxy.
+message EntityPassivationStrategy {
+    oneof strategy {
+        // the timeout passivation strategy.
+        TimeoutPassivationStrategy timeout = 1;
+    }
+}
+
+// A passivation strategy based on a timeout. The idle timeout after which an entity is passivated.
+message TimeoutPassivationStrategy {
+    // The timeout in millis
+    int64 timeout = 1;
 }
 
 message UserFunctionError {

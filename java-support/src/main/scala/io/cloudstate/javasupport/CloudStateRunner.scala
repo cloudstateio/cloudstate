@@ -38,7 +38,7 @@ import io.cloudstate.protocol.value_entity.ValueEntityHandler
 
 import scala.compat.java8.FutureConverters
 import scala.concurrent.Future
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object CloudStateRunner {
   final case class Configuration(userFunctionInterface: String, userFunctionPort: Int, snapshotEvery: Int) {
@@ -183,9 +183,9 @@ trait Service {
   def persistenceId: String = descriptor.getName
 
   /**
-   * @return the idle time after which entities represented by this service should be passivated
+   * @return the options [[EntityOptions]] used by this service
    */
-  def passivationTimeout: Int
+  def entityOptions: Option[EntityOptions] = None
 
   /**
    * @return a dictionary of service methods (Protobuf Descriptors.MethodDescriptor) classified by method name.
