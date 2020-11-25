@@ -18,7 +18,6 @@ package io.cloudstate.proxy.crdt
 
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets.UTF_8
-import java.util.concurrent.TimeUnit
 
 import akka.{Done, NotUsed}
 import akka.actor.{ActorRef, ActorSystem, CoordinatedShutdown}
@@ -31,8 +30,7 @@ import akka.stream.scaladsl.{Flow, Source}
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
 import io.cloudstate.protocol.crdt.CrdtClient
-import io.cloudstate.protocol.entity.EntityPassivationStrategy.Strategy
-import io.cloudstate.protocol.entity.{Entity, EntityDiscovery, Metadata, TimeoutPassivationStrategy}
+import io.cloudstate.protocol.entity.{Entity, EntityDiscovery, Metadata}
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 

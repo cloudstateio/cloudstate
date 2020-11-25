@@ -16,8 +16,6 @@
 
 package io.cloudstate.proxy.valueentity
 
-import java.util.concurrent.TimeUnit
-
 import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem, ExtendedActorSystem}
 import akka.cluster.sharding.ShardRegion.HashCodeMessageExtractor
@@ -28,8 +26,7 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
-import io.cloudstate.protocol.entity.EntityPassivationStrategy.Strategy
-import io.cloudstate.protocol.entity.{Entity, Metadata, TimeoutPassivationStrategy}
+import io.cloudstate.protocol.entity.{Entity, Metadata}
 import io.cloudstate.protocol.value_entity.ValueEntityClient
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy._
