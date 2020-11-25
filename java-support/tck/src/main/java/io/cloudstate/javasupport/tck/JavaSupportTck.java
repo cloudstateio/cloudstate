@@ -22,10 +22,13 @@ import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityTckModelEntity;
 import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityTwoEntity;
 import io.cloudstate.javasupport.tck.model.action.ActionTckModelBehavior;
 import io.cloudstate.javasupport.tck.model.action.ActionTwoBehavior;
+import io.cloudstate.javasupport.tck.model.crdt.CrdtTckModelEntity;
+import io.cloudstate.javasupport.tck.model.crdt.CrdtTwoEntity;
 import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedTckModelEntity;
 import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedTwoEntity;
 import io.cloudstate.samples.shoppingcart.ShoppingCartEntity;
 import io.cloudstate.tck.model.Action;
+import io.cloudstate.tck.model.Crdt;
 import io.cloudstate.tck.model.Eventsourced;
 import io.cloudstate.tck.model.valueentity.Valueentity;
 
@@ -51,6 +54,11 @@ public final class JavaSupportTck {
             ShoppingCartEntity.class,
             Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
             com.example.valueentity.shoppingcart.persistence.Domain.getDescriptor())
+        .registerCrdtEntity(
+            CrdtTckModelEntity.class,
+            Crdt.getDescriptor().findServiceByName("CrdtTckModel"),
+            Crdt.getDescriptor())
+        .registerCrdtEntity(CrdtTwoEntity.class, Crdt.getDescriptor().findServiceByName("CrdtTwo"))
         .registerEventSourcedEntity(
             EventSourcedTckModelEntity.class,
             Eventsourced.getDescriptor().findServiceByName("EventSourcedTckModel"),

@@ -58,6 +58,12 @@ trait EntityMessages {
   def sideEffect(service: String, command: String, payload: Option[ScalaPbAny], synchronous: Boolean): SideEffect =
     SideEffect(service, command, payload, synchronous)
 
+  def streamCancelled(entityId: String): StreamCancelled =
+    streamCancelled(id = 0, entityId)
+
+  def streamCancelled(id: Long, entityId: String): StreamCancelled =
+    StreamCancelled(entityId, id)
+
   def messagePayload(message: JavaPbMessage): Option[ScalaPbAny] =
     Option(message).map(protobufAny)
 
@@ -76,4 +82,11 @@ trait EntityMessages {
 
   def primitiveString(value: String): ScalaPbAny =
     ScalaPbAny("p.cloudstate.io/string", StringValue.of(value).toByteString)
+
+  def readPrimitiveString(any: ScalaPbAny): String =
+    if (any.typeUrl == "p.cloudstate.io/string") {
+      val stream = any.value.newCodedInput
+      stream.readTag // assume it's for string
+      stream.readString
+    } else ""
 }

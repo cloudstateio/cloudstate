@@ -23,7 +23,7 @@ import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.google.protobuf.{ByteString, Any => JavaPbAny}
 import io.cloudstate.javasupport.impl.{AnySupport, ResolvedServiceMethod, ResolvedType}
 import io.cloudstate.javasupport._
-import io.cloudstate.javasupport.crdt.{Crdt, CrdtContext, CrdtCreationContext, CrdtEntity, Vote}
+import io.cloudstate.javasupport.crdt.{Crdt, CrdtContext, CrdtCreationContext, CrdtEntity, Vote, WriteConsistency}
 import org.scalatest.{Matchers, WordSpec}
 
 import scala.compat.java8.OptionConverters._
@@ -58,6 +58,8 @@ class AnnotationBasedCrdtSupportSpec extends WordSpec with Matchers {
           s"The current ${wrongType} CRDT state doesn't match requested type of ${crdtType.getSimpleName}"
         )
     }
+    override def getWriteConsistency: WriteConsistency = WriteConsistency.LOCAL
+    override def setWriteConsistency(writeConsistency: WriteConsistency): Unit = ()
   }
 
   object WrappedResolvedType extends ResolvedType[Wrapped] {
