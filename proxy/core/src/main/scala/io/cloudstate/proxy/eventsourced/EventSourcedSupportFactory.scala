@@ -16,8 +16,6 @@
 
 package io.cloudstate.proxy.eventsourced
 
-import java.util.concurrent.TimeUnit
-
 import akka.NotUsed
 import akka.actor.{ActorRef, ActorSystem}
 import akka.cluster.sharding.ShardRegion.HashCodeMessageExtractor
@@ -28,8 +26,7 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.Flow
 import akka.util.Timeout
 import com.google.protobuf.Descriptors.ServiceDescriptor
-import io.cloudstate.protocol.entity.EntityPassivationStrategy.Strategy
-import io.cloudstate.protocol.entity.{Entity, Metadata, TimeoutPassivationStrategy}
+import io.cloudstate.protocol.entity.{Entity, Metadata}
 import io.cloudstate.protocol.event_sourced.EventSourcedClient
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
@@ -56,7 +53,8 @@ class EventSourcedSupportFactory(
     val eventSourcedEntityConfig = EventSourcedEntity.Configuration(
       entity.serviceName,
       entity.persistenceId,
-      passivationTimeout(entity),
+      EntityTypeSupportFactory.configuredPassivationTimeoutOrElse(entity,
+                                                                  config.eventSourcedSettings.passivationTimeout),
       config.relayOutputBufferSize
     )
 
@@ -95,19 +93,6 @@ class EventSourcedSupportFactory(
       )
     }
   }
-
-  private def passivationTimeout(entity: Entity): Timeout =
-    entity.passivationStrategy match {
-      case Some(passivationStrategy) =>
-        passivationStrategy.strategy match {
-          case Strategy.Timeout(TimeoutPassivationStrategy(timeout, _)) =>
-            Timeout(timeout, TimeUnit.MILLISECONDS)
-        }
-      case _ =>
-        throw EntityDiscoveryException(
-          s"Event sourced entity ${entity.persistenceId} should have a passivation strategy configured"
-        )
-    }
 }
 
 private class EventSourcedSupport(eventSourcedEntity: ActorRef,

@@ -58,7 +58,7 @@ class CrdtSupportFactory(system: ActorSystem,
     val crdtEntityConfig = CrdtEntity.Configuration(
       entity.serviceName,
       entity.persistenceId,
-      passivationTimeout(entity),
+      EntityTypeSupportFactory.configuredPassivationTimeoutOrElse(entity, config.crdtSettings.passivationTimeout),
       config.relayOutputBufferSize,
       3.seconds, // TODO make it configurable
       5.seconds // TODO make it configurable
@@ -103,20 +103,6 @@ class CrdtSupportFactory(system: ActorSystem,
       )
     }
   }
-
-  private def passivationTimeout(entity: Entity): Timeout =
-    entity.passivationStrategy match {
-      case Some(strategy) =>
-        strategy.strategy match {
-          case Strategy.Timeout(TimeoutPassivationStrategy(timeout, _)) =>
-            Timeout(timeout, TimeUnit.MILLISECONDS)
-        }
-
-      case _ =>
-        throw EntityDiscoveryException(
-          s"Crdt entity ${entity.persistenceId} should have a passivation strategy configured"
-        )
-    }
 }
 
 private class CrdtSupport(crdtEntity: ActorRef, parallelism: Int, private implicit val relayTimeout: Timeout)

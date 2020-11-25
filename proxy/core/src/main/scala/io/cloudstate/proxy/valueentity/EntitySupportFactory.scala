@@ -58,7 +58,8 @@ class EntitySupportFactory(
     val entityConfig = ValueEntity.Configuration(
       entity.serviceName,
       entity.persistenceId,
-      passivationTimeout(entity),
+      EntityTypeSupportFactory.configuredPassivationTimeoutOrElse(entity,
+                                                                  config.valueEntitySettings.passivationTimeout),
       config.relayOutputBufferSize
     )
 
@@ -109,20 +110,6 @@ class EntitySupportFactory(
       )
     }
   }
-
-  private def passivationTimeout(entity: Entity): Timeout =
-    entity.passivationStrategy match {
-      case Some(strategy) =>
-        strategy.strategy match {
-          case Strategy.Timeout(TimeoutPassivationStrategy(timeout, _)) =>
-            Timeout(timeout, TimeUnit.MILLISECONDS)
-        }
-
-      case _ =>
-        throw EntityDiscoveryException(
-          s"Value based entity ${entity.persistenceId} should have a passivation strategy configured"
-        )
-    }
 }
 
 private class EntitySupport(valueEntity: ActorRef, parallelism: Int, private implicit val relayTimeout: Timeout)

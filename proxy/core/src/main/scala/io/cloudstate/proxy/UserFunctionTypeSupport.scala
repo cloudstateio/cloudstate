@@ -16,12 +16,16 @@
 
 package io.cloudstate.proxy
 
+import java.util.concurrent.TimeUnit
+
 import akka.NotUsed
 import akka.stream.scaladsl.Flow
+import akka.util.Timeout
 import com.google.protobuf.Descriptors.{MethodDescriptor, ServiceDescriptor}
 import com.google.protobuf.{ByteString, DynamicMessage}
-import io.cloudstate.protocol.entity.{Entity, Metadata}
+import io.cloudstate.protocol.entity.{Entity, Metadata, TimeoutPassivationStrategy}
 import io.cloudstate.entity_key.EntityKeyProto
+import io.cloudstate.protocol.entity.EntityPassivationStrategy.Strategy
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 import io.cloudstate.proxy.protobuf.Options
 
@@ -68,6 +72,20 @@ object UserFunctionTypeSupport {
 
 trait UserFunctionTypeSupportFactory {
   def build(entity: Entity, serviceDescriptor: ServiceDescriptor): UserFunctionTypeSupport
+}
+
+object EntityTypeSupportFactory {
+
+  def configuredPassivationTimeoutOrElse(entity: Entity, default: Timeout): Timeout =
+    entity.passivationStrategy match {
+      case Some(strategy) =>
+        strategy.strategy match {
+          case Strategy.Timeout(TimeoutPassivationStrategy(timeout, _)) =>
+            Timeout(timeout, TimeUnit.MILLISECONDS)
+        }
+
+      case _ => default
+    }
 }
 
 /**

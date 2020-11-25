@@ -93,26 +93,29 @@ object EntityDiscoveryManager {
     }
   }
 
-  final case class ValueEntitySettings(enabled: Boolean) {
+  final case class ValueEntitySettings(enabled: Boolean, passivationTimeout: Timeout) {
     def this(config: Config) = {
       this(
-        enabled = config.getBoolean("value-entity.enabled")
+        enabled = config.getBoolean("value-entity.enabled"),
+        passivationTimeout = Timeout(config.getDuration("value-entity.passivation-timeout").toMillis.millis)
       )
     }
   }
 
-  final case class EventSourcedSettings(journalEnabled: Boolean) {
+  final case class EventSourcedSettings(journalEnabled: Boolean, passivationTimeout: Timeout) {
     def this(config: Config) = {
       this(
-        journalEnabled = config.getBoolean("eventsourced-entity.journal-enabled")
+        journalEnabled = config.getBoolean("eventsourced-entity.journal-enabled"),
+        passivationTimeout = Timeout(config.getDuration("eventsourced-entity.passivation-timeout").toMillis.millis)
       )
     }
   }
 
-  final case class CrdtSettings() {
-    // will be perhaps be filled up later
+  final case class CrdtSettings(passivationTimeout: Timeout) {
     def this(config: Config) = {
-      this()
+      this(
+        passivationTimeout = Timeout(config.getDuration("crdt-entity.passivation-timeout").toMillis.millis)
+      )
     }
   }
 
