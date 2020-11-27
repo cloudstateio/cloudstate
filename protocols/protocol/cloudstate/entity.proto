@@ -267,7 +267,13 @@ message Entity {
     EntityPassivationStrategy passivation_strategy = 4;
 }
 
-// A passivation strategy for the entity which is sent to the proxy.
+//
+// The semantics is to provide a flexible way for entity user functions to configure the passivation strategy.
+// This strategy is sent to the proxy at discovery time allowing the proxy to configure the corresponding entities.
+// The only passivation strategy supported is the timeout strategy and configuring this is optional for the entity.
+// If an entity user function does not configure the passivation strategy the proxy used its fallback default value.
+//
+// The passivation strategy for the entity user function.
 message EntityPassivationStrategy {
     oneof strategy {
         // the timeout passivation strategy.
@@ -275,7 +281,7 @@ message EntityPassivationStrategy {
     }
 }
 
-// A passivation strategy based on a timeout. The idle timeout after which an entity is passivated.
+// A passivation strategy based on a timeout. The idle timeout after which an user function's entity is passivated.
 message TimeoutPassivationStrategy {
     // The timeout in millis
     int64 timeout = 1;
