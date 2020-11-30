@@ -32,6 +32,8 @@ import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.protocol.action._
 import io.cloudstate.protocol.crdt.Crdt
+import io.cloudstate.protocol.entity.EntityPassivationStrategy.Strategy
+import io.cloudstate.protocol.entity.{EntityPassivationStrategy, TimeoutPassivationStrategy}
 import io.cloudstate.protocol.value_entity.ValueEntity
 import io.cloudstate.protocol.event_sourced._
 import io.cloudstate.tck.model.valueentity.valueentity.{ValueEntityTckModel, ValueEntityTwo}
@@ -43,6 +45,7 @@ import io.grpc.StatusRuntimeException
 import io.cloudstate.tck.model.eventsourced.{EventSourcedTckModel, EventSourcedTwo}
 import io.cloudstate.testkit.valueentity.ValueEntityMessages
 import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.matchers.Matcher
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 
 import scala.concurrent.duration._
@@ -109,6 +112,13 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
       "verify proxy info and entity discovery" in {
         import scala.jdk.CollectionConverters._
 
+        def verifyTimeoutPassivationStrategy(strategy: Option[EntityPassivationStrategy]): Unit =
+          strategy must (be(
+            Some(
+              EntityPassivationStrategy(Strategy.Timeout(TimeoutPassivationStrategy(30.seconds.toMillis)))
+            )
+          ) or be(None))
+
         expectProxyOnline()
 
         val discovery = interceptor.expectEntityDiscovery()
@@ -135,46 +145,54 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         spec.entities.find(_.serviceName == ActionTckModel.name).foreach { entity =>
           serviceNames must contain("ActionTckModel")
           entity.entityType mustBe ActionProtocol.name
+          entity.passivationStrategy mustBe None
         }
 
         spec.entities.find(_.serviceName == ActionTwo.name).foreach { entity =>
           serviceNames must contain("ActionTwo")
           entity.entityType mustBe ActionProtocol.name
+          entity.passivationStrategy mustBe None
         }
 
         spec.entities.find(_.serviceName == EventSourcedTckModel.name).foreach { entity =>
           serviceNames must contain("EventSourcedTckModel")
           entity.entityType mustBe EventSourced.name
           entity.persistenceId mustBe "event-sourced-tck-model"
+          verifyTimeoutPassivationStrategy(entity.passivationStrategy)
         }
 
         spec.entities.find(_.serviceName == EventSourcedTwo.name).foreach { entity =>
           serviceNames must contain("EventSourcedTwo")
           entity.entityType mustBe EventSourced.name
+          verifyTimeoutPassivationStrategy(entity.passivationStrategy)
         }
 
         spec.entities.find(_.serviceName == EventSourcedShoppingCart.name).foreach { entity =>
           serviceNames must contain("ShoppingCart")
           entity.entityType mustBe EventSourced.name
           entity.persistenceId must not be empty
+          verifyTimeoutPassivationStrategy(entity.passivationStrategy)
         }
 
         spec.entities.find(_.serviceName == ValueEntityTckModel.name).foreach { entity =>
           serviceNames must contain("ValueEntityTckModel")
           entity.entityType mustBe ValueEntity.name
           entity.persistenceId mustBe "value-entity-tck-model"
+          verifyTimeoutPassivationStrategy(entity.passivationStrategy)
         }
 
         spec.entities.find(_.serviceName == ValueEntityTwo.name).foreach { entity =>
           serviceNames must contain("ValueEntityTwo")
           entity.entityType mustBe ValueEntity.name
           entity.persistenceId mustBe "value-entity-tck-model-two"
+          verifyTimeoutPassivationStrategy(entity.passivationStrategy)
         }
 
         spec.entities.find(_.serviceName == ValueEntityShoppingCart.name).foreach { entity =>
           serviceNames must contain("ShoppingCart")
           entity.entityType mustBe ValueEntity.name
           entity.persistenceId must not be empty
+          verifyTimeoutPassivationStrategy(entity.passivationStrategy)
         }
 
         enabledServices = spec.entities.map(_.serviceName)
@@ -182,7 +200,6 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
     }
 
     "verifying model test: actions" must {
-      import io.cloudstate.protocol.entity
       import io.cloudstate.tck.model.action._
       import io.cloudstate.testkit.action.ActionMessages._
 

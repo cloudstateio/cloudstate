@@ -86,10 +86,9 @@ class EventSourcedSupportFactory(
     val methodsWithoutKeys = methodDescriptors.values.filter(_.keyFieldsCount < 1)
     if (methodsWithoutKeys.nonEmpty) {
       val offendingMethods = methodsWithoutKeys.map(_.method.getName).mkString(",")
-      throw EntityDiscoveryException(
-        s"""Event sourced entities do not support methods whose parameters do not have at least one field marked as entity_key,
-            |but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}""".stripMargin
-          .replaceAll("\n", " ")
+      throw new EntityDiscoveryException(
+        "Event sourced entities do not support methods whose parameters do not have at least one field marked as entity_key, " +
+        s"but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}"
       )
     }
   }

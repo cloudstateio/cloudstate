@@ -18,7 +18,7 @@ package io.cloudstate.javasupport
 
 import java.util.concurrent.CompletionStage
 
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.Config
 import akka.Done
 import akka.actor.ActorSystem
 import akka.http.scaladsl._
@@ -79,15 +79,16 @@ final class CloudStateRunner private[this] (
     case (serviceName, factory) => serviceName -> factory(system)
   }.toMap
 
-  // TODO JavaDoc
+  /**
+   * Creates a CloudStateRunner from the given services. Use the default config to create the internal ActorSystem.
+   */
   def this(services: java.util.Map[String, java.util.function.Function[ActorSystem, Service]]) {
-    this(ActorSystem("StatefulService", {
-      val conf = ConfigFactory.load()
-      conf.getConfig("cloudstate.system").withFallback(conf)
-    }), services.asScala.toMap)
+    this(ActorSystem("StatefulService", CloudStateConfigHolder.defaultConfiguration()), services.asScala.toMap)
   }
 
-  // TODO JavaDoc
+  /**
+   * Creates a CloudStateRunner from the given services and config. Use the config to create the internal ActorSystem.
+   */
   def this(services: java.util.Map[String, java.util.function.Function[ActorSystem, Service]], config: Config) {
     this(ActorSystem("StatefulService", config), services.asScala.toMap)
   }

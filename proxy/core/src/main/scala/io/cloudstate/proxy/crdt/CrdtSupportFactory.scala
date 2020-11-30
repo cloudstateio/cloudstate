@@ -94,10 +94,9 @@ class CrdtSupportFactory(system: ActorSystem,
     val methodsWithoutKeys = methodDescriptors.values.filter(_.keyFieldsCount < 1)
     if (methodsWithoutKeys.nonEmpty) {
       val offendingMethods = methodsWithoutKeys.map(_.method.getName).mkString(",")
-      throw EntityDiscoveryException(
-        s"""CRDT entities do not support methods whose parameters do not have at least one field marked as entity_key,
-            |but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}""".stripMargin
-          .replaceAll("\n", " ")
+      throw new EntityDiscoveryException(
+        "CRDT entities do not support methods whose parameters do not have at least one field marked as entity_key, " +
+        s"but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}"
       )
     }
   }

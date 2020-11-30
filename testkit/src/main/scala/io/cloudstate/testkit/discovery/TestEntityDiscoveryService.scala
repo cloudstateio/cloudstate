@@ -16,8 +16,6 @@
 
 package io.cloudstate.testkit.discovery
 
-import java.util.concurrent.TimeUnit
-
 import akka.grpc.ServiceDescription
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.testkit.TestProbe
@@ -45,6 +43,7 @@ final class TestEntityDiscoveryService(context: TestServiceContext) {
 
 object TestEntityDiscoveryService {
   val info: ServiceInfo = ServiceInfo(supportLibraryName = "Cloudstate TestKit")
+
   private val passivationStrategyTimeout: Strategy.Timeout =
     Strategy.Timeout(TimeoutPassivationStrategy(30.seconds.toMillis))
 
