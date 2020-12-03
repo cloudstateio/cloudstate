@@ -28,16 +28,19 @@ import com.example.valueentity.shoppingcart.shoppingcart.{
   ShoppingCart => ValueEntityShoppingCart,
   ShoppingCartClient => ValueEntityShoppingCartClient
 }
-import com.google.protobuf.DescriptorProtos
+import com.google.protobuf.{ByteString, DescriptorProtos}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.protocol.action._
 import io.cloudstate.protocol.crdt._
 import io.cloudstate.protocol.value_entity.ValueEntity
 import io.cloudstate.protocol.event_sourced._
+import io.cloudstate.protocol.entity._
 import io.cloudstate.tck.model.valueentity.valueentity.{ValueEntityTckModel, ValueEntityTwo}
 import io.cloudstate.tck.model.action.{ActionTckModel, ActionTwo}
 import io.cloudstate.tck.model.crdt.{CrdtTckModel, CrdtTckModelClient, CrdtTwo}
+import io.cloudstate.tck.model.eventlogeventing.{EmitEventRequest, EventLogSubscriberModel}
+import io.cloudstate.tck.model.eventlogeventing
 import io.cloudstate.testkit.InterceptService.InterceptorSettings
 import io.cloudstate.testkit.eventsourced.EventSourcedMessages
 import io.cloudstate.testkit.{InterceptService, ServiceAddress, TestClient, TestProtocol}
@@ -45,7 +48,7 @@ import io.grpc.StatusRuntimeException
 import io.cloudstate.tck.model.eventsourced.{EventSourcedTckModel, EventSourcedTwo}
 import io.cloudstate.testkit.valueentity.ValueEntityMessages
 import org.scalatest.concurrent.ScalaFutures
-import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, MustMatchers, WordSpec}
 
 import scala.concurrent.duration._
 
@@ -70,6 +73,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
     extends WordSpec
     with MustMatchers
     with BeforeAndAfterAll
+    with BeforeAndAfter
     with ScalaFutures {
 
   def this(settings: CloudStateTCK.Settings) = this("", settings)
@@ -80,6 +84,10 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
   private[this] final val eventSourcedShoppingCartClient = EventSourcedShoppingCartClient(client.settings)(system)
   private[this] final val valueEntityShoppingCartClient = ValueEntityShoppingCartClient(client.settings)(system)
   private[this] final val crdtTckModelClient = CrdtTckModelClient(client.settings)(client.context.system)
+  private[this] final val eventLogEventingEventSourcedEntityOne =
+    eventlogeventing.EventSourcedEntityOneClient(client.settings)(system)
+  private[this] final val eventLogEventingEventSourcedEntityTwo =
+    eventlogeventing.EventSourcedEntityTwoClient(client.settings)(system)
 
   private[this] final val protocol = TestProtocol(settings.service.host, settings.service.port)
 
@@ -98,6 +106,10 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
     finally try client.terminate()
     finally try protocol.terminate()
     finally interceptor.terminate()
+
+  after {
+    interceptor.verifyNoMoreInteractions()
+  }
 
   def expectProxyOnline(): Unit =
     TestKit.awaitCond(client.http.probe(), max = 10.seconds)
@@ -3208,6 +3220,85 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         verifyAddItemFailure(session, "cart:1", Item("product:1", "Product1", 0)) // add zero quantity
         verifyRemoveItemFailure(session, "cart:1", "product:1") // remove non-existing product
         verifyGetCart(session, "cart:1", Item("product:2", "Product2", 33)) // check final state
+      }
+    }
+
+    "verify proxy test: event log subscriptions" must {
+      def eventLogSubscriptionTest(test: => Any): Unit =
+        testFor(EventLogSubscriberModel)(test)
+
+      def emitEventOne(id: String, step: eventlogeventing.ProcessStep.Step) =
+        eventLogEventingEventSourcedEntityOne.emitEvent(
+          EmitEventRequest(id,
+                           EmitEventRequest.Event
+                             .EventOne(eventlogeventing.EventOne(Some(eventlogeventing.ProcessStep(step)))))
+        )
+      def emitReplyEventOne(id: String, message: String) =
+        emitEventOne(id, eventlogeventing.ProcessStep.Step.Reply(eventlogeventing.Reply(message)))
+      def emitForwardEventOne(id: String, message: String) =
+        emitEventOne(id, eventlogeventing.ProcessStep.Step.Forward(eventlogeventing.Forward(message)))
+      def verifyEventSourcedInitCommandReply(id: String) = {
+        val connection = interceptor.expectEventSourcedConnection()
+        val init = connection.expectClientMessage[EventSourcedStreamIn.Message.Init]
+        init.value.serviceName must ===(eventlogeventing.EventSourcedEntityOne.name)
+        init.value.entityId must ===(id)
+        connection.expectClientMessage[EventSourcedStreamIn.Message.Command]
+        connection.expectServiceMessage[EventSourcedStreamOut.Message.Reply]
+      }
+      def verifySubscriberCommandResponse(step: eventlogeventing.ProcessStep.Step) = {
+        val subscriberConnection = interceptor.expectActionUnaryConnection()
+        val eventOneIn = eventlogeventing.EventOne.parseFrom(
+          subscriberConnection.command.payload.fold(ByteString.EMPTY)(_.value).newCodedInput()
+        )
+        eventOneIn.step must ===(Some(eventlogeventing.ProcessStep(step)))
+        subscriberConnection.expectResponse()
+      }
+      def verifySubscriberReplyCommand(id: String, message: String) = {
+        val response =
+          verifySubscriberCommandResponse(eventlogeventing.ProcessStep.Step.Reply(eventlogeventing.Reply(message)))
+        response.response.isReply must ===(true)
+        val reply = eventlogeventing.Response.parseFrom(response.response.reply.get.payload.get.value.newCodedInput())
+        reply.id must ===(id)
+        reply.message must ===(message)
+      }
+      def verifySubscriberForwardCommand(id: String, message: String) = {
+        val response =
+          verifySubscriberCommandResponse(eventlogeventing.ProcessStep.Step.Forward(eventlogeventing.Forward(message)))
+        response.response.isForward must ===(true)
+        val subscriberConnection = interceptor.expectActionUnaryConnection()
+        subscriberConnection.command.name must ===("Effect")
+      }
+      "consume an event" in eventLogSubscriptionTest {
+        emitReplyEventOne("eventlogeventing:1", "some message")
+        verifyEventSourcedInitCommandReply("eventlogeventing:1")
+        verifySubscriberReplyCommand("eventlogeventing:1", "some message")
+      }
+
+      "forward a consumed event" in eventLogSubscriptionTest {
+        emitForwardEventOne("eventlogeventing:2", "some message")
+        verifyEventSourcedInitCommandReply("eventlogeventing:2")
+        verifySubscriberForwardCommand("eventlogeventing:2", "some message")
+      }
+
+      "process json events" in eventLogSubscriptionTest {
+        eventLogEventingEventSourcedEntityTwo.emitJsonEvent(
+          eventlogeventing.JsonEvent("eventlogeventing:3", "some json message")
+        )
+
+        val connection = interceptor.expectEventSourcedConnection()
+        val init = connection.expectClientMessage[EventSourcedStreamIn.Message.Init]
+        init.value.serviceName must ===(eventlogeventing.EventSourcedEntityTwo.name)
+        init.value.entityId must ===("eventlogeventing:3")
+        connection.expectClientMessage[EventSourcedStreamIn.Message.Command]
+        val reply = connection.expectServiceMessage[EventSourcedStreamOut.Message.Reply]
+        reply.value.events must have size (1)
+        reply.value.events.head.typeUrl must startWith("json.cloudstate.io/")
+
+        val subscriberConnection = interceptor.expectActionUnaryConnection()
+        val response = subscriberConnection.expectResponse()
+        val parsed = eventlogeventing.Response.parseFrom(response.response.reply.get.payload.get.value.newCodedInput())
+        parsed.id must ===("eventlogeventing:3")
+        parsed.message must ===("some json message")
       }
     }
   }

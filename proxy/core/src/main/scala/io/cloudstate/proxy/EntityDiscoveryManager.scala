@@ -18,10 +18,11 @@ package io.cloudstate.proxy
 
 import akka.Done
 import akka.actor.{Actor, ActorLogging, CoordinatedShutdown, Props, Status}
+import akka.actor.typed.{ActorSystem => TypedActorSystem}
+import akka.actor.typed.scaladsl.adapter._
 import akka.cluster.Cluster
 import akka.util.Timeout
 import akka.pattern.pipe
-import akka.stream.scaladsl.RunnableGraph
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.Http.ServerBinding
 import akka.grpc.GrpcClientSettings
@@ -36,10 +37,10 @@ import io.cloudstate.protocol.value_entity.ValueEntity
 import io.cloudstate.protocol.event_sourced.EventSourced
 import io.cloudstate.proxy.action.ActionProtocolSupportFactory
 import io.cloudstate.proxy.crdt.CrdtSupportFactory
+import io.cloudstate.proxy.eventing.{EventLogEventing, EventingManager, EventingSupport, ProjectionSupport}
 import io.cloudstate.proxy.eventsourced.EventSourcedSupportFactory
 import io.cloudstate.proxy.valueentity.EntitySupportFactory
 
-import scala.concurrent.Future
 import scala.concurrent.duration._
 
 object EntityDiscoveryManager {
@@ -74,7 +75,7 @@ object EntityDiscoveryManager {
            numberOfShards = config.getInt("number-of-shards"),
            proxyParallelism = config.getInt("proxy-parallelism"),
            valueEntitySettings = new ValueEntitySettings(config),
-           eventSourcedSettings = new EventSourcedSettings(config),
+           eventSourcedSettings = EventSourcedSettings(config),
            crdtSettings = new CrdtSettings(config),
            config = config)
     }
@@ -102,12 +103,22 @@ object EntityDiscoveryManager {
     }
   }
 
-  final case class EventSourcedSettings(journalEnabled: Boolean, passivationTimeout: Timeout) {
-    def this(config: Config) = {
-      this(
-        journalEnabled = config.getBoolean("eventsourced-entity.journal-enabled"),
-        passivationTimeout = Timeout(config.getDuration("eventsourced-entity.passivation-timeout").toMillis.millis)
-      )
+  final case class EventSourcedSettings(journalEnabled: Boolean,
+                                        passivationTimeout: Timeout,
+                                        readJournal: String,
+                                        projectionSupport: Option[String])
+
+  object EventSourcedSettings {
+    def apply(config: Config): EventSourcedSettings = {
+      val esConfig = config.getConfig("eventsourced-entity")
+      val journalEnabled = esConfig.getBoolean("journal-enabled")
+      val passivationTimeout = Timeout(esConfig.getDuration("passivation-timeout").toMillis.millis)
+      val readJournal = esConfig.getString("read-journal")
+      val psConfig = esConfig.getConfig("projection-support")
+      val projectionSupport = if (psConfig.getBoolean("enabled")) {
+        Some(psConfig.getString("class"))
+      } else None
+      EventSourcedSettings(journalEnabled, passivationTimeout, readJournal, projectionSupport)
     }
   }
 
@@ -170,6 +181,21 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
       else Map.empty
     }
 
+  private final val elAndPs: Option[(EventingSupport, ProjectionSupport)] = for {
+    projectionSupportClass <- config.eventSourcedSettings.projectionSupport
+  } yield {
+    val projectionSupport: ProjectionSupport = getClass.getClassLoader
+      .loadClass(projectionSupportClass)
+      .asSubclass(classOf[ProjectionSupport])
+      .getDeclaredConstructor(classOf[TypedActorSystem[_]])
+      .newInstance(system.toTyped)
+
+    (new EventLogEventing(projectionSupport, config.eventSourcedSettings.readJournal, system.toTyped),
+     projectionSupport)
+  }
+  private final val eventLogEventing = elAndPs.map(_._1)
+  private final val projectionSupport = elAndPs.map(_._2)
+
   entityDiscoveryClient.discover(EntityDiscoveryManager.proxyInfo(supportFactories.keys.toSeq)) pipeTo self
 
   val supportedProtocolMajorVersion: Int = BuildInfo.protocolMajorVersion
@@ -219,14 +245,14 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
                   .mkString(",")}"
               )
           }
-        }
+        }.toList
 
         val router = new UserFunctionRouter(entities, entityDiscoveryClient)
 
-        /*
-        val eventSupport = EventingManager.createSupport(config.getConfig("eventing"))
-         */
-        val route = Serve.createRoute(entities, router, entityDiscoveryClient, descriptors, Map.empty)
+        val topicSupport = EventingManager.createSupport(config.getConfig("eventing"))
+        val emitters = EventingManager.createEmitters(entities, topicSupport)
+
+        val route = Serve.createRoute(entities, router, entityDiscoveryClient, descriptors, emitters)
 
         log.debug("Starting gRPC proxy")
 
@@ -237,9 +263,11 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
             interface = config.httpInterface,
             port = config.httpPort
           ) pipeTo self
+
+          EventingManager.startConsumers(router, entities, topicSupport, eventLogEventing, projectionSupport)
         }
 
-        context.become(binding(None))
+        context.become(binding)
 
       } catch {
         case e @ EntityDiscoveryException(message) =>
@@ -255,10 +283,10 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
 
   private[this] final def extractService(serviceName: String, descriptor: FileDescriptor): Option[ServiceDescriptor] = {
     val (pkg, name) = Names.splitPrev(serviceName)
-    Some(descriptor).filter(_.getPackage == pkg).map(_.findServiceByName(name))
+    Some(descriptor).filter(_.getPackage == pkg).flatMap(descriptor => Option(descriptor.findServiceByName(name)))
   }
 
-  private[this] final def binding(eventManager: Option[RunnableGraph[Future[Done]]]): Receive = {
+  private[this] final def binding: Receive = {
     case sb: ServerBinding =>
       log.info(s"CloudState proxy online at ${sb.localAddress}")
 
@@ -277,8 +305,6 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
         Http().shutdownAllConnectionPools().map(_ => Done)
       }
 
-      eventManager.foreach(_.run() pipeTo self)
-
       context.become(running)
 
     case Status.Failure(cause) => // Failure to bind the HTTP server is fatal, terminate
@@ -292,9 +318,6 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
   private[this] final def running: Receive = {
     case Ready =>
       sender ! true
-    case Status.Failure(cause) => // Failure in the eventing subsystem, terminate
-      log.error(cause, "Eventing failed")
-      system.terminate()
     case Done =>
       system.terminate() // FIXME context.become(dead)
   }

@@ -18,6 +18,7 @@ package io.cloudstate.javasupport.tck;
 
 import com.example.valueentity.shoppingcart.Shoppingcart;
 import io.cloudstate.javasupport.CloudState;
+import io.cloudstate.javasupport.tck.model.eventlogeventing.EventLogSubscriber;
 import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityTckModelEntity;
 import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityTwoEntity;
 import io.cloudstate.javasupport.tck.model.action.ActionTckModelBehavior;
@@ -29,6 +30,7 @@ import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedTwoEntity;
 import io.cloudstate.samples.shoppingcart.ShoppingCartEntity;
 import io.cloudstate.tck.model.Action;
 import io.cloudstate.tck.model.Crdt;
+import io.cloudstate.tck.model.Eventlogeventing;
 import io.cloudstate.tck.model.Eventsourced;
 import io.cloudstate.tck.model.valueentity.Valueentity;
 
@@ -66,6 +68,17 @@ public final class JavaSupportTck {
         .registerEventSourcedEntity(
             EventSourcedTwoEntity.class,
             Eventsourced.getDescriptor().findServiceByName("EventSourcedTwo"))
+        .registerAction(
+            new EventLogSubscriber(),
+            Eventlogeventing.getDescriptor().findServiceByName("EventLogSubscriberModel"))
+        .registerEventSourcedEntity(
+            io.cloudstate.javasupport.tck.model.eventlogeventing.EventSourcedEntityOne.class,
+            Eventlogeventing.getDescriptor().findServiceByName("EventSourcedEntityOne"),
+            Eventlogeventing.getDescriptor())
+        .registerEventSourcedEntity(
+            io.cloudstate.javasupport.tck.model.eventlogeventing.EventSourcedEntityTwo.class,
+            Eventlogeventing.getDescriptor().findServiceByName("EventSourcedEntityTwo"),
+            Eventlogeventing.getDescriptor())
         .registerEventSourcedEntity(
             io.cloudstate.samples.eventsourced.shoppingcart.ShoppingCartEntity.class,
             com.example.shoppingcart.Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),

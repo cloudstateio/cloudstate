@@ -95,6 +95,7 @@ message MetadataEntry {
 
 // A reply to the sender.
 message Reply {
+
     // The reply payload
     google.protobuf.Any payload = 1;
 
@@ -107,17 +108,21 @@ message Reply {
     //
     // If the metadata is ignored, the Cloudstate proxy MAY notify the user function by sending an error message to the
     // EntityDiscovery.ReportError gRPC call.
-    Metadata metadata = 2;
+    cloudstate.Metadata metadata = 2;
 }
 
 // Forwards handling of this request to another entity.
 message Forward {
+
     // The name of the service to forward to.
     string service_name = 1;
+
     // The name of the command.
     string command_name = 2;
+
     // The payload.
     google.protobuf.Any payload = 3;
+
     // The metadata to include with the forward
     Metadata metadata = 4;
 }
@@ -172,7 +177,7 @@ message Command {
     // The command payload.
     google.protobuf.Any payload = 4;
 
-    // Whether the command is streamed or not
+    // Whether the command is streamed or not.
     bool streamed = 5;
 
     // The command metadata.
