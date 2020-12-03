@@ -255,7 +255,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
 
   private[this] final def extractService(serviceName: String, descriptor: FileDescriptor): Option[ServiceDescriptor] = {
     val (pkg, name) = Names.splitPrev(serviceName)
-    Some(descriptor).filter(_.getPackage == pkg).map(_.findServiceByName(name))
+    if (descriptor.getPackage == pkg) Option(descriptor.findServiceByName(name)) else None
   }
 
   private[this] final def binding(eventManager: Option[RunnableGraph[Future[Done]]]): Receive = {
