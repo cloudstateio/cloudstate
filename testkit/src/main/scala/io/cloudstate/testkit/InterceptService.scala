@@ -22,6 +22,7 @@ import akka.http.scaladsl.Http
 import akka.testkit.{TestKit, TestProbe}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.testkit.InterceptService.InterceptorSettings
+import io.cloudstate.testkit.crdt.InterceptCrdtService
 import io.cloudstate.testkit.discovery.InterceptEntityDiscovery
 import io.cloudstate.testkit.eventsourced.InterceptEventSourcedService
 import io.cloudstate.testkit.valueentity.InterceptValueEntityService
@@ -36,6 +37,7 @@ final class InterceptService(settings: InterceptorSettings) {
 
   private val context = new InterceptorContext(settings.intercept.host, settings.intercept.port)
   private val entityDiscovery = new InterceptEntityDiscovery(context)
+  private val crdt = new InterceptCrdtService(context)
   private val eventSourced = new InterceptEventSourcedService(context)
   private val valueBased = new InterceptValueEntityService(context)
 
@@ -45,7 +47,7 @@ final class InterceptService(settings: InterceptorSettings) {
 
   Await.result(
     Http().bindAndHandleAsync(
-      handler = entityDiscovery.handler orElse eventSourced.handler orElse valueBased.handler,
+      handler = entityDiscovery.handler orElse crdt.handler orElse eventSourced.handler orElse valueBased.handler,
       interface = settings.bind.host,
       port = settings.bind.port
     ),
@@ -54,12 +56,15 @@ final class InterceptService(settings: InterceptorSettings) {
 
   def expectEntityDiscovery(): InterceptEntityDiscovery.Discovery = entityDiscovery.expectDiscovery()
 
+  def expectCrdtConnection(): InterceptCrdtService.Connection = crdt.expectConnection()
+
   def expectEventSourcedConnection(): InterceptEventSourcedService.Connection = eventSourced.expectConnection()
 
   def expectValueBasedConnection(): InterceptValueEntityService.Connection = valueBased.expectConnection()
 
   def terminate(): Unit = {
     entityDiscovery.terminate()
+    crdt.terminate()
     eventSourced.terminate()
     valueBased.terminate()
     context.terminate()

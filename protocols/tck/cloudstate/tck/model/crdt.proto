@@ -68,12 +68,17 @@ message Request {
 // If `end_state` is set, it specifies a target state for ending the stream.
 // If `cancel_update` is set, it specifies an update to apply when the stream is cancelled.
 // If `effects` is set, it specifies side effects to return with every streamed response.
+// If `initial_update` is set, it specifies an update to apply on the initial request.
+// If `empty` is set, then no responses should be streamed (for testing empty stream connections).
+// Otherwise, the current state should be streamed on changes.
 //
 message StreamedRequest {
   string id = 1 [(.cloudstate.entity_key) = true];
   State end_state = 2;
   Update cancel_update = 3;
   repeated Effect effects = 4;
+  Update initial_update = 5;
+  bool empty = 6;
 }
 
 //

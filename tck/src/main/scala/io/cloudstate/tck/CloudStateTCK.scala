@@ -18,6 +18,7 @@ package io.cloudstate.tck
 
 import akka.actor.ActorSystem
 import akka.grpc.ServiceDescription
+import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.TestKit
 import com.example.shoppingcart.shoppingcart.{
   ShoppingCart => EventSourcedShoppingCart,
@@ -36,7 +37,7 @@ import io.cloudstate.protocol.value_entity.ValueEntity
 import io.cloudstate.protocol.event_sourced._
 import io.cloudstate.tck.model.valueentity.valueentity.{ValueEntityTckModel, ValueEntityTwo}
 import io.cloudstate.tck.model.action.{ActionTckModel, ActionTwo}
-import io.cloudstate.tck.model.crdt.{CrdtTckModel, CrdtTwo}
+import io.cloudstate.tck.model.crdt.{CrdtTckModel, CrdtTckModelClient, CrdtTwo}
 import io.cloudstate.testkit.InterceptService.InterceptorSettings
 import io.cloudstate.testkit.eventsourced.EventSourcedMessages
 import io.cloudstate.testkit.{InterceptService, ServiceAddress, TestClient, TestProtocol}
@@ -78,6 +79,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
   private[this] final val client = TestClient(settings.proxy.host, settings.proxy.port)
   private[this] final val eventSourcedShoppingCartClient = EventSourcedShoppingCartClient(client.settings)(system)
   private[this] final val valueEntityShoppingCartClient = ValueEntityShoppingCartClient(client.settings)(system)
+  private[this] final val crdtTckModelClient = CrdtTckModelClient(client.settings)(client.context.system)
 
   private[this] final val protocol = TestProtocol(settings.service.host, settings.service.port)
 
@@ -92,6 +94,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
   override def afterAll(): Unit =
     try eventSourcedShoppingCartClient.close().futureValue
     finally try valueEntityShoppingCartClient.close().futureValue
+    finally try crdtTckModelClient.close().futureValue
     finally try client.terminate()
     finally try protocol.terminate()
     finally interceptor.terminate()
@@ -1969,7 +1972,10 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           Response(Some(State(State.Value.Vote(VoteValue(selfVote, votesFor, totalVoters)))))
 
         def self(vote: Boolean): Seq[RequestAction] =
-          Seq(requestUpdate(Update(Update.Update.Vote(VoteUpdate(vote)))))
+          Seq(requestUpdate(updateWith(vote)))
+
+        def updateWith(vote: Boolean): Update =
+          Update(Update.Update.Vote(VoteUpdate(vote)))
 
         def update(selfVote: Boolean): Effects =
           Effects(stateAction = crdtUpdate(delta(selfVote)))
@@ -2249,6 +2255,29 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .passivate()
       }
 
+      "verify empty streamed responses with cancellation" in PNCounter.test { id =>
+        protocol.crdt
+          .connect()
+          .send(init(CrdtTckModel.name, id))
+          .send(command(1, id, "Process", Request(id, PNCounter.changeBy(+10))))
+          .expect(reply(1, PNCounter.state(+10), PNCounter.update(+10)))
+          .send(
+            command(
+              2,
+              id,
+              "ProcessStreamed",
+              StreamedRequest(id, cancelUpdate = Some(PNCounter.updateWith(-42)), empty = true),
+              streamed = true
+            )
+          )
+          .expect(crdtReply(2, None, Effects(streamed = true)))
+          .send(crdtStreamCancelled(2, id))
+          .expect(streamCancelledResponse(2, PNCounter.update(-42)))
+          .send(command(3, id, "Process", Request(id)))
+          .expect(reply(3, PNCounter.state(-32)))
+          .passivate()
+      }
+
       "verify streamed responses with side effects" in GSet.test { id =>
         protocol.crdt
           .connect()
@@ -2270,6 +2299,46 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           .expect(reply(3, GSet.state("a", "b"), GSet.update("b")))
           .expect(streamed(1, GSet.state("a", "b"), sideEffects("one") ++ synchronousSideEffects("two")))
           .passivate()
+      }
+
+      "verify streamed responses for connection tracking (proxy test)" in Vote.test { id =>
+        implicit val actorSystem: ActorSystem = system
+
+        val state0 = Vote.state(selfVote = false, votesFor = 0, totalVoters = 1)
+        val state1 = Vote.state(selfVote = true, votesFor = 1, totalVoters = 1)
+        val voteTrue = Some(Vote.updateWith(true))
+        val voteFalse = Some(Vote.updateWith(false))
+
+        val monitor = crdtTckModelClient.processStreamed(StreamedRequest(id)).runWith(TestSink.probe[Response])
+        monitor.request(1).expectNext(state0)
+        val crdtProtocol = interceptor.expectCrdtConnection()
+        crdtProtocol.expectClient(init(CrdtTckModel.name, id))
+        crdtProtocol.expectClient(command(1, id, "ProcessStreamed", StreamedRequest(id), streamed = true))
+        crdtProtocol.expectService(reply(1, state0, Effects(streamed = true)))
+
+        val connectRequest = StreamedRequest(id, initialUpdate = voteTrue, cancelUpdate = voteFalse, empty = true)
+        val connect = crdtTckModelClient.processStreamed(connectRequest).runWith(TestSink.probe[Response])
+        connect.request(1).expectNoMessage(100.millis)
+        monitor.request(1).expectNext(state1)
+        crdtProtocol.expectClient(command(2, id, "ProcessStreamed", connectRequest, streamed = true))
+        crdtProtocol.expectService(crdtReply(2, None, Effects(streamed = true) ++ Vote.update(true)))
+        crdtProtocol.expectService(streamed(1, state1))
+
+        connect.cancel()
+        monitor.request(1).expectNext(state0)
+        crdtProtocol.expectClient(crdtStreamCancelled(2, id))
+        crdtProtocol.expectService(streamCancelledResponse(2, Vote.update(false)))
+        crdtProtocol.expectService(streamed(1, state0))
+
+        monitor.cancel()
+        crdtProtocol.expectClient(crdtStreamCancelled(1, id))
+        crdtProtocol.expectService(streamCancelledResponse(1))
+
+        val deleteRequest = Request(id, Seq(requestDelete))
+        crdtTckModelClient.process(deleteRequest).futureValue mustBe state0
+        crdtProtocol.expectClient(command(3, id, "Process", deleteRequest))
+        crdtProtocol.expectService(reply(3, state0, deleteCrdt))
+        crdtProtocol.expectClosed()
       }
 
       // write consistency tests
