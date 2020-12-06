@@ -15,18 +15,24 @@ import com.google.protobuf.empty.Empty
 import scala.concurrent.duration._
 import scala.util.Random
 
-object GenerateLoad extends App{
-
+object GenerateLoad extends App {
 
   val system = ActorSystem()
 
-  val loadGenerator = system.actorOf(BackoffSupervisor.props(BackoffOpts.onFailure(
-    childProps = Props[LoadGeneratorActor],
-    childName = "load-generator",
-    minBackoff = 3.seconds,
-    maxBackoff = 30.seconds,
-    randomFactor = 0.2d
-  ).withReplyWhileStopped(Done)), "load-generator-supervisor")
+  val loadGenerator = system.actorOf(
+    BackoffSupervisor.props(
+      BackoffOpts
+        .onFailure(
+          childProps = Props[LoadGeneratorActor],
+          childName = "load-generator",
+          minBackoff = 3.seconds,
+          maxBackoff = 30.seconds,
+          randomFactor = 0.2d
+        )
+        .withReplyWhileStopped(Done)
+    ),
+    "load-generator-supervisor"
+  )
 
   CoordinatedShutdown(system).addTask(CoordinatedShutdown.PhaseServiceRequestsDone, "stop-making-requests") { () =>
     import akka.pattern.ask
@@ -97,7 +103,8 @@ class LoadGeneratorActor extends Actor with Timers {
   implicit val ec = context.dispatcher
 
   private val clients = {
-    val settings = GrpcClientSettings.connectToServiceAt(serviceName, servicePort)
+    val settings = GrpcClientSettings
+      .connectToServiceAt(serviceName, servicePort)
       .withTls(false)
       .withDeadline(1.minute)
 
@@ -119,25 +126,23 @@ class LoadGeneratorActor extends Actor with Timers {
 
   override def receive = starting
 
-  override def postStop(): Unit = {
+  override def postStop(): Unit =
     if (stoppingRef != null) {
       stoppingRef ! Done
     }
-  }
 
-  override def preStart(): Unit = {
+  override def preStart(): Unit =
     clients.head.getCart(GetShoppingCart("user1")) pipeTo self
-  }
 
   /**
-    * Let's say that we want to achieve 13 requests per second, with a 250ms tick interval. To do this, we need to make
-    * 3.25 requests per tick. But you can't make 0.25 requests. If we round this up or down, we're going to end up with
-    * a requests per second that is greater or less than our desired rate. We could track the rate across ticks, but
-    * there's no simple way to do that, especially during warmup, and taking back off due to response lag into
-    * consideration. Instead, we round 3.25 up or down randomly, weighted according to its decimal part, so on average,
-    * 75% of the time we round down, 25% we round up, and therefore end up with an average of 13 requests a second, as
-    * desired.
-    */
+   * Let's say that we want to achieve 13 requests per second, with a 250ms tick interval. To do this, we need to make
+   * 3.25 requests per tick. But you can't make 0.25 requests. If we round this up or down, we're going to end up with
+   * a requests per second that is greater or less than our desired rate. We could track the rate across ticks, but
+   * there's no simple way to do that, especially during warmup, and taking back off due to response lag into
+   * consideration. Instead, we round 3.25 up or down randomly, weighted according to its decimal part, so on average,
+   * 75% of the time we round down, 25% we round up, and therefore end up with an average of 13 requests a second, as
+   * desired.
+   */
   private def roundRandomWeighted(d: Double): Int = {
     val floor = d.floor
     val remainder = d - floor
@@ -217,9 +222,15 @@ class LoadGeneratorActor extends Actor with Timers {
       val responsesASecond = responsesReceivedSinceLastReport.toDouble / reportInterval * nanos
       val failuresASecond = failuresSinceLastReport.toDouble / reportInterval * nanos
 
-      println("%s Report: %4.0f req/s %4.0f success/s %4.0f failure/s with %d outstanding requests".format(
-        dateTimeFormatter.format(ZonedDateTime.now()),
-        requestsASecond, responsesASecond, failuresASecond, outstandingRequests))
+      println(
+        "%s Report: %4.0f req/s %4.0f success/s %4.0f failure/s with %d outstanding requests".format(
+          dateTimeFormatter.format(ZonedDateTime.now()),
+          requestsASecond,
+          responsesASecond,
+          failuresASecond,
+          outstandingRequests
+        )
+      )
 
       lastReportNanos = reportTime
       requestsMadeSinceLastReport = 0
@@ -229,7 +240,7 @@ class LoadGeneratorActor extends Actor with Timers {
 
   def stopping: Receive = {
     case Tick =>
-      // Ignore
+    // Ignore
 
     case _: Cart | _: Empty =>
       responsesReceivedSinceLastReport += 1

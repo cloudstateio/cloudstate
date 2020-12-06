@@ -31,4 +31,18 @@ public interface CrdtContext extends EntityContext {
    *     </code> type.
    */
   <T extends Crdt> Optional<T> state(Class<T> crdtClass) throws IllegalStateException;
+
+  /**
+   * Get the current write consistency setting for replication of CRDT state.
+   *
+   * @return the current write consistency
+   */
+  WriteConsistency getWriteConsistency();
+
+  /**
+   * Set the write consistency setting for replication of CRDT state.
+   *
+   * @param writeConsistency the new write consistency to use
+   */
+  void setWriteConsistency(WriteConsistency writeConsistency);
 }

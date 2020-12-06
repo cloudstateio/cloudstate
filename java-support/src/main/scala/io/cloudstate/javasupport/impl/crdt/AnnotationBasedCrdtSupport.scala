@@ -45,7 +45,8 @@ import io.cloudstate.javasupport.crdt.{
   StreamCancelledContext,
   StreamedCommandContext,
   SubscriptionContext,
-  Vote
+  Vote,
+  WriteConsistency
 }
 import io.cloudstate.javasupport.impl.ReflectionHelper.{
   CommandHandlerInvoker,
@@ -288,6 +289,9 @@ private final class AdaptedStreamedCommandContext(val delegate: StreamedCommandC
   override def newLWWRegister[T](value: T): LWWRegister[T] = delegate.newLWWRegister(value)
   override def newORMap[K, V <: Crdt](): ORMap[K, V] = delegate.newORMap()
   override def newVote(): Vote = delegate.newVote()
+
+  override def getWriteConsistency: WriteConsistency = delegate.getWriteConsistency
+  override def setWriteConsistency(consistency: WriteConsistency): Unit = delegate.setWriteConsistency(consistency)
 }
 
 private final class EntityConstructorInvoker(constructor: Constructor[_]) extends (CrdtCreationContext => AnyRef) {

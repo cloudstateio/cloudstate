@@ -20,11 +20,13 @@ import java.lang.annotation.Annotation
 import java.lang.reflect.{AccessibleObject, Executable, Member, Method, ParameterizedType, Type, WildcardType}
 import java.util.Optional
 
+import akka.NotUsed
 import io.cloudstate.javasupport.{
   CloudEvent,
   Context,
   EntityContext,
   EntityId,
+  Jsonable,
   Metadata,
   MetadataContext,
   ServiceCallFactory
@@ -32,6 +34,7 @@ import io.cloudstate.javasupport.{
 import com.google.protobuf.{Any => JavaPbAny}
 
 import scala.reflect.ClassTag
+import scala.runtime.BoxedUnit
 
 /**
  * How we do reflection:
@@ -208,13 +211,12 @@ private[impl] object ReflectionHelper {
 
     verifyAtMostOneMainArgument("CommandHandler", method, parameters)
 
-    parameters.foreach {
-      case MainArgumentParameterHandler(inClass) if !inClass.isAssignableFrom(serviceMethod.inputType.typeClass) =>
-        throw new RuntimeException(
-          s"Incompatible command class $inClass for command $name, expected ${serviceMethod.inputType.typeClass}"
-        )
-      case _ =>
-    }
+    val mainArgumentDecoder: JavaPbAny => AnyRef = parameters
+      .collectFirst {
+        case MainArgumentParameterHandler(inClass) =>
+          getMainArgumentDecoder(name, inClass, serviceMethod.inputType)
+      }
+      .getOrElse(_ => NotUsed)
 
     private def serialize(result: AnyRef) =
       JavaPbAny
@@ -249,12 +251,30 @@ private[impl] object ReflectionHelper {
     }
 
     def invoke(obj: AnyRef, command: JavaPbAny, context: CommandContext): Optional[JavaPbAny] = {
-      val decodedCommand = serviceMethod.inputType.parseFrom(command.getValue).asInstanceOf[AnyRef]
+      val decodedCommand = mainArgumentDecoder(command)
       val ctx = InvocationContext(decodedCommand, context)
       val result = method.invoke(obj, parameters.map(_.apply(ctx)): _*)
       handleResult(result)
     }
   }
+
+  def getMainArgumentDecoder(name: String, actualType: Class[_], pbType: ResolvedType[_]): JavaPbAny => AnyRef =
+    if (actualType.isAssignableFrom(pbType.typeClass)) { pbAny =>
+      pbType.parseFrom(pbAny.getValue).asInstanceOf[AnyRef]
+    } else if (pbType.typeClass.equals(classOf[JavaPbAny]) && actualType.getAnnotation(classOf[Jsonable]) != null) {
+      val reader = AnySupport.objectMapper.readerFor(actualType)
+      pbAny => {
+        if (pbAny.getTypeUrl.startsWith(AnySupport.CloudStateJson)) {
+          reader.readValue(AnySupport.extractBytes(pbAny.getValue).newInput()).asInstanceOf[AnyRef]
+        } else {
+          throw new RuntimeException(
+            s"Don't know how to deserialize protobuf Any type with type URL ${pbAny.getTypeUrl} "
+          )
+        }
+      }
+    } else {
+      throw new RuntimeException(s"Incompatible input class $actualType for call $name, expected ${pbType.typeClass}")
+    }
 
   def getRawType(t: Type): Class[_] = t match {
     case clazz: Class[_] => clazz

@@ -32,7 +32,8 @@ import io.cloudstate.javasupport.crdt.{
   CrdtEntityOptions,
   StreamCancelledContext,
   StreamedCommandContext,
-  SubscriptionContext
+  SubscriptionContext,
+  WriteConsistency
 }
 import io.cloudstate.javasupport.impl.{
   AbstractClientActionContext,
@@ -147,7 +148,9 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
         ctx.deactivate()
       }
     }
-    verifyNoDelta("creation")
+    // Doesn't make sense to verify that there's no delta here.
+    // LWWRegister can have its value set on creation, so there may be a delta.
+    // verifyNoDelta("creation")
 
     private def verifyNoDelta(scope: String): Unit =
       crdt match {
@@ -407,6 +410,19 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
       override final def entityId(): String = EntityRunner.this.entityId
 
       override def serviceCallFactory(): ServiceCallFactory = rootContext.serviceCallFactory()
+
+      private var writeConsistency = WriteConsistency.LOCAL
+
+      override final def getWriteConsistency: WriteConsistency = writeConsistency
+
+      override final def setWriteConsistency(writeConsistency: WriteConsistency): Unit =
+        this.writeConsistency = writeConsistency
+
+      def crdtWriteConsistency: CrdtWriteConsistency = writeConsistency match {
+        case WriteConsistency.LOCAL => CrdtWriteConsistency.LOCAL
+        case WriteConsistency.MAJORITY => CrdtWriteConsistency.MAJORITY
+        case WriteConsistency.ALL => CrdtWriteConsistency.ALL
+      }
     }
 
     trait CapturingCrdtFactory extends AbstractCrdtFactory with AbstractCrdtContext {
@@ -438,11 +454,11 @@ class CrdtImpl(system: ActorSystem, services: Map[String, CrdtStatefulService], 
       final def createCrdtAction(): Option[CrdtStateAction] = crdt match {
         case Some(c) =>
           if (deleted) {
-            Some(CrdtStateAction(action = CrdtStateAction.Action.Delete(CrdtDelete())))
+            Some(CrdtStateAction(action = CrdtStateAction.Action.Delete(CrdtDelete()), crdtWriteConsistency))
           } else if (c.hasDelta) {
             val delta = c.delta
             c.resetDelta()
-            Some(CrdtStateAction(action = CrdtStateAction.Action.Update(CrdtDelta(delta))))
+            Some(CrdtStateAction(action = CrdtStateAction.Action.Update(CrdtDelta(delta)), crdtWriteConsistency))
           } else {
             None
           }

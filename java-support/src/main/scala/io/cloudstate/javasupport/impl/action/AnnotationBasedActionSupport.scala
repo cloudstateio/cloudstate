@@ -21,7 +21,7 @@ import java.util.concurrent.{CompletableFuture, CompletionStage}
 
 import akka.NotUsed
 import akka.stream.{javadsl, Materializer}
-import akka.stream.javadsl.{AsPublisher, Source}
+import akka.stream.javadsl.Source
 import akka.stream.scaladsl.{JavaFlowSupport, Sink}
 import com.google.protobuf.{Descriptors, Any => JavaPbAny}
 import io.cloudstate.javasupport.action._
@@ -33,7 +33,6 @@ import io.cloudstate.javasupport.impl.{
   ResolvedServiceMethod,
   ResolvedType
 }
-import io.cloudstate.javasupport.Metadata
 
 /**
  * Annotation based implementation of the [[ActionHandler]].
@@ -247,23 +246,19 @@ private object ActionReflection {
     ReflectionHelper.getRawType(parameterType) match {
       case envelope if envelope == classOf[MessageEnvelope[_]] =>
         val messageType = ReflectionHelper.getFirstParameter(parameterType)
-        if (messageType != resolvedType.typeClass) {
-          throw new RuntimeException(
-            s"Incompatible message class $messageType for call $method, expected ${resolvedType.typeClass}"
-          )
-        } else { envelope =>
+        val decoder = ReflectionHelper.getMainArgumentDecoder(method, messageType, resolvedType)
+
+        { envelope =>
           MessageEnvelope.of(
-            resolvedType.parseFrom(envelope.payload.getValue).asInstanceOf[AnyRef],
+            decoder(envelope.payload),
             envelope.metadata
           )
         }
       case payload =>
-        if (payload != resolvedType.typeClass) {
-          throw new RuntimeException(
-            s"Incompatible message class $payload for call $method, expected ${resolvedType.typeClass}"
-          )
-        } else { envelope =>
-          resolvedType.parseFrom(envelope.payload.getValue).asInstanceOf[AnyRef]
+        val decoder = ReflectionHelper.getMainArgumentDecoder(method, payload, resolvedType)
+
+        { envelope =>
+          decoder(envelope.payload)
         }
     }
 }
