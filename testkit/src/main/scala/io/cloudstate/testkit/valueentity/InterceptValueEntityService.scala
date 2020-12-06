@@ -92,5 +92,15 @@ object InterceptValueEntityService {
       out.expectNoMessage(timeout)
       this
     }
+
+    def expectInClosed(duration: FiniteDuration): Connection = {
+      in.expectMsg(duration, Complete)
+      this
+    }
+
+    def expectOutClosed(duration: FiniteDuration): Connection = {
+      out.expectMsg(duration, Complete)
+      this
+    }
   }
 }

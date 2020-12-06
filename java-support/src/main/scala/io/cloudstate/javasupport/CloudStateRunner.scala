@@ -83,14 +83,14 @@ final class CloudStateRunner private[this] (
    * Creates a CloudStateRunner from the given services. Use the default config to create the internal ActorSystem.
    */
   def this(services: java.util.Map[String, java.util.function.Function[ActorSystem, Service]]) {
-    this(ActorSystem("StatefulService", CloudStateConfigHolder.defaultConfiguration()), services.asScala.toMap)
+    this(ActorSystem("StatefulService", CloudStateSettingsHolder.settings), services.asScala.toMap)
   }
 
   /**
    * Creates a CloudStateRunner from the given services and config. Use the config to create the internal ActorSystem.
    */
   def this(services: java.util.Map[String, java.util.function.Function[ActorSystem, Service]], config: Config) {
-    this(ActorSystem("StatefulService", config), services.asScala.toMap)
+    this(ActorSystem("StatefulService", CloudStateSettingsHolder.useConfig(config)), services.asScala.toMap)
   }
 
   private val rootContext = new Context {

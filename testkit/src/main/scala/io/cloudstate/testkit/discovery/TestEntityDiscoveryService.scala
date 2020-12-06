@@ -22,11 +22,9 @@ import akka.testkit.TestProbe
 import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.google.protobuf.empty.{Empty => ScalaPbEmpty}
-import io.cloudstate.protocol.entity.EntityPassivationStrategy.Strategy
 import io.cloudstate.protocol.entity._
 import io.cloudstate.testkit.TestService.TestServiceContext
 
-import scala.concurrent.duration._
 import scala.concurrent.{Future, Promise}
 import scala.util.Success
 
@@ -44,9 +42,6 @@ final class TestEntityDiscoveryService(context: TestServiceContext) {
 object TestEntityDiscoveryService {
   val info: ServiceInfo = ServiceInfo(supportLibraryName = "Cloudstate TestKit")
 
-  private val passivationStrategyTimeout: Strategy.Timeout =
-    Strategy.Timeout(TimeoutPassivationStrategy(30.seconds.toMillis))
-
   def entitySpec(entityType: String, service: ServiceDescription): EntitySpec = {
     import scala.jdk.CollectionConverters._
     entitySpec(entityType, service.descriptor.getServices.asScala.toSeq)
@@ -62,9 +57,7 @@ object TestEntityDiscoveryService {
       allDescriptors(descriptors.map(_.getFile)).distinctBy(_.getName).foreach(fd => descriptorSet.addFile(fd.toProto))
       descriptorSet.build().toByteString
     }
-    val entities = descriptors.map(
-      d => Entity(entityType, d.getFullName, d.getName, Some(EntityPassivationStrategy(passivationStrategyTimeout)))
-    )
+    val entities = descriptors.map(d => Entity(entityType, d.getFullName, d.getName))
     EntitySpec(proto, entities, Some(info))
   }
 
