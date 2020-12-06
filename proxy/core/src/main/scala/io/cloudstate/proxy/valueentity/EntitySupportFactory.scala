@@ -101,7 +101,7 @@ class EntitySupportFactory(
     if (methodsWithoutKeys.nonEmpty) {
       val offendingMethods = methodsWithoutKeys.map(_.method.getName).mkString(",")
       throw EntityDiscoveryException(
-        "Value based entities do not support methods whose parameters do not have at least one field marked as entity_key, " +
+        s"Value based entities do not support methods whose parameters do not have at least one field marked as entity_key, " +
         s"but ${serviceDescriptor.getFullName} has the following methods without keys: $offendingMethods"
       )
     }

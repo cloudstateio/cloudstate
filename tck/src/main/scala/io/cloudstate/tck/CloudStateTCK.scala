@@ -34,10 +34,8 @@ import com.google.protobuf.{ByteString, DescriptorProtos}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.protocol.action._
-import io.cloudstate.protocol.crdt.Crdt
-import io.cloudstate.protocol.entity.EntityPassivationStrategy.Strategy
-import io.cloudstate.protocol.entity.Entity
-import io.cloudstate.protocol.value_entity.ValueEntity
+import io.cloudstate.protocol.crdt._
+import io.cloudstate.protocol.value_entity._
 import io.cloudstate.protocol.event_sourced._
 import io.cloudstate.protocol.entity._
 import io.cloudstate.tck.model.valueentity.valueentity.{ValueEntityTckModel, ValueEntityTwo}
@@ -245,7 +243,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           entity.entityType mustBe ValueEntity.name
           entity.persistenceId mustBe "entity-passivation-tck-model"
           entity.passivationStrategy must (not be None or be(None))
-          entity.passivationStrategy.get.strategy mustBe a[Strategy.Timeout]
+          entity.passivationStrategy.get.strategy mustBe a[EntityPassivationStrategy.Strategy.Timeout]
         }
       }
 
