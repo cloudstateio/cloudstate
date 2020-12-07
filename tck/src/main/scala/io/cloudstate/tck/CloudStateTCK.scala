@@ -169,52 +169,54 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         spec.entities.find(_.serviceName == CrdtTckModel.name).foreach { entity =>
           serviceNames must contain("CrdtTckModel")
           entity.entityType mustBe Crdt.name
+          entity.passivationStrategy must not be None
         }
 
         spec.entities.find(_.serviceName == CrdtTwo.name).foreach { entity =>
           serviceNames must contain("CrdtTwo")
           entity.entityType mustBe Crdt.name
+          entity.passivationStrategy must not be None
         }
 
         spec.entities.find(_.serviceName == EventSourcedTckModel.name).foreach { entity =>
           serviceNames must contain("EventSourcedTckModel")
           entity.entityType mustBe EventSourced.name
           entity.persistenceId mustBe "event-sourced-tck-model"
-          entity.passivationStrategy must (not be None or be(None))
+          entity.passivationStrategy must not be None
         }
 
         spec.entities.find(_.serviceName == EventSourcedTwo.name).foreach { entity =>
           serviceNames must contain("EventSourcedTwo")
           entity.entityType mustBe EventSourced.name
-          entity.passivationStrategy must (not be None or be(None))
+          entity.passivationStrategy must not be None
         }
 
         spec.entities.find(_.serviceName == EventSourcedShoppingCart.name).foreach { entity =>
           serviceNames must contain("ShoppingCart")
           entity.entityType mustBe EventSourced.name
           entity.persistenceId must not be empty
-          entity.passivationStrategy must (not be None or be(None))
+        //entity.passivationStrategy must not be None // some language support does not support passivation yet!!
         }
 
         spec.entities.find(_.serviceName == ValueEntityTckModel.name).foreach { entity =>
           serviceNames must contain("ValueEntityTckModel")
           entity.entityType mustBe ValueEntity.name
           entity.persistenceId mustBe "value-entity-tck-model"
-          entity.passivationStrategy must (not be None or be(None))
+          entity.passivationStrategy must not be None
         }
 
         spec.entities.find(_.serviceName == ValueEntityTwo.name).foreach { entity =>
           serviceNames must contain("ValueEntityTwo")
           entity.entityType mustBe ValueEntity.name
           entity.persistenceId mustBe "value-entity-tck-model-two"
-          entity.passivationStrategy must (not be None or be(None))
+          entity.passivationStrategy must not be None
         }
 
         spec.entities.find(_.serviceName == ValueEntityShoppingCart.name).foreach { entity =>
           serviceNames must contain("ShoppingCart")
           entity.entityType mustBe ValueEntity.name
           entity.persistenceId must not be empty
-          entity.passivationStrategy must (not be None or be(None))
+          entity.passivationStrategy must not be None
         }
 
         enabledServices = spec.entities.map(_.serviceName)
@@ -233,7 +235,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         testFor(PassivationTckModel)(test(nextEntityId()))
 
       def passivationTimeout(entity: Entity): FiniteDuration = {
-        val additionalTimeout = 100 // additional time for allowing passivation
+        val additionalTimeout = 1000 // additional time in millis for allowing passivation
         val timeoutStrategy = entity.passivationStrategy.get.strategy.timeout
         Duration(timeoutStrategy.get.timeout + additionalTimeout, TimeUnit.MILLISECONDS)
       }
@@ -242,7 +244,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         passivationEntities.find(_.serviceName == PassivationTckModel.name).foreach { entity =>
           entity.entityType mustBe ValueEntity.name
           entity.persistenceId mustBe "entity-passivation-tck-model"
-          entity.passivationStrategy must (not be None or be(None))
+          entity.passivationStrategy must not be None
           entity.passivationStrategy.get.strategy mustBe a[EntityPassivationStrategy.Strategy.Timeout]
         }
       }
