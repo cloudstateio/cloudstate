@@ -195,7 +195,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
           serviceNames must contain("ShoppingCart")
           entity.entityType mustBe EventSourced.name
           entity.persistenceId must not be empty
-        //entity.passivationStrategy must not be None // some language support does not support passivation yet!!
+          entity.passivationStrategy must not be None
         }
 
         spec.entities.find(_.serviceName == ValueEntityTckModel.name).foreach { entity =>
@@ -224,7 +224,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
       }
     }
 
-    "verifying entity passivation" must {
+    "verifying model test: entity passivation" must {
       import ValueEntityMessages._
       import io.cloudstate.tck.model.entitypassivation.entitypassivation._
 
@@ -244,7 +244,6 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         passivationEntities.find(_.serviceName == PassivationTckModel.name).foreach { entity =>
           entity.entityType mustBe ValueEntity.name
           entity.persistenceId mustBe "entity-passivation-tck-model"
-          entity.passivationStrategy must not be None
           entity.passivationStrategy.get.strategy mustBe a[EntityPassivationStrategy.Strategy.Timeout]
         }
       }
