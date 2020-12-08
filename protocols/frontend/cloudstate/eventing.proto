@@ -24,6 +24,7 @@ package cloudstate;
 option java_package = "io.cloudstate";
 option java_multiple_files = true;
 option java_outer_classname = "EventsProto";
+option go_package = "github.com/cloudstateio/go-support/cloudstate;cloudstate";
 
 // Eventing configuration for a gRPC method.
 message Eventing {
