@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //
-// == Cloudstate TCK model test for value-based entities passivation ==
+// == Cloudstate TCK model test for passivation ==
 //
 
 syntax = "proto3";
@@ -29,8 +29,10 @@ option go_package = "github.com/cloudstateio/go-support/tck/entitypassivation;en
 // The `PassivationTckModel` service should be implemented in the following ways:
 //
 // - The entity persistence-id must be `entity-passivation-tck-model`.
-// - The state of the entity is simply a string and is constant.
-// - The command handler does nothing and must return a response.
+// - The passivation timeout must be set to a duration of 2 seconds or 2000 millis.
+// - The state of the entity is a string and has the value "state".
+// - The command handler does nothing and must return a `Response` with the state.
+// - The `Persisted` message is just used for the command context.
 // - The `Activate` method receives a `Request` message for activating the entity.
 // - The `Activate` method must reply with the state in a `Response`.
 //
@@ -53,7 +55,7 @@ message Response {
 }
 
 //
-// The `Persisted` message wraps the state value.
+// The `Persisted` message wraps the state value. It is just used for the command context.
 //
 message Persisted {
   string value = 1;
