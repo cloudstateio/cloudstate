@@ -30,7 +30,7 @@ public interface PassivationStrategy {
    * @return the passivation strategy
    */
   static PassivationStrategy defaultTimeout() {
-    return new Timeout(CloudStateSettingsHolder.settings());
+    return new Timeout();
   }
 
   /**

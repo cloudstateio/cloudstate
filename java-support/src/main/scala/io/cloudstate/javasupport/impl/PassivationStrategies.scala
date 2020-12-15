@@ -18,12 +18,15 @@ package io.cloudstate.javasupport.impl
 
 import java.time.Duration
 
-import com.typesafe.config.Config
 import io.cloudstate.javasupport.PassivationStrategy
 
-private[impl] case class Timeout(duration: Duration) extends PassivationStrategy {
+private[impl] case class Timeout private (duration: Option[Duration]) extends PassivationStrategy {
 
-  def this(config: Config) {
-    this(config.getDuration("cloudstate.passivation-timeout"))
+  def this() {
+    this(None) // use the timeout from the default or customized settings
+  }
+
+  def this(duration: Duration) {
+    this(Some(duration))
   }
 }

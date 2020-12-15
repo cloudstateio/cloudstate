@@ -24,6 +24,8 @@ import com.google.protobuf.DescriptorProtos
 import io.cloudstate.javasupport.{BuildInfo, EntityOptions, Service}
 import io.cloudstate.protocol.entity.EntityPassivationStrategy.Strategy
 
+import java.time.Duration
+
 class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, Service]) extends EntityDiscovery {
 
   private def configuredOrElse(key: String, default: String): String =
@@ -93,11 +95,20 @@ class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, Service]) e
 
   private def entityPassivationStrategy(maybeOptions: Option[EntityOptions]): Option[EntityPassivationStrategy] = {
     import io.cloudstate.protocol.entity.{EntityPassivationStrategy => EPStrategy}
-    maybeOptions.map {
-      case options =>
-        options.passivationStrategy() match {
-          case Timeout(duration) => EPStrategy(Strategy.Timeout(TimeoutPassivationStrategy(duration.toMillis)))
-        }
+    maybeOptions.flatMap { options =>
+      options.passivationStrategy() match {
+        case Timeout(maybeTimeout) =>
+          maybeTimeout match {
+            case Some(timeout) => Some(EPStrategy(Strategy.Timeout(TimeoutPassivationStrategy(timeout.toMillis))))
+            case _ =>
+              configuredPassivationTimeout("cloudstate.passivation-timeout").map(
+                timeout => EPStrategy(Strategy.Timeout(TimeoutPassivationStrategy(timeout.toMillis)))
+              )
+          }
+      }
     }
   }
+
+  private def configuredPassivationTimeout(key: String): Option[Duration] =
+    if (system.settings.config.hasPath(key)) Some(system.settings.config.getDuration(key)) else None
 }
