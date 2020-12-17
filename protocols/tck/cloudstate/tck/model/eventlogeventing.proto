@@ -86,7 +86,7 @@ service EventSourcedEntityOne {
 //
 // The `EventSourcedEntityTwo` service is an event sourced entity that should be implemented in the following ways:
 //
-// - The `EmitJsonMethod` method should emit an event serialised as JSON. This event should:
+// - The `EmitJsonEvent` method should emit an event serialised as JSON. This event should:
 //   - Contain a single `message` property with the value of the `message` field in `JsonEvent`.
 //   - Be serialized according to the Cloudstate JSON serialization conventions - that is, with the JSON serialized to
 //     bytes, then placed into a protobuf message with a single bytes field with field number 1.
@@ -139,7 +139,6 @@ message JsonEvent {
 //
 // - Reply: reply with the given message in a `Response`.
 // - Forward: forward to another service, in place of replying with a `Response`.
-// - SideEffect: add a side effect to the current reply, forward, or failure.
 //
 message ProcessStep {
   oneof step {
