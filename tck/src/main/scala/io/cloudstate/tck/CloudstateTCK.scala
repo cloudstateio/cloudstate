@@ -23,9 +23,7 @@ class CloudstateTCK(description: String, val settings: TCKSpec.Settings)
     with ProxyTCK
     with ActionTCK
     with EntityTCK
-    with ShoppingCartTCK
     with EventSourcedEntityTCK
-    with EventSourcedShoppingCartTCK
     with CrdtEntityTCK
     with EventingTCK {
 
@@ -39,11 +37,7 @@ class CloudstateTCK(description: String, val settings: TCKSpec.Settings)
 
     "verifying model test: entity" must verifyEntityModel()
 
-    "verifying app test: shopping cart" must verifyShoppingCart()
-
     "verifying model test: event sourced entity" must verifyEventSourcedEntityModel()
-
-    "verifying app test: event sourced shopping cart" must verifyEventSourcedShoppingCart()
 
     "verifying model test: CRDT entity" must verifyCrdtEntityModel()
 
