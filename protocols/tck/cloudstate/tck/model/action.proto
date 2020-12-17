@@ -20,6 +20,8 @@ syntax = "proto3";
 
 package cloudstate.tck.model.action;
 
+import "google/api/annotations.proto";
+
 option java_package = "io.cloudstate.tck.model";
 option go_package = "github.com/cloudstateio/go-support/tck/action;action";
 
@@ -41,7 +43,12 @@ option go_package = "github.com/cloudstateio/go-support/tck/action;action";
 // - Forwarding and side effects must always be made to the second service `ActionTwo`.
 //
 service ActionTckModel {
-  rpc ProcessUnary(Request) returns (Response);
+  rpc ProcessUnary(Request) returns (Response) {
+    option (google.api.http) = {
+      post: "/tck/model/action/unary",
+      body: "*"
+    };
+  }
   rpc ProcessStreamedIn(stream Request) returns (Response);
   rpc ProcessStreamedOut(Request) returns (stream Response);
   rpc ProcessStreamed(stream Request) returns (stream Response);
@@ -49,7 +56,7 @@ service ActionTckModel {
 
 //
 // The `ActionTwo` service is only for verifying forwards and side effects.
-// The `Call` method is not required to do anything, and may simply return an empty `Response` message.
+// The `Call` method is not required to do anything, and must return an empty `Response` message.
 //
 service ActionTwo {
   rpc Call(OtherRequest) returns (Response);

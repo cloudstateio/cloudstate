@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.tck.model.action;
+package io.cloudstate.javasupport.tck.model.crdt;
 
-import io.cloudstate.javasupport.action.*;
-import io.cloudstate.tck.model.Action.*;
+import io.cloudstate.javasupport.crdt.*;
+import io.cloudstate.tck.model.Crdt.*;
 
-@Action
-public class ActionTwoBehavior {
-  public ActionTwoBehavior() {}
+@CrdtEntity
+public class CrdtConfiguredEntity {
 
-  @CallHandler
-  public Response call(OtherRequest request) {
+  @CommandHandler
+  public Response call(Request request) {
     return Response.getDefaultInstance();
   }
 }

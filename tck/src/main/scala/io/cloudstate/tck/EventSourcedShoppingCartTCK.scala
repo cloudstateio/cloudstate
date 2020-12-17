@@ -183,7 +183,7 @@ class EventSourcedShoppingCartVerifier(interceptor: InterceptService) extends Mu
 
   private def nextCommandId(cartId: String): Long = commandIds.updateWith(cartId)(_.map(_ + 1).orElse(Some(1L))).get
 
-  def verifyConnection(): Unit = connection = interceptor.expectEventSourcedConnection()
+  def verifyConnection(): Unit = connection = interceptor.expectEventSourcedEntityConnection()
 
   def verifyGetInitialEmptyCart(cartId: String): Unit = {
     val commandId = nextCommandId(cartId)

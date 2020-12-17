@@ -47,7 +47,11 @@ class CloudstateTCK(description: String, val settings: TCKSpec.Settings)
 
     "verifying model test: CRDT entity" must verifyCrdtEntityModel()
 
+    "verifying proxy test: action" must verifyActionProxy()
+
     "verifying proxy test: entity" must verifyEntityProxy()
+
+    "verifying proxy test: event sourced entity" must verifyEventSourcedEntityProxy()
 
     "verifying proxy test: CRDT entity" must verifyCrdtEntityProxy()
 

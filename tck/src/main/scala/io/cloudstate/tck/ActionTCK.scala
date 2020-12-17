@@ -16,10 +16,15 @@
 
 package io.cloudstate.tck
 
+import akka.actor.ActorSystem
+import akka.stream.scaladsl.Source
+import akka.stream.testkit.TestPublisher
+import akka.stream.testkit.scaladsl.TestSink
 import io.cloudstate.protocol.action.{ActionCommand, ActionProtocol, ActionResponse}
 import io.cloudstate.tck.model.action.{ActionTckModel, ActionTwo}
 import io.cloudstate.tck.model.action._
 import io.cloudstate.testkit.action.ActionMessages._
+import io.grpc.StatusRuntimeException
 
 trait ActionTCK extends TCKSpec {
 
@@ -54,6 +59,9 @@ trait ActionTCK extends TCKSpec {
 
     def replyWith(message: String): ProcessStep =
       ProcessStep(ProcessStep.Step.Reply(Reply(message)))
+
+    def serviceTwoCall(id: String): ActionCommand =
+      command(ServiceTwo, "Call", OtherRequest(id))
 
     def sideEffectTo(id: String, synchronous: Boolean = false): ProcessStep =
       ProcessStep(ProcessStep.Step.Effect(SideEffect(id, synchronous)))
@@ -420,6 +428,198 @@ trait ActionTCK extends TCKSpec {
         .expect(failure("five"))
         .expect(failure("six", sideEffects("other")))
         .complete()
+    }
+  }
+
+  object ActionTCKProxy {
+    val tckModelClient: ActionTckModelClient = ActionTckModelClient(client.settings)(client.system)
+
+    def terminate(): Unit = tckModelClient.close()
+  }
+
+  override def afterAll(): Unit =
+    try ActionTCKProxy.terminate()
+    finally super.afterAll()
+
+  def verifyActionProxy(): Unit = {
+    import ActionTCKModel._
+    import ActionTCKProxy._
+
+    "verify unary command processing" in actionTest {
+      tckModelClient.processUnary(single(replyWith("one"))).futureValue mustBe Response("one")
+      interceptor
+        .expectActionUnaryConnection()
+        .expectClient(processUnary(single(replyWith("one"))))
+        .expectService(reply(Response("one")))
+    }
+
+    "verify streamed-in command processing" in actionTest {
+      implicit val actorSystem: ActorSystem = client.system
+      val requests = TestPublisher.probe[Request]()
+      val response = tckModelClient.processStreamedIn(Source.fromPublisher(requests))
+      requests.sendNext(single(replyWith("two"))).sendComplete()
+      response.futureValue mustBe Response("two")
+      interceptor
+        .expectActionStreamedInConnection()
+        .expectClient(processStreamedIn)
+        .expectClient(command(single(replyWith("two"))))
+        .expectInComplete()
+        .expectService(reply(Response("two")))
+    }
+
+    "verify streamed-out command processing" in actionTest {
+      implicit val actorSystem: ActorSystem = client.system
+      val streamedOutRequest = request(group(replyWith("A")), group(replyWith("B")), group(replyWith("C")))
+      tckModelClient
+        .processStreamedOut(streamedOutRequest)
+        .runWith(TestSink.probe[Response])
+        .ensureSubscription()
+        .request(3)
+        .expectNext(Response("A"))
+        .expectNext(Response("B"))
+        .expectNext(Response("C"))
+        .expectComplete()
+      interceptor
+        .expectActionStreamedOutConnection()
+        .expectClient(processStreamedOut(streamedOutRequest))
+        .expectService(reply(Response("A")))
+        .expectService(reply(Response("B")))
+        .expectService(reply(Response("C")))
+        .expectOutComplete()
+    }
+
+    "verify streamed command processing" in actionTest {
+      implicit val actorSystem: ActorSystem = client.system
+      val requests = TestPublisher.probe[Request]()
+      val responses = tckModelClient
+        .processStreamed(Source.fromPublisher(requests))
+        .runWith(TestSink.probe[Response])
+        .ensureSubscription()
+      requests
+        .sendNext(single(replyWith("X")))
+        .sendNext(single(replyWith("Y")))
+        .sendNext(single(replyWith("Z")))
+        .sendComplete()
+      responses
+        .request(3)
+        .expectNext(Response("X"))
+        .expectNext(Response("Y"))
+        .expectNext(Response("Z"))
+        .expectComplete()
+      interceptor
+        .expectActionStreamedConnection()
+        .expectClient(processStreamed)
+        .expectClient(command(single(replyWith("X"))))
+        .expectService(reply(Response("X")))
+        .expectClient(command(single(replyWith("Y"))))
+        .expectService(reply(Response("Y")))
+        .expectClient(command(single(replyWith("Z"))))
+        .expectService(reply(Response("Z")))
+        .expectComplete()
+    }
+
+    "verify unary forwards and side effects" in actionTest {
+      tckModelClient.processUnary(single(forwardTo("other"))).futureValue mustBe Response()
+      interceptor
+        .expectActionUnaryConnection()
+        .expectClient(processUnary(single(forwardTo("other"))))
+        .expectService(forwarded("other"))
+      interceptor
+        .expectActionUnaryConnection()
+        .expectClient(serviceTwoCall("other"))
+        .expectService(reply(Response()))
+
+      tckModelClient.processUnary(single(replyWith(""), sideEffectTo("another"))).futureValue mustBe Response()
+      interceptor
+        .expectActionUnaryConnection()
+        .expectClient(processUnary(single(replyWith(""), sideEffectTo("another"))))
+        .expectService(reply(Response(), sideEffects("another")))
+      interceptor
+        .expectActionUnaryConnection()
+        .expectClient(serviceTwoCall("another"))
+        .expectService(reply(Response()))
+    }
+
+    "verify streamed forwards and side effects" in actionTest {
+      implicit val actorSystem: ActorSystem = client.system
+      val requests = TestPublisher.probe[Request]()
+      val responses = tckModelClient
+        .processStreamed(Source.fromPublisher(requests))
+        .runWith(TestSink.probe[Response])
+        .ensureSubscription()
+
+      requests.sendNext(single(forwardTo("one")))
+      responses.request(1).expectNext(Response())
+      val connection = interceptor
+        .expectActionStreamedConnection()
+        .expectClient(processStreamed)
+        .expectClient(command(single(forwardTo("one"))))
+        .expectService(forwarded("one"))
+      interceptor
+        .expectActionUnaryConnection()
+        .expectClient(serviceTwoCall("one"))
+        .expectService(reply(Response()))
+
+      requests.sendNext(single(sideEffectTo("two")))
+      connection
+        .expectClient(command(single(sideEffectTo("two"))))
+        .expectService(noReply(sideEffects("two")))
+      interceptor
+        .expectActionUnaryConnection()
+        .expectClient(serviceTwoCall("two"))
+        .expectService(reply(Response()))
+
+      requests.sendComplete()
+      responses.expectComplete()
+      connection.expectComplete()
+    }
+
+    "verify unary failures" in actionTest {
+      val failed = tckModelClient.processUnary(single(failWith("expected failure"))).failed.futureValue
+      failed mustBe a[StatusRuntimeException]
+      failed.asInstanceOf[StatusRuntimeException].getStatus.getDescription mustBe "expected failure"
+      interceptor
+        .expectActionUnaryConnection()
+        .expectClient(processUnary(single(failWith("expected failure"))))
+        .expectService(failure("expected failure"))
+    }
+
+    "verify streamed failures" in actionTest {
+      implicit val actorSystem: ActorSystem = client.system
+      val requests = TestPublisher.probe[Request]()
+      val responses = tckModelClient
+        .processStreamed(Source.fromPublisher(requests))
+        .runWith(TestSink.probe[Response])
+        .ensureSubscription()
+      val connection = interceptor
+        .expectActionStreamedConnection()
+        .expectClient(processStreamed)
+      requests.sendNext(single(failWith("expected failure")))
+      val failed = responses.request(1).expectError()
+      failed mustBe a[StatusRuntimeException]
+      failed.asInstanceOf[StatusRuntimeException].getStatus.getDescription mustBe "expected failure"
+      requests.expectCancellation()
+      connection
+        .expectClient(command(single(failWith("expected failure"))))
+        .expectService(failure("expected failure"))
+    }
+
+    "verify unary HTTP API" in actionTest {
+      client.http
+        .request("tck/model/action/unary", """{"groups": [{"steps": [{"reply": {"message": "foo"}}]}]}""")
+        .futureValue mustBe """{"message":"foo"}"""
+      interceptor
+        .expectActionUnaryConnection()
+        .expectClient(processUnary(single(replyWith("foo"))))
+        .expectService(reply(Response("foo")))
+
+      client.http
+        .requestToError("tck/model/action/unary", """{"groups": [{"steps": [{"fail": {"message": "boom"}}]}]}""")
+        .futureValue mustBe "boom"
+      interceptor
+        .expectActionUnaryConnection()
+        .expectClient(processUnary(single(failWith("boom"))))
+        .expectService(failure("boom"))
     }
   }
 }

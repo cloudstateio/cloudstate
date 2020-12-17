@@ -21,6 +21,7 @@ syntax = "proto3";
 package cloudstate.tck.model;
 
 import "cloudstate/entity_key.proto";
+import "google/api/annotations.proto";
 
 option java_package = "io.cloudstate.tck.model";
 option go_package = "github.com/cloudstateio/go-support/tck/eventsourced;eventsourced";
@@ -40,14 +41,30 @@ option go_package = "github.com/cloudstateio/go-support/tck/eventsourced;eventso
 // - Forwarding and side effects must always be made to the second service `EventSourcedTwo`.
 //
 service EventSourcedTckModel {
-  rpc Process(Request) returns (Response);
+  rpc Process(Request) returns (Response) {
+    option (google.api.http) = {
+      post: "/tck/model/eventsourced/{id}",
+      body: "*"
+    };
+  }
 }
 
 //
 // The `EventSourcedTwo` service is only for verifying forward actions and side effects.
-// The `Call` method is not required to do anything, and may simply return an empty `Response` message.
+// The `Call` method is not required to do anything, and must return an empty `Response` message.
 //
 service EventSourcedTwo {
+  rpc Call(Request) returns (Response);
+}
+
+//
+// The `EventSourcedConfigured` service is for testing entity configuration from the language support:
+//
+// - The entity persistence-id must be `event-sourced-configured`.
+// - The passivation strategy must be set with a timeout of 100 millis.
+// - The `Call` method is not required to do anything, and must return an empty `Response` message.
+//
+service EventSourcedConfigured {
   rpc Call(Request) returns (Response);
 }
 

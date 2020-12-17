@@ -95,5 +95,10 @@ object InterceptCrdtService {
       in.expectMsg(Complete)
       out.expectMsg(Complete)
     }
+
+    def expectClosed(max: FiniteDuration): Unit = {
+      in.expectMsg(max, Complete)
+      out.expectMsg(max, Complete)
+    }
   }
 }

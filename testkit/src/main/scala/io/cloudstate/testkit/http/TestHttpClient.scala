@@ -28,7 +28,7 @@ final class TestHttpClient(context: TestClientContext) {
   import context.system
   import context.system.dispatcher
 
-  def request(path: String, body: String = null): Future[String] =
+  def singleRequest(path: String, body: String = null): Future[HttpResponse] =
     Http()
       .singleRequest(
         HttpRequest(
@@ -38,9 +38,19 @@ final class TestHttpClient(context: TestClientContext) {
           protocol = HttpProtocols.`HTTP/1.1`
         )
       )
+
+  def request(path: String, body: String = null): Future[String] =
+    singleRequest(path, body)
       .flatMap { response =>
         assert(response.status == StatusCodes.OK, "response status was not OK")
         assert(response.entity.contentType == ContentTypes.`application/json`, "response content type was not json")
+        Unmarshal(response).to[String]
+      }
+
+  def requestToError(path: String, body: String = null): Future[String] =
+    singleRequest(path, body)
+      .flatMap { response =>
+        assert(response.status == StatusCodes.InternalServerError, "response status was not InternalServerError")
         Unmarshal(response).to[String]
       }
 
