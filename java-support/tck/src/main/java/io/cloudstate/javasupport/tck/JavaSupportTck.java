@@ -16,7 +16,6 @@
 
 package io.cloudstate.javasupport.tck;
 
-import com.example.valueentity.shoppingcart.Shoppingcart;
 import io.cloudstate.javasupport.CloudState;
 import io.cloudstate.javasupport.PassivationStrategy;
 import io.cloudstate.javasupport.crdt.CrdtEntityOptions;
@@ -34,7 +33,6 @@ import io.cloudstate.javasupport.tck.model.crdt.CrdtTckModelEntity;
 import io.cloudstate.javasupport.tck.model.crdt.CrdtTwoEntity;
 import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedTckModelEntity;
 import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedTwoEntity;
-import io.cloudstate.samples.shoppingcart.ShoppingCartEntity;
 import io.cloudstate.tck.model.Action;
 import io.cloudstate.tck.model.Crdt;
 import io.cloudstate.tck.model.Eventlogeventing;
@@ -66,10 +64,6 @@ public final class JavaSupportTck {
             Valueentity.getDescriptor().findServiceByName("ValueEntityConfigured"),
             EntityOptions.defaults() // required timeout of 100 millis for TCK tests
                 .withPassivationStrategy(PassivationStrategy.timeout(Duration.ofMillis(100))))
-        .registerEntity(
-            ShoppingCartEntity.class,
-            Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
-            com.example.valueentity.shoppingcart.persistence.Domain.getDescriptor())
         .registerCrdtEntity(
             CrdtTckModelEntity.class,
             Crdt.getDescriptor().findServiceByName("CrdtTckModel"),
@@ -103,10 +97,6 @@ public final class JavaSupportTck {
             io.cloudstate.javasupport.tck.model.eventlogeventing.EventSourcedEntityTwo.class,
             Eventlogeventing.getDescriptor().findServiceByName("EventSourcedEntityTwo"),
             Eventlogeventing.getDescriptor())
-        .registerEventSourcedEntity(
-            io.cloudstate.samples.eventsourced.shoppingcart.ShoppingCartEntity.class,
-            com.example.shoppingcart.Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
-            com.example.shoppingcart.persistence.Domain.getDescriptor())
         .start()
         .toCompletableFuture()
         .get();
