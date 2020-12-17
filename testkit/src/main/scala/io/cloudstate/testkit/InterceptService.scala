@@ -43,19 +43,18 @@ final class InterceptService(settings: InterceptorSettings) {
   private val valueBased = new InterceptValueEntityService(context)
   private val action = new InterceptActionService(context)
 
-  import context.system
-
-  entityDiscovery.expectOnline(60.seconds)
-
-  Await.result(
-    Http().bindAndHandleAsync(
-      handler = entityDiscovery.handler orElse crdt.handler orElse eventSourced.handler orElse valueBased.handler
-        orElse action.handler,
-      interface = settings.bind.host,
-      port = settings.bind.port
-    ),
-    10.seconds
-  )
+  def start(): Unit = {
+    import context.system
+    entityDiscovery.expectOnline(60.seconds)
+    Await.result(
+      Http().bindAndHandleAsync(
+        handler = entityDiscovery.handler orElse crdt.handler orElse eventSourced.handler orElse valueBased.handler orElse action.handler,
+        interface = settings.bind.host,
+        port = settings.bind.port
+      ),
+      10.seconds
+    )
+  }
 
   def expectEntityDiscovery(): InterceptEntityDiscovery.Discovery = entityDiscovery.expectDiscovery()
 
@@ -83,8 +82,8 @@ final class InterceptService(settings: InterceptorSettings) {
     crdt.terminate()
     eventSourced.terminate()
     valueBased.terminate()
-    context.terminate()
     action.terminate()
+    context.terminate()
   }
 }
 

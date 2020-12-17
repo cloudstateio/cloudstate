@@ -23,10 +23,9 @@ import io.cloudstate.tck.model.valueentity.Valueentity.Response;
 
 @Entity(persistenceId = "value-entity-tck-model-two")
 public class ValueEntityTwoEntity {
-  public ValueEntityTwoEntity() {}
 
   @CommandHandler
   public Response call(Request request) {
-    return Response.newBuilder().build();
+    return Response.getDefaultInstance();
   }
 }
