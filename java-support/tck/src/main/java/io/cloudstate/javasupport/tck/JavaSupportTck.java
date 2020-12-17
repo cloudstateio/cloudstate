@@ -19,8 +19,12 @@ package io.cloudstate.javasupport.tck;
 import com.example.valueentity.shoppingcart.Shoppingcart;
 import io.cloudstate.javasupport.CloudState;
 import io.cloudstate.javasupport.PassivationStrategy;
+import io.cloudstate.javasupport.crdt.CrdtEntityOptions;
 import io.cloudstate.javasupport.entity.EntityOptions;
+import io.cloudstate.javasupport.eventsourced.EventSourcedEntityOptions;
+import io.cloudstate.javasupport.tck.model.crdt.CrdtConfiguredEntity;
 import io.cloudstate.javasupport.tck.model.eventlogeventing.EventLogSubscriber;
+import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedConfiguredEntity;
 import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityConfiguredEntity;
 import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityTckModelEntity;
 import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityTwoEntity;
@@ -71,6 +75,11 @@ public final class JavaSupportTck {
             Crdt.getDescriptor().findServiceByName("CrdtTckModel"),
             Crdt.getDescriptor())
         .registerCrdtEntity(CrdtTwoEntity.class, Crdt.getDescriptor().findServiceByName("CrdtTwo"))
+        .registerCrdtEntity(
+            CrdtConfiguredEntity.class,
+            Crdt.getDescriptor().findServiceByName("CrdtConfigured"),
+            CrdtEntityOptions.defaults() // required timeout of 100 millis for TCK tests
+                .withPassivationStrategy(PassivationStrategy.timeout(Duration.ofMillis(100))))
         .registerEventSourcedEntity(
             EventSourcedTckModelEntity.class,
             Eventsourced.getDescriptor().findServiceByName("EventSourcedTckModel"),
@@ -78,6 +87,11 @@ public final class JavaSupportTck {
         .registerEventSourcedEntity(
             EventSourcedTwoEntity.class,
             Eventsourced.getDescriptor().findServiceByName("EventSourcedTwo"))
+        .registerEventSourcedEntity(
+            EventSourcedConfiguredEntity.class,
+            Eventsourced.getDescriptor().findServiceByName("EventSourcedConfigured"),
+            EventSourcedEntityOptions.defaults() // required timeout of 100 millis for TCK tests
+                .withPassivationStrategy(PassivationStrategy.timeout(Duration.ofMillis(100))))
         .registerAction(
             new EventLogSubscriber(),
             Eventlogeventing.getDescriptor().findServiceByName("EventLogSubscriberModel"))

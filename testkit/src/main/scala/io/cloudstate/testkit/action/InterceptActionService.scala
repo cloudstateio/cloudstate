@@ -17,6 +17,8 @@
 package io.cloudstate.testkit.action
 
 import akka.NotUsed
+import akka.actor.ActorSystem
+import akka.grpc.Trailers
 import akka.http.scaladsl.model.{HttpRequest, HttpResponse}
 import akka.stream.scaladsl.{Sink, Source}
 import akka.testkit.TestProbe
@@ -28,6 +30,7 @@ import io.cloudstate.protocol.action.{
   ActionResponse
 }
 import io.cloudstate.testkit.InterceptService.InterceptorContext
+import io.grpc.Status
 
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
@@ -42,8 +45,12 @@ final class InterceptActionService(context: InterceptorContext) {
   def expectStreamedOutConnection(): StreamedOutConnection = context.probe.expectMsgType[StreamedOutConnection]
   def expectStreamedConnection(): StreamedConnection = context.probe.expectMsgType[StreamedConnection]
 
+  private val errorHandler: ActorSystem => PartialFunction[Throwable, Trailers] = _ => {
+    case e: Exception => Trailers(Status.INTERNAL.augmentDescription(e.getMessage))
+  }
+
   def handler: PartialFunction[HttpRequest, Future[HttpResponse]] =
-    ActionProtocolHandler.partial(interceptor)(context.system)
+    ActionProtocolHandler.partial(interceptor, eHandler = errorHandler)(context.system)
 
   def terminate(): Unit = interceptor.terminate()
 }
@@ -98,8 +105,20 @@ object InterceptActionService {
 
   final class UnaryConnection(context: InterceptorContext, val command: ActionCommand) {
     private[testkit] val out = TestProbe("UnaryConnectionOutProbe")(context.system)
+
     def expectResponse(): ActionResponse =
       out.expectMsgType[ActionResponse]
+
+    def expectClient(expected: ActionCommand): UnaryConnection = {
+      val received = command.copy(metadata = None) // ignore attached metadata
+      assert(received == expected, s"Unexpected unary action command: expected $expected, found $received")
+      this
+    }
+
+    def expectService(response: ActionResponse): UnaryConnection = {
+      out.expectMsg(response)
+      this
+    }
   }
 
   final class StreamedInConnection(context: InterceptorContext) {
@@ -113,6 +132,17 @@ object InterceptActionService {
 
     def expectCommand(): ActionCommand =
       in.expectMsgType[ActionCommand]
+
+    def expectClient(expected: ActionCommand): StreamedInConnection = {
+      val command = expectCommand().copy(metadata = None) // ignore attached metadata
+      assert(command == expected, s"Unexpected streamed-in action command: expected $expected, found $command")
+      this
+    }
+
+    def expectService(response: ActionResponse): StreamedInConnection = {
+      out.expectMsg(response)
+      this
+    }
 
     def expectInComplete(): StreamedInConnection = {
       in.expectMsg(Complete)
@@ -128,6 +158,17 @@ object InterceptActionService {
     def expectResponse(): ActionResponse =
       out.expectMsgType[ActionResponse]
 
+    def expectClient(expected: ActionCommand): StreamedOutConnection = {
+      val received = command.copy(metadata = None) // ignore attached metadata
+      assert(received == expected, s"Unexpected streamed-out action command: expected $expected, found $received")
+      this
+    }
+
+    def expectService(response: ActionResponse): StreamedOutConnection = {
+      out.expectMsg(response)
+      this
+    }
+
     def expectOutComplete(): StreamedOutConnection = {
       out.expectMsg(Complete)
       this
@@ -141,20 +182,36 @@ object InterceptActionService {
     private[testkit] def inSink: Sink[ActionCommand, NotUsed] = Sink.actorRef(in.ref, Complete, Error.apply)
     private[testkit] def outSink: Sink[ActionResponse, NotUsed] = Sink.actorRef(out.ref, Complete, Error.apply)
 
+    def expectCommand(): ActionCommand =
+      in.expectMsgType[ActionCommand]
+
     def expectResponse(): ActionResponse =
       out.expectMsgType[ActionResponse]
+
+    def expectClient(expected: ActionCommand): StreamedConnection = {
+      val command = expectCommand().copy(metadata = None) // ignore attached metadata
+      assert(command == expected, s"Unexpected streamed action command: expected $expected, found $command")
+      this
+    }
+
+    def expectService(response: ActionResponse): StreamedConnection = {
+      out.expectMsg(response)
+      this
+    }
+
+    def expectInComplete(): StreamedConnection = {
+      in.expectMsg(Complete)
+      this
+    }
 
     def expectOutComplete(): StreamedConnection = {
       out.expectMsg(Complete)
       this
     }
 
-    def expectCommand(): ActionCommand =
-      in.expectMsgType[ActionCommand]
-
-    def expectInComplete(): StreamedConnection = {
-      in.expectMsg(Complete)
-      this
+    def expectComplete(): StreamedConnection = {
+      expectInComplete()
+      expectOutComplete()
     }
   }
 }

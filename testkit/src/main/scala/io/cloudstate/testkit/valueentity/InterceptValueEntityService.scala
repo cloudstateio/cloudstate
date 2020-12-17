@@ -93,14 +93,9 @@ object InterceptValueEntityService {
       this
     }
 
-    def expectInClosed(duration: FiniteDuration): Connection = {
-      in.expectMsg(duration, Complete)
-      this
-    }
-
-    def expectOutClosed(duration: FiniteDuration): Connection = {
-      out.expectMsg(duration, Complete)
-      this
+    def expectClosed(max: FiniteDuration): Unit = {
+      in.expectMsg(max, Complete)
+      out.expectMsg(max, Complete)
     }
   }
 }

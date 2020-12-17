@@ -21,6 +21,7 @@ syntax = "proto3";
 package cloudstate.tck.model.crdt;
 
 import "cloudstate/entity_key.proto";
+import "google/api/annotations.proto";
 
 option java_package = "io.cloudstate.tck.model";
 option go_package = "github.com/cloudstateio/go-support/tck/crdt;crdt";
@@ -42,15 +43,31 @@ option go_package = "github.com/cloudstateio/go-support/tck/crdt;crdt";
 // - The `ProcessStreamed` method must stream the current state in a `Response`, on any changes.
 // - A `StreamedRequest` message may have an end state, an update to apply on stream cancellation, or side effects.
 service CrdtTckModel {
-  rpc Process(Request) returns (Response);
+  rpc Process(Request) returns (Response) {
+    option (google.api.http) = {
+      post: "/tck/model/crdt/{id}",
+      body: "*"
+    };
+  }
   rpc ProcessStreamed(StreamedRequest) returns (stream Response);
 }
 
 //
 // The `CrdtTwo` service is only for verifying forwards and side effects.
-// The `Call` method is not required to do anything, and may simply return an empty `Response` message.
+// The only action the `Call` method is expected to handle is a delete action, and otherwise
+// the `Call` method is not required to do anything, and must return an empty `Response` message.
 //
 service CrdtTwo {
+  rpc Call(Request) returns (Response);
+}
+
+//
+// The `CrdtConfigured` service is for testing entity configuration from the language support:
+//
+// - The passivation strategy must be set with a timeout of 100 millis.
+// - The `Call` method is not required to do anything, and must return an empty `Response` message.
+//
+service CrdtConfigured {
   rpc Call(Request) returns (Response);
 }
 

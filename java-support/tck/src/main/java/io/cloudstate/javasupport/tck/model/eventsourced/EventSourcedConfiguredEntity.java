@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.tck.model.action;
+package io.cloudstate.javasupport.tck.model.eventsourced;
 
-import io.cloudstate.javasupport.action.*;
-import io.cloudstate.tck.model.Action.*;
+import io.cloudstate.javasupport.eventsourced.*;
+import io.cloudstate.tck.model.Eventsourced.*;
 
-@Action
-public class ActionTwoBehavior {
-  public ActionTwoBehavior() {}
+@EventSourcedEntity(persistenceId = "event-sourced-configured")
+public class EventSourcedConfiguredEntity {
 
-  @CallHandler
-  public Response call(OtherRequest request) {
+  @CommandHandler
+  public Response call(Request request) {
     return Response.getDefaultInstance();
   }
 }

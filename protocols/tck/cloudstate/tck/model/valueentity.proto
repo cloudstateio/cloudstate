@@ -21,6 +21,7 @@ syntax = "proto3";
 package cloudstate.tck.model.valueentity;
 
 import "cloudstate/entity_key.proto";
+import "google/api/annotations.proto";
 
 option java_package = "io.cloudstate.tck.model.valueentity";
 option go_package = "github.com/cloudstateio/go-support/tck/valueentity;valueentity";
@@ -38,14 +39,19 @@ option go_package = "github.com/cloudstateio/go-support/tck/valueentity;valueent
 // - Forwarding and side effects must always be made to the second service `ValueEntityTwo`.
 //
 service ValueEntityTckModel {
-  rpc Process(Request) returns (Response);
+  rpc Process(Request) returns (Response) {
+    option (google.api.http) = {
+      post: "/tck/model/entity/{id}",
+      body: "*"
+    };
+  }
 }
 
 //
 // The `ValueBasedTwo` service is only for verifying forward actions and side effects.
 //
 // - The entity persistence-id must be `value-entity-tck-model-two`.
-// - The `Call` method is not required to do anything, and may simply return an empty `Response` message.
+// - The `Call` method is not required to do anything, and must return an empty `Response` message.
 //
 service ValueEntityTwo {
   rpc Call(Request) returns (Response);

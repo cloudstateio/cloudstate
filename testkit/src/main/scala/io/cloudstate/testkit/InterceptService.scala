@@ -38,17 +38,21 @@ final class InterceptService(settings: InterceptorSettings) {
 
   private val context = new InterceptorContext(settings.intercept.host, settings.intercept.port)
   private val entityDiscovery = new InterceptEntityDiscovery(context)
-  private val crdt = new InterceptCrdtService(context)
-  private val eventSourced = new InterceptEventSourcedService(context)
-  private val valueBased = new InterceptValueEntityService(context)
   private val action = new InterceptActionService(context)
+  private val valueEntity = new InterceptValueEntityService(context)
+  private val eventSourcedEntity = new InterceptEventSourcedService(context)
+  private val crdtEntity = new InterceptCrdtService(context)
 
   def start(): Unit = {
     import context.system
     entityDiscovery.expectOnline(60.seconds)
     Await.result(
       Http().bindAndHandleAsync(
-        handler = entityDiscovery.handler orElse crdt.handler orElse eventSourced.handler orElse valueBased.handler orElse action.handler,
+        handler = entityDiscovery.handler
+          orElse action.handler
+          orElse valueEntity.handler
+          orElse eventSourcedEntity.handler
+          orElse crdtEntity.handler,
         interface = settings.bind.host,
         port = settings.bind.port
       ),
@@ -56,15 +60,11 @@ final class InterceptService(settings: InterceptorSettings) {
     )
   }
 
-  def expectEntityDiscovery(): InterceptEntityDiscovery.Discovery = entityDiscovery.expectDiscovery()
+  def expectEntityDiscovery(): InterceptEntityDiscovery.Discovery =
+    entityDiscovery.expectDiscovery()
 
-  def expectCrdtConnection(): InterceptCrdtService.Connection = crdt.expectConnection()
-
-  def expectEventSourcedConnection(): InterceptEventSourcedService.Connection = eventSourced.expectConnection()
-
-  def expectValueBasedConnection(): InterceptValueEntityService.Connection = valueBased.expectConnection()
-
-  def expectActionUnaryConnection(): InterceptActionService.UnaryConnection = action.expectUnaryConnection()
+  def expectActionUnaryConnection(): InterceptActionService.UnaryConnection =
+    action.expectUnaryConnection()
 
   def expectActionStreamedInConnection(): InterceptActionService.StreamedInConnection =
     action.expectStreamedInConnection()
@@ -72,17 +72,27 @@ final class InterceptService(settings: InterceptorSettings) {
   def expectActionStreamedOutConnection(): InterceptActionService.StreamedOutConnection =
     action.expectStreamedOutConnection()
 
-  def expectActionStreamedConnection(): InterceptActionService.StreamedConnection = action.expectStreamedConnection()
+  def expectActionStreamedConnection(): InterceptActionService.StreamedConnection =
+    action.expectStreamedConnection()
+
+  def expectEntityConnection(): InterceptValueEntityService.Connection =
+    valueEntity.expectConnection()
+
+  def expectEventSourcedEntityConnection(): InterceptEventSourcedService.Connection =
+    eventSourcedEntity.expectConnection()
+
+  def expectCrdtEntityConnection(): InterceptCrdtService.Connection =
+    crdtEntity.expectConnection()
 
   def verifyNoMoreInteractions(): Unit =
     context.probe.expectNoMessage(10.millis)
 
   def terminate(): Unit = {
     entityDiscovery.terminate()
-    crdt.terminate()
-    eventSourced.terminate()
-    valueBased.terminate()
     action.terminate()
+    valueEntity.terminate()
+    eventSourcedEntity.terminate()
+    crdtEntity.terminate()
     context.terminate()
   }
 }

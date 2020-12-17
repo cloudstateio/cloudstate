@@ -17,9 +17,12 @@
 package io.cloudstate.tck
 
 import com.google.protobuf.any.{Any => ScalaPbAny}
+import io.cloudstate.protocol.entity.{EntityPassivationStrategy, TimeoutPassivationStrategy}
 import io.cloudstate.protocol.event_sourced.EventSourced
 import io.cloudstate.tck.model.eventsourced._
 import io.cloudstate.testkit.eventsourced.EventSourcedMessages._
+import io.grpc.StatusRuntimeException
+import scala.concurrent.duration._
 
 trait EventSourcedEntityTCK extends TCKSpec {
 
@@ -27,13 +30,17 @@ trait EventSourcedEntityTCK extends TCKSpec {
     val Protocol: String = EventSourced.name
     val Service: String = EventSourcedTckModel.name
     val ServiceTwo: String = EventSourcedTwo.name
+    val ServiceConfigured: String = EventSourcedConfigured.name
 
     var entityId: Int = 0
 
-    def nextEntityId(): String = { entityId += 1; s"entity:$entityId" }
+    def nextEntityId(): String = { entityId += 1; s"entity-$entityId" }
 
     def eventSourcedTest(test: String => Any): Unit =
       testFor(EventSourcedTckModel, EventSourcedTwo)(test(nextEntityId()))
+
+    def eventSourcedConfiguredTest(test: String => Any): Unit =
+      testFor(EventSourcedConfigured)(test(nextEntityId()))
 
     def emitEvent(value: String): RequestAction =
       RequestAction(RequestAction.Action.Emit(Emit(value)))
@@ -80,6 +87,15 @@ trait EventSourcedEntityTCK extends TCKSpec {
       entity(EventSourcedEntityTCKModel.Service).value.entityType mustBe EventSourcedEntityTCKModel.Protocol
       entity(EventSourcedEntityTCKModel.ServiceTwo).value.entityType mustBe EventSourcedEntityTCKModel.Protocol
       entity(EventSourcedEntityTCKModel.Service).value.persistenceId mustBe "event-sourced-tck-model"
+    }
+
+    "verify event sourced configured entity" in testFor(EventSourcedConfigured) {
+      discoveredServices must contain("EventSourcedConfigured")
+      entity(EventSourcedEntityTCKModel.ServiceConfigured).value.entityType mustBe EventSourcedEntityTCKModel.Protocol
+      entity(EventSourcedEntityTCKModel.ServiceConfigured).value.persistenceId mustBe "event-sourced-configured"
+      entity(EventSourcedEntityTCKModel.ServiceConfigured).value.passivationStrategy mustBe Some(
+        EntityPassivationStrategy(EntityPassivationStrategy.Strategy.Timeout(TimeoutPassivationStrategy(100)))
+      )
     }
 
     "verify initial empty state" in eventSourcedTest { id =>
@@ -318,6 +334,188 @@ trait EventSourcedEntityTCK extends TCKSpec {
         .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id), failWith("expected failure")))))
         .expect(actionFailure(1, "expected failure"))
         .passivate()
+    }
+  }
+
+  object EventSourcedEntityTCKProxy {
+    val tckModelClient: EventSourcedTckModelClient = EventSourcedTckModelClient(client.settings)(client.system)
+    val configuredClient: EventSourcedConfiguredClient = EventSourcedConfiguredClient(client.settings)(client.system)
+
+    def terminate(): Unit = {
+      tckModelClient.close()
+      configuredClient.close()
+    }
+  }
+
+  override def afterAll(): Unit =
+    try EventSourcedEntityTCKProxy.terminate()
+    finally super.afterAll()
+
+  def verifyEventSourcedEntityProxy(): Unit = {
+    import EventSourcedEntityTCKModel._
+    import EventSourcedEntityTCKProxy._
+
+    "verify state changes" in eventSourcedTest { id =>
+      tckModelClient.process(Request(id)).futureValue mustBe Response()
+      val connection = interceptor
+        .expectEventSourcedEntityConnection()
+        .expectClient(init(Service, id))
+        .expectClient(command(1, id, "Process", Request(id)))
+        .expectService(reply(1, Response()))
+
+      tckModelClient.process(Request(id, emitEvents("A"))).futureValue mustBe Response("A")
+      connection
+        .expectClient(command(2, id, "Process", Request(id, emitEvents("A"))))
+        .expectService(reply(2, Response("A"), events("A")))
+
+      tckModelClient.process(Request(id, emitEvents("B", "C", "D"))).futureValue mustBe Response("ABCD")
+      connection
+        .expectClient(command(3, id, "Process", Request(id, emitEvents("B", "C", "D"))))
+        .expectService(reply(3, Response("ABCD"), events("B", "C", "D")))
+
+      tckModelClient.process(Request(id, emitEvents("E"))).futureValue mustBe Response("ABCDE")
+      connection
+        .expectClient(command(4, id, "Process", Request(id, emitEvents("E"))))
+        .expectService(reply(4, Response("ABCDE"), snapshotAndEvents("ABCDE", "E")))
+
+      tckModelClient.process(Request(id, emitEvents("F", "G", "H", "I"))).futureValue mustBe Response("ABCDEFGHI")
+      connection
+        .expectClient(command(5, id, "Process", Request(id, emitEvents("F", "G", "H", "I"))))
+        .expectService(reply(5, Response("ABCDEFGHI"), events("F", "G", "H", "I")))
+
+      tckModelClient.process(Request(id, emitEvents("J", "K"))).futureValue mustBe Response("ABCDEFGHIJK")
+      connection
+        .expectClient(command(6, id, "Process", Request(id, emitEvents("J", "K"))))
+        .expectService(reply(6, Response("ABCDEFGHIJK"), snapshotAndEvents("ABCDEFGHIJK", "J", "K")))
+    }
+
+    "verify forwards and side effects" in eventSourcedTest { id =>
+      tckModelClient.process(Request(id, emitEvents("one"))).futureValue mustBe Response("one")
+      val connection = interceptor
+        .expectEventSourcedEntityConnection()
+        .expectClient(init(Service, id))
+        .expectClient(command(1, id, "Process", Request(id, emitEvents("one"))))
+        .expectService(reply(1, Response("one"), events("one")))
+
+      tckModelClient.process(Request(id, Seq(forwardTo(id)))).futureValue mustBe Response()
+      connection
+        .expectClient(command(2, id, "Process", Request(id, Seq(forwardTo(id)))))
+        .expectService(forward(2, ServiceTwo, "Call", Request(id)))
+      val connection2 = interceptor
+        .expectEventSourcedEntityConnection()
+        .expectClient(init(ServiceTwo, id))
+        .expectClient(command(1, id, "Call", Request(id)))
+        .expectService(reply(1, Response()))
+
+      tckModelClient.process(Request(id, Seq(sideEffectTo(id)))).futureValue mustBe Response("one")
+      connection
+        .expectClient(command(3, id, "Process", Request(id, Seq(sideEffectTo(id)))))
+        .expectService(reply(3, Response("one"), sideEffects(id)))
+      connection2
+        .expectClient(command(2, id, "Call", Request(id)))
+        .expectService(reply(2, Response()))
+    }
+
+    "verify failures" in eventSourcedTest { id =>
+      tckModelClient.process(Request(id, emitEvents("1", "2", "3"))).futureValue mustBe Response("123")
+      val connection = interceptor
+        .expectEventSourcedEntityConnection()
+        .expectClient(init(Service, id))
+        .expectClient(command(1, id, "Process", Request(id, emitEvents("1", "2", "3"))))
+        .expectService(reply(1, Response("123"), events("1", "2", "3")))
+
+      val failed = tckModelClient.process(Request(id, Seq(failWith("expected failure")))).failed.futureValue
+      failed mustBe a[StatusRuntimeException]
+      failed.asInstanceOf[StatusRuntimeException].getStatus.getDescription mustBe "expected failure"
+      connection
+        .expectClient(command(2, id, "Process", Request(id, Seq(failWith("expected failure")))))
+        .expectService(actionFailure(2, "expected failure"))
+
+      tckModelClient.process(Request(id)).futureValue mustBe Response("123")
+      connection
+        .expectClient(command(3, id, "Process", Request(id)))
+        .expectService(reply(3, Response("123")))
+
+      val emitAndFail = Seq(emitEvent("4"), failWith("another failure"), emitEvent("5"))
+      val failed2 = tckModelClient.process(Request(id, emitAndFail)).failed.futureValue
+      failed2 mustBe a[StatusRuntimeException]
+      failed2.asInstanceOf[StatusRuntimeException].getStatus.getDescription mustBe "another failure"
+      connection
+        .expectClient(command(4, id, "Process", Request(id, emitAndFail)))
+        .expectService(actionFailure(4, "another failure", restart = true))
+        .expectClosed()
+      val connection2 = interceptor
+        .expectEventSourcedEntityConnection()
+        .expectClient(init(Service, id))
+        .expectClient(event(1, persisted("1")))
+        .expectClient(event(2, persisted("2")))
+        .expectClient(event(3, persisted("3")))
+
+      tckModelClient.process(Request(id, emitEvents("4", "5"))).futureValue mustBe Response("12345")
+      connection2
+        .expectClient(command(1, id, "Process", Request(id, emitEvents("4", "5"))))
+        .expectService(reply(1, Response("12345"), snapshotAndEvents("12345", "4", "5")))
+    }
+
+    "verify HTTP API" in eventSourcedTest { id =>
+      client.http.request(s"tck/model/eventsourced/$id", "{}").futureValue mustBe """{"message":""}"""
+      val connection = interceptor
+        .expectEventSourcedEntityConnection()
+        .expectClient(init(Service, id))
+        .expectClient(command(1, id, "Process", Request(id)))
+        .expectService(reply(1, Response()))
+
+      client.http
+        .request(s"tck/model/eventsourced/$id", """{"actions": [{"emit": {"value": "x"}}]}""")
+        .futureValue mustBe """{"message":"x"}"""
+      connection
+        .expectClient(command(2, id, "Process", Request(id, emitEvents("x"))))
+        .expectService(reply(2, Response("x"), events("x")))
+
+      client.http
+        .requestToError(s"tck/model/eventsourced/$id", """{"actions": [{"fail": {"message": "expected failure"}}]}""")
+        .futureValue mustBe "expected failure"
+      connection
+        .expectClient(command(3, id, "Process", Request(id, Seq(failWith("expected failure")))))
+        .expectService(actionFailure(3, "expected failure"))
+
+      client.http
+        .request(s"tck/model/eventsourced/$id", """{"actions": [{"emit": {"value": "y"}}]}""")
+        .futureValue mustBe """{"message":"xy"}"""
+      connection
+        .expectClient(command(4, id, "Process", Request(id, emitEvents("y"))))
+        .expectService(reply(4, Response("xy"), events("y")))
+
+      client.http
+        .requestToError(s"tck/model/eventsourced/$id",
+                        """{"actions": [{"emit": {"value": "z"}}, {"fail": {"message": "emit then fail"}}]}""")
+        .futureValue mustBe "emit then fail"
+      connection
+        .expectClient(command(5, id, "Process", Request(id, Seq(emitEvent("z"), failWith("emit then fail")))))
+        .expectService(actionFailure(5, "emit then fail", restart = true))
+        .expectClosed()
+      val connection2 = interceptor
+        .expectEventSourcedEntityConnection()
+        .expectClient(init(Service, id))
+        .expectClient(event(1, persisted("x")))
+        .expectClient(event(2, persisted("y")))
+
+      client.http
+        .request(s"tck/model/eventsourced/$id", """{"actions": [{"emit": {"value": "z"}}]}""")
+        .futureValue mustBe """{"message":"xyz"}"""
+      connection2
+        .expectClient(command(1, id, "Process", Request(id, emitEvents("z"))))
+        .expectService(reply(1, Response("xyz"), events("z")))
+    }
+
+    "verify passivation timeout" in eventSourcedConfiguredTest { id =>
+      configuredClient.call(Request(id))
+      interceptor
+        .expectEventSourcedEntityConnection()
+        .expectClient(init(ServiceConfigured, id))
+        .expectClient(command(1, id, "Call", Request(id)))
+        .expectService(reply(1, Response()))
+        .expectClosed(2.seconds) // check passivation (with expected timeout of 100 millis)
     }
   }
 }

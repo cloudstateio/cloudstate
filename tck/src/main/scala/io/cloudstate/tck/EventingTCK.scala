@@ -55,7 +55,7 @@ trait EventingTCK extends TCKSpec {
       emitEventOne(id, eventlogeventing.ProcessStep.Step.Forward(eventlogeventing.Forward(message)))
 
     def verifyEventSourcedInitCommandReply(id: String): Unit = {
-      val connection = interceptor.expectEventSourcedConnection()
+      val connection = interceptor.expectEventSourcedEntityConnection()
       val init = connection.expectClientMessage[EventSourcedStreamIn.Message.Init]
       init.value.serviceName must ===(eventlogeventing.EventSourcedEntityOne.name)
       init.value.entityId must ===(id)
@@ -120,7 +120,7 @@ trait EventingTCK extends TCKSpec {
         eventlogeventing.JsonEvent("eventlogeventing:3", "some json message")
       )
 
-      val connection = interceptor.expectEventSourcedConnection()
+      val connection = interceptor.expectEventSourcedEntityConnection()
       val init = connection.expectClientMessage[EventSourcedStreamIn.Message.Init]
       init.value.serviceName must ===(eventlogeventing.EventSourcedEntityTwo.name)
       init.value.entityId must ===("eventlogeventing:3")
