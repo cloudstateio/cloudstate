@@ -14,22 +14,18 @@
  * limitations under the License.
  */
 
-package io.cloudstate.javasupport.tck.model.passivation;
+package io.cloudstate.javasupport.tck.model.valuebased;
 
-import io.cloudstate.javasupport.entity.CommandContext;
 import io.cloudstate.javasupport.entity.CommandHandler;
 import io.cloudstate.javasupport.entity.Entity;
-import io.cloudstate.tck.model.entitypassivation.Entitypassivation.*;
+import io.cloudstate.tck.model.valueentity.Valueentity.Request;
+import io.cloudstate.tck.model.valueentity.Valueentity.Response;
 
-import java.util.Optional;
-
-@Entity(persistenceId = "entity-passivation-tck-model")
-public class PassivationTckModelEntity {
-
-  private final String state = "state";
+@Entity(persistenceId = "value-entity-configured")
+public class ValueEntityConfiguredEntity {
 
   @CommandHandler
-  public Optional<Response> activate(Request request, CommandContext<Persisted> context) {
-    return Optional.of(Response.newBuilder().setMessage(state).build());
+  public Response call(Request request) {
+    return Response.getDefaultInstance();
   }
 }

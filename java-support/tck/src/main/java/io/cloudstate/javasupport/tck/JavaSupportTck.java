@@ -20,8 +20,8 @@ import com.example.valueentity.shoppingcart.Shoppingcart;
 import io.cloudstate.javasupport.CloudState;
 import io.cloudstate.javasupport.PassivationStrategy;
 import io.cloudstate.javasupport.entity.EntityOptions;
-import io.cloudstate.javasupport.tck.model.passivation.PassivationTckModelEntity;
 import io.cloudstate.javasupport.tck.model.eventlogeventing.EventLogSubscriber;
+import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityConfiguredEntity;
 import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityTckModelEntity;
 import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityTwoEntity;
 import io.cloudstate.javasupport.tck.model.action.ActionTckModelBehavior;
@@ -35,7 +35,6 @@ import io.cloudstate.tck.model.Action;
 import io.cloudstate.tck.model.Crdt;
 import io.cloudstate.tck.model.Eventlogeventing;
 import io.cloudstate.tck.model.Eventsourced;
-import io.cloudstate.tck.model.entitypassivation.Entitypassivation;
 import io.cloudstate.tck.model.valueentity.Valueentity;
 
 import java.time.Duration;
@@ -58,6 +57,11 @@ public final class JavaSupportTck {
         .registerEntity(
             ValueEntityTwoEntity.class,
             Valueentity.getDescriptor().findServiceByName("ValueEntityTwo"))
+        .registerEntity(
+            ValueEntityConfiguredEntity.class,
+            Valueentity.getDescriptor().findServiceByName("ValueEntityConfigured"),
+            EntityOptions.defaults() // required timeout of 100 millis for TCK tests
+                .withPassivationStrategy(PassivationStrategy.timeout(Duration.ofMillis(100))))
         .registerEntity(
             ShoppingCartEntity.class,
             Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
@@ -89,14 +93,6 @@ public final class JavaSupportTck {
             io.cloudstate.samples.eventsourced.shoppingcart.ShoppingCartEntity.class,
             com.example.shoppingcart.Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
             com.example.shoppingcart.persistence.Domain.getDescriptor())
-        .registerEntity(
-            PassivationTckModelEntity.class,
-            Entitypassivation.getDescriptor().findServiceByName("PassivationTckModel"),
-            EntityOptions.defaults()
-                .withPassivationStrategy(
-                    PassivationStrategy.timeout(
-                        Duration.ofSeconds(2))), // 2 seconds for timeout passivation testing!
-            Entitypassivation.getDescriptor())
         .start()
         .toCompletableFuture()
         .get();

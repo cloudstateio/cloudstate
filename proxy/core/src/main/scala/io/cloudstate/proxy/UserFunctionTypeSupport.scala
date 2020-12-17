@@ -83,8 +83,8 @@ object EntityTypeSupportFactory {
         strategy.strategy match {
           case Strategy.Timeout(TimeoutPassivationStrategy(timeout, _)) =>
             Timeout(timeout, TimeUnit.MILLISECONDS)
+          case _ => default
         }
-
       case _ => default
     }
 }

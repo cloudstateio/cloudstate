@@ -43,9 +43,22 @@ service ValueEntityTckModel {
 
 //
 // The `ValueBasedTwo` service is only for verifying forward actions and side effects.
-// The `Call` method is not required to do anything, and may simply return an empty `Response` message.
+//
+// - The entity persistence-id must be `value-entity-tck-model-two`.
+// - The `Call` method is not required to do anything, and may simply return an empty `Response` message.
 //
 service ValueEntityTwo {
+  rpc Call(Request) returns (Response);
+}
+
+//
+// The `ValueEntityConfigured` service is for testing entity configuration from the language support:
+//
+// - The entity persistence-id must be `value-entity-configured`.
+// - The passivation strategy must be set with a timeout of 100 millis.
+// - The `Call` method is not required to do anything, and must return an empty `Response` message.
+//
+service ValueEntityConfigured {
   rpc Call(Request) returns (Response);
 }
 
