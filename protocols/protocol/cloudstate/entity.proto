@@ -267,6 +267,29 @@ message Entity {
     // The ID to namespace state by. How this is used depends on the type of entity, for example,
     // event sourced entities will prefix this to the persistence id.
     string persistence_id = 3;
+
+    // The passivation strategy for the entity.
+    EntityPassivationStrategy passivation_strategy = 4;
+}
+
+//
+// The semantics is to provide a flexible way for entity user functions to configure the passivation strategy.
+// This strategy is sent to the proxy at discovery time allowing the proxy to configure the corresponding entities.
+// The only passivation strategy supported is the timeout strategy and configuring this is optional for the entity.
+// If an entity user function does not configure the passivation strategy the proxy uses its fallback default value.
+//
+// The passivation strategy for the entity user function.
+message EntityPassivationStrategy {
+    oneof strategy {
+        // the timeout passivation strategy.
+        TimeoutPassivationStrategy timeout = 1;
+    }
+}
+
+// A passivation strategy based on a timeout. The idle timeout after which a user function's entity is passivated.
+message TimeoutPassivationStrategy {
+    // The timeout in millis
+    int64 timeout = 1;
 }
 
 message UserFunctionError {

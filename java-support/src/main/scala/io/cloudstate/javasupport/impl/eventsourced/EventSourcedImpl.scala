@@ -46,14 +46,24 @@ import io.cloudstate.protocol.event_sourced.EventSourcedStreamIn.Message.{
 }
 import io.cloudstate.protocol.event_sourced.EventSourcedStreamOut.Message.{Failure => OutFailure, Reply => OutReply}
 import io.cloudstate.protocol.event_sourced._
+
 import scala.util.control.NonFatal
 
 final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
                                         override val descriptor: Descriptors.ServiceDescriptor,
                                         val anySupport: AnySupport,
                                         override val persistenceId: String,
-                                        val snapshotEvery: Int)
+                                        val snapshotEvery: Int,
+                                        override val entityOptions: Option[EventSourcedEntityOptions])
     extends Service {
+
+  def this(factory: EventSourcedEntityFactory,
+           descriptor: Descriptors.ServiceDescriptor,
+           anySupport: AnySupport,
+           persistenceId: String,
+           snapshotEvery: Int,
+           entityOptions: EventSourcedEntityOptions) =
+    this(factory, descriptor, anySupport, persistenceId, snapshotEvery, Some(entityOptions))
 
   override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] =
     factory match {
@@ -64,7 +74,12 @@ final class EventSourcedStatefulService(val factory: EventSourcedEntityFactory,
   override final val entityType = EventSourced.name
   final def withSnapshotEvery(snapshotEvery: Int): EventSourcedStatefulService =
     if (snapshotEvery != this.snapshotEvery)
-      new EventSourcedStatefulService(this.factory, this.descriptor, this.anySupport, this.persistenceId, snapshotEvery)
+      new EventSourcedStatefulService(this.factory,
+                                      this.descriptor,
+                                      this.anySupport,
+                                      this.persistenceId,
+                                      snapshotEvery,
+                                      this.entityOptions)
     else
       this
 }

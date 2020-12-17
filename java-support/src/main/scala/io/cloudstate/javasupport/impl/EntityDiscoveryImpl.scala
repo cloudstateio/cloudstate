@@ -21,7 +21,10 @@ import io.cloudstate.protocol.entity._
 import scala.concurrent.Future
 import akka.actor.ActorSystem
 import com.google.protobuf.DescriptorProtos
-import io.cloudstate.javasupport.{BuildInfo, Service}
+import io.cloudstate.javasupport.{BuildInfo, EntityOptions, Service}
+import io.cloudstate.protocol.entity.EntityPassivationStrategy.Strategy
+
+import java.time.Duration
 
 class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, Service]) extends EntityDiscovery {
 
@@ -72,7 +75,8 @@ class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, Service]) e
 
     val entities = services.map {
       case (name, service) =>
-        Entity(service.entityType, name, service.persistenceId)
+        val passivationStrategy = entityPassivationStrategy(service.entityOptions)
+        Entity(service.entityType, name, service.persistenceId, passivationStrategy)
     }.toSeq
 
     Future.successful(EntitySpec(fileDescriptorSet, entities, Some(serviceInfo)))
@@ -88,4 +92,23 @@ class EntityDiscoveryImpl(system: ActorSystem, services: Map[String, Service]) e
     system.log.error(s"Error reported from sidecar: ${in.message}")
     Future.successful(com.google.protobuf.empty.Empty.defaultInstance)
   }
+
+  private def entityPassivationStrategy(maybeOptions: Option[EntityOptions]): Option[EntityPassivationStrategy] = {
+    import io.cloudstate.protocol.entity.{EntityPassivationStrategy => EPStrategy}
+    maybeOptions.flatMap { options =>
+      options.passivationStrategy() match {
+        case Timeout(maybeTimeout) =>
+          maybeTimeout match {
+            case Some(timeout) => Some(EPStrategy(Strategy.Timeout(TimeoutPassivationStrategy(timeout.toMillis))))
+            case _ =>
+              configuredPassivationTimeout("cloudstate.passivation-timeout").map(
+                timeout => EPStrategy(Strategy.Timeout(TimeoutPassivationStrategy(timeout.toMillis)))
+              )
+          }
+      }
+    }
+  }
+
+  private def configuredPassivationTimeout(key: String): Option[Duration] =
+    if (system.settings.config.hasPath(key)) Some(system.settings.config.getDuration(key)) else None
 }

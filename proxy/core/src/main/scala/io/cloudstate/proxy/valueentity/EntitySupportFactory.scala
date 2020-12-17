@@ -52,10 +52,13 @@ class EntitySupportFactory(
                                       methodDescriptors: Map[String, EntityMethodDescriptor]): EntityTypeSupport = {
     validate(serviceDescriptor, methodDescriptors)
 
-    val stateManagerConfig = ValueEntity.Configuration(entity.serviceName,
-                                                       entity.persistenceId,
-                                                       config.valueEntitySettings.passivationTimeout,
-                                                       config.relayOutputBufferSize)
+    val entityConfig = ValueEntity.Configuration(
+      entity.serviceName,
+      entity.persistenceId,
+      EntityTypeSupportFactory.configuredPassivationTimeoutOrElse(entity,
+                                                                  config.valueEntitySettings.passivationTimeout),
+      config.relayOutputBufferSize
+    )
 
     val store: Store = {
       val storeType = config.config.getString("value-entity.persistence.store")
@@ -74,7 +77,7 @@ class EntitySupportFactory(
     val clusterShardingSettings = ClusterShardingSettings(system)
     val valueEntity = clusterSharding.start(
       typeName = entity.persistenceId,
-      entityProps = ValueEntitySupervisor.props(valueEntityClient, stateManagerConfig, repository),
+      entityProps = ValueEntitySupervisor.props(valueEntityClient, entityConfig, repository),
       settings = clusterShardingSettings,
       messageExtractor = new EntityIdExtractor(config.numberOfShards),
       allocationStrategy = new DynamicLeastShardAllocationStrategy(1, 10, 2, 0.0),
@@ -98,9 +101,8 @@ class EntitySupportFactory(
     if (methodsWithoutKeys.nonEmpty) {
       val offendingMethods = methodsWithoutKeys.map(_.method.getName).mkString(",")
       throw EntityDiscoveryException(
-        s"""Value based entities do not support methods whose parameters do not have at least one field marked as entity_key,
-            |but ${serviceDescriptor.getFullName} has the following methods without keys: $offendingMethods""".stripMargin
-          .replaceAll("\n", " ")
+        s"Value based entities do not support methods whose parameters do not have at least one field marked as entity_key, " +
+        s"but ${serviceDescriptor.getFullName} has the following methods without keys: $offendingMethods"
       )
     }
   }

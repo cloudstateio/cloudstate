@@ -16,6 +16,7 @@
 
 package io.cloudstate.tck
 
+import java.util.concurrent.TimeUnit
 import akka.actor.ActorSystem
 import akka.grpc.ServiceDescription
 import akka.stream.testkit.scaladsl.TestSink
@@ -33,11 +34,12 @@ import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.protocol.action._
 import io.cloudstate.protocol.crdt._
-import io.cloudstate.protocol.value_entity.ValueEntity
+import io.cloudstate.protocol.value_entity._
 import io.cloudstate.protocol.event_sourced._
 import io.cloudstate.protocol.entity._
 import io.cloudstate.tck.model.valueentity.valueentity.{ValueEntityTckModel, ValueEntityTwo}
 import io.cloudstate.tck.model.action.{ActionTckModel, ActionTwo}
+import io.cloudstate.tck.model.entitypassivation.entitypassivation.{PassivationTckModel, PassivationTckModelClient}
 import io.cloudstate.tck.model.crdt.{CrdtTckModel, CrdtTckModelClient, CrdtTwo}
 import io.cloudstate.tck.model.eventlogeventing.{EmitEventRequest, EventLogSubscriberModel}
 import io.cloudstate.tck.model.eventlogeventing
@@ -83,6 +85,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
   private[this] final val client = TestClient(settings.proxy.host, settings.proxy.port)
   private[this] final val eventSourcedShoppingCartClient = EventSourcedShoppingCartClient(client.settings)(system)
   private[this] final val valueEntityShoppingCartClient = ValueEntityShoppingCartClient(client.settings)(system)
+  private[this] final val valueEntityPassivationEntityClient = PassivationTckModelClient(client.settings)(system)
   private[this] final val crdtTckModelClient = CrdtTckModelClient(client.settings)(client.context.system)
   private[this] final val eventLogEventingEventSourcedEntityOne =
     eventlogeventing.EventSourcedEntityOneClient(client.settings)(system)
@@ -93,6 +96,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
 
   @volatile private[this] final var interceptor: InterceptService = _
   @volatile private[this] final var enabledServices = Seq.empty[String]
+  @volatile private[this] final var passivationEntities = Seq.empty[Entity]
 
   override implicit val patienceConfig: PatienceConfig = PatienceConfig(timeout = 3.seconds, interval = 100.millis)
 
@@ -103,6 +107,7 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
     try eventSourcedShoppingCartClient.close().futureValue
     finally try valueEntityShoppingCartClient.close().futureValue
     finally try crdtTckModelClient.close().futureValue
+    finally try valueEntityPassivationEntityClient.close().futureValue
     finally try client.terminate()
     finally try protocol.terminate()
     finally interceptor.terminate()
@@ -204,6 +209,49 @@ class CloudStateTCK(description: String, settings: CloudStateTCK.Settings)
         }
 
         enabledServices = spec.entities.map(_.serviceName)
+        passivationEntities = spec.entities.filter(_.serviceName == PassivationTckModel.name)
+      }
+    }
+
+    "verifying model test: entity passivation" must {
+      import ValueEntityMessages._
+      import io.cloudstate.tck.model.entitypassivation.entitypassivation._
+      import io.cloudstate.protocol.entity.EntityPassivationStrategy._
+
+      var entityId: Int = 0
+      def nextEntityId(): String = { entityId += 1; s"entity:$entityId" }
+
+      def passivationEntityTest(test: String => Any): Unit =
+        testFor(PassivationTckModel)(test(nextEntityId()))
+
+      def passivationTimeout(entity: Entity): FiniteDuration = {
+        val additionalTimeout = 1000 // additional time in millis for allowing passivation
+        val timeoutStrategy = entity.passivationStrategy.get.strategy.timeout
+        Duration(timeoutStrategy.get.timeout + additionalTimeout, TimeUnit.MILLISECONDS)
+      }
+
+      "verify timeout passivation is enabled for value-based entity" in {
+        passivationEntities.find(_.serviceName == PassivationTckModel.name).foreach { entity =>
+          entity.entityType mustBe ValueEntity.name
+          entity.persistenceId mustBe "entity-passivation-tck-model"
+          entity.passivationStrategy mustBe Some(
+            EntityPassivationStrategy(Strategy.Timeout(TimeoutPassivationStrategy(2000)))
+          )
+        }
+      }
+
+      "verify value-based entity is passivated after timeout" in passivationEntityTest { id =>
+        passivationEntities.find(_.serviceName == PassivationTckModel.name).foreach { entity =>
+          val timeout = passivationTimeout(entity)
+          valueEntityPassivationEntityClient.activate(Request(id))
+
+          val connection = interceptor.expectValueBasedConnection()
+          connection.expectClient(init(PassivationTckModel.name, id))
+          connection.expectClient(command(1, id, "Activate", Request(id)))
+          connection.expectService(reply(1, Response("state")))
+          connection.expectOutClosed(timeout) // check passivation
+          connection.expectInClosed(timeout) // check passivation
+        }
       }
     }
 

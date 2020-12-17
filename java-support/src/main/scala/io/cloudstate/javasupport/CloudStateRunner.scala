@@ -17,7 +17,6 @@
 package io.cloudstate.javasupport
 
 import java.util.concurrent.CompletionStage
-
 import com.typesafe.config.{Config, ConfigFactory}
 import akka.Done
 import akka.actor.ActorSystem
@@ -38,7 +37,7 @@ import io.cloudstate.protocol.value_entity.ValueEntityHandler
 
 import scala.compat.java8.FutureConverters
 import scala.concurrent.Future
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object CloudStateRunner {
   final case class Configuration(userFunctionInterface: String, userFunctionPort: Int, snapshotEvery: Int) {
@@ -79,7 +78,9 @@ final class CloudStateRunner private[this] (
     case (serviceName, factory) => serviceName -> factory(system)
   }.toMap
 
-  // TODO JavaDoc
+  /**
+   * Creates a CloudStateRunner from the given services. Use the default config to create the internal ActorSystem.
+   */
   def this(services: java.util.Map[String, java.util.function.Function[ActorSystem, Service]]) {
     this(ActorSystem("StatefulService", {
       val conf = ConfigFactory.load()
@@ -87,7 +88,9 @@ final class CloudStateRunner private[this] (
     }), services.asScala.toMap)
   }
 
-  // TODO JavaDoc
+  /**
+   * Creates a CloudStateRunner from the given services and config. Use the config to create the internal ActorSystem.
+   */
   def this(services: java.util.Map[String, java.util.function.Function[ActorSystem, Service]], config: Config) {
     this(ActorSystem("StatefulService", config), services.asScala.toMap)
   }
@@ -162,8 +165,7 @@ final class CloudStateRunner private[this] (
 }
 
 /**
- * StatefulService describes an entitiy type in a way which makes it possible
- * to deploy.
+ * Service describes an entity type in a way which makes it possible to deploy.
  */
 trait Service {
 
@@ -174,15 +176,24 @@ trait Service {
 
   /**
    * Possible values are: "", "", "".
-   * @return the type of entity represented by this StatefulService
+   * @return the type of entity represented by this service
    */
   def entityType: String
 
   /**
-   * @return the persistence identifier used for the the entities represented by this service
+   * @return the persistence identifier used for the entities represented by this service
    */
   def persistenceId: String = descriptor.getName
 
-  // TODO JavaDoc
+  /**
+   * @return the options [[EntityOptions]] used by this service
+   */
+  def entityOptions: Option[EntityOptions] = None
+
+  /**
+   * @return a dictionary of service methods (Protobuf Descriptors.MethodDescriptor) classified by method name.
+   *         The dictionary values represent a mapping of Protobuf Descriptors.MethodDescriptor with its input
+   *         and output types (see [[io.cloudstate.javasupport.impl.ResolvedServiceMethod]])
+   */
   def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]]
 }
