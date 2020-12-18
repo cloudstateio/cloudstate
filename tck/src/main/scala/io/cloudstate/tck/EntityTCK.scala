@@ -210,8 +210,12 @@ trait EntityTCK extends TCKSpec {
       protocol.valueEntity
         .connect()
         .send(init(ValueEntityTckModel.name, id))
-        .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id)))))
-        .expect(reply(1, Response(), sideEffects(id)))
+        .send(command(1, id, "Process", Request(id, updateStates("X"))))
+        .expect(reply(1, Response("X"), update("X")))
+        .send(command(2, id, "Process", Request(id, Seq(sideEffectTo(id)))))
+        .expect(reply(2, Response("X"), sideEffects(id)))
+        .send(command(3, id, "Process", Request(id)))
+        .expect(reply(3, Response("X")))
         .passivate()
     }
 
@@ -239,8 +243,12 @@ trait EntityTCK extends TCKSpec {
       protocol.valueEntity
         .connect()
         .send(init(ValueEntityTckModel.name, id))
-        .send(command(1, id, "Process", Request(id, Seq(forwardTo(id)))))
-        .expect(forward(1, ServiceTwo, "Call", Request(id)))
+        .send(command(1, id, "Process", Request(id, updateStates("X"))))
+        .expect(reply(1, Response("X"), update("X")))
+        .send(command(2, id, "Process", Request(id, Seq(forwardTo(id)))))
+        .expect(forward(2, ServiceTwo, "Call", Request(id)))
+        .send(command(3, id, "Process", Request(id)))
+        .expect(reply(3, Response("X")))
         .passivate()
     }
 
@@ -381,6 +389,11 @@ trait EntityTCK extends TCKSpec {
       connection2
         .expectClient(command(2, id, "Call", Request(id)))
         .expectService(reply(2, Response()))
+
+      tckModelClient.process(Request(id)).futureValue mustBe Response("one")
+      connection
+        .expectClient(command(4, id, "Process", Request(id)))
+        .expectService(reply(4, Response("one")))
     }
 
     "verify failures" in valueEntityTest { id =>

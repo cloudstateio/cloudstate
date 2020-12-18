@@ -103,6 +103,16 @@ object InterceptActionService {
     def terminate(): Unit = client.close()
   }
 
+  def ignoreMetadata(command: ActionCommand): ActionCommand =
+    command.copy(metadata = None)
+
+  def ignoreMetadata(response: ActionResponse): ActionResponse =
+    response.update(
+      if (response.response.isReply) _.reply.optionalMetadata := None else _ => identity,
+      if (response.response.isForward) _.forward.optionalMetadata := None else _ => identity,
+      _.sideEffects.modify(_.map(_.update(_.optionalMetadata := None)))
+    )
+
   final class UnaryConnection(context: InterceptorContext, val command: ActionCommand) {
     private[testkit] val out = TestProbe("UnaryConnectionOutProbe")(context.system)
 
@@ -110,13 +120,14 @@ object InterceptActionService {
       out.expectMsgType[ActionResponse]
 
     def expectClient(expected: ActionCommand): UnaryConnection = {
-      val received = command.copy(metadata = None) // ignore attached metadata
+      val received = ignoreMetadata(command)
       assert(received == expected, s"Unexpected unary action command: expected $expected, found $received")
       this
     }
 
-    def expectService(response: ActionResponse): UnaryConnection = {
-      out.expectMsg(response)
+    def expectService(expected: ActionResponse): UnaryConnection = {
+      val received = ignoreMetadata(expectResponse())
+      assert(received == expected, s"Unexpected unary action response: expected $expected, found $received")
       this
     }
   }
@@ -134,13 +145,14 @@ object InterceptActionService {
       in.expectMsgType[ActionCommand]
 
     def expectClient(expected: ActionCommand): StreamedInConnection = {
-      val command = expectCommand().copy(metadata = None) // ignore attached metadata
-      assert(command == expected, s"Unexpected streamed-in action command: expected $expected, found $command")
+      val received = ignoreMetadata(expectCommand())
+      assert(received == expected, s"Unexpected streamed-in action command: expected $expected, found $received")
       this
     }
 
-    def expectService(response: ActionResponse): StreamedInConnection = {
-      out.expectMsg(response)
+    def expectService(expected: ActionResponse): StreamedInConnection = {
+      val received = ignoreMetadata(expectResponse())
+      assert(received == expected, s"Unexpected unary action response: expected $expected, found $received")
       this
     }
 
@@ -159,13 +171,14 @@ object InterceptActionService {
       out.expectMsgType[ActionResponse]
 
     def expectClient(expected: ActionCommand): StreamedOutConnection = {
-      val received = command.copy(metadata = None) // ignore attached metadata
+      val received = ignoreMetadata(command)
       assert(received == expected, s"Unexpected streamed-out action command: expected $expected, found $received")
       this
     }
 
-    def expectService(response: ActionResponse): StreamedOutConnection = {
-      out.expectMsg(response)
+    def expectService(expected: ActionResponse): StreamedOutConnection = {
+      val received = ignoreMetadata(expectResponse())
+      assert(received == expected, s"Unexpected unary action response: expected $expected, found $received")
       this
     }
 
@@ -189,13 +202,14 @@ object InterceptActionService {
       out.expectMsgType[ActionResponse]
 
     def expectClient(expected: ActionCommand): StreamedConnection = {
-      val command = expectCommand().copy(metadata = None) // ignore attached metadata
-      assert(command == expected, s"Unexpected streamed action command: expected $expected, found $command")
+      val received = ignoreMetadata(expectCommand())
+      assert(received == expected, s"Unexpected streamed action command: expected $expected, found $received")
       this
     }
 
-    def expectService(response: ActionResponse): StreamedConnection = {
-      out.expectMsg(response)
+    def expectService(expected: ActionResponse): StreamedConnection = {
+      val received = ignoreMetadata(expectResponse())
+      assert(received == expected, s"Unexpected unary action response: expected $expected, found $received")
       this
     }
 

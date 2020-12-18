@@ -782,7 +782,7 @@ lazy val `testkit` = (project in file("testkit"))
 lazy val `tck` = (project in file("tck"))
   .enablePlugins(AkkaGrpcPlugin, JavaAppPackaging, DockerPlugin, NoPublish)
   .configs(IntegrationTest)
-  .dependsOn(`akka-client`, testkit)
+  .dependsOn(testkit)
   .settings(
     Defaults.itSettings,
     common,
@@ -798,11 +798,11 @@ lazy val `tck` = (project in file("tck"))
       ),
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "protocol", baseDir / "tck")
+      Seq(baseDir / "protocol", baseDir / "frontend", baseDir / "tck")
     },
     dockerSettings,
     Compile / bashScriptDefines / mainClass := Some("org.scalatest.run"),
-    bashScriptExtraDefines += "addApp io.cloudstate.tck.ConfiguredCloudStateTCK",
+    bashScriptExtraDefines += "addApp io.cloudstate.tck.ConfiguredCloudstateTCK",
     headerSettings(IntegrationTest),
     automateHeaderSettings(IntegrationTest),
     fork in IntegrationTest := true,

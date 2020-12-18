@@ -201,8 +201,12 @@ trait EventSourcedEntityTCK extends TCKSpec {
       protocol.eventSourced
         .connect()
         .send(init(EventSourcedTckModel.name, id))
-        .send(command(1, id, "Process", Request(id, Seq(forwardTo(id)))))
-        .expect(forward(1, EventSourcedTwo.name, "Call", Request(id)))
+        .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
+        .expect(reply(1, Response("ABC"), events("A", "B", "C")))
+        .send(command(2, id, "Process", Request(id, Seq(forwardTo(id)))))
+        .expect(forward(2, EventSourcedTwo.name, "Call", Request(id)))
+        .send(command(3, id, "Process", Request(id)))
+        .expect(reply(3, Response("ABC")))
         .passivate()
     }
 
@@ -230,8 +234,12 @@ trait EventSourcedEntityTCK extends TCKSpec {
       protocol.eventSourced
         .connect()
         .send(init(EventSourcedTckModel.name, id))
-        .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(id)))))
-        .expect(reply(1, Response(), sideEffects(id)))
+        .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
+        .expect(reply(1, Response("ABC"), events("A", "B", "C")))
+        .send(command(2, id, "Process", Request(id, Seq(sideEffectTo(id)))))
+        .expect(reply(2, Response("ABC"), sideEffects(id)))
+        .send(command(3, id, "Process", Request(id)))
+        .expect(reply(3, Response("ABC")))
         .passivate()
     }
 
@@ -414,6 +422,11 @@ trait EventSourcedEntityTCK extends TCKSpec {
       connection2
         .expectClient(command(2, id, "Call", Request(id)))
         .expectService(reply(2, Response()))
+
+      tckModelClient.process(Request(id)).futureValue mustBe Response("one")
+      connection
+        .expectClient(command(4, id, "Process", Request(id)))
+        .expectService(reply(4, Response("one")))
     }
 
     "verify failures" in eventSourcedTest { id =>
