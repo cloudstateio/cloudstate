@@ -1554,8 +1554,12 @@ trait CrdtEntityTCK extends TCKSpec {
       protocol.crdt
         .connect()
         .send(init(CrdtTckModel.name, id))
-        .send(command(1, id, "Process", Request(id, Seq(forwardTo(s"X-$id")))))
-        .expect(forwarded(1, s"X-$id"))
+        .send(command(1, id, "Process", Request(id, GCounter.incrementBy(42))))
+        .expect(reply(1, GCounter.state(42), GCounter.update(42)))
+        .send(command(2, id, "Process", Request(id, Seq(forwardTo(s"X-$id")))))
+        .expect(forwarded(2, s"X-$id"))
+        .send(command(3, id, "Process", Request(id)))
+        .expect(reply(3, GCounter.state(42)))
         .passivate()
     }
 
@@ -1572,8 +1576,12 @@ trait CrdtEntityTCK extends TCKSpec {
       protocol.crdt
         .connect()
         .send(init(CrdtTckModel.name, id))
-        .send(command(1, id, "Process", Request(id, Seq(sideEffectTo(s"X-$id")))))
-        .expect(reply(1, GSet.state(), sideEffects(s"X-$id")))
+        .send(command(1, id, "Process", Request(id, GSet.add("one"))))
+        .expect(reply(1, GSet.state("one"), GSet.update("one")))
+        .send(command(2, id, "Process", Request(id, Seq(sideEffectTo(s"X-$id")))))
+        .expect(reply(2, GSet.state("one"), sideEffects(s"X-$id")))
+        .send(command(3, id, "Process", Request(id)))
+        .expect(reply(3, GSet.state("one")))
         .passivate()
     }
 
