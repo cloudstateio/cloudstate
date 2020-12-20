@@ -324,141 +324,141 @@ trait EntityTCK extends TCKSpec {
       tckModelClient.process(Request(id)).futureValue mustBe Response()
       val connection = interceptor
         .expectEntityConnection()
-        .expectClient(init(Service, id))
-        .expectClient(command(1, id, "Process", Request(id)))
-        .expectService(reply(1, Response()))
+        .expectIncoming(init(Service, id))
+        .expectIncoming(command(1, id, "Process", Request(id)))
+        .expectOutgoing(reply(1, Response()))
 
       tckModelClient.process(Request(id, updateStates("one"))).futureValue mustBe Response("one")
       connection
-        .expectClient(command(2, id, "Process", Request(id, updateStates("one"))))
-        .expectService(reply(2, Response("one"), update("one")))
+        .expectIncoming(command(2, id, "Process", Request(id, updateStates("one"))))
+        .expectOutgoing(reply(2, Response("one"), update("one")))
 
       tckModelClient.process(Request(id, updateStates("two"))).futureValue mustBe Response("two")
       connection
-        .expectClient(command(3, id, "Process", Request(id, updateStates("two"))))
-        .expectService(reply(3, Response("two"), update("two")))
+        .expectIncoming(command(3, id, "Process", Request(id, updateStates("two"))))
+        .expectOutgoing(reply(3, Response("two"), update("two")))
 
       tckModelClient.process(Request(id)).futureValue mustBe Response("two")
       connection
-        .expectClient(command(4, id, "Process", Request(id)))
-        .expectService(reply(4, Response("two")))
+        .expectIncoming(command(4, id, "Process", Request(id)))
+        .expectOutgoing(reply(4, Response("two")))
 
       tckModelClient.process(Request(id, Seq(deleteState()))).futureValue mustBe Response()
       connection
-        .expectClient(command(5, id, "Process", Request(id, Seq(deleteState()))))
-        .expectService(reply(5, Response(), delete()))
+        .expectIncoming(command(5, id, "Process", Request(id, Seq(deleteState()))))
+        .expectOutgoing(reply(5, Response(), delete()))
 
       tckModelClient.process(Request(id)).futureValue mustBe Response()
       connection
-        .expectClient(command(6, id, "Process", Request(id)))
-        .expectService(reply(6, Response()))
+        .expectIncoming(command(6, id, "Process", Request(id)))
+        .expectOutgoing(reply(6, Response()))
 
       tckModelClient.process(Request(id, updateStates("foo"))).futureValue mustBe Response("foo")
       connection
-        .expectClient(command(7, id, "Process", Request(id, updateStates("foo"))))
-        .expectService(reply(7, Response("foo"), update("foo")))
+        .expectIncoming(command(7, id, "Process", Request(id, updateStates("foo"))))
+        .expectOutgoing(reply(7, Response("foo"), update("foo")))
 
       tckModelClient.process(Request(id, Seq(deleteState()))).futureValue mustBe Response()
       connection
-        .expectClient(command(8, id, "Process", Request(id, Seq(deleteState()))))
-        .expectService(reply(8, Response(), delete()))
+        .expectIncoming(command(8, id, "Process", Request(id, Seq(deleteState()))))
+        .expectOutgoing(reply(8, Response(), delete()))
     }
 
     "verify forwards and side effects" in valueEntityTest { id =>
       tckModelClient.process(Request(id, updateStates("one"))).futureValue mustBe Response("one")
       val connection = interceptor
         .expectEntityConnection()
-        .expectClient(init(Service, id))
-        .expectClient(command(1, id, "Process", Request(id, updateStates("one"))))
-        .expectService(reply(1, Response("one"), update("one")))
+        .expectIncoming(init(Service, id))
+        .expectIncoming(command(1, id, "Process", Request(id, updateStates("one"))))
+        .expectOutgoing(reply(1, Response("one"), update("one")))
 
       tckModelClient.process(Request(id, Seq(forwardTo(id)))).futureValue mustBe Response()
       connection
-        .expectClient(command(2, id, "Process", Request(id, Seq(forwardTo(id)))))
-        .expectService(forward(2, ServiceTwo, "Call", Request(id)))
+        .expectIncoming(command(2, id, "Process", Request(id, Seq(forwardTo(id)))))
+        .expectOutgoing(forward(2, ServiceTwo, "Call", Request(id)))
       val connection2 = interceptor
         .expectEntityConnection()
-        .expectClient(init(ServiceTwo, id))
-        .expectClient(command(1, id, "Call", Request(id)))
-        .expectService(reply(1, Response()))
+        .expectIncoming(init(ServiceTwo, id))
+        .expectIncoming(command(1, id, "Call", Request(id)))
+        .expectOutgoing(reply(1, Response()))
 
       tckModelClient.process(Request(id, Seq(sideEffectTo(id)))).futureValue mustBe Response("one")
       connection
-        .expectClient(command(3, id, "Process", Request(id, Seq(sideEffectTo(id)))))
-        .expectService(reply(3, Response("one"), sideEffects(id)))
+        .expectIncoming(command(3, id, "Process", Request(id, Seq(sideEffectTo(id)))))
+        .expectOutgoing(reply(3, Response("one"), sideEffects(id)))
       connection2
-        .expectClient(command(2, id, "Call", Request(id)))
-        .expectService(reply(2, Response()))
+        .expectIncoming(command(2, id, "Call", Request(id)))
+        .expectOutgoing(reply(2, Response()))
 
       tckModelClient.process(Request(id)).futureValue mustBe Response("one")
       connection
-        .expectClient(command(4, id, "Process", Request(id)))
-        .expectService(reply(4, Response("one")))
+        .expectIncoming(command(4, id, "Process", Request(id)))
+        .expectOutgoing(reply(4, Response("one")))
     }
 
     "verify failures" in valueEntityTest { id =>
       tckModelClient.process(Request(id, updateStates("one"))).futureValue mustBe Response("one")
       val connection = interceptor
         .expectEntityConnection()
-        .expectClient(init(Service, id))
-        .expectClient(command(1, id, "Process", Request(id, updateStates("one"))))
-        .expectService(reply(1, Response("one"), update("one")))
+        .expectIncoming(init(Service, id))
+        .expectIncoming(command(1, id, "Process", Request(id, updateStates("one"))))
+        .expectOutgoing(reply(1, Response("one"), update("one")))
 
       val failed = tckModelClient.process(Request(id, Seq(failWith("expected failure")))).failed.futureValue
       failed mustBe a[StatusRuntimeException]
       failed.asInstanceOf[StatusRuntimeException].getStatus.getDescription mustBe "expected failure"
       connection
-        .expectClient(command(2, id, "Process", Request(id, Seq(failWith("expected failure")))))
-        .expectService(actionFailure(2, "expected failure"))
+        .expectIncoming(command(2, id, "Process", Request(id, Seq(failWith("expected failure")))))
+        .expectOutgoing(actionFailure(2, "expected failure"))
 
       tckModelClient.process(Request(id)).futureValue mustBe Response("one")
       connection
-        .expectClient(command(3, id, "Process", Request(id)))
-        .expectService(reply(3, Response("one")))
+        .expectIncoming(command(3, id, "Process", Request(id)))
+        .expectOutgoing(reply(3, Response("one")))
     }
 
     "verify HTTP API" in valueEntityTest { id =>
       client.http.request(s"tck/model/entity/$id", "{}").futureValue mustBe """{"message":""}"""
       val connection = interceptor
         .expectEntityConnection()
-        .expectClient(init(Service, id))
-        .expectClient(command(1, id, "Process", Request(id)))
-        .expectService(reply(1, Response()))
+        .expectIncoming(init(Service, id))
+        .expectIncoming(command(1, id, "Process", Request(id)))
+        .expectOutgoing(reply(1, Response()))
 
       client.http
         .request(s"tck/model/entity/$id", """{"actions": [{"update": {"value": "one"}}]}""")
         .futureValue mustBe """{"message":"one"}"""
       connection
-        .expectClient(command(2, id, "Process", Request(id, updateStates("one"))))
-        .expectService(reply(2, Response("one"), update("one")))
+        .expectIncoming(command(2, id, "Process", Request(id, updateStates("one"))))
+        .expectOutgoing(reply(2, Response("one"), update("one")))
 
       client.http
         .requestToError(s"tck/model/entity/$id", """{"actions": [{"fail": {"message": "expected failure"}}]}""")
         .futureValue mustBe "expected failure"
       connection
-        .expectClient(command(3, id, "Process", Request(id, Seq(failWith("expected failure")))))
-        .expectService(actionFailure(3, "expected failure"))
+        .expectIncoming(command(3, id, "Process", Request(id, Seq(failWith("expected failure")))))
+        .expectOutgoing(actionFailure(3, "expected failure"))
 
       client.http
         .request(s"tck/model/entity/$id", """{"actions": [{"update": {"value": "two"}}]}""")
         .futureValue mustBe """{"message":"two"}"""
       connection
-        .expectClient(command(4, id, "Process", Request(id, updateStates("two"))))
-        .expectService(reply(4, Response("two"), update("two")))
+        .expectIncoming(command(4, id, "Process", Request(id, updateStates("two"))))
+        .expectOutgoing(reply(4, Response("two"), update("two")))
 
       client.http.request(s"tck/model/entity/$id", "{}").futureValue mustBe """{"message":"two"}"""
       connection
-        .expectClient(command(5, id, "Process", Request(id)))
-        .expectService(reply(5, Response("two")))
+        .expectIncoming(command(5, id, "Process", Request(id)))
+        .expectOutgoing(reply(5, Response("two")))
     }
 
     "verify passivation timeout" in valueEntityConfiguredTest { id =>
       configuredClient.call(Request(id))
       interceptor
         .expectEntityConnection()
-        .expectClient(init(ServiceConfigured, id))
-        .expectClient(command(1, id, "Call", Request(id)))
-        .expectService(reply(1, Response()))
+        .expectIncoming(init(ServiceConfigured, id))
+        .expectIncoming(command(1, id, "Call", Request(id)))
+        .expectOutgoing(reply(1, Response()))
         .expectClosed(2.seconds) // check passivation (with expected timeout of 100 millis)
     }
   }

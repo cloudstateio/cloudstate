@@ -1815,24 +1815,24 @@ trait CrdtEntityTCK extends TCKSpec {
       tckModelClient.process(Request(id)).futureValue mustBe PNCounter.state(0)
       val connection = interceptor
         .expectCrdtEntityConnection()
-        .expectClient(init(Service, id))
-        .expectClient(command(1, id, "Process", Request(id)))
-        .expectService(reply(1, PNCounter.state(0)))
+        .expectIncoming(init(Service, id))
+        .expectIncoming(command(1, id, "Process", Request(id)))
+        .expectOutgoing(reply(1, PNCounter.state(0)))
 
       tckModelClient.process(Request(id, PNCounter.changeBy(+1, -2, +3))).futureValue mustBe PNCounter.state(+2)
       connection
-        .expectClient(command(2, id, "Process", Request(id, PNCounter.changeBy(+1, -2, +3))))
-        .expectService(reply(2, PNCounter.state(+2), PNCounter.update(+2)))
+        .expectIncoming(command(2, id, "Process", Request(id, PNCounter.changeBy(+1, -2, +3))))
+        .expectOutgoing(reply(2, PNCounter.state(+2), PNCounter.update(+2)))
 
       tckModelClient.process(Request(id, PNCounter.changeBy(+4, -5, +6))).futureValue mustBe PNCounter.state(+7)
       connection
-        .expectClient(command(3, id, "Process", Request(id, PNCounter.changeBy(+4, -5, +6))))
-        .expectService(reply(3, PNCounter.state(+7), PNCounter.update(+5)))
+        .expectIncoming(command(3, id, "Process", Request(id, PNCounter.changeBy(+4, -5, +6))))
+        .expectOutgoing(reply(3, PNCounter.state(+7), PNCounter.update(+5)))
 
       tckModelClient.process(Request(id, Seq(requestDelete))).futureValue mustBe PNCounter.state(+7)
       connection
-        .expectClient(command(4, id, "Process", Request(id, Seq(requestDelete))))
-        .expectService(reply(4, PNCounter.state(+7), deleteCrdt))
+        .expectIncoming(command(4, id, "Process", Request(id, Seq(requestDelete))))
+        .expectOutgoing(reply(4, PNCounter.state(+7), deleteCrdt))
         .expectClosed()
     }
 
@@ -1840,38 +1840,38 @@ trait CrdtEntityTCK extends TCKSpec {
       tckModelClient.process(Request(id, GSet.add("one"))).futureValue mustBe GSet.state("one")
       val connection = interceptor
         .expectCrdtEntityConnection()
-        .expectClient(init(Service, id))
-        .expectClient(command(1, id, "Process", Request(id, GSet.add("one"))))
-        .expectService(reply(1, GSet.state("one"), GSet.update("one")))
+        .expectIncoming(init(Service, id))
+        .expectIncoming(command(1, id, "Process", Request(id, GSet.add("one"))))
+        .expectOutgoing(reply(1, GSet.state("one"), GSet.update("one")))
 
       tckModelClient.process(Request(id, Seq(forwardTo(id)))).futureValue mustBe Response()
       connection
-        .expectClient(command(2, id, "Process", Request(id, Seq(forwardTo(id)))))
-        .expectService(forward(2, ServiceTwo, "Call", Request(id)))
+        .expectIncoming(command(2, id, "Process", Request(id, Seq(forwardTo(id)))))
+        .expectOutgoing(forward(2, ServiceTwo, "Call", Request(id)))
       val connection2 = interceptor
         .expectCrdtEntityConnection()
-        .expectClient(init(ServiceTwo, id))
-        .expectClient(command(1, id, "Call", Request(id)))
-        .expectService(reply(1, Response()))
+        .expectIncoming(init(ServiceTwo, id))
+        .expectIncoming(command(1, id, "Call", Request(id)))
+        .expectOutgoing(reply(1, Response()))
 
       tckModelClient.process(Request(id, Seq(sideEffectTo(id)))).futureValue mustBe GSet.state("one")
       connection
-        .expectClient(command(3, id, "Process", Request(id, Seq(sideEffectTo(id)))))
-        .expectService(reply(3, GSet.state("one"), sideEffects(id)))
+        .expectIncoming(command(3, id, "Process", Request(id, Seq(sideEffectTo(id)))))
+        .expectOutgoing(reply(3, GSet.state("one"), sideEffects(id)))
       connection2
-        .expectClient(command(2, id, "Call", Request(id)))
-        .expectService(reply(2, Response()))
+        .expectIncoming(command(2, id, "Call", Request(id)))
+        .expectOutgoing(reply(2, Response()))
 
       tckModelClient.process(Request(id, Seq(requestDelete))).futureValue mustBe GSet.state("one")
       connection
-        .expectClient(command(4, id, "Process", Request(id, Seq(requestDelete))))
-        .expectService(reply(4, GSet.state("one"), deleteCrdt))
+        .expectIncoming(command(4, id, "Process", Request(id, Seq(requestDelete))))
+        .expectOutgoing(reply(4, GSet.state("one"), deleteCrdt))
         .expectClosed()
 
       modelTwoClient.call(Request(id, Seq(requestDelete))).futureValue mustBe Response()
       connection2
-        .expectClient(command(3, id, "Call", Request(id, Seq(requestDelete))))
-        .expectService(reply(3, Response(), deleteCrdt))
+        .expectIncoming(command(3, id, "Call", Request(id, Seq(requestDelete))))
+        .expectOutgoing(reply(3, Response(), deleteCrdt))
         .expectClosed()
     }
 
@@ -1879,21 +1879,21 @@ trait CrdtEntityTCK extends TCKSpec {
       tckModelClient.process(Request(id, GCounter.incrementBy(42))).futureValue mustBe GCounter.state(42)
       val connection = interceptor
         .expectCrdtEntityConnection()
-        .expectClient(init(Service, id))
-        .expectClient(command(1, id, "Process", Request(id, GCounter.incrementBy(42))))
-        .expectService(reply(1, GCounter.state(42), GCounter.update(42)))
+        .expectIncoming(init(Service, id))
+        .expectIncoming(command(1, id, "Process", Request(id, GCounter.incrementBy(42))))
+        .expectOutgoing(reply(1, GCounter.state(42), GCounter.update(42)))
 
       val failed = tckModelClient.process(Request(id, Seq(failWith("expected failure")))).failed.futureValue
       failed mustBe a[StatusRuntimeException]
       failed.asInstanceOf[StatusRuntimeException].getStatus.getDescription mustBe "expected failure"
       connection
-        .expectClient(command(2, id, "Process", Request(id, Seq(failWith("expected failure")))))
-        .expectService(failure(2, "expected failure"))
+        .expectIncoming(command(2, id, "Process", Request(id, Seq(failWith("expected failure")))))
+        .expectOutgoing(failure(2, "expected failure"))
 
       tckModelClient.process(Request(id, Seq(requestDelete))).futureValue mustBe GCounter.state(42)
       connection
-        .expectClient(command(3, id, "Process", Request(id, Seq(requestDelete))))
-        .expectService(reply(3, GCounter.state(42), deleteCrdt))
+        .expectIncoming(command(3, id, "Process", Request(id, Seq(requestDelete))))
+        .expectOutgoing(reply(3, GCounter.state(42), deleteCrdt))
         .expectClosed()
     }
 
@@ -1909,36 +1909,36 @@ trait CrdtEntityTCK extends TCKSpec {
       monitor.request(1).expectNext(state0)
       val connection = interceptor
         .expectCrdtEntityConnection()
-        .expectClient(init(CrdtTckModel.name, id))
-        .expectClient(command(1, id, "ProcessStreamed", StreamedRequest(id), streamed = true))
-        .expectService(reply(1, state0, Effects(streamed = true)))
+        .expectIncoming(init(CrdtTckModel.name, id))
+        .expectIncoming(command(1, id, "ProcessStreamed", StreamedRequest(id), streamed = true))
+        .expectOutgoing(reply(1, state0, Effects(streamed = true)))
 
       val connectRequest = StreamedRequest(id, initialUpdate = voteTrue, cancelUpdate = voteFalse, empty = true)
       val connect = tckModelClient.processStreamed(connectRequest).runWith(TestSink.probe[Response])
       connect.request(1).expectNoMessage(100.millis)
       monitor.request(1).expectNext(state1)
       connection
-        .expectClient(command(2, id, "ProcessStreamed", connectRequest, streamed = true))
-        .expectService(crdtReply(2, None, Effects(streamed = true) ++ Vote.update(true)))
-        .expectService(streamed(1, state1))
+        .expectIncoming(command(2, id, "ProcessStreamed", connectRequest, streamed = true))
+        .expectOutgoing(crdtReply(2, None, Effects(streamed = true) ++ Vote.update(true)))
+        .expectOutgoing(streamed(1, state1))
 
       connect.cancel()
       monitor.request(1).expectNext(state0)
       connection
-        .expectClient(crdtStreamCancelled(2, id))
-        .expectService(streamCancelledResponse(2, Vote.update(false)))
-        .expectService(streamed(1, state0))
+        .expectIncoming(crdtStreamCancelled(2, id))
+        .expectOutgoing(streamCancelledResponse(2, Vote.update(false)))
+        .expectOutgoing(streamed(1, state0))
 
       monitor.cancel()
       connection
-        .expectClient(crdtStreamCancelled(1, id))
-        .expectService(streamCancelledResponse(1))
+        .expectIncoming(crdtStreamCancelled(1, id))
+        .expectOutgoing(streamCancelledResponse(1))
 
       val deleteRequest = Request(id, Seq(requestDelete))
       tckModelClient.process(deleteRequest).futureValue mustBe state0
       connection
-        .expectClient(command(3, id, "Process", deleteRequest))
-        .expectService(reply(3, state0, deleteCrdt))
+        .expectIncoming(command(3, id, "Process", deleteRequest))
+        .expectOutgoing(reply(3, state0, deleteCrdt))
         .expectClosed()
     }
 
@@ -1948,37 +1948,37 @@ trait CrdtEntityTCK extends TCKSpec {
         .futureValue mustBe """{"state":{"pncounter":{"value":"0"}}}"""
       val connection = interceptor
         .expectCrdtEntityConnection()
-        .expectClient(init(Service, id))
-        .expectClient(command(1, id, "Process", Request(id)))
-        .expectService(reply(1, PNCounter.state(0)))
+        .expectIncoming(init(Service, id))
+        .expectIncoming(command(1, id, "Process", Request(id)))
+        .expectOutgoing(reply(1, PNCounter.state(0)))
 
       client.http
         .request(s"tck/model/crdt/$id", """{"actions": [{"update": {"pncounter": {"change": 42} }}]}""")
         .futureValue mustBe """{"state":{"pncounter":{"value":"42"}}}"""
       connection
-        .expectClient(command(2, id, "Process", Request(id, PNCounter.changeBy(+42))))
-        .expectService(reply(2, PNCounter.state(+42), PNCounter.update(+42)))
+        .expectIncoming(command(2, id, "Process", Request(id, PNCounter.changeBy(+42))))
+        .expectOutgoing(reply(2, PNCounter.state(+42), PNCounter.update(+42)))
 
       client.http
         .requestToError(s"tck/model/crdt/$id", """{"actions": [{"fail": {"message": "expected failure"}}]}""")
         .futureValue mustBe "expected failure"
       connection
-        .expectClient(command(3, id, "Process", Request(id, Seq(failWith("expected failure")))))
-        .expectService(failure(3, "expected failure"))
+        .expectIncoming(command(3, id, "Process", Request(id, Seq(failWith("expected failure")))))
+        .expectOutgoing(failure(3, "expected failure"))
 
       client.http
         .request(s"tck/model/crdt/$id", """{"actions": [{"update": {"pncounter": {"change": -123} }}]}""")
         .futureValue mustBe """{"state":{"pncounter":{"value":"-81"}}}"""
       connection
-        .expectClient(command(4, id, "Process", Request(id, PNCounter.changeBy(-123))))
-        .expectService(reply(4, PNCounter.state(-81), PNCounter.update(-123)))
+        .expectIncoming(command(4, id, "Process", Request(id, PNCounter.changeBy(-123))))
+        .expectOutgoing(reply(4, PNCounter.state(-81), PNCounter.update(-123)))
 
       client.http
         .request(s"tck/model/crdt/$id", """{"actions": [{"delete": {}}]}""")
         .futureValue mustBe """{"state":{"pncounter":{"value":"-81"}}}"""
       connection
-        .expectClient(command(5, id, "Process", Request(id, Seq(requestDelete))))
-        .expectService(reply(5, PNCounter.state(-81), deleteCrdt))
+        .expectIncoming(command(5, id, "Process", Request(id, Seq(requestDelete))))
+        .expectOutgoing(reply(5, PNCounter.state(-81), deleteCrdt))
         .expectClosed()
     }
 
@@ -1986,9 +1986,9 @@ trait CrdtEntityTCK extends TCKSpec {
       configuredClient.call(Request(id))
       interceptor
         .expectCrdtEntityConnection()
-        .expectClient(init(ServiceConfigured, id))
-        .expectClient(command(1, id, "Call", Request(id)))
-        .expectService(reply(1, Response()))
+        .expectIncoming(init(ServiceConfigured, id))
+        .expectIncoming(command(1, id, "Call", Request(id)))
+        .expectOutgoing(reply(1, Response()))
         .expectClosed(2.seconds) // check passivation (with expected timeout of 100 millis)
     }
   }

@@ -119,13 +119,13 @@ object InterceptActionService {
     def expectResponse(): ActionResponse =
       out.expectMsgType[ActionResponse]
 
-    def expectClient(expected: ActionCommand): UnaryConnection = {
+    def expectIncoming(expected: ActionCommand): UnaryConnection = {
       val received = ignoreMetadata(command)
       assert(received == expected, s"Unexpected unary action command: expected $expected, found $received")
       this
     }
 
-    def expectService(expected: ActionResponse): UnaryConnection = {
+    def expectOutgoing(expected: ActionResponse): UnaryConnection = {
       val received = ignoreMetadata(expectResponse())
       assert(received == expected, s"Unexpected unary action response: expected $expected, found $received")
       this
@@ -144,13 +144,13 @@ object InterceptActionService {
     def expectCommand(): ActionCommand =
       in.expectMsgType[ActionCommand]
 
-    def expectClient(expected: ActionCommand): StreamedInConnection = {
+    def expectIncoming(expected: ActionCommand): StreamedInConnection = {
       val received = ignoreMetadata(expectCommand())
       assert(received == expected, s"Unexpected streamed-in action command: expected $expected, found $received")
       this
     }
 
-    def expectService(expected: ActionResponse): StreamedInConnection = {
+    def expectOutgoing(expected: ActionResponse): StreamedInConnection = {
       val received = ignoreMetadata(expectResponse())
       assert(received == expected, s"Unexpected unary action response: expected $expected, found $received")
       this
@@ -170,13 +170,13 @@ object InterceptActionService {
     def expectResponse(): ActionResponse =
       out.expectMsgType[ActionResponse]
 
-    def expectClient(expected: ActionCommand): StreamedOutConnection = {
+    def expectIncoming(expected: ActionCommand): StreamedOutConnection = {
       val received = ignoreMetadata(command)
       assert(received == expected, s"Unexpected streamed-out action command: expected $expected, found $received")
       this
     }
 
-    def expectService(expected: ActionResponse): StreamedOutConnection = {
+    def expectOutgoing(expected: ActionResponse): StreamedOutConnection = {
       val received = ignoreMetadata(expectResponse())
       assert(received == expected, s"Unexpected unary action response: expected $expected, found $received")
       this
@@ -201,13 +201,13 @@ object InterceptActionService {
     def expectResponse(): ActionResponse =
       out.expectMsgType[ActionResponse]
 
-    def expectClient(expected: ActionCommand): StreamedConnection = {
+    def expectIncoming(expected: ActionCommand): StreamedConnection = {
       val received = ignoreMetadata(expectCommand())
       assert(received == expected, s"Unexpected streamed action command: expected $expected, found $received")
       this
     }
 
-    def expectService(expected: ActionResponse): StreamedConnection = {
+    def expectOutgoing(expected: ActionResponse): StreamedConnection = {
       val received = ignoreMetadata(expectResponse())
       assert(received == expected, s"Unexpected unary action response: expected $expected, found $received")
       this

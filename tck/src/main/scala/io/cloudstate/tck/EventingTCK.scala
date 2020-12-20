@@ -56,11 +56,11 @@ trait EventingTCK extends TCKSpec {
 
     def verifyEventSourcedInitCommandReply(id: String): Unit = {
       val connection = interceptor.expectEventSourcedEntityConnection()
-      val init = connection.expectClientMessage[EventSourcedStreamIn.Message.Init]
+      val init = connection.expectIncomingMessage[EventSourcedStreamIn.Message.Init]
       init.value.serviceName must ===(eventlogeventing.EventSourcedEntityOne.name)
       init.value.entityId must ===(id)
-      connection.expectClientMessage[EventSourcedStreamIn.Message.Command]
-      connection.expectServiceMessage[EventSourcedStreamOut.Message.Reply]
+      connection.expectIncomingMessage[EventSourcedStreamIn.Message.Command]
+      connection.expectOutgoingMessage[EventSourcedStreamOut.Message.Reply]
     }
 
     def verifySubscriberCommandResponse(step: eventlogeventing.ProcessStep.Step): ActionResponse = {
@@ -121,11 +121,11 @@ trait EventingTCK extends TCKSpec {
       )
 
       val connection = interceptor.expectEventSourcedEntityConnection()
-      val init = connection.expectClientMessage[EventSourcedStreamIn.Message.Init]
+      val init = connection.expectIncomingMessage[EventSourcedStreamIn.Message.Init]
       init.value.serviceName must ===(eventlogeventing.EventSourcedEntityTwo.name)
       init.value.entityId must ===("eventlogeventing:3")
-      connection.expectClientMessage[EventSourcedStreamIn.Message.Command]
-      val reply = connection.expectServiceMessage[EventSourcedStreamOut.Message.Reply]
+      connection.expectIncomingMessage[EventSourcedStreamIn.Message.Command]
+      val reply = connection.expectOutgoingMessage[EventSourcedStreamOut.Message.Reply]
       reply.value.events must have size (1)
       reply.value.events.head.typeUrl must startWith("json.cloudstate.io/")
 
