@@ -66,20 +66,20 @@ object InterceptCrdtService {
     private[testkit] def inSink: Sink[CrdtStreamIn, NotUsed] = Sink.actorRef(in.ref, Complete, Error.apply)
     private[testkit] def outSink: Sink[CrdtStreamOut, NotUsed] = Sink.actorRef(out.ref, Complete, Error.apply)
 
-    def expectClient(message: CrdtStreamIn.Message): Connection = {
+    def expectIncoming(message: CrdtStreamIn.Message): Connection = {
       in.expectMsg(CrdtStreamIn(message))
       this
     }
 
-    def expectService(message: CrdtStreamOut.Message): Connection = {
+    def expectOutgoing(message: CrdtStreamOut.Message): Connection = {
       out.expectMsg(CrdtStreamOut(message))
       this
     }
 
-    def expectServiceMessage[T](implicit classTag: ClassTag[T]): T =
-      expectServiceMessageClass(classTag.runtimeClass.asInstanceOf[Class[T]])
+    def expectOutgoingMessage[T](implicit classTag: ClassTag[T]): T =
+      expectOutgoingMessageClass(classTag.runtimeClass.asInstanceOf[Class[T]])
 
-    def expectServiceMessageClass[T](messageClass: Class[T]): T = {
+    def expectOutgoingMessageClass[T](messageClass: Class[T]): T = {
       val message = out.expectMsgType[CrdtStreamOut].message
       assert(messageClass.isInstance(message), s"expected message $messageClass, found ${message.getClass} ($message)")
       message.asInstanceOf[T]

@@ -449,8 +449,8 @@ trait ActionTCK extends TCKSpec {
       tckModelClient.processUnary(single(replyWith("one"))).futureValue mustBe Response("one")
       interceptor
         .expectActionUnaryConnection()
-        .expectClient(processUnary(single(replyWith("one"))))
-        .expectService(reply(Response("one")))
+        .expectIncoming(processUnary(single(replyWith("one"))))
+        .expectOutgoing(reply(Response("one")))
     }
 
     "verify streamed-in command processing" in actionTest {
@@ -461,10 +461,10 @@ trait ActionTCK extends TCKSpec {
       response.futureValue mustBe Response("two")
       interceptor
         .expectActionStreamedInConnection()
-        .expectClient(processStreamedIn)
-        .expectClient(command(single(replyWith("two"))))
+        .expectIncoming(processStreamedIn)
+        .expectIncoming(command(single(replyWith("two"))))
         .expectInComplete()
-        .expectService(reply(Response("two")))
+        .expectOutgoing(reply(Response("two")))
     }
 
     "verify streamed-out command processing" in actionTest {
@@ -481,10 +481,10 @@ trait ActionTCK extends TCKSpec {
         .expectComplete()
       interceptor
         .expectActionStreamedOutConnection()
-        .expectClient(processStreamedOut(streamedOutRequest))
-        .expectService(reply(Response("A")))
-        .expectService(reply(Response("B")))
-        .expectService(reply(Response("C")))
+        .expectIncoming(processStreamedOut(streamedOutRequest))
+        .expectOutgoing(reply(Response("A")))
+        .expectOutgoing(reply(Response("B")))
+        .expectOutgoing(reply(Response("C")))
         .expectOutComplete()
     }
 
@@ -508,13 +508,13 @@ trait ActionTCK extends TCKSpec {
         .expectComplete()
       interceptor
         .expectActionStreamedConnection()
-        .expectClient(processStreamed)
-        .expectClient(command(single(replyWith("X"))))
-        .expectService(reply(Response("X")))
-        .expectClient(command(single(replyWith("Y"))))
-        .expectService(reply(Response("Y")))
-        .expectClient(command(single(replyWith("Z"))))
-        .expectService(reply(Response("Z")))
+        .expectIncoming(processStreamed)
+        .expectIncoming(command(single(replyWith("X"))))
+        .expectOutgoing(reply(Response("X")))
+        .expectIncoming(command(single(replyWith("Y"))))
+        .expectOutgoing(reply(Response("Y")))
+        .expectIncoming(command(single(replyWith("Z"))))
+        .expectOutgoing(reply(Response("Z")))
         .expectComplete()
     }
 
@@ -522,22 +522,22 @@ trait ActionTCK extends TCKSpec {
       tckModelClient.processUnary(single(forwardTo("other"))).futureValue mustBe Response()
       interceptor
         .expectActionUnaryConnection()
-        .expectClient(processUnary(single(forwardTo("other"))))
-        .expectService(forwarded("other"))
+        .expectIncoming(processUnary(single(forwardTo("other"))))
+        .expectOutgoing(forwarded("other"))
       interceptor
         .expectActionUnaryConnection()
-        .expectClient(serviceTwoCall("other"))
-        .expectService(reply(Response()))
+        .expectIncoming(serviceTwoCall("other"))
+        .expectOutgoing(reply(Response()))
 
       tckModelClient.processUnary(single(replyWith(""), sideEffectTo("another"))).futureValue mustBe Response()
       interceptor
         .expectActionUnaryConnection()
-        .expectClient(processUnary(single(replyWith(""), sideEffectTo("another"))))
-        .expectService(reply(Response(), sideEffects("another")))
+        .expectIncoming(processUnary(single(replyWith(""), sideEffectTo("another"))))
+        .expectOutgoing(reply(Response(), sideEffects("another")))
       interceptor
         .expectActionUnaryConnection()
-        .expectClient(serviceTwoCall("another"))
-        .expectService(reply(Response()))
+        .expectIncoming(serviceTwoCall("another"))
+        .expectOutgoing(reply(Response()))
     }
 
     "verify streamed forwards and side effects" in actionTest {
@@ -552,22 +552,22 @@ trait ActionTCK extends TCKSpec {
       responses.request(1).expectNext(Response())
       val connection = interceptor
         .expectActionStreamedConnection()
-        .expectClient(processStreamed)
-        .expectClient(command(single(forwardTo("one"))))
-        .expectService(forwarded("one"))
+        .expectIncoming(processStreamed)
+        .expectIncoming(command(single(forwardTo("one"))))
+        .expectOutgoing(forwarded("one"))
       interceptor
         .expectActionUnaryConnection()
-        .expectClient(serviceTwoCall("one"))
-        .expectService(reply(Response()))
+        .expectIncoming(serviceTwoCall("one"))
+        .expectOutgoing(reply(Response()))
 
       requests.sendNext(single(sideEffectTo("two")))
       connection
-        .expectClient(command(single(sideEffectTo("two"))))
-        .expectService(noReply(sideEffects("two")))
+        .expectIncoming(command(single(sideEffectTo("two"))))
+        .expectOutgoing(noReply(sideEffects("two")))
       interceptor
         .expectActionUnaryConnection()
-        .expectClient(serviceTwoCall("two"))
-        .expectService(reply(Response()))
+        .expectIncoming(serviceTwoCall("two"))
+        .expectOutgoing(reply(Response()))
 
       requests.sendComplete()
       responses.expectComplete()
@@ -580,8 +580,8 @@ trait ActionTCK extends TCKSpec {
       failed.asInstanceOf[StatusRuntimeException].getStatus.getDescription mustBe "expected failure"
       interceptor
         .expectActionUnaryConnection()
-        .expectClient(processUnary(single(failWith("expected failure"))))
-        .expectService(failure("expected failure"))
+        .expectIncoming(processUnary(single(failWith("expected failure"))))
+        .expectOutgoing(failure("expected failure"))
     }
 
     "verify streamed failures" in actionTest {
@@ -593,15 +593,15 @@ trait ActionTCK extends TCKSpec {
         .ensureSubscription()
       val connection = interceptor
         .expectActionStreamedConnection()
-        .expectClient(processStreamed)
+        .expectIncoming(processStreamed)
       requests.sendNext(single(failWith("expected failure")))
       val failed = responses.request(1).expectError()
       failed mustBe a[StatusRuntimeException]
       failed.asInstanceOf[StatusRuntimeException].getStatus.getDescription mustBe "expected failure"
       requests.expectCancellation()
       connection
-        .expectClient(command(single(failWith("expected failure"))))
-        .expectService(failure("expected failure"))
+        .expectIncoming(command(single(failWith("expected failure"))))
+        .expectOutgoing(failure("expected failure"))
     }
 
     "verify unary HTTP API" in actionTest {
@@ -610,16 +610,16 @@ trait ActionTCK extends TCKSpec {
         .futureValue mustBe """{"message":"foo"}"""
       interceptor
         .expectActionUnaryConnection()
-        .expectClient(processUnary(single(replyWith("foo"))))
-        .expectService(reply(Response("foo")))
+        .expectIncoming(processUnary(single(replyWith("foo"))))
+        .expectOutgoing(reply(Response("foo")))
 
       client.http
         .requestToError("tck/model/action/unary", """{"groups": [{"steps": [{"fail": {"message": "boom"}}]}]}""")
         .futureValue mustBe "boom"
       interceptor
         .expectActionUnaryConnection()
-        .expectClient(processUnary(single(failWith("boom"))))
-        .expectService(failure("boom"))
+        .expectIncoming(processUnary(single(failWith("boom"))))
+        .expectOutgoing(failure("boom"))
     }
   }
 }
