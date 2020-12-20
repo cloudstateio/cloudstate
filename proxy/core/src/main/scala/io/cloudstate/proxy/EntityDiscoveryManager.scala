@@ -50,6 +50,7 @@ object EntityDiscoveryManager {
       httpPort: Int,
       userFunctionHost: String,
       userFunctionPort: Int,
+      protocolCompatibilityCheck: Boolean,
       relayTimeout: Timeout,
       relayOutputBufferSize: Int,
       maxInboundMessageSize: Long,
@@ -68,6 +69,7 @@ object EntityDiscoveryManager {
            httpPort = config.getInt("http-port"),
            userFunctionHost = config.getString("user-function-host"),
            userFunctionPort = config.getInt("user-function-port"),
+           protocolCompatibilityCheck = config.getBoolean("protocol-compatibility-check"),
            relayTimeout = Timeout(config.getDuration("relay-timeout").toMillis.millis),
            maxInboundMessageSize = config.getBytes("max-inbound-message-size"),
            relayOutputBufferSize = config.getInt("relay-buffer-size"),
@@ -203,9 +205,7 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
   val supportedProtocolVersionString: String = s"${supportedProtocolMajorVersion}.${supportedProtocolMinorVersion}"
 
   def compatibleProtocol(majorVersion: Int, minorVersion: Int): Boolean =
-    // allow empty protocol version to be compatible, until all library supports report their protocol version
-    ((majorVersion == 0) && (minorVersion == 0)) ||
-    // otherwise it's currently strict matching of protocol versions
+    // currently strict matching of protocol versions
     ((majorVersion == supportedProtocolMajorVersion) && (minorVersion == supportedProtocolMinorVersion))
 
   override def receive: Receive = {
@@ -213,7 +213,10 @@ class EntityDiscoveryManager(config: EntityDiscoveryManager.Configuration)(
       log.info("Received EntitySpec from user function with info: {}", spec.getServiceInfo)
 
       try {
-        if (!compatibleProtocol(spec.getServiceInfo.protocolMajorVersion, spec.getServiceInfo.protocolMinorVersion))
+        if (!config.protocolCompatibilityCheck)
+          log.warning("Protocol version compatibility is configured to be ignored")
+        else if (!compatibleProtocol(spec.getServiceInfo.protocolMajorVersion,
+                                     spec.getServiceInfo.protocolMinorVersion))
           throw EntityDiscoveryException(
             s"Incompatible protocol version ${spec.getServiceInfo.protocolMajorVersion}.${spec.getServiceInfo.protocolMinorVersion}, only $supportedProtocolVersionString is supported"
           )
