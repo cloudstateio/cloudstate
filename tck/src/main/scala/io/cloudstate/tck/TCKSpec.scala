@@ -67,11 +67,16 @@ trait TCKSpec
   @volatile private[this] var _entitySpec: EntitySpec = EntitySpec()
   @volatile private[this] var _proxyInfo: ProxyInfo = ProxyInfo()
 
-  override def beforeAll(): Unit = {
-    start()
-    discover()
-    super.beforeAll()
-  }
+  override def beforeAll(): Unit =
+    try {
+      start()
+      discover()
+      super.beforeAll()
+    } catch {
+      case error: Throwable => onStartError(error)
+    }
+
+  def onStartError(error: Throwable): Unit = throw error
 
   override def afterEach(): Unit = {
     super.afterEach()

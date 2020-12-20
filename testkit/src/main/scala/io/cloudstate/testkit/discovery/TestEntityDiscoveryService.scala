@@ -23,6 +23,7 @@ import com.google.protobuf.DescriptorProtos
 import com.google.protobuf.Descriptors.{FileDescriptor, ServiceDescriptor}
 import com.google.protobuf.empty.{Empty => ScalaPbEmpty}
 import io.cloudstate.protocol.entity._
+import io.cloudstate.testkit.BuildInfo
 import io.cloudstate.testkit.TestService.TestServiceContext
 
 import scala.concurrent.{Future, Promise}
@@ -40,7 +41,11 @@ final class TestEntityDiscoveryService(context: TestServiceContext) {
 }
 
 object TestEntityDiscoveryService {
-  val info: ServiceInfo = ServiceInfo(supportLibraryName = "Cloudstate TestKit")
+  val info: ServiceInfo = ServiceInfo(
+    supportLibraryName = "Cloudstate TestKit",
+    protocolMajorVersion = BuildInfo.protocolMajorVersion,
+    protocolMinorVersion = BuildInfo.protocolMinorVersion
+  )
 
   def entitySpec(entityType: String, service: ServiceDescription): EntitySpec = {
     import scala.jdk.CollectionConverters._
