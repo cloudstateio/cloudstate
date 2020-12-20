@@ -1983,15 +1983,13 @@ trait CrdtEntityTCK extends TCKSpec {
     }
 
     "verify passivation timeout" in crdtConfiguredTest { id =>
-      pendingUntilFixed { // FIXME: we don't get stream completion, but a failed stream with PeerClosedStreamException
-        configuredClient.call(Request(id))
-        interceptor
-          .expectCrdtEntityConnection()
-          .expectClient(init(ServiceConfigured, id))
-          .expectClient(command(1, id, "Call", Request(id)))
-          .expectService(reply(1, Response()))
-          .expectClosed(2.seconds) // check passivation (with expected timeout of 100 millis)
-      }
+      configuredClient.call(Request(id))
+      interceptor
+        .expectCrdtEntityConnection()
+        .expectClient(init(ServiceConfigured, id))
+        .expectClient(command(1, id, "Call", Request(id)))
+        .expectService(reply(1, Response()))
+        .expectClosed(2.seconds) // check passivation (with expected timeout of 100 millis)
     }
   }
 }
