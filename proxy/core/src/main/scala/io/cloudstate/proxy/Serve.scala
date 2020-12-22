@@ -28,7 +28,15 @@ import akka.grpc.internal.{
 }
 import akka.NotUsed
 import akka.grpc.{ProtobufSerializer, Trailers}
-import akka.http.scaladsl.model.{HttpEntity, HttpHeader, HttpRequest, HttpResponse, StatusCodes}
+import akka.http.scaladsl.model.{
+  ContentTypes,
+  HttpEntity,
+  HttpHeader,
+  HttpProtocols,
+  HttpRequest,
+  HttpResponse,
+  StatusCodes
+}
 import akka.http.scaladsl.model.Uri.Path
 import akka.actor.{ActorRef, ActorSystem}
 import akka.event.{Logging, LoggingAdapter}
@@ -196,6 +204,11 @@ object Serve {
       )
   }
 
+  private def isGrpcRequest(request: HttpRequest): Boolean =
+    (request.protocol == HttpProtocols.`HTTP/2.0`) &&
+    ((request.entity.contentType == ContentTypes.`application/grpc+proto`) ||
+    (request.entity.contentType.mediaType.value == "application/grpc"))
+
   private[this] final def createGrpcApi(entities: Seq[ServableEntity],
                                         router: UserFunctionRouter,
                                         entityDiscoveryClient: EntityDiscoveryClient,
@@ -215,7 +228,7 @@ object Serve {
     }).toMap
 
     val routes: PartialFunction[HttpRequest, Future[(List[HttpHeader], Source[ProtobufAny, NotUsed])]] = {
-      case req: HttpRequest if rpcMethodSerializers.contains(req.uri.path) =>
+      case req: HttpRequest if isGrpcRequest(req) && rpcMethodSerializers.contains(req.uri.path) =>
         log.debug("Received gRPC request [{}]", req.uri.path)
 
         val handler = rpcMethodSerializers(req.uri.path)
