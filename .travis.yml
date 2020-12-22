@@ -63,7 +63,7 @@ jobs:
     before_script:
     - sbt update
     - cd node-support && nvm install && nvm use && npm install && cd -
-    - cd samples/js-shopping-cart && nvm install && nvm use && npm install && cd -
+    - cd node-support/tck && nvm install && nvm use && npm install && cd -
     script:
     - sbt 'set concurrentRestrictions in Global += Tags.limitAll(1)' tck/it:test
 

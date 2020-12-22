@@ -18,10 +18,11 @@ package io.cloudstate.tck
 
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import io.cloudstate.protocol.entity.{EntityPassivationStrategy, TimeoutPassivationStrategy}
-import io.cloudstate.protocol.event_sourced.EventSourced
+import io.cloudstate.protocol.event_sourced.{EventSourced, EventSourcedStreamOut}
 import io.cloudstate.tck.model.eventsourced._
 import io.cloudstate.testkit.eventsourced.EventSourcedMessages._
 import io.grpc.StatusRuntimeException
+
 import scala.concurrent.duration._
 
 trait EventSourcedEntityTCK extends TCKSpec {
@@ -83,14 +84,14 @@ trait EventSourcedEntityTCK extends TCKSpec {
     import EventSourcedEntityTCKModel._
 
     "verify event sourced entity discovery" in testFor(EventSourcedTckModel, EventSourcedTwo) {
-      discoveredServices must (contain("EventSourcedTckModel") and contain("EventSourcedTwo"))
+      discoveredServices must (contain(Service) and contain(ServiceTwo))
       entity(EventSourcedEntityTCKModel.Service).value.entityType mustBe EventSourcedEntityTCKModel.Protocol
       entity(EventSourcedEntityTCKModel.ServiceTwo).value.entityType mustBe EventSourcedEntityTCKModel.Protocol
       entity(EventSourcedEntityTCKModel.Service).value.persistenceId mustBe "event-sourced-tck-model"
     }
 
     "verify event sourced configured entity" in testFor(EventSourcedConfigured) {
-      discoveredServices must contain("EventSourcedConfigured")
+      discoveredServices must contain(ServiceConfigured)
       entity(EventSourcedEntityTCKModel.ServiceConfigured).value.entityType mustBe EventSourcedEntityTCKModel.Protocol
       entity(EventSourcedEntityTCKModel.ServiceConfigured).value.persistenceId mustBe "event-sourced-configured"
       entity(EventSourcedEntityTCKModel.ServiceConfigured).value.passivationStrategy mustBe Some(
@@ -303,36 +304,51 @@ trait EventSourcedEntityTCK extends TCKSpec {
         .passivate()
     }
 
-    "verify failure actions do not retain emitted events, by requesting entity restart" in eventSourcedTest { id =>
-      protocol.eventSourced
+    "verify failure actions do not retain emitted events (may request entity restart)" in eventSourcedTest { id =>
+      val connection = protocol.eventSourced
         .connect()
         .send(init(EventSourcedTckModel.name, id))
         .send(command(1, id, "Process", Request(id, emitEvents("A", "B", "C"))))
         .expect(reply(1, Response("ABC"), events("A", "B", "C")))
         .send(command(2, id, "Process", Request(id, Seq(emitEvent("4"), emitEvent("5"), failWith("failure 1")))))
-        .expect(actionFailure(2, "failure 1", restart = true))
-        .passivate()
-      protocol.eventSourced
-        .connect()
-        .send(init(EventSourcedTckModel.name, id))
-        .send(event(1, persisted("A")))
-        .send(event(2, persisted("B")))
-        .send(event(3, persisted("C")))
-        .send(command(1, id, "Process", Request(id, emitEvents("D"))))
-        .expect(reply(1, Response("ABCD"), events("D")))
-        .send(command(2, id, "Process", Request(id, Seq(emitEvent("6"), failWith("failure 2"), emitEvent("7")))))
-        .expect(actionFailure(2, "failure 2", restart = true))
-        .passivate()
-      protocol.eventSourced
-        .connect()
-        .send(init(EventSourcedTckModel.name, id))
-        .send(event(1, persisted("A")))
-        .send(event(2, persisted("B")))
-        .send(event(3, persisted("C")))
-        .send(event(4, persisted("D")))
-        .send(command(1, id, "Process", Request(id, emitEvents("E"))))
-        .expect(reply(1, Response("ABCDE"), snapshotAndEvents("ABCDE", "E")))
-        .passivate()
+      val action = connection.expectMessage().reply.value.clientAction.value.action
+      action.isFailure mustBe true
+      val failure = action.failure.value
+      failure.commandId mustBe 2
+      failure.description mustBe "failure 1"
+      if (failure.restart) { // language support requests restart on failures after emitting events
+        connection.passivate()
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(event(1, persisted("A")))
+          .send(event(2, persisted("B")))
+          .send(event(3, persisted("C")))
+          .send(command(1, id, "Process", Request(id, emitEvents("D"))))
+          .expect(reply(1, Response("ABCD"), events("D")))
+          .send(command(2, id, "Process", Request(id, Seq(emitEvent("6"), failWith("failure 2"), emitEvent("7")))))
+          .expect(actionFailure(2, "failure 2", restart = true))
+          .passivate()
+        protocol.eventSourced
+          .connect()
+          .send(init(EventSourcedTckModel.name, id))
+          .send(event(1, persisted("A")))
+          .send(event(2, persisted("B")))
+          .send(event(3, persisted("C")))
+          .send(event(4, persisted("D")))
+          .send(command(1, id, "Process", Request(id, emitEvents("E"))))
+          .expect(reply(1, Response("ABCDE"), snapshotAndEvents("ABCDE", "E")))
+          .passivate()
+      } else { // language support doesn't request restarts for failures after emitting events
+        connection
+          .send(command(3, id, "Process", Request(id, emitEvents("D"))))
+          .expect(reply(3, Response("ABCD"), events("D")))
+          .send(command(4, id, "Process", Request(id, Seq(emitEvent("6"), failWith("failure 2"), emitEvent("7")))))
+          .expect(actionFailure(4, "failure 2"))
+          .send(command(5, id, "Process", Request(id, emitEvents("E"))))
+          .expect(reply(5, Response("ABCDE"), snapshotAndEvents("ABCDE", "E")))
+          .passivate()
+      }
     }
 
     "verify failure actions do not allow side effects" in eventSourcedTest { id =>
@@ -453,21 +469,31 @@ trait EventSourcedEntityTCK extends TCKSpec {
       val failed2 = tckModelClient.process(Request(id, emitAndFail)).failed.futureValue
       failed2 mustBe a[StatusRuntimeException]
       failed2.asInstanceOf[StatusRuntimeException].getStatus.getDescription mustBe "another failure"
-      connection
-        .expectIncoming(command(4, id, "Process", Request(id, emitAndFail)))
-        .expectOutgoing(actionFailure(4, "another failure", restart = true))
-        .expectClosed()
-      val connection2 = interceptor
-        .expectEventSourcedEntityConnection()
-        .expectIncoming(init(Service, id))
-        .expectIncoming(event(1, persisted("1")))
-        .expectIncoming(event(2, persisted("2")))
-        .expectIncoming(event(3, persisted("3")))
-
-      tckModelClient.process(Request(id, emitEvents("4", "5"))).futureValue mustBe Response("12345")
-      connection2
-        .expectIncoming(command(1, id, "Process", Request(id, emitEvents("4", "5"))))
-        .expectOutgoing(reply(1, Response("12345"), snapshotAndEvents("12345", "4", "5")))
+      connection.expectIncoming(command(4, id, "Process", Request(id, emitAndFail)))
+      val message = connection.expectOutgoingMessage[EventSourcedStreamOut.Message.Reply]
+      val action = message.value.clientAction.value.action
+      action.isFailure mustBe true
+      val failure = action.failure.value
+      failure.commandId mustBe 4
+      failure.description mustBe "another failure"
+      if (failure.restart) {
+        connection.expectClosed()
+        val connection2 = interceptor
+          .expectEventSourcedEntityConnection()
+          .expectIncoming(init(Service, id))
+          .expectIncoming(event(1, persisted("1")))
+          .expectIncoming(event(2, persisted("2")))
+          .expectIncoming(event(3, persisted("3")))
+        tckModelClient.process(Request(id, emitEvents("4", "5"))).futureValue mustBe Response("12345")
+        connection2
+          .expectIncoming(command(1, id, "Process", Request(id, emitEvents("4", "5"))))
+          .expectOutgoing(reply(1, Response("12345"), snapshotAndEvents("12345", "4", "5")))
+      } else { // no restart on failure
+        tckModelClient.process(Request(id, emitEvents("4", "5"))).futureValue mustBe Response("12345")
+        connection
+          .expectIncoming(command(5, id, "Process", Request(id, emitEvents("4", "5"))))
+          .expectOutgoing(reply(5, Response("12345"), snapshotAndEvents("12345", "4", "5")))
+      }
     }
 
     "verify HTTP API" in eventSourcedTest { id =>
@@ -503,22 +529,34 @@ trait EventSourcedEntityTCK extends TCKSpec {
         .requestToError(s"tck/model/eventsourced/$id",
                         """{"actions": [{"emit": {"value": "z"}}, {"fail": {"message": "emit then fail"}}]}""")
         .futureValue mustBe "emit then fail"
-      connection
-        .expectIncoming(command(5, id, "Process", Request(id, Seq(emitEvent("z"), failWith("emit then fail")))))
-        .expectOutgoing(actionFailure(5, "emit then fail", restart = true))
-        .expectClosed()
-      val connection2 = interceptor
-        .expectEventSourcedEntityConnection()
-        .expectIncoming(init(Service, id))
-        .expectIncoming(event(1, persisted("x")))
-        .expectIncoming(event(2, persisted("y")))
-
-      client.http
-        .request(s"tck/model/eventsourced/$id", """{"actions": [{"emit": {"value": "z"}}]}""")
-        .futureValue mustBe """{"message":"xyz"}"""
-      connection2
-        .expectIncoming(command(1, id, "Process", Request(id, emitEvents("z"))))
-        .expectOutgoing(reply(1, Response("xyz"), events("z")))
+      connection.expectIncoming(command(5, id, "Process", Request(id, Seq(emitEvent("z"), failWith("emit then fail")))))
+      val message = connection.expectOutgoingMessage[EventSourcedStreamOut.Message.Reply]
+      val action = message.value.clientAction.value.action
+      action.isFailure mustBe true
+      val failure = action.failure.value
+      failure.commandId mustBe 5
+      failure.description mustBe "emit then fail"
+      if (failure.restart) {
+        connection.expectClosed()
+        val connection2 = interceptor
+          .expectEventSourcedEntityConnection()
+          .expectIncoming(init(Service, id))
+          .expectIncoming(event(1, persisted("x")))
+          .expectIncoming(event(2, persisted("y")))
+        client.http
+          .request(s"tck/model/eventsourced/$id", """{"actions": [{"emit": {"value": "z"}}]}""")
+          .futureValue mustBe """{"message":"xyz"}"""
+        connection2
+          .expectIncoming(command(1, id, "Process", Request(id, emitEvents("z"))))
+          .expectOutgoing(reply(1, Response("xyz"), events("z")))
+      } else { // no restart on failure
+        client.http
+          .request(s"tck/model/eventsourced/$id", """{"actions": [{"emit": {"value": "z"}}]}""")
+          .futureValue mustBe """{"message":"xyz"}"""
+        connection
+          .expectIncoming(command(6, id, "Process", Request(id, emitEvents("z"))))
+          .expectOutgoing(reply(6, Response("xyz"), events("z")))
+      }
     }
 
     "verify passivation timeout" in eventSourcedConfiguredTest { id =>

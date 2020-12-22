@@ -89,7 +89,7 @@ trait ActionTCK extends TCKSpec {
     import ActionTCKModel._
 
     "verify action entity discovery" in actionTest {
-      discoveredServices must (contain("ActionTckModel") and contain("ActionTwo"))
+      discoveredServices must (contain(Service) and contain(ServiceTwo))
       entity(ActionTCKModel.Service).value.entityType mustBe ActionTCKModel.Protocol
       entity(ActionTCKModel.ServiceTwo).value.entityType mustBe ActionTCKModel.Protocol
     }

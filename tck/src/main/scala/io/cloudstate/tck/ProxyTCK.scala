@@ -35,7 +35,7 @@ trait ProxyTCK extends TCKSpec {
         Crdt.name
       )
 
-      discoveredServices.size mustBe serviceNames.size
+      discoveredServices must contain allElementsOf serviceNames
     }
 
   def verifyServerReflection(): Unit =

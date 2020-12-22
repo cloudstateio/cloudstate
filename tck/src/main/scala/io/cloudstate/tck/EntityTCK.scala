@@ -92,7 +92,7 @@ trait EntityTCK extends TCKSpec {
     import EntityTCKModel._
 
     "verify entity discovery" in testFor(ValueEntityTckModel, ValueEntityTwo) {
-      discoveredServices must (contain("ValueEntityTckModel") and contain("ValueEntityTwo"))
+      discoveredServices must (contain(Service) and contain(ServiceTwo))
       entity(EntityTCKModel.Service).value.entityType mustBe EntityTCKModel.Protocol
       entity(EntityTCKModel.ServiceTwo).value.entityType mustBe EntityTCKModel.Protocol
       entity(EntityTCKModel.Service).value.persistenceId mustBe "value-entity-tck-model"
@@ -100,7 +100,7 @@ trait EntityTCK extends TCKSpec {
     }
 
     "verify configured entity" in testFor(ValueEntityConfigured) {
-      discoveredServices must contain("ValueEntityConfigured")
+      discoveredServices must contain(ServiceConfigured)
       entity(EntityTCKModel.ServiceConfigured).value.entityType mustBe EntityTCKModel.Protocol
       entity(EntityTCKModel.ServiceConfigured).value.persistenceId mustBe "value-entity-configured"
       entity(EntityTCKModel.ServiceConfigured).value.passivationStrategy mustBe Some(
