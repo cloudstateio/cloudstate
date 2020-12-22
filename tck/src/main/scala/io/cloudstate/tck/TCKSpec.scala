@@ -109,10 +109,13 @@ trait TCKSpec
 
   lazy val serviceNames: Seq[String] = entitySpec.entities.map(_.serviceName)
 
-  lazy val discoveredServices: Seq[String] = {
-    val descriptorSet = DescriptorProtos.FileDescriptorSet.parseFrom(entitySpec.proto)
-    descriptorSet.getFileList.asScala.flatMap(_.getServiceList.asScala.map(_.getName)).toSeq
-  }
+  lazy val discoveredServices: Seq[String] =
+    DescriptorProtos.FileDescriptorSet
+      .parseFrom(entitySpec.proto)
+      .getFileList
+      .asScala
+      .flatMap(file => file.getServiceList.asScala.map(service => s"${file.getPackage}.${service.getName}"))
+      .toSeq
 
   def testFor(services: ServiceDescription*)(test: => Any): Unit = {
     val enabled = services.map(_.name).forall(serviceNames.contains)

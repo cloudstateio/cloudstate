@@ -314,13 +314,13 @@ trait CrdtEntityTCK extends TCKSpec {
     import CrdtEntityTCKModel._
 
     "verify CRDT entity discovery" in testFor(CrdtTckModel, CrdtTwo) {
-      discoveredServices must (contain("CrdtTckModel") and contain("CrdtTwo"))
+      discoveredServices must (contain(Service) and contain(ServiceTwo))
       entity(CrdtEntityTCKModel.Service).value.entityType mustBe CrdtEntityTCKModel.Protocol
       entity(CrdtEntityTCKModel.ServiceTwo).value.entityType mustBe CrdtEntityTCKModel.Protocol
     }
 
     "verify CRDT configured entity" in testFor(CrdtConfigured) {
-      discoveredServices must contain("CrdtConfigured")
+      discoveredServices must contain(ServiceConfigured)
       entity(CrdtEntityTCKModel.ServiceConfigured).value.entityType mustBe CrdtEntityTCKModel.Protocol
       entity(CrdtEntityTCKModel.ServiceConfigured).value.passivationStrategy mustBe Some(
         EntityPassivationStrategy(EntityPassivationStrategy.Strategy.Timeout(TimeoutPassivationStrategy(100)))
