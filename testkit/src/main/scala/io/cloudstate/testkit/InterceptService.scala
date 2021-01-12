@@ -22,6 +22,8 @@ import akka.http.scaladsl.Http
 import akka.testkit.{TestKit, TestProbe}
 import com.typesafe.config.{Config, ConfigFactory}
 import io.cloudstate.testkit.InterceptService.InterceptorSettings
+import io.cloudstate.testkit.crdt.InterceptCrdtService
+import io.cloudstate.testkit.action.InterceptActionService
 import io.cloudstate.testkit.discovery.InterceptEntityDiscovery
 import io.cloudstate.testkit.eventsourced.InterceptEventSourcedService
 import io.cloudstate.testkit.valueentity.InterceptValueEntityService
@@ -36,32 +38,61 @@ final class InterceptService(settings: InterceptorSettings) {
 
   private val context = new InterceptorContext(settings.intercept.host, settings.intercept.port)
   private val entityDiscovery = new InterceptEntityDiscovery(context)
-  private val eventSourced = new InterceptEventSourcedService(context)
-  private val valueBased = new InterceptValueEntityService(context)
+  private val action = new InterceptActionService(context)
+  private val valueEntity = new InterceptValueEntityService(context)
+  private val eventSourcedEntity = new InterceptEventSourcedService(context)
+  private val crdtEntity = new InterceptCrdtService(context)
 
-  import context.system
+  def start(): Unit = {
+    import context.system
+    entityDiscovery.expectOnline(60.seconds)
+    Await.result(
+      Http().bindAndHandleAsync(
+        handler = entityDiscovery.handler
+          orElse action.handler
+          orElse valueEntity.handler
+          orElse eventSourcedEntity.handler
+          orElse crdtEntity.handler,
+        interface = settings.bind.host,
+        port = settings.bind.port
+      ),
+      10.seconds
+    )
+  }
 
-  entityDiscovery.expectOnline(60.seconds)
+  def expectEntityDiscovery(): InterceptEntityDiscovery.Discovery =
+    entityDiscovery.expectDiscovery()
 
-  Await.result(
-    Http().bindAndHandleAsync(
-      handler = entityDiscovery.handler orElse eventSourced.handler orElse valueBased.handler,
-      interface = settings.bind.host,
-      port = settings.bind.port
-    ),
-    10.seconds
-  )
+  def expectActionUnaryConnection(): InterceptActionService.UnaryConnection =
+    action.expectUnaryConnection()
 
-  def expectEntityDiscovery(): InterceptEntityDiscovery.Discovery = entityDiscovery.expectDiscovery()
+  def expectActionStreamedInConnection(): InterceptActionService.StreamedInConnection =
+    action.expectStreamedInConnection()
 
-  def expectEventSourcedConnection(): InterceptEventSourcedService.Connection = eventSourced.expectConnection()
+  def expectActionStreamedOutConnection(): InterceptActionService.StreamedOutConnection =
+    action.expectStreamedOutConnection()
 
-  def expectValueBasedConnection(): InterceptValueEntityService.Connection = valueBased.expectConnection()
+  def expectActionStreamedConnection(): InterceptActionService.StreamedConnection =
+    action.expectStreamedConnection()
+
+  def expectEntityConnection(): InterceptValueEntityService.Connection =
+    valueEntity.expectConnection()
+
+  def expectEventSourcedEntityConnection(): InterceptEventSourcedService.Connection =
+    eventSourcedEntity.expectConnection()
+
+  def expectCrdtEntityConnection(): InterceptCrdtService.Connection =
+    crdtEntity.expectConnection()
+
+  def verifyNoMoreInteractions(): Unit =
+    context.probe.expectNoMessage(10.millis)
 
   def terminate(): Unit = {
     entityDiscovery.terminate()
-    eventSourced.terminate()
-    valueBased.terminate()
+    action.terminate()
+    valueEntity.terminate()
+    eventSourcedEntity.terminate()
+    crdtEntity.terminate()
     context.terminate()
   }
 }

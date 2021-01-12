@@ -21,10 +21,14 @@ import io.cloudstate.tck.model.Crdt.*;
 
 @CrdtEntity
 public class CrdtTwoEntity {
-  public CrdtTwoEntity() {}
+  // create a CRDT to be able to call delete
+  public CrdtTwoEntity(GCounter counter) {}
 
   @CommandHandler
-  public Response call(Request request) {
-    return Response.newBuilder().build();
+  public Response call(Request request, CommandContext context) {
+    for (RequestAction action : request.getActionsList()) {
+      if (action.hasDelete()) context.delete();
+    }
+    return Response.getDefaultInstance();
   }
 }

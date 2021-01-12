@@ -29,6 +29,7 @@ import io.cloudstate.javasupport.crdt.{
   CrdtContext,
   CrdtCreationContext,
   CrdtEntityFactory,
+  CrdtEntityOptions,
   StreamCancelledContext,
   StreamedCommandContext,
   SubscriptionContext,
@@ -50,12 +51,19 @@ import io.cloudstate.protocol.entity.{Command, Failure, StreamCancelled}
 import com.google.protobuf.any.{Any => ScalaPbAny}
 import com.google.protobuf.{Any => JavaPbAny}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 final class CrdtStatefulService(val factory: CrdtEntityFactory,
                                 override val descriptor: Descriptors.ServiceDescriptor,
-                                val anySupport: AnySupport)
+                                val anySupport: AnySupport,
+                                override val entityOptions: Option[CrdtEntityOptions])
     extends Service {
+
+  def this(factory: CrdtEntityFactory,
+           descriptor: Descriptors.ServiceDescriptor,
+           anySupport: AnySupport,
+           entityOptions: CrdtEntityOptions) = this(factory, descriptor, anySupport, Some(entityOptions))
+
   override final val entityType = Crdt.name
 
   override def resolvedMethods: Option[Map[String, ResolvedServiceMethod[_, _]]] =

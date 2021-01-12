@@ -131,7 +131,7 @@ public class CrdtTckModelEntity {
   }
 
   @CommandHandler
-  public Response processStreamed(
+  public Optional<Response> processStreamed(
       StreamedRequest request, StreamedCommandContext<Response> context) {
     if (context.isStreamed()) {
       context.onChange(
@@ -140,12 +140,13 @@ public class CrdtTckModelEntity {
               subscription.effect(serviceTwoRequest(effect.getId()), effect.getSynchronous());
             if (request.hasEndState() && crdtState(crdt).equals(request.getEndState()))
               subscription.endStream();
-            return Optional.of(responseValue());
+            return request.getEmpty() ? Optional.empty() : Optional.of(responseValue());
           });
       if (request.hasCancelUpdate())
         context.onCancel(cancelled -> applyUpdate(crdt, request.getCancelUpdate()));
     }
-    return responseValue();
+    if (request.hasInitialUpdate()) applyUpdate(crdt, request.getInitialUpdate());
+    return request.getEmpty() ? Optional.empty() : Optional.of(responseValue());
   }
 
   private void applyUpdate(Crdt crdt, Update update) {

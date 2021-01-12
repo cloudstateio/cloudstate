@@ -24,12 +24,53 @@ package cloudstate;
 option java_package = "io.cloudstate";
 option java_multiple_files = true;
 option java_outer_classname = "EventsProto";
+option go_package = "github.com/cloudstateio/go-support/cloudstate;cloudstate";
 
+// Eventing configuration for a gRPC method.
 message Eventing {
-  string in = 1;
-  string out = 2; // Special value "discard" means do not publish
+  // The event source in configuration.
+  EventSource in = 1;
+
+  // The event destination out configuration.
+  //
+  // Optional, if unset, messages out will not be published anywhere.
+  EventDestination out = 2;
+}
+
+// Event source configuration
+message EventSource {
+
+    // The consumer group id.
+    //
+    // By default, all rpc methods on a given service with the same source will be part of the same virtual consumer
+    // group, messages will be routed to the different methods by type. This can be used to override that, if you want
+    // multiple methods to act as independent consumers of the same source (ie, if you want the same event to be
+    // published to each consumer) then give each consumer a unique name.
+    //
+    // Note that this does depend on the event source supporting multiple consumer groups. Queue based event sources
+    // may not support this.
+    string consumer_group = 1;
+
+    oneof source {
+
+        // A topic source.
+        //
+        // This will consume events from the given topic name.
+        string topic = 2;
+
+        // An event log source.
+        //
+        // This will consume events from the given event log with the given persistence id.
+        string event_log = 3;
+    }
+}
+
+message EventDestination {
+    oneof destination {
+        string topic = 1;
+    }
 }
 
 extend google.protobuf.MethodOptions {
-    Eventing eventing = 50003;
+    Eventing eventing = 1081;
 }

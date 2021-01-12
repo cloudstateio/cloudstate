@@ -31,7 +31,7 @@ import io.cloudstate.protocol.entity.{Failure, Forward, Reply, SideEffect, Metad
 
 import scala.concurrent.Future
 import scala.compat.java8.FutureConverters._
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 final class ActionService(val actionHandler: ActionHandler,
                           override val descriptor: Descriptors.ServiceDescriptor,

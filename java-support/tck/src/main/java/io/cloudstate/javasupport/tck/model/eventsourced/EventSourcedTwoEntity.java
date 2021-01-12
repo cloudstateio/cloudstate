@@ -21,10 +21,9 @@ import io.cloudstate.tck.model.Eventsourced.*;
 
 @EventSourcedEntity
 public class EventSourcedTwoEntity {
-  public EventSourcedTwoEntity() {}
 
   @CommandHandler
   public Response call(Request request) {
-    return Response.newBuilder().build();
+    return Response.getDefaultInstance();
   }
 }

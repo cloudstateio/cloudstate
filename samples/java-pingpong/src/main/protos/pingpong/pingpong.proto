@@ -47,25 +47,33 @@ service PingPongService {
 
   rpc Ping(PongSent) returns (PingSent) {
     option (.cloudstate.eventing) = {
-      out: "pings",
+      out {
+        topic: "pings",
+      },
     };
   }
 
   rpc Pong(PingSent) returns (PongSent) {
     option (.cloudstate.eventing) = {
-      out: "pongs",
+      out {
+        topic: "pongs",
+      },
     };
   }
 
   rpc SeenPong(PongSent) returns (google.protobuf.Empty) {
     option (.cloudstate.eventing) = {
-      in: "pongs",
+      in {
+        topic: "pongs",
+      },
     };
   }
 
   rpc SeenPing(PingSent) returns (google.protobuf.Empty) {
     option (.cloudstate.eventing) = {
-      in: "pings",
+      in {
+        topic: "pings",
+      },
     };
   }
 

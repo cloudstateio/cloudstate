@@ -1,0 +1,177 @@
+// Copyright 2019 Lightbend Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//
+// == Cloudstate TCK model test for event log eventing ==
+//
+
+syntax = "proto3";
+
+package cloudstate.tck.model.eventlogeventing;
+
+option java_package = "io.cloudstate.tck.model";
+option go_package = "github.com/cloudstateio/go-support/tck/eventlogeventing;eventlogeventing";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+import "cloudstate/eventing.proto";
+import "cloudstate/entity_key.proto";
+
+//
+// The `EventLogSubscriberModel` service is an Action that should be implemented in the following ways:
+//
+// - The `ProcessEventOne` method receives an `EventOne` message, and must behave according to the passed in step.
+// - The `ProcessEventTwo` method receives an `EventTwo` message, and must return a stream of responses, one for each
+//   incoming step.
+// - The `Effect` method receives an `EffectRequest` message and must respond with a `Response` that contains the id
+//   from the effect message.
+// - The `ProcessAnyEvent` method receives a `google.protobuf.Any`, which will contain JSON serialized according to
+//   the Cloudstate JSON serialization conventions, with a `type_url` of `json.cloudstate.io/JsonEvent`. The contents
+//   of the JSON message will be a JSON object with a single message property, and the call must respond with this
+//   message in the `Response`.
+// - Forwarding and side effects should be made to the `Effect` call.
+// - The response to the Process calls, or the effects and forwards emitted by them, must contain the message field
+//   from the incoming events, along with the id read from the CloudEvent metadata source property.
+//
+service EventLogSubscriberModel {
+  rpc ProcessEventOne(EventOne) returns (Response) {
+    option (.cloudstate.eventing) = {
+              in: {
+                  event_log: "eventlogeventing-one"
+              }
+    };
+  };
+
+  rpc ProcessEventTwo(EventTwo) returns (stream Response) {
+    option (.cloudstate.eventing) = {
+              in: {
+                  event_log: "eventlogeventing-one"
+              }
+    };
+  };
+
+  rpc Effect(EffectRequest) returns (Response);
+
+  rpc ProcessAnyEvent(google.protobuf.Any) returns (Response) {
+    option (.cloudstate.eventing) = {
+              in: {
+                  event_log: "eventlogeventing-two"
+              }
+    };
+  };
+}
+
+
+//
+// The `EventSourcedEntityOne` service is an event sourced entity that should be implemented in the following ways:
+//
+// - The `EmitEvent` method should emit the event in the `EmitEventRequest` method as a protobuf serialized event.
+// - The persistence id for it must be `eventlogeventing-one`.
+//
+service EventSourcedEntityOne {
+  rpc EmitEvent(EmitEventRequest) returns (google.protobuf.Empty);
+}
+
+//
+// The `EventSourcedEntityTwo` service is an event sourced entity that should be implemented in the following ways:
+//
+// - The `EmitJsonEvent` method should emit an event serialised as JSON. This event should:
+//   - Contain a single `message` property with the value of the `message` field in `JsonEvent`.
+//   - Be serialized according to the Cloudstate JSON serialization conventions - that is, with the JSON serialized to
+//     bytes, then placed into a protobuf message with a single bytes field with field number 1.
+//   - Have a type_url of `json.cloudstate.io/JsonEvent`.
+// - The persistence id for it must be `eventlogeventing-two`.
+//
+service EventSourcedEntityTwo {
+  rpc EmitJsonEvent(JsonEvent) returns (google.protobuf.Empty);
+}
+
+//
+// An `EmitEventRequest` is received by the `EventSourcedEntityOne` entity to instruct it to emit either an `EventOne`
+// or an `EventTwo`.
+//
+message EmitEventRequest {
+  string id = 1 [(.cloudstate.entity_key) = true];
+  oneof event {
+    EventOne event_one = 2;
+    EventTwo event_two = 3;
+  }
+}
+
+//
+// An `EventOne` is an event emitted by the `EventSourcedEntityOne` entity and subscribed to by
+// `EventLogSubscriberModel`.
+//
+message EventOne {
+  ProcessStep step = 2;
+}
+
+//
+// An `EventTwo` is an event emitted by the `EventSourcedEntityOne` entity and subscribed to by
+// `EventLogSubscriberModel`.
+//
+message EventTwo {
+  repeated ProcessStep step = 2;
+}
+
+//
+// A `JsonEvent` is an event emitted by the `EventSourcedEntityTwo` entity and subscribed to by
+// `EventLogSubscriberModel`.
+//
+message JsonEvent {
+  string id = 1 [(.cloudstate.entity_key) = true];
+  string message = 2;
+}
+
+//
+// Each `ProcessStep` is one of:
+//
+// - Reply: reply with the given message in a `Response`.
+// - Forward: forward to another service, in place of replying with a `Response`.
+//
+message ProcessStep {
+  oneof step {
+    Reply reply = 1;
+    Forward forward = 2;
+  }
+}
+
+//
+// Reply with a message in the response.
+//
+message Reply {
+  string message = 1;
+}
+
+//
+// Replace the response with a forward to `cloudstate.tck.model.eventlogeventing.EventLogSubscriberModel/Effect`.
+// The payload must be an `EffectRequest` message with the given `message`.
+//
+message Forward {
+  string message = 1;
+}
+
+//
+// The `Response` message must contain the message from the corresponding reply step.
+//
+message Response {
+  string id = 1;
+  string message = 2;
+}
+
+// The `EffectRequest` message must contain the id from the SideEffect or Forward.
+message EffectRequest {
+  string id = 1;
+  string message = 2;
+}

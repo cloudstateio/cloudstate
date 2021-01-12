@@ -34,6 +34,8 @@ final class TestClient(host: String, port: Int) {
 
   def settings: GrpcClientSettings = context.clientSettings
 
+  def system: ActorSystem = context.system
+
   def terminate(): Unit = {
     http.terminate()
     serverReflection.terminate()

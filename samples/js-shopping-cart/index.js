@@ -14,4 +14,9 @@
  * limitations under the License.
  */
 
-require("./shoppingcart.js").start();
+const CloudState = require("cloudstate").CloudState;
+
+const server = new CloudState();
+server.addEntity(require("./shoppingcart"));
+
+server.start();

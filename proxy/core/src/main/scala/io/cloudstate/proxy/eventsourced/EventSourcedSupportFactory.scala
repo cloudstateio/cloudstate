@@ -50,17 +50,20 @@ class EventSourcedSupportFactory(
                                       methodDescriptors: Map[String, EntityMethodDescriptor]): EntityTypeSupport = {
     validate(serviceDescriptor, methodDescriptors)
 
-    val stateManagerConfig = EventSourcedEntity.Configuration(entity.serviceName,
-                                                              entity.persistenceId,
-                                                              config.eventSourcedSettings.passivationTimeout,
-                                                              config.relayOutputBufferSize)
+    val eventSourcedEntityConfig = EventSourcedEntity.Configuration(
+      entity.serviceName,
+      entity.persistenceId,
+      EntityTypeSupportFactory.configuredPassivationTimeoutOrElse(entity,
+                                                                  config.eventSourcedSettings.passivationTimeout),
+      config.relayOutputBufferSize
+    )
 
     log.debug("Starting EventSourcedEntity for {}", entity.persistenceId)
     val clusterSharding = ClusterSharding(system)
     val clusterShardingSettings = ClusterShardingSettings(system)
     val eventSourcedEntity = clusterSharding.start(
       typeName = entity.persistenceId,
-      entityProps = EventSourcedEntitySupervisor.props(eventSourcedClient, stateManagerConfig),
+      entityProps = EventSourcedEntitySupervisor.props(eventSourcedClient, eventSourcedEntityConfig),
       settings = clusterShardingSettings,
       messageExtractor = new EntityIdExtractor(config.numberOfShards),
       allocationStrategy = new DynamicLeastShardAllocationStrategy(1, 10, 2, 0.0),
@@ -83,9 +86,9 @@ class EventSourcedSupportFactory(
     val methodsWithoutKeys = methodDescriptors.values.filter(_.keyFieldsCount < 1)
     if (methodsWithoutKeys.nonEmpty) {
       val offendingMethods = methodsWithoutKeys.map(_.method.getName).mkString(",")
-      throw new EntityDiscoveryException(
+      throw EntityDiscoveryException(
         s"Event sourced entities do not support methods whose parameters do not have at least one field marked as entity_key, " +
-        "but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}"
+        s"but ${serviceDescriptor.getFullName} has the following methods without keys: $offendingMethods"
       )
     }
   }

@@ -47,6 +47,7 @@ val AkkaManagementVersion = "1.0.8"
 val AkkaPersistenceCassandraVersion = "0.102"
 val AkkaPersistenceJdbcVersion = "3.5.2"
 val AkkaPersistenceSpannerVersion = "1.0.0-RC4"
+val AkkaProjectionsVersion = "1.0.0"
 val PrometheusClientVersion = "0.9.0"
 val ScalaTestVersion = "3.0.8"
 val ProtobufVersion = "3.11.4" // Note: sync with Protobuf version in Akka gRPC and ScalaPB
@@ -76,6 +77,9 @@ def akkaDiscoveryDependency(name: String, excludeThese: ExclusionRule*) =
 
 def akkaPersistenceCassandraDependency(name: String, excludeThese: ExclusionRule*) =
   "com.typesafe.akka" %% name % AkkaPersistenceCassandraVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
+
+def akkaProjectionsDependency(name: String, excludeThese: ExclusionRule*) =
+  "com.lightbend.akka" %% name % AkkaProjectionsVersion excludeAll ((excludeTheseDependencies ++ excludeThese): _*)
 
 def common: Seq[Setting[_]] = automateHeaderSettings(Compile, Test) ++ Seq(
   headerMappings := headerMappings.value ++ Seq(
@@ -388,6 +392,7 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         akkaDependency("akka-stream"),
         akkaDependency("akka-slf4j"),
         akkaDependency("akka-discovery"),
+        akkaDependency("akka-cluster-typed"),
         akkaHttpDependency("akka-http"),
         akkaHttpDependency("akka-http-spray-json"),
         akkaHttpDependency("akka-http-core"),
@@ -395,6 +400,9 @@ lazy val `proxy-core` = (project in file("proxy/core"))
         akkaDependency("akka-cluster-sharding", ExclusionRule("org.lmdbjava", "lmdbjava")),
         akkaManagementDependency("akka-management-cluster-bootstrap"),
         akkaDiscoveryDependency("akka-discovery-kubernetes-api"),
+        akkaProjectionsDependency("akka-projection-core"),
+        akkaProjectionsDependency("akka-projection-eventsourced"),
+        akkaProjectionsDependency("akka-projection-testkit"), // Needed for in memory support
         "com.google.protobuf" % "protobuf-java" % ProtobufVersion % "protobuf",
         "com.google.protobuf" % "protobuf-java-util" % ProtobufVersion,
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test,
@@ -458,7 +466,8 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
     dependencyOverrides += "io.grpc" % "grpc-netty-shaded" % GrpcNettyShadedVersion,
     libraryDependencies ++= Seq(
         akkaPersistenceCassandraDependency("akka-persistence-cassandra", ExclusionRule("com.github.jnr")),
-        akkaPersistenceCassandraDependency("akka-persistence-cassandra-launcher") % Test
+        akkaPersistenceCassandraDependency("akka-persistence-cassandra-launcher") % Test,
+        "com.lightbend.akka" %% "akka-projection-cassandra" % AkkaProjectionsVersion
       ),
     fork in run := true,
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
@@ -479,6 +488,7 @@ lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
     dependencyOverrides += "io.grpc" % "grpc-netty-shaded" % GrpcNettyShadedVersion,
     libraryDependencies ++= Seq(
         "com.github.dnvriend" %% "akka-persistence-jdbc" % AkkaPersistenceJdbcVersion,
+        "com.lightbend.akka" %% "akka-projection-slick" % AkkaProjectionsVersion,
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test
       ),
     fork in run := true,
@@ -643,7 +653,7 @@ lazy val `java-support-docs` = (project in file("java-support/docs"))
   )
 
 lazy val `java-support-tck` = (project in file("java-support/tck"))
-  .dependsOn(`java-support`, `java-shopping-cart`, `java-eventsourced-shopping-cart`)
+  .dependsOn(`java-support`)
   .enablePlugins(AkkaGrpcPlugin, AssemblyPlugin, JavaAppPackaging, DockerPlugin, AutomateHeaderPlugin, NoPublish)
   .settings(
     name := "cloudstate-java-tck",
@@ -772,7 +782,7 @@ lazy val `testkit` = (project in file("testkit"))
 lazy val `tck` = (project in file("tck"))
   .enablePlugins(AkkaGrpcPlugin, JavaAppPackaging, DockerPlugin, NoPublish)
   .configs(IntegrationTest)
-  .dependsOn(`akka-client`, testkit)
+  .dependsOn(testkit)
   .settings(
     Defaults.itSettings,
     common,
@@ -788,11 +798,11 @@ lazy val `tck` = (project in file("tck"))
       ),
     PB.protoSources in Compile ++= {
       val baseDir = (baseDirectory in ThisBuild).value / "protocols"
-      Seq(baseDir / "protocol", baseDir / "tck")
+      Seq(baseDir / "protocol", baseDir / "frontend", baseDir / "tck")
     },
     dockerSettings,
     Compile / bashScriptDefines / mainClass := Some("org.scalatest.run"),
-    bashScriptExtraDefines += "addApp io.cloudstate.tck.ConfiguredCloudStateTCK",
+    bashScriptExtraDefines += "addApp io.cloudstate.tck.ConfiguredCloudstateTCK",
     headerSettings(IntegrationTest),
     automateHeaderSettings(IntegrationTest),
     fork in IntegrationTest := true,

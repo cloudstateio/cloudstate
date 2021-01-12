@@ -80,8 +80,6 @@ class UserFunctionRouter(val entities: Seq[ServableEntity], entityDiscovery: Ent
             synchronous = true,
             metadata.getOrElse(Metadata.defaultInstance)
           )
-        case None | Some(ClientAction(ClientAction.Action.Empty, _)) =>
-          Source.empty
         case _ =>
           Source.single(response)
       }

@@ -25,6 +25,6 @@ public class ActionTwoBehavior {
 
   @CallHandler
   public Response call(OtherRequest request) {
-    return Response.newBuilder().build();
+    return Response.getDefaultInstance();
   }
 }

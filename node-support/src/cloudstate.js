@@ -210,7 +210,9 @@ class CloudState {
         serviceVersion: this.options.serviceVersion,
         serviceRuntime: process.title + " " + process.version,
         supportLibraryName: packageInfo.name,
-        supportLibraryVersion: packageInfo.version
+        supportLibraryVersion: packageInfo.version,
+        protocolMajorVersion: 0,
+        protocolMinorVersion: 2
       }
     });
   }

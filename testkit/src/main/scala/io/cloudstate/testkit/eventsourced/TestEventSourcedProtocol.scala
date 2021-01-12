@@ -49,6 +49,9 @@ object TestEventSourcedProtocol {
       this
     }
 
+    def expectMessage(): EventSourcedStreamOut.Message =
+      out.request(1).expectNext().message
+
     def expectClosed(): Unit = {
       out.expectComplete()
       in.expectCancellation()

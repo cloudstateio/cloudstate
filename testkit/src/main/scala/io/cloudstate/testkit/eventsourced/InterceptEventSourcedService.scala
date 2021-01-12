@@ -66,20 +66,27 @@ object InterceptEventSourcedService {
     private[testkit] def inSink: Sink[EventSourcedStreamIn, NotUsed] = Sink.actorRef(in.ref, Complete, Error.apply)
     private[testkit] def outSink: Sink[EventSourcedStreamOut, NotUsed] = Sink.actorRef(out.ref, Complete, Error.apply)
 
-    def expectClient(message: EventSourcedStreamIn.Message): Connection = {
+    def expectIncoming(message: EventSourcedStreamIn.Message): Connection = {
       in.expectMsg(EventSourcedStreamIn(message))
       this
     }
 
-    def expectService(message: EventSourcedStreamOut.Message): Connection = {
+    def expectIncomingMessage[T](implicit classTag: ClassTag[T]): T = {
+      val message = in.expectMsgType[EventSourcedStreamIn].message
+      assert(classTag.runtimeClass.isInstance(message),
+             s"expected message ${classTag.runtimeClass}, found ${message.getClass} ($message)")
+      message.asInstanceOf[T]
+    }
+
+    def expectOutgoing(message: EventSourcedStreamOut.Message): Connection = {
       out.expectMsg(EventSourcedStreamOut(message))
       this
     }
 
-    def expectServiceMessage[T](implicit classTag: ClassTag[T]): T =
-      expectServiceMessageClass(classTag.runtimeClass.asInstanceOf[Class[T]])
+    def expectOutgoingMessage[T](implicit classTag: ClassTag[T]): T =
+      expectOutgoingMessageClass(classTag.runtimeClass.asInstanceOf[Class[T]])
 
-    def expectServiceMessageClass[T](messageClass: Class[T]): T = {
+    def expectOutgoingMessageClass[T](messageClass: Class[T]): T = {
       val message = out.expectMsgType[EventSourcedStreamOut].message
       assert(messageClass.isInstance(message), s"expected message $messageClass, found ${message.getClass} ($message)")
       message.asInstanceOf[T]
@@ -89,6 +96,16 @@ object InterceptEventSourcedService {
       in.expectNoMessage(timeout)
       out.expectNoMessage(timeout)
       this
+    }
+
+    def expectClosed(): Unit = {
+      in.expectMsg(Complete)
+      out.expectMsg(Complete)
+    }
+
+    def expectClosed(max: FiniteDuration): Unit = {
+      in.expectMsg(max, Complete)
+      out.expectMsg(max, Complete)
     }
   }
 }

@@ -20,7 +20,7 @@ import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.atomic.AtomicLong
 
 import com.typesafe.config.Config
-import akka.actor.{ActorSelection, ActorSystem}
+import akka.actor.{ActorSelection, ActorSystem, OneForOneStrategy, SupervisorStrategy}
 import akka.pattern.ask
 import akka.util.Timeout
 import akka.cluster.Cluster
@@ -177,13 +177,18 @@ object CloudStateProxyMain {
 
     system.actorOf(
       BackoffSupervisor.props(
-        BackoffOpts.onFailure(
-          EntityDiscoveryManager.props(serverConfig),
-          childName = "server-manager",
-          minBackoff = appConfig.backoffMin,
-          maxBackoff = appConfig.backoffMax,
-          randomFactor = appConfig.backoffRandomFactor
-        )
+        BackoffOpts
+          .onFailure(
+            EntityDiscoveryManager.props(serverConfig),
+            childName = "server-manager",
+            minBackoff = appConfig.backoffMin,
+            maxBackoff = appConfig.backoffMax,
+            randomFactor = appConfig.backoffRandomFactor
+          )
+          .withSupervisorStrategy(OneForOneStrategy() {
+            // don't keep restarting and retrying if an entity discovery exception is thrown
+            case _: EntityDiscoveryException => SupervisorStrategy.Stop
+          })
       ),
       "server-manager-supervisor"
     )

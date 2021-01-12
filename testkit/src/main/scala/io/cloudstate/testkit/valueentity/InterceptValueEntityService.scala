@@ -68,20 +68,20 @@ object InterceptValueEntityService {
     private[testkit] def inSink: Sink[ValueEntityStreamIn, NotUsed] = Sink.actorRef(in.ref, Complete, Error.apply)
     private[testkit] def outSink: Sink[ValueEntityStreamOut, NotUsed] = Sink.actorRef(out.ref, Complete, Error.apply)
 
-    def expectClient(message: ValueEntityStreamIn.Message): Connection = {
+    def expectIncoming(message: ValueEntityStreamIn.Message): Connection = {
       in.expectMsg(ValueEntityStreamIn(message))
       this
     }
 
-    def expectService(message: ValueEntityStreamOut.Message): Connection = {
+    def expectOutgoing(message: ValueEntityStreamOut.Message): Connection = {
       out.expectMsg(ValueEntityStreamOut(message))
       this
     }
 
-    def expectServiceMessage[T](implicit classTag: ClassTag[T]): T =
-      expectServiceMessageClass(classTag.runtimeClass.asInstanceOf[Class[T]])
+    def expectOutgoingMessage[T](implicit classTag: ClassTag[T]): T =
+      expectOutgoingMessageClass(classTag.runtimeClass.asInstanceOf[Class[T]])
 
-    def expectServiceMessageClass[T](messageClass: Class[T]): T = {
+    def expectOutgoingMessageClass[T](messageClass: Class[T]): T = {
       val message = out.expectMsgType[ValueEntityStreamOut].message
       assert(messageClass.isInstance(message), s"expected message $messageClass, found ${message.getClass} ($message)")
       message.asInstanceOf[T]
@@ -91,6 +91,11 @@ object InterceptValueEntityService {
       in.expectNoMessage(timeout)
       out.expectNoMessage(timeout)
       this
+    }
+
+    def expectClosed(max: FiniteDuration): Unit = {
+      in.expectMsg(max, Complete)
+      out.expectMsg(max, Complete)
     }
   }
 }

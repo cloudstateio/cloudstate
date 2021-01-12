@@ -16,8 +16,15 @@
 
 package io.cloudstate.javasupport.tck;
 
-import com.example.valueentity.shoppingcart.Shoppingcart;
 import io.cloudstate.javasupport.CloudState;
+import io.cloudstate.javasupport.PassivationStrategy;
+import io.cloudstate.javasupport.crdt.CrdtEntityOptions;
+import io.cloudstate.javasupport.entity.EntityOptions;
+import io.cloudstate.javasupport.eventsourced.EventSourcedEntityOptions;
+import io.cloudstate.javasupport.tck.model.crdt.CrdtConfiguredEntity;
+import io.cloudstate.javasupport.tck.model.eventlogeventing.EventLogSubscriber;
+import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedConfiguredEntity;
+import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityConfiguredEntity;
 import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityTckModelEntity;
 import io.cloudstate.javasupport.tck.model.valuebased.ValueEntityTwoEntity;
 import io.cloudstate.javasupport.tck.model.action.ActionTckModelBehavior;
@@ -26,11 +33,13 @@ import io.cloudstate.javasupport.tck.model.crdt.CrdtTckModelEntity;
 import io.cloudstate.javasupport.tck.model.crdt.CrdtTwoEntity;
 import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedTckModelEntity;
 import io.cloudstate.javasupport.tck.model.eventsourced.EventSourcedTwoEntity;
-import io.cloudstate.samples.shoppingcart.ShoppingCartEntity;
 import io.cloudstate.tck.model.Action;
 import io.cloudstate.tck.model.Crdt;
+import io.cloudstate.tck.model.Eventlogeventing;
 import io.cloudstate.tck.model.Eventsourced;
 import io.cloudstate.tck.model.valueentity.Valueentity;
+
+import java.time.Duration;
 
 public final class JavaSupportTck {
   public static final void main(String[] args) throws Exception {
@@ -51,14 +60,20 @@ public final class JavaSupportTck {
             ValueEntityTwoEntity.class,
             Valueentity.getDescriptor().findServiceByName("ValueEntityTwo"))
         .registerEntity(
-            ShoppingCartEntity.class,
-            Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
-            com.example.valueentity.shoppingcart.persistence.Domain.getDescriptor())
+            ValueEntityConfiguredEntity.class,
+            Valueentity.getDescriptor().findServiceByName("ValueEntityConfigured"),
+            EntityOptions.defaults() // required timeout of 100 millis for TCK tests
+                .withPassivationStrategy(PassivationStrategy.timeout(Duration.ofMillis(100))))
         .registerCrdtEntity(
             CrdtTckModelEntity.class,
             Crdt.getDescriptor().findServiceByName("CrdtTckModel"),
             Crdt.getDescriptor())
         .registerCrdtEntity(CrdtTwoEntity.class, Crdt.getDescriptor().findServiceByName("CrdtTwo"))
+        .registerCrdtEntity(
+            CrdtConfiguredEntity.class,
+            Crdt.getDescriptor().findServiceByName("CrdtConfigured"),
+            CrdtEntityOptions.defaults() // required timeout of 100 millis for TCK tests
+                .withPassivationStrategy(PassivationStrategy.timeout(Duration.ofMillis(100))))
         .registerEventSourcedEntity(
             EventSourcedTckModelEntity.class,
             Eventsourced.getDescriptor().findServiceByName("EventSourcedTckModel"),
@@ -67,9 +82,21 @@ public final class JavaSupportTck {
             EventSourcedTwoEntity.class,
             Eventsourced.getDescriptor().findServiceByName("EventSourcedTwo"))
         .registerEventSourcedEntity(
-            io.cloudstate.samples.eventsourced.shoppingcart.ShoppingCartEntity.class,
-            com.example.shoppingcart.Shoppingcart.getDescriptor().findServiceByName("ShoppingCart"),
-            com.example.shoppingcart.persistence.Domain.getDescriptor())
+            EventSourcedConfiguredEntity.class,
+            Eventsourced.getDescriptor().findServiceByName("EventSourcedConfigured"),
+            EventSourcedEntityOptions.defaults() // required timeout of 100 millis for TCK tests
+                .withPassivationStrategy(PassivationStrategy.timeout(Duration.ofMillis(100))))
+        .registerAction(
+            new EventLogSubscriber(),
+            Eventlogeventing.getDescriptor().findServiceByName("EventLogSubscriberModel"))
+        .registerEventSourcedEntity(
+            io.cloudstate.javasupport.tck.model.eventlogeventing.EventSourcedEntityOne.class,
+            Eventlogeventing.getDescriptor().findServiceByName("EventSourcedEntityOne"),
+            Eventlogeventing.getDescriptor())
+        .registerEventSourcedEntity(
+            io.cloudstate.javasupport.tck.model.eventlogeventing.EventSourcedEntityTwo.class,
+            Eventlogeventing.getDescriptor().findServiceByName("EventSourcedEntityTwo"),
+            Eventlogeventing.getDescriptor())
         .start()
         .toCompletableFuture()
         .get();

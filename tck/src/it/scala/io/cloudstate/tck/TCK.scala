@@ -37,13 +37,13 @@ class TCK extends Suites({
     iterator.
     asScala.
     filter(section => verify(section.getString("name"))).
-    map(c => new ManagedCloudStateTCK(TckConfiguration.fromConfig(c))).
+    map(c => new ManagedCloudstateTCK(TckConfiguration.fromConfig(c))).
     toVector
 }: _*) with SequentialNestedSuiteExecution
 
-object ManagedCloudStateTCK {
-  def settings(config: TckConfiguration): CloudStateTCK.Settings = {
-    CloudStateTCK.Settings(
+object ManagedCloudstateTCK {
+  def settings(config: TckConfiguration): TCKSpec.Settings = {
+    TCKSpec.Settings(
       ServiceAddress(config.tckHostname, config.tckPort),
       ServiceAddress(config.proxy.hostname, config.proxy.port),
       ServiceAddress(config.service.hostname, config.service.port)
@@ -51,20 +51,23 @@ object ManagedCloudStateTCK {
   }
 }
 
-class ManagedCloudStateTCK(config: TckConfiguration) extends CloudStateTCK("for " + config.name, ManagedCloudStateTCK.settings(config)) {
+class ManagedCloudstateTCK(config: TckConfiguration) extends CloudstateTCK("for " + config.name, ManagedCloudstateTCK.settings(config)) {
   config.validate()
 
   val processes: TckProcesses = TckProcesses.create(config)
 
-  override def beforeAll(): Unit = try {
+  override def start(): Unit = {
     processes.service.start()
-    super.beforeAll()
+    super.start()
     processes.proxy.start()
-  } catch {
-    case error: Throwable =>
-      processes.service.logs("service")
-      processes.proxy.logs("proxy")
-      throw error
+  }
+
+  override def onStartError(error: Throwable): Unit = {
+    processes.service.logs("service")
+    processes.proxy.logs("proxy")
+    try processes.proxy.stop()
+    finally try processes.service.stop()
+    finally throw error
   }
 
   override def afterAll(): Unit = {

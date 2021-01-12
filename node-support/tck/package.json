@@ -1,0 +1,21 @@
+{
+  "name": "node-support-tck",
+  "version": "0.0.3",
+  "description": "Cloudstate TCK implementation for Node support",
+  "engineStrict": true,
+  "engines": {
+    "node": "~12"
+  },
+  "dependencies": {
+    "@grpc/proto-loader": "^0.1.0",
+    "google-protobuf": "^3.11.4",
+    "grpc": "^1.24.2",
+    "cloudstate": "file:.."
+  },
+  "scripts": {
+    "prepare": "rm -rf proto && mkdir proto && cp ../../protocols/tck/cloudstate/tck/model/*.proto proto",
+    "build": "npm run prepare && compile-descriptor ./proto/action.proto ./proto/crdt.proto ./proto/eventlogeventing.proto ./proto/eventsourced.proto ./proto/valueentity.proto",
+    "postinstall": "npm run build",
+    "start": "node index.js"
+  }
+}

@@ -34,7 +34,6 @@ import io.cloudstate.protocol.entity.{Entity, EntityDiscovery, Metadata}
 import io.cloudstate.proxy._
 import io.cloudstate.proxy.entity.{EntityCommand, UserFunctionReply}
 
-import scala.collection.JavaConverters._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 
@@ -54,12 +53,14 @@ class CrdtSupportFactory(system: ActorSystem,
 
     validate(serviceDescriptor, methodDescriptors)
 
-    val crdtEntityConfig = CrdtEntity.Configuration(entity.serviceName,
-                                                    entity.persistenceId,
-                                                    config.crdtSettings.passivationTimeout,
-                                                    config.relayOutputBufferSize,
-                                                    3.seconds,
-                                                    5.seconds)
+    val crdtEntityConfig = CrdtEntity.Configuration(
+      entity.serviceName,
+      entity.persistenceId,
+      EntityTypeSupportFactory.configuredPassivationTimeoutOrElse(entity, config.crdtSettings.passivationTimeout),
+      config.relayOutputBufferSize,
+      3.seconds, // TODO make it configurable
+      5.seconds // TODO make it configurable
+    )
 
     log.debug("Starting CrdtEntity for {}", entity.serviceName)
 
@@ -94,8 +95,8 @@ class CrdtSupportFactory(system: ActorSystem,
     if (methodsWithoutKeys.nonEmpty) {
       val offendingMethods = methodsWithoutKeys.map(_.method.getName).mkString(",")
       throw new EntityDiscoveryException(
-        s"CRDT entities do not support methods whose parameters do not have at least one field marked as entity_key, " +
-        "but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}"
+        "CRDT entities do not support methods whose parameters do not have at least one field marked as entity_key, " +
+        s"but ${serviceDescriptor.getFullName} has the following methods without keys: ${offendingMethods}"
       )
     }
   }

@@ -156,6 +156,9 @@ object CrdtMessages extends EntityMessages {
   def crdtStreamedMessage(id: Long, clientAction: Option[ClientAction], effects: Effects): OutMessage =
     OutMessage.StreamedMessage(CrdtStreamedMessage(id, clientAction, effects.sideEffects, effects.endStream))
 
+  def streamCancelledResponse(id: Long): OutMessage =
+    streamCancelledResponse(id, Effects.empty)
+
   def streamCancelledResponse(id: Long, effects: Effects): OutMessage =
     OutMessage.StreamCancelledResponse(CrdtStreamCancelledResponse(id, effects.sideEffects, effects.stateAction))
 

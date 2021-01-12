@@ -64,7 +64,7 @@ class EventSourcedRestartSpec extends AbstractTelemetrySpec {
 
       val entityConfiguration = EventSourcedEntity.Configuration(
         serviceName = "service",
-        userFunctionName = "test",
+        entityTypeName = "test",
         passivationTimeout = 30.seconds,
         sendQueueSize = 100
       )
