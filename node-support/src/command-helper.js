@@ -193,14 +193,20 @@ module.exports = class CommandHelper {
     accessor.replyMetadata = new Metadata([]);
 
     /**
+     * Context for an entity.
+     *
+     * @interface module:cloudstate.EntityContext
+     * @property {string} entityId The id of the entity that the command is for.
+     * @property {Long} commandId The id of the command.
+     * @property {module:cloudstate.Metadata} replyMetadata The metadata to send with a reply.
+     */
+
+    /**
      * Effect context.
      *
      * @interface module:cloudstate.EffectContext
-     * @property {string} entityId The id of the entity that the command is for.
-     * @property {Long} commandId The id of the command.
      * @property {module:cloudstate.Metadata} metadata The metadata associated with the command.
      * @property {module:cloudstate.CloudEvent} cloudevent The CloudEvents metadata associated with the command.
-     * @property {module:cloudstate.Metadata} replyMetadata The metadata to send with a reply.
      */
 
     /**

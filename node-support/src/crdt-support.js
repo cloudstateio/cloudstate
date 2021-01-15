@@ -189,6 +189,7 @@ class CrdtHandler {
          * @interface module:cloudstate.crdt.CrdtCommandContext
          * @extends module:cloudstate.crdt.StateManagementContext
          * @extends module:cloudstate.CommandContext
+         * @extends module:cloudstate.EntityContext
          */
 
         this.addStateManagementToContext(ctx);
@@ -393,6 +394,7 @@ class CrdtHandler {
        *
        * @interface module:cloudstate.crdt.StateChangedContext
        * @extends module:cloudstate.CommandContext
+       * @extends module:cloudstate.EntityContext
        */
       const ctx = this.commandHelper.createContext(subscriber.commandId, subscriber.metadata);
 
@@ -464,6 +466,7 @@ class CrdtHandler {
        *
        * @interface module:cloudstate.crdt.StreamCancelledContext
        * @extends module:cloudstate.EffectContext
+       * @extends module:cloudstate.EntityContext
        * @extends module:cloudstate.crdt.StateManagementContext
        */
 
