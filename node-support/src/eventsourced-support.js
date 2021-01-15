@@ -106,6 +106,7 @@ class EventSourcedEntityHandler {
            *
            * @interface module:cloudstate.EventSourced.EventSourcedCommandContext
            * @extends module:cloudstate.CommandContext
+           * @extends module:cloudstate.EntityContext
            */
 
           ctx.events = [];

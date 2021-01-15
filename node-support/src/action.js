@@ -24,11 +24,52 @@ const CloudState = require("./cloudstate");
 const actionServices = new ActionSupport();
 
 /**
- * A Cloudstate Action
+ * A unary action command handler.
  *
- * @namespace module:cloudstate.action
+ * @callback module:cloudstate.Action~unaryCommandHandler
+ * @param {Object} command The command message, this will be of the type of the gRPC service call input type.
+ * @param {module:cloudstate.Action.UnaryCommandContext} context The command context.
+ * @returns {undefined|Object|Promise} The message to reply with, it must match the gRPC service call output type for
+ *                                     this command. If replying by using context.write, undefined must be returned.
  */
 
+/**
+ * A streamed in action command handler.
+ *
+ * @callback module:cloudstate.Action~streamedInCommandHandler
+ * @param {module:cloudstate.Action.StreamedInCommandContext} context The command context.
+ * @returns {undefined|Object|Promise} The message to reply with, it must match the gRPC service call output type for
+ *                                     this command. If replying by using context.write, undefined must be returned.
+ */
+
+/**
+ * A streamed out command handler.
+ *
+ * @callback module:cloudstate.Action~streamedOutCommandHandler
+ * @param {Object} command The command message, this will be of the type of the gRPC service call input type.
+ * @param {module:cloudstate.Action.StreamedOutCommandContext} context The command context.
+ */
+
+/**
+ * A streamed command handler.
+ *
+ * @callback module:cloudstate.Action~streamedCommandHandler
+ * @param {module:cloudstate.Action.StreamedCommandContext} context The command context.
+ */
+
+/**
+ * An action command handler.
+ *
+ * @typedef module:cloudstate.Action.ActionCommandHandler
+ * @type {module:cloudstate.Action~unaryCommandHandler|module:cloudstate.Action~streamedInCommandHandler|module:cloudstate.Action~streamedOutCommandHandler|module:cloudstate.Action~streamedCommandHandler}
+ */
+
+/**
+ * An action.
+ *
+ * @memberOf module:cloudstate
+ * @extends module:cloudstate.Entity
+ */
 class Action {
 
   /**
@@ -36,7 +77,7 @@ class Action {
    *
    * @param {string|string[]} desc A descriptor or list of descriptors to parse, containing the service to serve.
    * @param {string} serviceName The fully qualified name of the service that provides this entities interface.
-   * @param {module:cloudstate.EventSourced~options=} options The options for this event sourced entity
+   * @param {module:cloudstate.Action~options=} options The options for this event sourced entity
    */
   constructor(desc, serviceName, options) {
 
@@ -69,7 +110,7 @@ class Action {
      *
      * The names of the properties must match the names of the service calls specified in the gRPC descriptor
      *
-     * @type {Object.<string, module:cloudstate.action.Action~commandHandler>}
+     * @type {Object.<string, module:cloudstate.Action.ActionCommandHandler>}
      */
     this.commandHandlers = {};
   }

@@ -55,7 +55,24 @@ class ActionHandler {
     debug("%s [%s.%s] - " + msg, ...[this.streamId, this.support.service.name, this.grpcMethod.name].concat(args));
   }
 
+  /**
+   * Context for an action command.
+   *
+   * @interface module:cloudstate.Action.ActionCommandContext
+   * @extends module:cloudstate.CommandContext
+   * @property {boolean} cancelled Whether the client is still connected.
+   * @property {module:cloudstate.Metadata} metadata The metadata associated with the command.
+   * @property {module:cloudstate.CloudEvent} cloudevent The CloudEvents metadata associated with the command.
+   */
   createContext(metadata) {
+    /**
+     * Write a message.
+     *
+     * @function module:cloudstate.Action.ActionCommandContext#write
+     * @param {Object} message The protobuf message to write.
+     * @param {module:cloudstate.Metadata} metadata The metadata associated with the message.
+     */
+
     const call = this.call;
     let metadataObject = new Metadata([]);
     if (metadata && metadata.entries) {
@@ -74,6 +91,13 @@ class ActionHandler {
       }
     };
 
+    /**
+     * Register an event handler.
+     *
+     * @function module:cloudstate.Action.ActionCommandContext#on
+     * @param {string} eventType The type of the event.
+     * @param {function} callback The callback to handle the event.
+     */
     ctx.on = (eventType, callback) => {
       if (this.supportedEvents.includes(eventType)) {
         this.callbacks[eventType] = callback;
@@ -96,6 +120,12 @@ class ActionHandler {
     }
   }
 
+  /**
+   * Context for a unary action command.
+   *
+   * @interface module:cloudstate.Action.UnaryCommandContext
+   * @extends module:cloudstate.Action.ActionCommandContext
+   */
   handleUnary() {
     this.setupUnaryOutContext();
     const deserializedCommand = this.grpcMethod.resolvedRequestType.decode(this.call.request.payload.value);
@@ -113,6 +143,13 @@ class ActionHandler {
     }
   }
 
+  /**
+   * Context for a streamed in action command.
+   *
+   * @interface module:cloudstate.Action.StreamedInCommandContext
+   * @extends module:cloudstate.Action.StreamedInContext
+   * @extends module:cloudstate.Action.ActionCommandContext
+   */
   handleStreamedIn() {
     this.setupUnaryOutContext();
     this.setupStreamedInContext();
@@ -130,12 +167,25 @@ class ActionHandler {
     }
   }
 
+  /**
+   * Context for a streamed out action command.
+   *
+   * @interface module:cloudstate.Action.StreamedOutCommandContext
+   * @extends module:cloudstate.Action.StreamedOutContext
+   */
   handleStreamedOut() {
     this.setupStreamedOutContext();
     const deserializedCommand = this.grpcMethod.resolvedRequestType.decode(this.call.request.payload.value);
     this.invokeUserCallback("command", this.commandHandler, deserializedCommand, this.ctx);
   }
 
+  /**
+   * Context for a streamed action command.
+   *
+   * @interface module:cloudstate.Action.StreamedCommandContext
+   * @extends module:cloudstate.Action.StreamedInContext
+   * @extends module:cloudstate.Action.StreamedOutContext
+   */
   handleStreamed() {
     this.setupStreamedInContext();
     this.setupStreamedOutContext();
@@ -145,7 +195,7 @@ class ActionHandler {
   setupUnaryOutContext() {
     const effects = [];
 
-    this.ctx.forward = (method, message, metadata) => {
+    this.ctx.thenForward = (method, message, metadata) => {
       this.ensureNotCancelled();
       this.streamDebug("Forwarding to %s", method);
       const forward = this.support.effectSerializer.serializeEffect(method, message, metadata);
@@ -192,7 +242,19 @@ class ActionHandler {
     };
   }
 
+  /**
+   * Context for a action command that returns a streamed message out.
+   *
+   * @interface module:cloudstate.Action.StreamedOutContext
+   * @extends module:cloudstate.Action.ActionCommandContext
+   */
   setupStreamedOutContext() {
+
+    /**
+     * A cancelled event.
+     *
+     * @event module:cloudstate.Action.StreamedOutContext#cancelled
+     */
     this.supportedEvents.push("cancelled");
 
     this.call.on("cancelled", () => {
@@ -200,6 +262,11 @@ class ActionHandler {
       this.invokeCallback("cancelled", this.ctx);
     });
 
+    /**
+     * Terminate the outgoing stream of messages.
+     *
+     * @function module:cloudstate.Action.StreamedOutContext#end
+     */
     this.ctx.end = () => {
       if (this.call.cancelled) {
         this.streamDebug("end invoked when already cancelled.");
@@ -209,7 +276,7 @@ class ActionHandler {
       }
     };
 
-    this.ctx.forward = (method, message, metadata) => {
+    this.ctx.thenForward = (method, message, metadata) => {
       this.ensureNotCancelled();
       this.streamDebug("Forwarding to %s", method);
       const forward = this.support.effectSerializer.serializeEffect(method, message, metadata);
@@ -257,8 +324,30 @@ class ActionHandler {
     };
   }
 
+  /**
+   * Context for a action command that handles streamed messages in.
+   *
+   * @interface module:cloudstate.Action.StreamedInContext
+   * @extends module:cloudstate.Action.ActionCommandContext
+   */
   setupStreamedInContext() {
+    /**
+     * A data event.
+     *
+     * Emitted when a new message arrives.
+     *
+     * @event module:cloudstate.Action.StreamedInContext#data
+     * @type {Object}
+     */
     this.supportedEvents.push("data");
+
+    /**
+     * A stream end event.
+     *
+     * Emitted when the input stream terminates.
+     *
+     * @event module:cloudstate.Action.StreamedInContext#end
+     */
     this.supportedEvents.push("end");
 
     this.call.on("data", (data) => {
@@ -272,6 +361,11 @@ class ActionHandler {
       this.invokeCallback("end", this.ctx);
     });
 
+    /**
+     * Cancel the incoming stream of messages.
+     *
+     * @function module:cloudstate.Action.StreamedInContext#cancel
+     */
     this.ctx.cancel = () => {
       if (this.call.cancelled) {
         this.streamDebug("cancel invoked when already cancelled.");
@@ -370,6 +464,8 @@ module.exports = class ActionServices {
 
   handleStreamed(call) {
     call.on("data", data => {
+      // Ignore the remaining data by default
+      call.on("data", () => {});
       const handler = this.createHandler(call, null, data);
       if (handler) {
         handler.handleStreamed();
@@ -386,6 +482,8 @@ module.exports = class ActionServices {
 
   handleStreamedIn(call, callback) {
     call.on("data", data => {
+      // Ignore the remaining data by default
+      call.on("data", () => {});
       const handler = this.createHandler(call, callback, data);
       if (handler) {
         handler.handleStreamedIn();
