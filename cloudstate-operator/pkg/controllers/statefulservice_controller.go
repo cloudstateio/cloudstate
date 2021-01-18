@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/listeners"
 	"time"
 
 	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/config"
@@ -58,6 +59,7 @@ type StatefulServiceReconciler struct {
 	ReconcileTimeout time.Duration
 	OperatorConfig   *config.OperatorConfig
 	Stores           stores.Stores
+	Listener         listeners.StatefulServiceListener
 }
 
 // +kubebuilder:rbac:groups=cloudstate.io,resources=statefulservices,verbs=get;list;watch;create;update;patch;delete
@@ -144,6 +146,9 @@ func (r *StatefulServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 			log.Error(err, "Unable to create deployment")
 			return ctrl.Result{}, err
 		}
+		if err := r.Listener.DeploymentCreated(ctx, &service, desired); err != nil {
+			return ctrl.Result{}, err
+		}
 		log.Info("Created deployment")
 		return ctrl.Result{}, nil
 	}
@@ -156,6 +161,10 @@ func (r *StatefulServiceReconciler) Reconcile(req ctrl.Request) (ctrl.Result, er
 
 	if err := r.Update(ctx, desired); err != nil {
 		log.Error(err, "Unable to update deployment")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.Listener.DeploymentUpdated(ctx, &service, actual, desired); err != nil {
 		return ctrl.Result{}, err
 	}
 
