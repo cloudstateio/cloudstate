@@ -16,6 +16,7 @@ package main
 
 import (
 	"flag"
+	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/listeners"
 	"os"
 	"time"
 
@@ -150,6 +151,7 @@ func main() {
 		ReconcileTimeout: reconcileTimeout,
 		OperatorConfig:   cfg,
 		Stores:           store,
+		Listener:         &listeners.NullStatefulServiceListener{},
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "StatefulService")
 		os.Exit(1)

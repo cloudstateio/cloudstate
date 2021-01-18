@@ -17,6 +17,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"github.com/cloudstateio/cloudstate/cloudstate-operator/pkg/listeners"
 	"path/filepath"
 	"testing"
 	"time"
@@ -166,6 +167,7 @@ func runController(ctx context.Context) chan struct{} {
 		ReconcileTimeout: 10 * time.Second,
 		OperatorConfig:   operatorConfig,
 		Stores:           multistore,
+		Listener:         &listeners.NullStatefulServiceListener{},
 	}).SetupWithManager(mgr)
 	Expect(err).ToNot(HaveOccurred(), "failed to setup statefulservice controller")
 
