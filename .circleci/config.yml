@@ -84,7 +84,7 @@ jobs:
     - run:
         name: Build sbt native image
         command: |
-          docker login https://docker.pkg.github.com -u cloudstatebot -p ${GITHUB_TOKEN}
+          docker login https://docker.pkg.github.com -u cloudstatebot -p $GITHUB_TOKEN
           sbt "dockerBuildNativeCore publishLocal"
     - save_docker_image:
         tar_file: cloudstate-proxy-native-core.tar
@@ -107,7 +107,7 @@ jobs:
     - run:
         name: Build sbt native images
         command: |
-          docker login https://docker.pkg.github.com -u cloudstatebot -p ${GITHUB_TOKEN}
+          docker login https://docker.pkg.github.com -u cloudstatebot -p $GITHUB_TOKEN
           sbt "dockerBuildNativePostgres publishLocal"
     - save_docker_image:
         tar_file: cloudstate-proxy-native-postgres.tar
@@ -130,7 +130,7 @@ jobs:
     - run:
         name: Build sbt native images
         command: |
-          docker login https://docker.pkg.github.com -u cloudstatebot -p ${GITHUB_TOKEN}
+          docker login https://docker.pkg.github.com -u cloudstatebot -p $GITHUB_TOKEN
           sbt "dockerBuildNativeCassandra publishLocal"
     - save_docker_image:
         tar_file: cloudstate-proxy-native-cassandra.tar
