@@ -83,7 +83,9 @@ jobs:
     - restore_sbt_cache
     - run:
         name: Build sbt native image
-        command: sbt "dockerBuildNativeCore publishLocal"
+        command: |
+          echo "$GITHUB_TOKEN" | docker login https://docker.pkg.github.com -u cloudstatebot --password-stdin
+          sbt "dockerBuildNativeCore publishLocal"
     - save_docker_image:
         tar_file: cloudstate-proxy-native-core.tar
         docker_image: cloudstateio/cloudstate-proxy-native-core:latest
@@ -104,7 +106,9 @@ jobs:
     - restore_sbt_cache
     - run:
         name: Build sbt native images
-        command: sbt "dockerBuildNativePostgres publishLocal"
+        command: |
+          echo "$GITHUB_TOKEN" | docker login https://docker.pkg.github.com -u cloudstatebot --password-stdin
+          sbt "dockerBuildNativePostgres publishLocal"
     - save_docker_image:
         tar_file: cloudstate-proxy-native-postgres.tar
         docker_image: cloudstateio/cloudstate-proxy-native-postgres:latest
@@ -125,7 +129,9 @@ jobs:
     - restore_sbt_cache
     - run:
         name: Build sbt native images
-        command: sbt "dockerBuildNativeCassandra publishLocal"
+        command: |
+          echo "$GITHUB_TOKEN" | docker login https://docker.pkg.github.com -u cloudstatebot --password-stdin
+          sbt "dockerBuildNativeCassandra publishLocal"
     - save_docker_image:
         tar_file: cloudstate-proxy-native-cassandra.tar
         docker_image: cloudstateio/cloudstate-proxy-native-cassandra:latest
