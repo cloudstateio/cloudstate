@@ -243,7 +243,7 @@ class ActionHandler {
   }
 
   /**
-   * Context for a action command that returns a streamed message out.
+   * Context for an action command that returns a streamed message out.
    *
    * @interface module:cloudstate.Action.StreamedOutContext
    * @extends module:cloudstate.Action.ActionCommandContext
@@ -325,7 +325,7 @@ class ActionHandler {
   }
 
   /**
-   * Context for a action command that handles streamed messages in.
+   * Context for an action command that handles streamed messages in.
    *
    * @interface module:cloudstate.Action.StreamedInContext
    * @extends module:cloudstate.Action.ActionCommandContext
