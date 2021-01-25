@@ -35,11 +35,11 @@ name := "cloudstate"
 val ProtocolMajorVersion = 0
 val ProtocolMinorVersion = 2
 
-val GrpcJavaVersion = "1.30.2" // Note: sync with gRPC version in Akka gRPC
+val GrpcJavaVersion = "1.35.0" // Note: sync with gRPC version in Akka gRPC
 // Unfortunately we need to downgrade grpc-netty-shaded
-// in the proxy until we have a fix to make it work with
-// native-image
-val GrpcNettyShadedVersion = "1.28.1"
+// to 1.28.1 in the proxy until we have a fix to make it work with
+// native-image... but that no longer works
+val GrpcNettyShadedVersion = "1.35.0"
 val GraalAkkaVersion = "0.5.0"
 val AkkaVersion = "2.6.9"
 val AkkaHttpVersion = "10.2.3" // Note: should be newer than Akka HTTP version in Akka gRPC
