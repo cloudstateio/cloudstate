@@ -53,7 +53,7 @@ val ScalaTestVersion = "3.0.8"
 val ProtobufVersion = "3.11.4" // Note: sync with Protobuf version in Akka gRPC and ScalaPB
 val JacksonDatabindVersion = "2.9.10.5"
 val Slf4jSimpleVersion = "1.7.30"
-val GraalVersion = "20.1.0"
+val GraalVersion = "20.3.1"
 val DockerBaseImageVersion = "adoptopenjdk/openjdk11:debianslim-jre"
 val DockerBaseImageJavaLibraryPath = "${JAVA_HOME}/lib"
 
@@ -257,7 +257,7 @@ commands ++= Seq(
 def nativeImageDockerSettings: Seq[Setting[_]] = dockerSettings ++ Seq(
   // If this is Some(…): run the native-image generation inside a Docker image
   // If this is None: run the native-image generation using a local GraalVM installation
-  graalVMVersion := Some(GraalVersion + "-java11"), // make sure we use the java11 version
+  graalVMVersion := Some("java11-" + GraalVersion), // make sure we use the java11 version
   graalVMNativeImageOptions ++= sharedNativeImageSettings({
       graalVMVersion.value match {
         case Some(_) => new File("/opt/docker/graal-resources/")
@@ -299,7 +299,7 @@ def sharedNativeImageSettings(targetDir: File, buildServer: Boolean) = Seq(
   "-H:IncludeResources=.+\\.conf",
   "-H:IncludeResources=.+\\.properties",
   "-H:+AllowVMInspection",
-  "-H:-RuntimeAssertions",
+  // "-H:-RuntimeAssertions", // broken option in GraalVM 20.3
   "-H:+RemoveSaturatedTypeFlows", // GraalVM native-image 20.1 feature which speeds up the build time
   "-H:+ReportExceptionStackTraces",
   // "-H:+PrintAnalysisCallTree", // Uncomment to dump the entire call graph, useful for debugging native-image failing builds
@@ -332,7 +332,7 @@ def sharedNativeImageSettings(targetDir: File, buildServer: Boolean) = Seq(
     "com.typesafe.config.impl.ConfigImpl$LoaderCacheHolder",
     "akka.actor.ActorCell", // Do not initialize the actor system until runtime (native-image)
     // These are to make up for the lack of shaded configuration for svm/native-image in grpc-netty-shaded
-    "com.sun.jndi.dns.DnsClient",
+    // "com.sun.jndi.dns.DnsClient", // error: trying to change RUN_TIME from the command line to RERUN Contains Random references
     "com.typesafe.sslconfig.ssl.tracing.TracingSSLContext",
     "io.grpc.netty.shaded.io.netty.handler.codec.http2.Http2CodecUtil",
     "io.grpc.netty.shaded.io.netty.handler.codec.http2.DefaultHttp2FrameWriter",
@@ -517,6 +517,7 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
     graalVMNativeImageOptions ++= Seq(
         "--initialize-at-build-time"
         + Seq(
+          "java.sql.DriverManager",
           "org.postgresql.Driver",
           "org.postgresql.util.SharedTimer"
         ).mkString("=", ",", "")

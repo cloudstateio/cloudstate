@@ -41,7 +41,7 @@ object GraalVMPlugin extends AutoPlugin {
   import DockerPlugin.autoImport._
   import UniversalPlugin.autoImport._
 
-  private val GraalVMBaseImage = "oracle/graalvm-ce"
+  private val GraalVMBaseImage = "ghcr.io/graalvm/graalvm-ce"
   private val NativeImageCommand = "native-image"
 
   override def requires: Plugins = JavaAppPackaging && DockerPlugin
