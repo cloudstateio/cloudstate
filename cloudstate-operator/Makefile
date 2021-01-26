@@ -30,8 +30,7 @@ run: generate fmt vet manifests install
 install: manifests
 	kubectl apply -f manifests/crds.yaml
 
-# Deploy the operator.
-#    - The envsubst bit mimics what we do in deploy-k8s.sh for configmap.yaml
+# Build the operator image and deploy the operator and CRD yaml
 deploy: install docker-build
 	kubectl apply -f manifests/cloudstate-operator.yaml
 
