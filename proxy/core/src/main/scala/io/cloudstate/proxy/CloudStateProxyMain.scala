@@ -130,10 +130,11 @@ object CloudStateProxyMain {
     start(Option(config))
 
   private def start(configuration: Option[Config]): ActorSystem = {
+    // This should be fixed in Graal already
     // Must do this first, before anything uses ThreadLocalRandom
-    if (isGraalVM) {
-      initializeThreadLocalRandom()
-    }
+    // if (isGraalVM) {
+    //   initializeThreadLocalRandom()
+    // }
 
     implicit val system = configuration.fold(ActorSystem("cloudstate-proxy"))(c => ActorSystem("cloudstate-proxy", c))
     implicit val materializer = SystemMaterializer(system)
