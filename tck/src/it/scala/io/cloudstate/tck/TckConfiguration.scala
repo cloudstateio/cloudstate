@@ -25,6 +25,7 @@ final case class TckProcessConfig private (
     hostname: String,
     port: Int,
     directory: File,
+    preCommand: List[String],
     command: List[String],
     stopCommand: Option[List[String]],
     envVars: Map[String, String],
@@ -48,6 +49,7 @@ object TckProcessConfig {
       hostname = config.getString("hostname"),
       port = config.getInt("port"),
       directory = new File(config.getString("directory")),
+      preCommand = config.getStringList("pre-command").asScala.toList,
       command = config.getStringList("command").asScala.toList,
       stopCommand = Some(config.getStringList("stop-command").asScala.toList).filter(_.nonEmpty),
       envVars = config.getConfig("env-vars").root.unwrapped.asScala.toMap.map {

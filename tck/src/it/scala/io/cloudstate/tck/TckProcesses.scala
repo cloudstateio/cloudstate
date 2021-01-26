@@ -40,6 +40,10 @@ object TckProcesses {
 
       override def start(): Unit = {
         require(process.isEmpty, "Process already started")
+        if (spec.preCommand.nonEmpty) {
+          val preExitCode = Process(spec.preCommand, spec.directory) ! logger
+          if (preExitCode != 0) sys.error(s"Pre-command failed with exit code: $preExitCode")
+        }
         val localhost = InetAddress.getLocalHost.getHostAddress
         val command = spec.command.map(_.replace("%LOCALHOST%", localhost))
         val pb = Process(command, spec.directory, spec.envVars.toSeq: _*)
@@ -83,7 +87,7 @@ object TckProcesses {
     )
   }
 
-  private def createDockerService(config: TckConfiguration) =
+  private def createDockerService(config: TckConfiguration): TckProcess =
     createDocker(config.service,
                  "cloudstate-tck-service",
                  Map(
@@ -99,6 +103,9 @@ object TckProcesses {
       private val logger = new TckProcessLogger
 
       override def start(): Unit = {
+        val pullExitCode = Process(Seq("docker", "pull", spec.dockerImage)) ! logger
+        if (pullExitCode != 0) sys.error(s"Docker pull failed with exit code: $pullExitCode")
+
         val env = extraEnv ++ spec.envVars
 
         val command = Seq("docker", "run", "--rm", "--name", name, "-p", s"${spec.port}:${spec.port}") ++
