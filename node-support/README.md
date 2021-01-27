@@ -98,9 +98,9 @@ entity.start();
 ```
 
 
-For more information see https://cloudstate.io/docs/core/current/user/lang/javascript/index.html.
+For more information see https://cloudstate.io/docs/javascript/.
 
 # Node.js version support
-In this repo, we set default node.js version to 12 in package.json. Based on [Node.js website](https://nodejs.org/en/), version 12 is recommended for most user currently. 
+In this repo, we set default node.js version to 12 in package.json. Based on [Node.js website](https://nodejs.org/en/), version 12 is recommended for most user currently.
 If the node.js version does not match, `npm install` raises error. If you want to use a different version, please modify "engines.node" field in package.json file.
 We recommend you use [nvm](https://github.com/nvm-sh/nvm) to control node version. You can run `nvm install` and `nvm use` to pick up the right node.js version from `.nvmrc` file.
