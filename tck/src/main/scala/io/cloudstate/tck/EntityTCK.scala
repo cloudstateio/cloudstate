@@ -426,6 +426,15 @@ trait EntityTCK extends TCKSpec {
         .expectOutgoing(reply(1, Response()))
 
       client.http
+        .request("cloudstate.tck.model.valueentity.ValueEntityTwo/Call", s"""{"id": "$id"}""")
+        .futureValue mustBe """{"message":""}"""
+      interceptor
+        .expectEntityConnection()
+        .expectIncoming(init(ServiceTwo, id))
+        .expectIncoming(command(1, id, "Call", Request(id)))
+        .expectOutgoing(reply(1, Response()))
+
+      client.http
         .request(s"tck/model/entity/$id", """{"actions": [{"update": {"value": "one"}}]}""")
         .futureValue mustBe """{"message":"one"}"""
       connection

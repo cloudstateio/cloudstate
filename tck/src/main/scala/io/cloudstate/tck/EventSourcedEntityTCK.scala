@@ -505,6 +505,15 @@ trait EventSourcedEntityTCK extends TCKSpec {
         .expectOutgoing(reply(1, Response()))
 
       client.http
+        .request("cloudstate.tck.model.EventSourcedTwo/Call", s"""{"id": "$id"}""")
+        .futureValue mustBe """{"message":""}"""
+      interceptor
+        .expectEventSourcedEntityConnection()
+        .expectIncoming(init(ServiceTwo, id))
+        .expectIncoming(command(1, id, "Call", Request(id)))
+        .expectOutgoing(reply(1, Response()))
+
+      client.http
         .request(s"tck/model/eventsourced/$id", """{"actions": [{"emit": {"value": "x"}}]}""")
         .futureValue mustBe """{"message":"x"}"""
       connection

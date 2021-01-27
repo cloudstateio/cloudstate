@@ -1953,6 +1953,15 @@ trait CrdtEntityTCK extends TCKSpec {
         .expectOutgoing(reply(1, PNCounter.state(0)))
 
       client.http
+        .request("cloudstate.tck.model.crdt.CrdtTwo/Call", s"""{"id": "$id"}""")
+        .futureValue mustBe "{}"
+      interceptor
+        .expectCrdtEntityConnection()
+        .expectIncoming(init(ServiceTwo, id))
+        .expectIncoming(command(1, id, "Call", Request(id)))
+        .expectOutgoing(reply(1, Response()))
+
+      client.http
         .request(s"tck/model/crdt/$id", """{"actions": [{"update": {"pncounter": {"change": 42} }}]}""")
         .futureValue mustBe """{"state":{"pncounter":{"value":"42"}}}"""
       connection
