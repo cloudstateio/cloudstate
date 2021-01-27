@@ -27,7 +27,7 @@
     catch(err) {
     }
 //-->
-var data = {"i0":32,"i1":1,"i2":1,"i3":1,"i4":32,"i5":1,"i6":1,"i7":2,"i8":32,"i9":1,"i10":1,"i11":32,"i12":32,"i13":1,"i14":1,"i15":1,"i16":1,"i17":32,"i18":1,"i19":1,"i20":1,"i21":1,"i22":1,"i23":1,"i24":1,"i25":32,"i26":1,"i27":32,"i28":1,"i29":32,"i30":1,"i31":1,"i32":1,"i33":1,"i34":1,"i35":1,"i36":1,"i37":1,"i38":32,"i39":1,"i40":4,"i41":2,"i42":1,"i43":1,"i44":1,"i45":1,"i46":1,"i47":1,"i48":1,"i49":1,"i50":2,"i51":1,"i52":1,"i53":1,"i54":32,"i55":1,"i56":32,"i57":1,"i58":1,"i59":1,"i60":1};
+var data = {"i0":32,"i1":1,"i2":1,"i3":1,"i4":32,"i5":1,"i6":1,"i7":2,"i8":32,"i9":1,"i10":1,"i11":1,"i12":32,"i13":32,"i14":32,"i15":1,"i16":1,"i17":1,"i18":1,"i19":32,"i20":1,"i21":1,"i22":1,"i23":1,"i24":1,"i25":1,"i26":32,"i27":1,"i28":1,"i29":1,"i30":1,"i31":1,"i32":1,"i33":32,"i34":1,"i35":1,"i36":1,"i37":32,"i38":1,"i39":32,"i40":1,"i41":1,"i42":1,"i43":1,"i44":1,"i45":1,"i46":1,"i47":1,"i48":1,"i49":32,"i50":1,"i51":4,"i52":2,"i53":1,"i54":1,"i55":1,"i56":1,"i57":1,"i58":1,"i59":1,"i60":1,"i61":1,"i62":2,"i63":1,"i64":1,"i65":1,"i66":32,"i67":1,"i68":32,"i69":1,"i70":1,"i71":1,"i72":1,"i73":4};
 var tabs = {65535:["t0","All Classes"],1:["t1","Interface Summary"],2:["t2","Class Summary"],4:["t3","Enum Summary"],32:["t6","Annotation Types Summary"]};
 var altColor = "altColor";
 var rowColor = "rowColor";
@@ -172,310 +172,388 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 </th>
 </tr>
 <tr id="i10" class="altColor">
+<td class="colFirst"><a href="io/cloudstate/javasupport/entity/CommandContext.html" title="interface in io.cloudstate.javasupport.entity">CommandContext</a>&lt;<a href="io/cloudstate/javasupport/entity/CommandContext.html" title="type parameter in CommandContext">T</a>&gt;</td>
+<th class="colLast" scope="row">
+<div class="block">A value based entity command context.</div>
+</th>
+</tr>
+<tr id="i11" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/eventsourced/CommandContext.html" title="interface in io.cloudstate.javasupport.eventsourced">CommandContext</a></td>
 <th class="colLast" scope="row">
 <div class="block">An event sourced command context.</div>
 </th>
 </tr>
-<tr id="i11" class="rowColor">
+<tr id="i12" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/CommandHandler.html" title="annotation in io.cloudstate.javasupport.crdt">CommandHandler</a></td>
 <th class="colLast" scope="row">
 <div class="block">Marks a method as a command handler.</div>
 </th>
 </tr>
-<tr id="i12" class="altColor">
+<tr id="i13" class="rowColor">
+<td class="colFirst"><a href="io/cloudstate/javasupport/entity/CommandHandler.html" title="annotation in io.cloudstate.javasupport.entity">CommandHandler</a></td>
+<th class="colLast" scope="row">
+<div class="block">Marks a method on a value based entity as a command handler.</div>
+</th>
+</tr>
+<tr id="i14" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/eventsourced/CommandHandler.html" title="annotation in io.cloudstate.javasupport.eventsourced">CommandHandler</a></td>
 <th class="colLast" scope="row">
 <div class="block">Marks a method as a command handler.</div>
 </th>
 </tr>
-<tr id="i13" class="rowColor">
+<tr id="i15" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/Context.html" title="interface in io.cloudstate.javasupport">Context</a></td>
 <th class="colLast" scope="row">
 <div class="block">Root class of all contexts.</div>
 </th>
 </tr>
-<tr id="i14" class="altColor">
+<tr id="i16" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/Crdt.html" title="interface in io.cloudstate.javasupport.crdt">Crdt</a></td>
 <th class="colLast" scope="row">
 <div class="block">Root interface for all CRDTs.</div>
 </th>
 </tr>
-<tr id="i15" class="rowColor">
+<tr id="i17" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/CrdtContext.html" title="interface in io.cloudstate.javasupport.crdt">CrdtContext</a></td>
 <th class="colLast" scope="row">
 <div class="block">Root context for all CRDT contexts.</div>
 </th>
 </tr>
-<tr id="i16" class="altColor">
+<tr id="i18" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/CrdtCreationContext.html" title="interface in io.cloudstate.javasupport.crdt">CrdtCreationContext</a></td>
 <th class="colLast" scope="row">
 <div class="block">Context for CRDT creation.</div>
 </th>
 </tr>
-<tr id="i17" class="rowColor">
+<tr id="i19" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/CrdtEntity.html" title="annotation in io.cloudstate.javasupport.crdt">CrdtEntity</a></td>
 <th class="colLast" scope="row">
 <div class="block">A CRDT backed entity.</div>
 </th>
 </tr>
-<tr id="i18" class="altColor">
+<tr id="i20" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/CrdtEntityFactory.html" title="interface in io.cloudstate.javasupport.crdt">CrdtEntityFactory</a></td>
 <th class="colLast" scope="row">
 <div class="block">Low level interface for handling commands for CRDTs.</div>
 </th>
 </tr>
-<tr id="i19" class="rowColor">
+<tr id="i21" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/CrdtEntityHandler.html" title="interface in io.cloudstate.javasupport.crdt">CrdtEntityHandler</a></td>
 <th class="colLast" scope="row">
 <div class="block">Low level interface for handling CRDT commands.</div>
 </th>
 </tr>
-<tr id="i20" class="altColor">
+<tr id="i22" class="altColor">
+<td class="colFirst"><a href="io/cloudstate/javasupport/crdt/CrdtEntityOptions.html" title="interface in io.cloudstate.javasupport.crdt">CrdtEntityOptions</a></td>
+<th class="colLast" scope="row">
+<div class="block">Root entity options for all CRDT.</div>
+</th>
+</tr>
+<tr id="i23" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/CrdtFactory.html" title="interface in io.cloudstate.javasupport.crdt">CrdtFactory</a></td>
 <th class="colLast" scope="row">
 <div class="block">Factory for creating CRDTs.</div>
 </th>
 </tr>
-<tr id="i21" class="rowColor">
+<tr id="i24" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/action/Effect.html" title="interface in io.cloudstate.javasupport.action">Effect</a></td>
 <th class="colLast" scope="row">
 <div class="block">An effect.</div>
 </th>
 </tr>
-<tr id="i22" class="altColor">
+<tr id="i25" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/EffectContext.html" title="interface in io.cloudstate.javasupport">EffectContext</a></td>
 <th class="colLast" scope="row">
 <div class="block">A context that allows instructing the proxy to perform a side effect.</div>
 </th>
 </tr>
-<tr id="i23" class="rowColor">
+<tr id="i26" class="altColor">
+<td class="colFirst"><a href="io/cloudstate/javasupport/entity/Entity.html" title="annotation in io.cloudstate.javasupport.entity">Entity</a></td>
+<th class="colLast" scope="row">
+<div class="block">A value based entity.</div>
+</th>
+</tr>
+<tr id="i27" class="rowColor">
+<td class="colFirst"><a href="io/cloudstate/javasupport/entity/EntityContext.html" title="interface in io.cloudstate.javasupport.entity">EntityContext</a></td>
+<th class="colLast" scope="row">
+<div class="block">Root context for all value based entity contexts.</div>
+</th>
+</tr>
+<tr id="i28" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/EntityContext.html" title="interface in io.cloudstate.javasupport">EntityContext</a></td>
 <th class="colLast" scope="row">
 <div class="block">Root context for all contexts that pertain to entities, that is, things that are addressable via
  an entity id.</div>
 </th>
 </tr>
-<tr id="i24" class="altColor">
+<tr id="i29" class="rowColor">
+<td class="colFirst"><a href="io/cloudstate/javasupport/entity/EntityCreationContext.html" title="interface in io.cloudstate.javasupport.entity">EntityCreationContext</a></td>
+<th class="colLast" scope="row">
+<div class="block">Creation context for <a href="io/cloudstate/javasupport/entity/Entity.html" title="annotation in io.cloudstate.javasupport.entity"><code>Entity</code></a> annotated entities.</div>
+</th>
+</tr>
+<tr id="i30" class="altColor">
+<td class="colFirst"><a href="io/cloudstate/javasupport/entity/EntityFactory.html" title="interface in io.cloudstate.javasupport.entity">EntityFactory</a></td>
+<th class="colLast" scope="row">
+<div class="block">Low level interface for handling commands on a value based entity.</div>
+</th>
+</tr>
+<tr id="i31" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/EntityFactory.html" title="interface in io.cloudstate.javasupport">EntityFactory</a></td>
 <th class="colLast" scope="row">
 <div class="block">Entity factory for supporting DI environments.</div>
 </th>
 </tr>
-<tr id="i25" class="rowColor">
+<tr id="i32" class="altColor">
+<td class="colFirst"><a href="io/cloudstate/javasupport/entity/EntityHandler.html" title="interface in io.cloudstate.javasupport.entity">EntityHandler</a></td>
+<th class="colLast" scope="row">
+<div class="block">Low level interface for handling commands on a value based entity.</div>
+</th>
+</tr>
+<tr id="i33" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/EntityId.html" title="annotation in io.cloudstate.javasupport">EntityId</a></td>
 <th class="colLast" scope="row">
 <div class="block">Annotation used to indicate that the annotated parameter accepts an entity id.</div>
 </th>
 </tr>
-<tr id="i26" class="altColor">
+<tr id="i34" class="altColor">
+<td class="colFirst"><a href="io/cloudstate/javasupport/entity/EntityOptions.html" title="interface in io.cloudstate.javasupport.entity">EntityOptions</a></td>
+<th class="colLast" scope="row">
+<div class="block">Root entity options for all value based entities.</div>
+</th>
+</tr>
+<tr id="i35" class="rowColor">
+<td class="colFirst"><a href="io/cloudstate/javasupport/EntityOptions.html" title="interface in io.cloudstate.javasupport">EntityOptions</a></td>
+<th class="colLast" scope="row">
+<div class="block">Options used for configuring an entity.</div>
+</th>
+</tr>
+<tr id="i36" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/eventsourced/EventContext.html" title="interface in io.cloudstate.javasupport.eventsourced">EventContext</a></td>
 <th class="colLast" scope="row">
 <div class="block">Context for an event.</div>
 </th>
 </tr>
-<tr id="i27" class="rowColor">
+<tr id="i37" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/eventsourced/EventHandler.html" title="annotation in io.cloudstate.javasupport.eventsourced">EventHandler</a></td>
 <th class="colLast" scope="row">
 <div class="block">Marks a method as an event handler.</div>
 </th>
 </tr>
-<tr id="i28" class="altColor">
+<tr id="i38" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/eventsourced/EventSourcedContext.html" title="interface in io.cloudstate.javasupport.eventsourced">EventSourcedContext</a></td>
 <th class="colLast" scope="row">
 <div class="block">Root context for all event sourcing contexts.</div>
 </th>
 </tr>
-<tr id="i29" class="rowColor">
+<tr id="i39" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntity.html" title="annotation in io.cloudstate.javasupport.eventsourced">EventSourcedEntity</a></td>
 <th class="colLast" scope="row">
 <div class="block">An event sourced entity.</div>
 </th>
 </tr>
-<tr id="i30" class="altColor">
+<tr id="i40" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntityCreationContext.html" title="interface in io.cloudstate.javasupport.eventsourced">EventSourcedEntityCreationContext</a></td>
 <th class="colLast" scope="row">
 <div class="block">Creation context for <a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntity.html" title="annotation in io.cloudstate.javasupport.eventsourced"><code>EventSourcedEntity</code></a> annotated entities.</div>
 </th>
 </tr>
-<tr id="i31" class="rowColor">
+<tr id="i41" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntityFactory.html" title="interface in io.cloudstate.javasupport.eventsourced">EventSourcedEntityFactory</a></td>
 <th class="colLast" scope="row">
 <div class="block">Low level interface for handling events and commands on an entity.</div>
 </th>
 </tr>
-<tr id="i32" class="altColor">
+<tr id="i42" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntityHandler.html" title="interface in io.cloudstate.javasupport.eventsourced">EventSourcedEntityHandler</a></td>
 <th class="colLast" scope="row">
 <div class="block">Low level interface for handling events and commands on an entity.</div>
 </th>
 </tr>
-<tr id="i33" class="rowColor">
+<tr id="i43" class="rowColor">
+<td class="colFirst"><a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntityOptions.html" title="interface in io.cloudstate.javasupport.eventsourced">EventSourcedEntityOptions</a></td>
+<th class="colLast" scope="row">
+<div class="block">Root entity options for all event sourcing entities.</div>
+</th>
+</tr>
+<tr id="i44" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/action/FailureReply.html" title="interface in io.cloudstate.javasupport.action">FailureReply</a>&lt;<a href="io/cloudstate/javasupport/action/FailureReply.html" title="type parameter in FailureReply">T</a>&gt;</td>
 <th class="colLast" scope="row">
 <div class="block">A failure reply.</div>
 </th>
 </tr>
-<tr id="i34" class="altColor">
+<tr id="i45" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/Flag.html" title="interface in io.cloudstate.javasupport.crdt">Flag</a></td>
 <th class="colLast" scope="row">
 <div class="block">A flag CRDT.</div>
 </th>
 </tr>
-<tr id="i35" class="rowColor">
+<tr id="i46" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/action/ForwardReply.html" title="interface in io.cloudstate.javasupport.action">ForwardReply</a>&lt;<a href="io/cloudstate/javasupport/action/ForwardReply.html" title="type parameter in ForwardReply">T</a>&gt;</td>
 <th class="colLast" scope="row">
 <div class="block">A forward reply.</div>
 </th>
 </tr>
-<tr id="i36" class="altColor">
+<tr id="i47" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/GCounter.html" title="interface in io.cloudstate.javasupport.crdt">GCounter</a></td>
 <th class="colLast" scope="row">
 <div class="block">A Grow-only Counter.</div>
 </th>
 </tr>
-<tr id="i37" class="rowColor">
+<tr id="i48" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/GSet.html" title="interface in io.cloudstate.javasupport.crdt">GSet</a>&lt;<a href="io/cloudstate/javasupport/crdt/GSet.html" title="type parameter in GSet">T</a>&gt;</td>
 <th class="colLast" scope="row">
 <div class="block">A Grow-only Set.</div>
 </th>
 </tr>
-<tr id="i38" class="altColor">
+<tr id="i49" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/Jsonable.html" title="annotation in io.cloudstate.javasupport">Jsonable</a></td>
 <th class="colLast" scope="row">
 <div class="block">Indicates that this class can be serialized to/from JSON.</div>
 </th>
 </tr>
-<tr id="i39" class="rowColor">
+<tr id="i50" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/LWWRegister.html" title="interface in io.cloudstate.javasupport.crdt">LWWRegister</a>&lt;<a href="io/cloudstate/javasupport/crdt/LWWRegister.html" title="type parameter in LWWRegister">T</a>&gt;</td>
 <th class="colLast" scope="row">
 <div class="block">A Last-Write-Wins Register.</div>
 </th>
 </tr>
-<tr id="i40" class="altColor">
+<tr id="i51" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/LWWRegister.Clock.html" title="enum in io.cloudstate.javasupport.crdt">LWWRegister.Clock</a></td>
 <th class="colLast" scope="row">
 <div class="block">A clock.</div>
 </th>
 </tr>
-<tr id="i41" class="rowColor">
+<tr id="i52" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/LWWRegisterMap.html" title="class in io.cloudstate.javasupport.crdt">LWWRegisterMap</a>&lt;<a href="io/cloudstate/javasupport/crdt/LWWRegisterMap.html" title="type parameter in LWWRegisterMap">K</a>,&#8203;<a href="io/cloudstate/javasupport/crdt/LWWRegisterMap.html" title="type parameter in LWWRegisterMap">V</a>&gt;</td>
 <th class="colLast" scope="row">
 <div class="block">Convenience wrapper class for <a href="io/cloudstate/javasupport/crdt/ORMap.html" title="interface in io.cloudstate.javasupport.crdt"><code>ORMap</code></a> that uses <a href="io/cloudstate/javasupport/crdt/LWWRegister.html" title="interface in io.cloudstate.javasupport.crdt"><code>LWWRegister</code></a>'s for values.</div>
 </th>
 </tr>
-<tr id="i42" class="altColor">
+<tr id="i53" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/action/MessageEnvelope.html" title="interface in io.cloudstate.javasupport.action">MessageEnvelope</a>&lt;<a href="io/cloudstate/javasupport/action/MessageEnvelope.html" title="type parameter in MessageEnvelope">T</a>&gt;</td>
 <th class="colLast" scope="row">
 <div class="block">A message envelope.</div>
 </th>
 </tr>
-<tr id="i43" class="rowColor">
+<tr id="i54" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/action/MessageReply.html" title="interface in io.cloudstate.javasupport.action">MessageReply</a>&lt;<a href="io/cloudstate/javasupport/action/MessageReply.html" title="type parameter in MessageReply">T</a>&gt;</td>
 <th class="colLast" scope="row">
 <div class="block">A message reply.</div>
 </th>
 </tr>
-<tr id="i44" class="altColor">
+<tr id="i55" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/Metadata.html" title="interface in io.cloudstate.javasupport">Metadata</a></td>
 <th class="colLast" scope="row">
 <div class="block">Transport specific metadata.</div>
 </th>
 </tr>
-<tr id="i45" class="rowColor">
+<tr id="i56" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/Metadata.MetadataEntry.html" title="interface in io.cloudstate.javasupport">Metadata.MetadataEntry</a></td>
 <th class="colLast" scope="row">
 <div class="block">A metadata entry.</div>
 </th>
 </tr>
-<tr id="i46" class="altColor">
+<tr id="i57" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/MetadataContext.html" title="interface in io.cloudstate.javasupport">MetadataContext</a></td>
 <th class="colLast" scope="row">
 <div class="block">Context that provides access to metadata.</div>
 </th>
 </tr>
-<tr id="i47" class="rowColor">
+<tr id="i58" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/ORMap.html" title="interface in io.cloudstate.javasupport.crdt">ORMap</a>&lt;<a href="io/cloudstate/javasupport/crdt/ORMap.html" title="type parameter in ORMap">K</a>,&#8203;<a href="io/cloudstate/javasupport/crdt/ORMap.html" title="type parameter in ORMap">V</a> extends <a href="io/cloudstate/javasupport/crdt/Crdt.html" title="interface in io.cloudstate.javasupport.crdt">Crdt</a>&gt;</td>
 <th class="colLast" scope="row">
 <div class="block">An Observed-Removed Map.</div>
 </th>
 </tr>
-<tr id="i48" class="altColor">
+<tr id="i59" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/ORSet.html" title="interface in io.cloudstate.javasupport.crdt">ORSet</a>&lt;<a href="io/cloudstate/javasupport/crdt/ORSet.html" title="type parameter in ORSet">T</a>&gt;</td>
 <th class="colLast" scope="row">
 <div class="block">An Observed-Removed Set.</div>
 </th>
 </tr>
-<tr id="i49" class="rowColor">
+<tr id="i60" class="altColor">
+<td class="colFirst"><a href="io/cloudstate/javasupport/PassivationStrategy.html" title="interface in io.cloudstate.javasupport">PassivationStrategy</a></td>
+<th class="colLast" scope="row">
+<div class="block">A passivation strategy.</div>
+</th>
+</tr>
+<tr id="i61" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/PNCounter.html" title="interface in io.cloudstate.javasupport.crdt">PNCounter</a></td>
 <th class="colLast" scope="row">
 <div class="block">A Positive-Negative Counter.</div>
 </th>
 </tr>
-<tr id="i50" class="altColor">
+<tr id="i62" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/PNCounterMap.html" title="class in io.cloudstate.javasupport.crdt">PNCounterMap</a>&lt;<a href="io/cloudstate/javasupport/crdt/PNCounterMap.html" title="type parameter in PNCounterMap">K</a>&gt;</td>
 <th class="colLast" scope="row">
 <div class="block">Convenience wrapper class for <a href="io/cloudstate/javasupport/crdt/ORMap.html" title="interface in io.cloudstate.javasupport.crdt"><code>ORMap</code></a> that uses <a href="io/cloudstate/javasupport/crdt/PNCounter.html" title="interface in io.cloudstate.javasupport.crdt"><code>PNCounter</code></a>'s for values.</div>
 </th>
 </tr>
-<tr id="i51" class="rowColor">
+<tr id="i63" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/ServiceCall.html" title="interface in io.cloudstate.javasupport">ServiceCall</a></td>
 <th class="colLast" scope="row">
 <div class="block">Represents a call to a service, performed either as a forward, or as an effect.</div>
 </th>
 </tr>
-<tr id="i52" class="altColor">
+<tr id="i64" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/ServiceCallFactory.html" title="interface in io.cloudstate.javasupport">ServiceCallFactory</a></td>
 <th class="colLast" scope="row">
 <div class="block">A service call factory.</div>
 </th>
 </tr>
-<tr id="i53" class="rowColor">
+<tr id="i65" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/ServiceCallRef.html" title="interface in io.cloudstate.javasupport">ServiceCallRef</a>&lt;<a href="io/cloudstate/javasupport/ServiceCallRef.html" title="type parameter in ServiceCallRef">T</a>&gt;</td>
 <th class="colLast" scope="row">
 <div class="block">A reference to a call on a service.</div>
 </th>
 </tr>
-<tr id="i54" class="altColor">
+<tr id="i66" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/eventsourced/Snapshot.html" title="annotation in io.cloudstate.javasupport.eventsourced">Snapshot</a></td>
 <th class="colLast" scope="row">
 <div class="block">Marks a method as a snapshot method.</div>
 </th>
 </tr>
-<tr id="i55" class="rowColor">
+<tr id="i67" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/eventsourced/SnapshotContext.html" title="interface in io.cloudstate.javasupport.eventsourced">SnapshotContext</a></td>
 <th class="colLast" scope="row">
 <div class="block">A snapshot context.</div>
 </th>
 </tr>
-<tr id="i56" class="altColor">
+<tr id="i68" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/eventsourced/SnapshotHandler.html" title="annotation in io.cloudstate.javasupport.eventsourced">SnapshotHandler</a></td>
 <th class="colLast" scope="row">
 <div class="block">Marks a method as a snapshot handler.</div>
 </th>
 </tr>
-<tr id="i57" class="rowColor">
+<tr id="i69" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/StreamCancelledContext.html" title="interface in io.cloudstate.javasupport.crdt">StreamCancelledContext</a></td>
 <th class="colLast" scope="row">
 <div class="block">Context for a stream cancelled event.</div>
 </th>
 </tr>
-<tr id="i58" class="altColor">
+<tr id="i70" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/StreamedCommandContext.html" title="interface in io.cloudstate.javasupport.crdt">StreamedCommandContext</a>&lt;<a href="io/cloudstate/javasupport/crdt/StreamedCommandContext.html" title="type parameter in StreamedCommandContext">Output</a>&gt;</td>
 <th class="colLast" scope="row">
 <div class="block">Context for handling a streamed command.</div>
 </th>
 </tr>
-<tr id="i59" class="rowColor">
+<tr id="i71" class="rowColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/SubscriptionContext.html" title="interface in io.cloudstate.javasupport.crdt">SubscriptionContext</a></td>
 <th class="colLast" scope="row">
 <div class="block">The context for a subscription, passed with every invocation of a <a href="io/cloudstate/javasupport/crdt/StreamedCommandContext.html#onChange(java.util.function.Function)"><code>StreamedCommandContext.onChange(Function)</code></a> callback.</div>
 </th>
 </tr>
-<tr id="i60" class="altColor">
+<tr id="i72" class="altColor">
 <td class="colFirst"><a href="io/cloudstate/javasupport/crdt/Vote.html" title="interface in io.cloudstate.javasupport.crdt">Vote</a></td>
 <th class="colLast" scope="row">
 <div class="block">A Vote CRDT.</div>
+</th>
+</tr>
+<tr id="i73" class="rowColor">
+<td class="colFirst"><a href="io/cloudstate/javasupport/crdt/WriteConsistency.html" title="enum in io.cloudstate.javasupport.crdt">WriteConsistency</a></td>
+<th class="colLast" scope="row">
+<div class="block">Write consistency setting for replication of state updates for CRDTs.</div>
 </th>
 </tr>
 </table>

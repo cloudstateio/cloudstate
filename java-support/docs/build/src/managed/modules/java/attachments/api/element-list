@@ -1,5 +1,6 @@
 io.cloudstate.javasupport
 io.cloudstate.javasupport.action
 io.cloudstate.javasupport.crdt
+io.cloudstate.javasupport.entity
 io.cloudstate.javasupport.eventsourced
 io.cloudstate.javasupport.impl

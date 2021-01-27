@@ -27,7 +27,7 @@
     catch(err) {
     }
 //-->
-var data = {"i0":10,"i1":10,"i2":10,"i3":10,"i4":10,"i5":10,"i6":10,"i7":10,"i8":10,"i9":10,"i10":10,"i11":10,"i12":10,"i13":10};
+var data = {"i0":10,"i1":10,"i2":10,"i3":10,"i4":10,"i5":10,"i6":10,"i7":10,"i8":10,"i9":10,"i10":10,"i11":10,"i12":10,"i13":10,"i14":10,"i15":10,"i16":10,"i17":10,"i18":10};
 var tabs = {65535:["t0","All Methods"],2:["t2","Instance Methods"],8:["t4","Concrete Methods"]};
 var altColor = "altColor";
 var rowColor = "rowColor";
@@ -227,8 +227,9 @@ extends java.lang.Object</pre>
 </tr>
 <tr id="i6" class="altColor">
 <td class="colFirst"><code><a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></code></td>
-<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#registerCrdtEntity(io.cloudstate.javasupport.crdt.CrdtEntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,com.google.protobuf.Descriptors.FileDescriptor...)">registerCrdtEntity</a></span>&#8203;(<a href="crdt/CrdtEntityFactory.html" title="interface in io.cloudstate.javasupport.crdt">CrdtEntityFactory</a>&nbsp;factory,
+<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#registerCrdtEntity(io.cloudstate.javasupport.crdt.CrdtEntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,io.cloudstate.javasupport.crdt.CrdtEntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">registerCrdtEntity</a></span>&#8203;(<a href="crdt/CrdtEntityFactory.html" title="interface in io.cloudstate.javasupport.crdt">CrdtEntityFactory</a>&nbsp;factory,
                   com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
+                  <a href="crdt/CrdtEntityOptions.html" title="interface in io.cloudstate.javasupport.crdt">CrdtEntityOptions</a>&nbsp;entityOptions,
                   com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</code></th>
 <td class="colLast">
 <div class="block">Register a CRDT entity factory.</div>
@@ -245,16 +246,57 @@ extends java.lang.Object</pre>
 </tr>
 <tr id="i8" class="altColor">
 <td class="colFirst"><code><a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></code></td>
-<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#registerEventSourcedEntity(io.cloudstate.javasupport.eventsourced.EventSourcedEntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,java.lang.String,int,com.google.protobuf.Descriptors.FileDescriptor...)">registerEventSourcedEntity</a></span>&#8203;(<a href="eventsourced/EventSourcedEntityFactory.html" title="interface in io.cloudstate.javasupport.eventsourced">EventSourcedEntityFactory</a>&nbsp;factory,
-                          com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
-                          java.lang.String&nbsp;persistenceId,
-                          int&nbsp;snapshotEvery,
-                          com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</code></th>
+<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#registerCrdtEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,io.cloudstate.javasupport.crdt.CrdtEntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">registerCrdtEntity</a></span>&#8203;(java.lang.Class&lt;?&gt;&nbsp;entityClass,
+                  com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
+                  <a href="crdt/CrdtEntityOptions.html" title="interface in io.cloudstate.javasupport.crdt">CrdtEntityOptions</a>&nbsp;entityOptions,
+                  com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</code></th>
 <td class="colLast">
-<div class="block">Register an event sourced entity factor.</div>
+<div class="block">Register an annotated CRDT entity.</div>
 </td>
 </tr>
 <tr id="i9" class="rowColor">
+<td class="colFirst"><code><a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></code></td>
+<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#registerEntity(io.cloudstate.javasupport.entity.EntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,java.lang.String,io.cloudstate.javasupport.entity.EntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">registerEntity</a></span>&#8203;(<a href="entity/EntityFactory.html" title="interface in io.cloudstate.javasupport.entity">EntityFactory</a>&nbsp;factory,
+              com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
+              java.lang.String&nbsp;persistenceId,
+              <a href="entity/EntityOptions.html" title="interface in io.cloudstate.javasupport.entity">EntityOptions</a>&nbsp;entityOptions,
+              com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</code></th>
+<td class="colLast">
+<div class="block">Register a value based entity factory.</div>
+</td>
+</tr>
+<tr id="i10" class="altColor">
+<td class="colFirst"><code><a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></code></td>
+<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#registerEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,com.google.protobuf.Descriptors.FileDescriptor...)">registerEntity</a></span>&#8203;(java.lang.Class&lt;?&gt;&nbsp;entityClass,
+              com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
+              com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</code></th>
+<td class="colLast">
+<div class="block">Register an annotated value based entity.</div>
+</td>
+</tr>
+<tr id="i11" class="rowColor">
+<td class="colFirst"><code><a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></code></td>
+<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#registerEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,io.cloudstate.javasupport.entity.EntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">registerEntity</a></span>&#8203;(java.lang.Class&lt;?&gt;&nbsp;entityClass,
+              com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
+              <a href="entity/EntityOptions.html" title="interface in io.cloudstate.javasupport.entity">EntityOptions</a>&nbsp;entityOptions,
+              com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</code></th>
+<td class="colLast">
+<div class="block">Register an annotated value based entity.</div>
+</td>
+</tr>
+<tr id="i12" class="altColor">
+<td class="colFirst"><code><a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></code></td>
+<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#registerEventSourcedEntity(io.cloudstate.javasupport.eventsourced.EventSourcedEntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,java.lang.String,int,io.cloudstate.javasupport.eventsourced.EventSourcedEntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">registerEventSourcedEntity</a></span>&#8203;(<a href="eventsourced/EventSourcedEntityFactory.html" title="interface in io.cloudstate.javasupport.eventsourced">EventSourcedEntityFactory</a>&nbsp;factory,
+                          com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
+                          java.lang.String&nbsp;persistenceId,
+                          int&nbsp;snapshotEvery,
+                          <a href="eventsourced/EventSourcedEntityOptions.html" title="interface in io.cloudstate.javasupport.eventsourced">EventSourcedEntityOptions</a>&nbsp;entityOptions,
+                          com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</code></th>
+<td class="colLast">
+<div class="block">Register an event sourced entity factory.</div>
+</td>
+</tr>
+<tr id="i13" class="rowColor">
 <td class="colFirst"><code><a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></code></td>
 <th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#registerEventSourcedEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,com.google.protobuf.Descriptors.FileDescriptor...)">registerEventSourcedEntity</a></span>&#8203;(java.lang.Class&lt;?&gt;&nbsp;entityClass,
                           com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
@@ -263,21 +305,31 @@ extends java.lang.Object</pre>
 <div class="block">Register an annotated event sourced entity.</div>
 </td>
 </tr>
-<tr id="i10" class="altColor">
+<tr id="i14" class="altColor">
+<td class="colFirst"><code><a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></code></td>
+<th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#registerEventSourcedEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,io.cloudstate.javasupport.eventsourced.EventSourcedEntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">registerEventSourcedEntity</a></span>&#8203;(java.lang.Class&lt;?&gt;&nbsp;entityClass,
+                          com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
+                          <a href="eventsourced/EventSourcedEntityOptions.html" title="interface in io.cloudstate.javasupport.eventsourced">EventSourcedEntityOptions</a>&nbsp;entityOptions,
+                          com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</code></th>
+<td class="colLast">
+<div class="block">Register an annotated event sourced entity.</div>
+</td>
+</tr>
+<tr id="i15" class="rowColor">
 <td class="colFirst"><code>java.util.concurrent.CompletionStage&lt;akka.Done&gt;</code></td>
 <th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#start()">start</a></span>()</code></th>
 <td class="colLast">
 <div class="block">Starts a server with the configured entities.</div>
 </td>
 </tr>
-<tr id="i11" class="rowColor">
+<tr id="i16" class="altColor">
 <td class="colFirst"><code>java.util.concurrent.CompletionStage&lt;akka.Done&gt;</code></td>
 <th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#start(com.typesafe.config.Config)">start</a></span>&#8203;(com.typesafe.config.Config&nbsp;config)</code></th>
 <td class="colLast">
 <div class="block">Starts a server with the configured entities, using the supplied configuration.</div>
 </td>
 </tr>
-<tr id="i12" class="altColor">
+<tr id="i17" class="rowColor">
 <td class="colFirst"><code><a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></code></td>
 <th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#withClassLoader(java.lang.ClassLoader)">withClassLoader</a></span>&#8203;(java.lang.ClassLoader&nbsp;classLoader)</code></th>
 <td class="colLast">
@@ -285,7 +337,7 @@ extends java.lang.Object</pre>
  the CloudState class.</div>
 </td>
 </tr>
-<tr id="i13" class="rowColor">
+<tr id="i18" class="altColor">
 <td class="colFirst"><code><a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></code></td>
 <th class="colSecond" scope="row"><code><span class="memberNameLink"><a href="#withTypeUrlPrefix(java.lang.String)">withTypeUrlPrefix</a></span>&#8203;(java.lang.String&nbsp;prefix)</code></th>
 <td class="colLast">
@@ -423,7 +475,32 @@ extends java.lang.Object</pre>
 </dl>
 </li>
 </ul>
-<a id="registerEventSourcedEntity(io.cloudstate.javasupport.eventsourced.EventSourcedEntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,java.lang.String,int,com.google.protobuf.Descriptors.FileDescriptor...)">
+<a id="registerEventSourcedEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,io.cloudstate.javasupport.eventsourced.EventSourcedEntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">
+<!--   -->
+</a>
+<ul class="blockList">
+<li class="blockList">
+<h4>registerEventSourcedEntity</h4>
+<pre class="methodSignature">public&nbsp;<a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a>&nbsp;registerEventSourcedEntity&#8203;(java.lang.Class&lt;?&gt;&nbsp;entityClass,
+                                             com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
+                                             <a href="eventsourced/EventSourcedEntityOptions.html" title="interface in io.cloudstate.javasupport.eventsourced">EventSourcedEntityOptions</a>&nbsp;entityOptions,
+                                             com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</pre>
+<div class="block">Register an annotated event sourced entity.
+
+ <p>The entity class must be annotated with <a href="eventsourced/EventSourcedEntity.html" title="annotation in io.cloudstate.javasupport.eventsourced"><code>EventSourcedEntity</code></a>.</div>
+<dl>
+<dt><span class="paramLabel">Parameters:</span></dt>
+<dd><code>entityClass</code> - The entity class.</dd>
+<dd><code>descriptor</code> - The descriptor for the service that this entity implements.</dd>
+<dd><code>entityOptions</code> - The entity options.</dd>
+<dd><code>additionalDescriptors</code> - Any additional descriptors that should be used to look up protobuf
+     types when needed.</dd>
+<dt><span class="returnLabel">Returns:</span></dt>
+<dd>This stateful service builder.</dd>
+</dl>
+</li>
+</ul>
+<a id="registerEventSourcedEntity(io.cloudstate.javasupport.eventsourced.EventSourcedEntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,java.lang.String,int,io.cloudstate.javasupport.eventsourced.EventSourcedEntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">
 <!--   -->
 </a>
 <ul class="blockList">
@@ -433,8 +510,9 @@ extends java.lang.Object</pre>
                                              com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
                                              java.lang.String&nbsp;persistenceId,
                                              int&nbsp;snapshotEvery,
+                                             <a href="eventsourced/EventSourcedEntityOptions.html" title="interface in io.cloudstate.javasupport.eventsourced">EventSourcedEntityOptions</a>&nbsp;entityOptions,
                                              com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</pre>
-<div class="block">Register an event sourced entity factor.
+<div class="block">Register an event sourced entity factory.
 
  <p>This is a low level API intended for custom (eg, non reflection based) mechanisms for
  implementing the entity.</div>
@@ -446,6 +524,7 @@ extends java.lang.Object</pre>
 <dd><code>snapshotEvery</code> - Specifies how snapshots of the entity state should be made: Zero means use
      default from configuration file. (Default) Any negative value means never snapshot. Any
      positive value means snapshot at-or-after that number of events.</dd>
+<dd><code>entityOptions</code> - the options for this entity.</dd>
 <dd><code>additionalDescriptors</code> - Any additional descriptors that should be used to look up protobuf
      types when needed.</dd>
 <dt><span class="returnLabel">Returns:</span></dt>
@@ -476,7 +555,32 @@ extends java.lang.Object</pre>
 </dl>
 </li>
 </ul>
-<a id="registerCrdtEntity(io.cloudstate.javasupport.crdt.CrdtEntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,com.google.protobuf.Descriptors.FileDescriptor...)">
+<a id="registerCrdtEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,io.cloudstate.javasupport.crdt.CrdtEntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">
+<!--   -->
+</a>
+<ul class="blockList">
+<li class="blockList">
+<h4>registerCrdtEntity</h4>
+<pre class="methodSignature">public&nbsp;<a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a>&nbsp;registerCrdtEntity&#8203;(java.lang.Class&lt;?&gt;&nbsp;entityClass,
+                                     com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
+                                     <a href="crdt/CrdtEntityOptions.html" title="interface in io.cloudstate.javasupport.crdt">CrdtEntityOptions</a>&nbsp;entityOptions,
+                                     com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</pre>
+<div class="block">Register an annotated CRDT entity.
+
+ <p>The entity class must be annotated with <a href="crdt/CrdtEntity.html" title="annotation in io.cloudstate.javasupport.crdt"><code>CrdtEntity</code></a>.</div>
+<dl>
+<dt><span class="paramLabel">Parameters:</span></dt>
+<dd><code>entityClass</code> - The entity class.</dd>
+<dd><code>descriptor</code> - The descriptor for the service that this entity implements.</dd>
+<dd><code>entityOptions</code> - The options for this entity.</dd>
+<dd><code>additionalDescriptors</code> - Any additional descriptors that should be used to look up protobuf
+     types when needed.</dd>
+<dt><span class="returnLabel">Returns:</span></dt>
+<dd>This stateful service builder.</dd>
+</dl>
+</li>
+</ul>
+<a id="registerCrdtEntity(io.cloudstate.javasupport.crdt.CrdtEntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,io.cloudstate.javasupport.crdt.CrdtEntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">
 <!--   -->
 </a>
 <ul class="blockList">
@@ -484,6 +588,7 @@ extends java.lang.Object</pre>
 <h4>registerCrdtEntity</h4>
 <pre class="methodSignature">public&nbsp;<a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a>&nbsp;registerCrdtEntity&#8203;(<a href="crdt/CrdtEntityFactory.html" title="interface in io.cloudstate.javasupport.crdt">CrdtEntityFactory</a>&nbsp;factory,
                                      com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
+                                     <a href="crdt/CrdtEntityOptions.html" title="interface in io.cloudstate.javasupport.crdt">CrdtEntityOptions</a>&nbsp;entityOptions,
                                      com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</pre>
 <div class="block">Register a CRDT entity factory.
 
@@ -493,6 +598,7 @@ extends java.lang.Object</pre>
 <dt><span class="paramLabel">Parameters:</span></dt>
 <dd><code>factory</code> - The CRDT factory.</dd>
 <dd><code>descriptor</code> - The descriptor for the service that this entity implements.</dd>
+<dd><code>entityOptions</code> - The options for this entity.</dd>
 <dd><code>additionalDescriptors</code> - Any additional descriptors that should be used to look up protobuf
      types when needed.</dd>
 <dt><span class="returnLabel">Returns:</span></dt>
@@ -544,6 +650,82 @@ extends java.lang.Object</pre>
      types when needed.</dd>
 <dt><span class="returnLabel">Returns:</span></dt>
 <dd>This Cloudstate builder.</dd>
+</dl>
+</li>
+</ul>
+<a id="registerEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,com.google.protobuf.Descriptors.FileDescriptor...)">
+<!--   -->
+</a>
+<ul class="blockList">
+<li class="blockList">
+<h4>registerEntity</h4>
+<pre class="methodSignature">public&nbsp;<a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a>&nbsp;registerEntity&#8203;(java.lang.Class&lt;?&gt;&nbsp;entityClass,
+                                 com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
+                                 com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</pre>
+<div class="block">Register an annotated value based entity.
+
+ <p>The entity class must be annotated with <a href="entity/Entity.html" title="annotation in io.cloudstate.javasupport.entity"><code>Entity</code></a>.</div>
+<dl>
+<dt><span class="paramLabel">Parameters:</span></dt>
+<dd><code>entityClass</code> - The entity class.</dd>
+<dd><code>descriptor</code> - The descriptor for the service that this entity implements.</dd>
+<dd><code>additionalDescriptors</code> - Any additional descriptors that should be used to look up protobuf
+     types when needed.</dd>
+<dt><span class="returnLabel">Returns:</span></dt>
+<dd>This stateful service builder.</dd>
+</dl>
+</li>
+</ul>
+<a id="registerEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,io.cloudstate.javasupport.entity.EntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">
+<!--   -->
+</a>
+<ul class="blockList">
+<li class="blockList">
+<h4>registerEntity</h4>
+<pre class="methodSignature">public&nbsp;<a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a>&nbsp;registerEntity&#8203;(java.lang.Class&lt;?&gt;&nbsp;entityClass,
+                                 com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
+                                 <a href="entity/EntityOptions.html" title="interface in io.cloudstate.javasupport.entity">EntityOptions</a>&nbsp;entityOptions,
+                                 com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</pre>
+<div class="block">Register an annotated value based entity.
+
+ <p>The entity class must be annotated with <a href="entity/Entity.html" title="annotation in io.cloudstate.javasupport.entity"><code>Entity</code></a>.</div>
+<dl>
+<dt><span class="paramLabel">Parameters:</span></dt>
+<dd><code>entityClass</code> - The entity class.</dd>
+<dd><code>descriptor</code> - The descriptor for the service that this entity implements.</dd>
+<dd><code>entityOptions</code> - The options for this entity.</dd>
+<dd><code>additionalDescriptors</code> - Any additional descriptors that should be used to look up protobuf
+     types when needed.</dd>
+<dt><span class="returnLabel">Returns:</span></dt>
+<dd>This stateful service builder.</dd>
+</dl>
+</li>
+</ul>
+<a id="registerEntity(io.cloudstate.javasupport.entity.EntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,java.lang.String,io.cloudstate.javasupport.entity.EntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">
+<!--   -->
+</a>
+<ul class="blockList">
+<li class="blockList">
+<h4>registerEntity</h4>
+<pre class="methodSignature">public&nbsp;<a href="CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a>&nbsp;registerEntity&#8203;(<a href="entity/EntityFactory.html" title="interface in io.cloudstate.javasupport.entity">EntityFactory</a>&nbsp;factory,
+                                 com.google.protobuf.Descriptors.ServiceDescriptor&nbsp;descriptor,
+                                 java.lang.String&nbsp;persistenceId,
+                                 <a href="entity/EntityOptions.html" title="interface in io.cloudstate.javasupport.entity">EntityOptions</a>&nbsp;entityOptions,
+                                 com.google.protobuf.Descriptors.FileDescriptor...&nbsp;additionalDescriptors)</pre>
+<div class="block">Register a value based entity factory.
+
+ <p>This is a low level API intended for custom (eg, non reflection based) mechanisms for
+ implementing the entity.</div>
+<dl>
+<dt><span class="paramLabel">Parameters:</span></dt>
+<dd><code>factory</code> - The value based entity factory.</dd>
+<dd><code>descriptor</code> - The descriptor for the service that this entity implements.</dd>
+<dd><code>persistenceId</code> - The persistence id for this entity.</dd>
+<dd><code>entityOptions</code> - The options for this entity.</dd>
+<dd><code>additionalDescriptors</code> - Any additional descriptors that should be used to look up protobuf
+     types when needed.</dd>
+<dt><span class="returnLabel">Returns:</span></dt>
+<dd>This stateful service builder.</dd>
 </dl>
 </li>
 </ul>

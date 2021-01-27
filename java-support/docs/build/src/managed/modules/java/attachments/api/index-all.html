@@ -92,7 +92,7 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 </nav>
 </header>
 <main role="main">
-<div class="contentContainer"><a href="#I:A">A</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:F">F</a>&nbsp;<a href="#I:G">G</a>&nbsp;<a href="#I:H">H</a>&nbsp;<a href="#I:I">I</a>&nbsp;<a href="#I:J">J</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:M">M</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:T">T</a>&nbsp;<a href="#I:V">V</a>&nbsp;<a href="#I:W">W</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes</a>&nbsp;<a href="allpackages-index.html">All&nbsp;Packages</a><a id="I:A">
+<div class="contentContainer"><a href="#I:A">A</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:F">F</a>&nbsp;<a href="#I:G">G</a>&nbsp;<a href="#I:H">H</a>&nbsp;<a href="#I:I">I</a>&nbsp;<a href="#I:J">J</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:M">M</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:T">T</a>&nbsp;<a href="#I:U">U</a>&nbsp;<a href="#I:V">V</a>&nbsp;<a href="#I:W">W</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes</a>&nbsp;<a href="allpackages-index.html">All&nbsp;Packages</a><a id="I:A">
 <!--   -->
 </a>
 <h2 class="title">A</h2>
@@ -120,6 +120,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/Metadata.html#addBinary(java.lang.String,java.nio.ByteBuffer)">addBinary(String, ByteBuffer)</a></span> - Method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/Metadata.html" title="interface in io.cloudstate.javasupport">Metadata</a></dt>
 <dd>
 <div class="block">Add the binary value for the given key.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/WriteConsistency.html#ALL">ALL</a></span> - io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/WriteConsistency.html" title="enum in io.cloudstate.javasupport.crdt">WriteConsistency</a></dt>
+<dd>
+<div class="block">Updates will be written immediately to all replicas.</div>
 </dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/Metadata.html#asCloudEvent()">asCloudEvent()</a></span> - Method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/Metadata.html" title="interface in io.cloudstate.javasupport">Metadata</a></dt>
 <dd>
@@ -186,6 +190,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">Context for handling a command.</div>
 </dd>
+<dt><a href="io/cloudstate/javasupport/entity/CommandContext.html" title="interface in io.cloudstate.javasupport.entity"><span class="typeNameLink">CommandContext</span></a>&lt;<a href="io/cloudstate/javasupport/entity/CommandContext.html" title="type parameter in CommandContext">T</a>&gt; - Interface in <a href="io/cloudstate/javasupport/entity/package-summary.html">io.cloudstate.javasupport.entity</a></dt>
+<dd>
+<div class="block">A value based entity command context.</div>
+</dd>
 <dt><a href="io/cloudstate/javasupport/eventsourced/CommandContext.html" title="interface in io.cloudstate.javasupport.eventsourced"><span class="typeNameLink">CommandContext</span></a> - Interface in <a href="io/cloudstate/javasupport/eventsourced/package-summary.html">io.cloudstate.javasupport.eventsourced</a></dt>
 <dd>
 <div class="block">An event sourced command context.</div>
@@ -193,6 +201,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dt><a href="io/cloudstate/javasupport/crdt/CommandHandler.html" title="annotation in io.cloudstate.javasupport.crdt"><span class="typeNameLink">CommandHandler</span></a> - Annotation Type in <a href="io/cloudstate/javasupport/crdt/package-summary.html">io.cloudstate.javasupport.crdt</a></dt>
 <dd>
 <div class="block">Marks a method as a command handler.</div>
+</dd>
+<dt><a href="io/cloudstate/javasupport/entity/CommandHandler.html" title="annotation in io.cloudstate.javasupport.entity"><span class="typeNameLink">CommandHandler</span></a> - Annotation Type in <a href="io/cloudstate/javasupport/entity/package-summary.html">io.cloudstate.javasupport.entity</a></dt>
+<dd>
+<div class="block">Marks a method on a value based entity as a command handler.</div>
 </dd>
 <dt><a href="io/cloudstate/javasupport/eventsourced/CommandHandler.html" title="annotation in io.cloudstate.javasupport.eventsourced"><span class="typeNameLink">CommandHandler</span></a> - Annotation Type in <a href="io/cloudstate/javasupport/eventsourced/package-summary.html">io.cloudstate.javasupport.eventsourced</a></dt>
 <dd>
@@ -206,6 +218,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">The id of the command that the stream was for.</div>
 </dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/entity/CommandContext.html#commandId()">commandId()</a></span> - Method in interface io.cloudstate.javasupport.entity.<a href="io/cloudstate/javasupport/entity/CommandContext.html" title="interface in io.cloudstate.javasupport.entity">CommandContext</a></dt>
+<dd>
+<div class="block">The id of the command being executed.</div>
+</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/eventsourced/CommandContext.html#commandId()">commandId()</a></span> - Method in interface io.cloudstate.javasupport.eventsourced.<a href="io/cloudstate/javasupport/eventsourced/CommandContext.html" title="interface in io.cloudstate.javasupport.eventsourced">CommandContext</a></dt>
 <dd>
 <div class="block">The id of the command being executed.</div>
@@ -213,6 +229,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/CommandContext.html#commandName()">commandName()</a></span> - Method in interface io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/CommandContext.html" title="interface in io.cloudstate.javasupport.crdt">CommandContext</a></dt>
 <dd>
 <div class="block">The name of the command.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/entity/CommandContext.html#commandName()">commandName()</a></span> - Method in interface io.cloudstate.javasupport.entity.<a href="io/cloudstate/javasupport/entity/CommandContext.html" title="interface in io.cloudstate.javasupport.entity">CommandContext</a></dt>
+<dd>
+<div class="block">The name of the command being executed.</div>
 </dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/eventsourced/CommandContext.html#commandName()">commandName()</a></span> - Method in interface io.cloudstate.javasupport.eventsourced.<a href="io/cloudstate/javasupport/eventsourced/CommandContext.html" title="interface in io.cloudstate.javasupport.eventsourced">CommandContext</a></dt>
 <dd>
@@ -246,6 +266,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">Low level interface for handling CRDT commands.</div>
 </dd>
+<dt><a href="io/cloudstate/javasupport/crdt/CrdtEntityOptions.html" title="interface in io.cloudstate.javasupport.crdt"><span class="typeNameLink">CrdtEntityOptions</span></a> - Interface in <a href="io/cloudstate/javasupport/crdt/package-summary.html">io.cloudstate.javasupport.crdt</a></dt>
+<dd>
+<div class="block">Root entity options for all CRDT.</div>
+</dd>
 <dt><a href="io/cloudstate/javasupport/crdt/CrdtFactory.html" title="interface in io.cloudstate.javasupport.crdt"><span class="typeNameLink">CrdtFactory</span></a> - Interface in <a href="io/cloudstate/javasupport/crdt/package-summary.html">io.cloudstate.javasupport.crdt</a></dt>
 <dd>
 <div class="block">Factory for creating CRDTs.</div>
@@ -253,6 +277,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/CrdtEntityFactory.html#create(io.cloudstate.javasupport.crdt.CrdtCreationContext)">create(CrdtCreationContext)</a></span> - Method in interface io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/CrdtEntityFactory.html" title="interface in io.cloudstate.javasupport.crdt">CrdtEntityFactory</a></dt>
 <dd>
 <div class="block">Create a CRDT entity handler for the given context.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/entity/EntityFactory.html#create(io.cloudstate.javasupport.entity.EntityContext)">create(EntityContext)</a></span> - Method in interface io.cloudstate.javasupport.entity.<a href="io/cloudstate/javasupport/entity/EntityFactory.html" title="interface in io.cloudstate.javasupport.entity">EntityFactory</a></dt>
+<dd>
+<div class="block">Create an entity handler for the given context.</div>
 </dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/EntityFactory.html#create(io.cloudstate.javasupport.EntityContext)">create(EntityContext)</a></span> - Method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/EntityFactory.html" title="interface in io.cloudstate.javasupport">EntityFactory</a></dt>
 <dd>
@@ -316,9 +344,30 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">The default clock, uses the current system time as the clock value.</div>
 </dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/CrdtEntityOptions.html#defaults()">defaults()</a></span> - Static method in interface io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/CrdtEntityOptions.html" title="interface in io.cloudstate.javasupport.crdt">CrdtEntityOptions</a></dt>
+<dd>
+<div class="block">Create a default CRDT entity option.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/entity/EntityOptions.html#defaults()">defaults()</a></span> - Static method in interface io.cloudstate.javasupport.entity.<a href="io/cloudstate/javasupport/entity/EntityOptions.html" title="interface in io.cloudstate.javasupport.entity">EntityOptions</a></dt>
+<dd>
+<div class="block">Create a default entity option for a value based entity.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntityOptions.html#defaults()">defaults()</a></span> - Static method in interface io.cloudstate.javasupport.eventsourced.<a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntityOptions.html" title="interface in io.cloudstate.javasupport.eventsourced">EventSourcedEntityOptions</a></dt>
+<dd>
+<div class="block">Create a default entity option for an event sourced entity.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/PassivationStrategy.html#defaultTimeout()">defaultTimeout()</a></span> - Static method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/PassivationStrategy.html" title="interface in io.cloudstate.javasupport">PassivationStrategy</a></dt>
+<dd>
+<div class="block">Create a passivation strategy that passivates the entity after the default duration (30
+ seconds) of inactivity.</div>
+</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/CommandContext.html#delete()">delete()</a></span> - Method in interface io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/CommandContext.html" title="interface in io.cloudstate.javasupport.crdt">CommandContext</a></dt>
 <dd>
 <div class="block">Delete the CRDT.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/entity/CommandContext.html#deleteState()">deleteState()</a></span> - Method in interface io.cloudstate.javasupport.entity.<a href="io/cloudstate/javasupport/entity/CommandContext.html" title="interface in io.cloudstate.javasupport.entity">CommandContext</a></dt>
+<dd>
+<div class="block">Delete the entity state.</div>
 </dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/action/FailureReply.html#description()">description()</a></span> - Method in interface io.cloudstate.javasupport.action.<a href="io/cloudstate/javasupport/action/FailureReply.html" title="interface in io.cloudstate.javasupport.action">FailureReply</a></dt>
 <dd>
@@ -366,18 +415,38 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">End this stream.</div>
 </dd>
+<dt><a href="io/cloudstate/javasupport/entity/Entity.html" title="annotation in io.cloudstate.javasupport.entity"><span class="typeNameLink">Entity</span></a> - Annotation Type in <a href="io/cloudstate/javasupport/entity/package-summary.html">io.cloudstate.javasupport.entity</a></dt>
+<dd>
+<div class="block">A value based entity.</div>
+</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/EntityFactory.html#entityClass()">entityClass()</a></span> - Method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/EntityFactory.html" title="interface in io.cloudstate.javasupport">EntityFactory</a></dt>
 <dd>
 <div class="block">Get the class of the entity.</div>
+</dd>
+<dt><a href="io/cloudstate/javasupport/entity/EntityContext.html" title="interface in io.cloudstate.javasupport.entity"><span class="typeNameLink">EntityContext</span></a> - Interface in <a href="io/cloudstate/javasupport/entity/package-summary.html">io.cloudstate.javasupport.entity</a></dt>
+<dd>
+<div class="block">Root context for all value based entity contexts.</div>
 </dd>
 <dt><a href="io/cloudstate/javasupport/EntityContext.html" title="interface in io.cloudstate.javasupport"><span class="typeNameLink">EntityContext</span></a> - Interface in <a href="io/cloudstate/javasupport/package-summary.html">io.cloudstate.javasupport</a></dt>
 <dd>
 <div class="block">Root context for all contexts that pertain to entities, that is, things that are addressable via
  an entity id.</div>
 </dd>
+<dt><a href="io/cloudstate/javasupport/entity/EntityCreationContext.html" title="interface in io.cloudstate.javasupport.entity"><span class="typeNameLink">EntityCreationContext</span></a> - Interface in <a href="io/cloudstate/javasupport/entity/package-summary.html">io.cloudstate.javasupport.entity</a></dt>
+<dd>
+<div class="block">Creation context for <a href="io/cloudstate/javasupport/entity/Entity.html" title="annotation in io.cloudstate.javasupport.entity"><code>Entity</code></a> annotated entities.</div>
+</dd>
+<dt><a href="io/cloudstate/javasupport/entity/EntityFactory.html" title="interface in io.cloudstate.javasupport.entity"><span class="typeNameLink">EntityFactory</span></a> - Interface in <a href="io/cloudstate/javasupport/entity/package-summary.html">io.cloudstate.javasupport.entity</a></dt>
+<dd>
+<div class="block">Low level interface for handling commands on a value based entity.</div>
+</dd>
 <dt><a href="io/cloudstate/javasupport/EntityFactory.html" title="interface in io.cloudstate.javasupport"><span class="typeNameLink">EntityFactory</span></a> - Interface in <a href="io/cloudstate/javasupport/package-summary.html">io.cloudstate.javasupport</a></dt>
 <dd>
 <div class="block">Entity factory for supporting DI environments.</div>
+</dd>
+<dt><a href="io/cloudstate/javasupport/entity/EntityHandler.html" title="interface in io.cloudstate.javasupport.entity"><span class="typeNameLink">EntityHandler</span></a> - Interface in <a href="io/cloudstate/javasupport/entity/package-summary.html">io.cloudstate.javasupport.entity</a></dt>
+<dd>
+<div class="block">Low level interface for handling commands on a value based entity.</div>
 </dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/EntityContext.html#entityId()">entityId()</a></span> - Method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/EntityContext.html" title="interface in io.cloudstate.javasupport">EntityContext</a></dt>
 <dd>
@@ -386,6 +455,14 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dt><a href="io/cloudstate/javasupport/EntityId.html" title="annotation in io.cloudstate.javasupport"><span class="typeNameLink">EntityId</span></a> - Annotation Type in <a href="io/cloudstate/javasupport/package-summary.html">io.cloudstate.javasupport</a></dt>
 <dd>
 <div class="block">Annotation used to indicate that the annotated parameter accepts an entity id.</div>
+</dd>
+<dt><a href="io/cloudstate/javasupport/entity/EntityOptions.html" title="interface in io.cloudstate.javasupport.entity"><span class="typeNameLink">EntityOptions</span></a> - Interface in <a href="io/cloudstate/javasupport/entity/package-summary.html">io.cloudstate.javasupport.entity</a></dt>
+<dd>
+<div class="block">Root entity options for all value based entities.</div>
+</dd>
+<dt><a href="io/cloudstate/javasupport/EntityOptions.html" title="interface in io.cloudstate.javasupport"><span class="typeNameLink">EntityOptions</span></a> - Interface in <a href="io/cloudstate/javasupport/package-summary.html">io.cloudstate.javasupport</a></dt>
+<dd>
+<div class="block">Options used for configuring an entity.</div>
 </dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/eventsourced/EventHandler.html#eventClass()">eventClass()</a></span> - Method in annotation type io.cloudstate.javasupport.eventsourced.<a href="io/cloudstate/javasupport/eventsourced/EventHandler.html" title="annotation in io.cloudstate.javasupport.eventsourced">EventHandler</a></dt>
 <dd>
@@ -418,6 +495,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dt><a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntityHandler.html" title="interface in io.cloudstate.javasupport.eventsourced"><span class="typeNameLink">EventSourcedEntityHandler</span></a> - Interface in <a href="io/cloudstate/javasupport/eventsourced/package-summary.html">io.cloudstate.javasupport.eventsourced</a></dt>
 <dd>
 <div class="block">Low level interface for handling events and commands on an entity.</div>
+</dd>
+<dt><a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntityOptions.html" title="interface in io.cloudstate.javasupport.eventsourced"><span class="typeNameLink">EventSourcedEntityOptions</span></a> - Interface in <a href="io/cloudstate/javasupport/eventsourced/package-summary.html">io.cloudstate.javasupport.eventsourced</a></dt>
+<dd>
+<div class="block">Root entity options for all event sourcing entities.</div>
 </dd>
 </dl>
 <a id="I:F">
@@ -504,6 +585,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">Get the current value for this nodes vote.</div>
 </dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/entity/CommandContext.html#getState()">getState()</a></span> - Method in interface io.cloudstate.javasupport.entity.<a href="io/cloudstate/javasupport/entity/CommandContext.html" title="interface in io.cloudstate.javasupport.entity">CommandContext</a></dt>
+<dd>
+<div class="block">Retrieve the state.</div>
+</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/GCounter.html#getValue()">getValue()</a></span> - Method in interface io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/GCounter.html" title="interface in io.cloudstate.javasupport.crdt">GCounter</a></dt>
 <dd>
 <div class="block">Get the current value of the counter.</div>
@@ -528,6 +613,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">Get the number of votes for.</div>
 </dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/CrdtContext.html#getWriteConsistency()">getWriteConsistency()</a></span> - Method in interface io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/CrdtContext.html" title="interface in io.cloudstate.javasupport.crdt">CrdtContext</a></dt>
+<dd>
+<div class="block">Get the current write consistency setting for replication of CRDT state.</div>
+</dd>
 <dt><a href="io/cloudstate/javasupport/crdt/GSet.html" title="interface in io.cloudstate.javasupport.crdt"><span class="typeNameLink">GSet</span></a>&lt;<a href="io/cloudstate/javasupport/crdt/GSet.html" title="type parameter in GSet">T</a>&gt; - Interface in <a href="io/cloudstate/javasupport/crdt/package-summary.html">io.cloudstate.javasupport.crdt</a></dt>
 <dd>
 <div class="block">A Grow-only Set.</div>
@@ -539,6 +628,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <h2 class="title">H</h2>
 <dl>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/CrdtEntityHandler.html#handleCommand(com.google.protobuf.Any,io.cloudstate.javasupport.crdt.CommandContext)">handleCommand(Any, CommandContext)</a></span> - Method in interface io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/CrdtEntityHandler.html" title="interface in io.cloudstate.javasupport.crdt">CrdtEntityHandler</a></dt>
+<dd>
+<div class="block">Handle the given command.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/entity/EntityHandler.html#handleCommand(com.google.protobuf.Any,io.cloudstate.javasupport.entity.CommandContext)">handleCommand(Any, CommandContext&lt;Any&gt;)</a></span> - Method in interface io.cloudstate.javasupport.entity.<a href="io/cloudstate/javasupport/entity/EntityHandler.html" title="interface in io.cloudstate.javasupport.entity">EntityHandler</a></dt>
 <dd>
 <div class="block">Handle the given command.</div>
 </dd>
@@ -610,6 +703,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">Conflict-free Replicated Data Type support.</div>
 </dd>
+<dt><a href="io/cloudstate/javasupport/entity/package-summary.html">io.cloudstate.javasupport.entity</a> - package io.cloudstate.javasupport.entity</dt>
+<dd>
+<div class="block">Value based entity support.</div>
+</dd>
 <dt><a href="io/cloudstate/javasupport/eventsourced/package-summary.html">io.cloudstate.javasupport.eventsourced</a> - package io.cloudstate.javasupport.eventsourced</dt>
 <dd>
 <div class="block">Event Sourcing support.</div>
@@ -670,6 +767,11 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 </a>
 <h2 class="title">L</h2>
 <dl>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/WriteConsistency.html#LOCAL">LOCAL</a></span> - io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/WriteConsistency.html" title="enum in io.cloudstate.javasupport.crdt">WriteConsistency</a></dt>
+<dd>
+<div class="block">Updates will only be written to the local replica immediately, and then asynchronously
+ distributed to other replicas in the background.</div>
+</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/ServiceCallFactory.html#lookup(java.lang.String,java.lang.String,java.lang.Class)">lookup(String, String, Class&lt;T&gt;)</a></span> - Method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/ServiceCallFactory.html" title="interface in io.cloudstate.javasupport">ServiceCallFactory</a></dt>
 <dd>
 <div class="block">Lookup a reference to the service call with the given name and method.</div>
@@ -694,6 +796,11 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 </a>
 <h2 class="title">M</h2>
 <dl>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/WriteConsistency.html#MAJORITY">MAJORITY</a></span> - io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/WriteConsistency.html" title="enum in io.cloudstate.javasupport.crdt">WriteConsistency</a></dt>
+<dd>
+<div class="block">Updates will be written immediately to a majority of replicas, and then asynchronously
+ distributed to remaining replicas in the background.</div>
+</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/ServiceCall.html#message()">message()</a></span> - Method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/ServiceCall.html" title="interface in io.cloudstate.javasupport">ServiceCall</a></dt>
 <dd>
 <div class="block">The message to pass to the call when the call is invoked.</div>
@@ -761,6 +868,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <div class="block">The name of the command to handle.</div>
 </dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/CommandHandler.html#name()">name()</a></span> - Method in annotation type io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/CommandHandler.html" title="annotation in io.cloudstate.javasupport.crdt">CommandHandler</a></dt>
+<dd>
+<div class="block">The name of the command to handle.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/entity/CommandHandler.html#name()">name()</a></span> - Method in annotation type io.cloudstate.javasupport.entity.<a href="io/cloudstate/javasupport/entity/CommandHandler.html" title="annotation in io.cloudstate.javasupport.entity">CommandHandler</a></dt>
 <dd>
 <div class="block">The name of the command to handle.</div>
 </dd>
@@ -852,6 +963,12 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 </a>
 <h2 class="title">P</h2>
 <dl>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/EntityOptions.html#passivationStrategy()">passivationStrategy()</a></span> - Method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/EntityOptions.html" title="interface in io.cloudstate.javasupport">EntityOptions</a></dt>
+<dd>&nbsp;</dd>
+<dt><a href="io/cloudstate/javasupport/PassivationStrategy.html" title="interface in io.cloudstate.javasupport"><span class="typeNameLink">PassivationStrategy</span></a> - Interface in <a href="io/cloudstate/javasupport/package-summary.html">io.cloudstate.javasupport</a></dt>
+<dd>
+<div class="block">A passivation strategy.</div>
+</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/action/MessageEnvelope.html#payload()">payload()</a></span> - Method in interface io.cloudstate.javasupport.action.<a href="io/cloudstate/javasupport/action/MessageEnvelope.html" title="interface in io.cloudstate.javasupport.action">MessageEnvelope</a></dt>
 <dd>
 <div class="block">The payload of the message.</div>
@@ -859,6 +976,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/action/MessageReply.html#payload()">payload()</a></span> - Method in interface io.cloudstate.javasupport.action.<a href="io/cloudstate/javasupport/action/MessageReply.html" title="interface in io.cloudstate.javasupport.action">MessageReply</a></dt>
 <dd>
 <div class="block">The payload of the message reply.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/entity/Entity.html#persistenceId()">persistenceId()</a></span> - Method in annotation type io.cloudstate.javasupport.entity.<a href="io/cloudstate/javasupport/entity/Entity.html" title="annotation in io.cloudstate.javasupport.entity">Entity</a></dt>
+<dd>
+<div class="block">The name of the persistence id.</div>
 </dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntity.html#persistenceId()">persistenceId()</a></span> - Method in annotation type io.cloudstate.javasupport.eventsourced.<a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntity.html" title="annotation in io.cloudstate.javasupport.eventsourced">EventSourcedEntity</a></dt>
 <dd>
@@ -910,7 +1031,7 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">Register an annotated Action service.</div>
 </dd>
-<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/CloudState.html#registerCrdtEntity(io.cloudstate.javasupport.crdt.CrdtEntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,com.google.protobuf.Descriptors.FileDescriptor...)">registerCrdtEntity(CrdtEntityFactory, Descriptors.ServiceDescriptor, Descriptors.FileDescriptor...)</a></span> - Method in class io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></dt>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/CloudState.html#registerCrdtEntity(io.cloudstate.javasupport.crdt.CrdtEntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,io.cloudstate.javasupport.crdt.CrdtEntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">registerCrdtEntity(CrdtEntityFactory, Descriptors.ServiceDescriptor, CrdtEntityOptions, Descriptors.FileDescriptor...)</a></span> - Method in class io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></dt>
 <dd>
 <div class="block">Register a CRDT entity factory.</div>
 </dd>
@@ -918,11 +1039,31 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">Register an annotated CRDT entity.</div>
 </dd>
-<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/CloudState.html#registerEventSourcedEntity(io.cloudstate.javasupport.eventsourced.EventSourcedEntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,java.lang.String,int,com.google.protobuf.Descriptors.FileDescriptor...)">registerEventSourcedEntity(EventSourcedEntityFactory, Descriptors.ServiceDescriptor, String, int, Descriptors.FileDescriptor...)</a></span> - Method in class io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></dt>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/CloudState.html#registerCrdtEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,io.cloudstate.javasupport.crdt.CrdtEntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">registerCrdtEntity(Class&lt;?&gt;, Descriptors.ServiceDescriptor, CrdtEntityOptions, Descriptors.FileDescriptor...)</a></span> - Method in class io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></dt>
 <dd>
-<div class="block">Register an event sourced entity factor.</div>
+<div class="block">Register an annotated CRDT entity.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/CloudState.html#registerEntity(io.cloudstate.javasupport.entity.EntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,java.lang.String,io.cloudstate.javasupport.entity.EntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">registerEntity(EntityFactory, Descriptors.ServiceDescriptor, String, EntityOptions, Descriptors.FileDescriptor...)</a></span> - Method in class io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></dt>
+<dd>
+<div class="block">Register a value based entity factory.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/CloudState.html#registerEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,com.google.protobuf.Descriptors.FileDescriptor...)">registerEntity(Class&lt;?&gt;, Descriptors.ServiceDescriptor, Descriptors.FileDescriptor...)</a></span> - Method in class io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></dt>
+<dd>
+<div class="block">Register an annotated value based entity.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/CloudState.html#registerEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,io.cloudstate.javasupport.entity.EntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">registerEntity(Class&lt;?&gt;, Descriptors.ServiceDescriptor, EntityOptions, Descriptors.FileDescriptor...)</a></span> - Method in class io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></dt>
+<dd>
+<div class="block">Register an annotated value based entity.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/CloudState.html#registerEventSourcedEntity(io.cloudstate.javasupport.eventsourced.EventSourcedEntityFactory,com.google.protobuf.Descriptors.ServiceDescriptor,java.lang.String,int,io.cloudstate.javasupport.eventsourced.EventSourcedEntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">registerEventSourcedEntity(EventSourcedEntityFactory, Descriptors.ServiceDescriptor, String, int, EventSourcedEntityOptions, Descriptors.FileDescriptor...)</a></span> - Method in class io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></dt>
+<dd>
+<div class="block">Register an event sourced entity factory.</div>
 </dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/CloudState.html#registerEventSourcedEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,com.google.protobuf.Descriptors.FileDescriptor...)">registerEventSourcedEntity(Class&lt;?&gt;, Descriptors.ServiceDescriptor, Descriptors.FileDescriptor...)</a></span> - Method in class io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></dt>
+<dd>
+<div class="block">Register an annotated event sourced entity.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/CloudState.html#registerEventSourcedEntity(java.lang.Class,com.google.protobuf.Descriptors.ServiceDescriptor,io.cloudstate.javasupport.eventsourced.EventSourcedEntityOptions,com.google.protobuf.Descriptors.FileDescriptor...)">registerEventSourcedEntity(Class&lt;?&gt;, Descriptors.ServiceDescriptor, EventSourcedEntityOptions, Descriptors.FileDescriptor...)</a></span> - Method in class io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/CloudState.html" title="class in io.cloudstate.javasupport">CloudState</a></dt>
 <dd>
 <div class="block">Register an annotated event sourced entity.</div>
 </dd>
@@ -997,6 +1138,10 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">Set the binary value for the given key.</div>
 </dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/CrdtContext.html#setWriteConsistency(io.cloudstate.javasupport.crdt.WriteConsistency)">setWriteConsistency(WriteConsistency)</a></span> - Method in interface io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/CrdtContext.html" title="interface in io.cloudstate.javasupport.crdt">CrdtContext</a></dt>
+<dd>
+<div class="block">Set the write consistency setting for replication of CRDT state.</div>
+</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntityHandler.html#snapshot(io.cloudstate.javasupport.eventsourced.SnapshotContext)">snapshot(SnapshotContext)</a></span> - Method in interface io.cloudstate.javasupport.eventsourced.<a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntityHandler.html" title="interface in io.cloudstate.javasupport.eventsourced">EventSourcedEntityHandler</a></dt>
 <dd>
 <div class="block">Snapshot the object.</div>
@@ -1068,9 +1213,23 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">The time of this CloudEvent.</div>
 </dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/PassivationStrategy.html#timeout(java.time.Duration)">timeout(Duration)</a></span> - Static method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/PassivationStrategy.html" title="interface in io.cloudstate.javasupport">PassivationStrategy</a></dt>
+<dd>
+<div class="block">Create a passivation strategy that passivates the entity after a given duration of inactivity.</div>
+</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/CloudEvent.html#type()">type()</a></span> - Method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/CloudEvent.html" title="interface in io.cloudstate.javasupport">CloudEvent</a></dt>
 <dd>
 <div class="block">The type of this CloudEvent.</div>
+</dd>
+</dl>
+<a id="I:U">
+<!--   -->
+</a>
+<h2 class="title">U</h2>
+<dl>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/entity/CommandContext.html#updateState(T)">updateState(T)</a></span> - Method in interface io.cloudstate.javasupport.entity.<a href="io/cloudstate/javasupport/entity/CommandContext.html" title="interface in io.cloudstate.javasupport.entity">CommandContext</a></dt>
+<dd>
+<div class="block">Update the entity with the new state.</div>
 </dd>
 </dl>
 <a id="I:V">
@@ -1082,7 +1241,16 @@ $('.navPadding').css('padding-top', $('.fixedNav').css("height"));
 <dd>
 <div class="block">Returns the enum constant of this type with the specified name.</div>
 </dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/WriteConsistency.html#valueOf(java.lang.String)">valueOf(String)</a></span> - Static method in enum io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/WriteConsistency.html" title="enum in io.cloudstate.javasupport.crdt">WriteConsistency</a></dt>
+<dd>
+<div class="block">Returns the enum constant of this type with the specified name.</div>
+</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/LWWRegister.Clock.html#values()">values()</a></span> - Static method in enum io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/LWWRegister.Clock.html" title="enum in io.cloudstate.javasupport.crdt">LWWRegister.Clock</a></dt>
+<dd>
+<div class="block">Returns an array containing the constants of this enum type, in
+the order they are declared.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/WriteConsistency.html#values()">values()</a></span> - Static method in enum io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/WriteConsistency.html" title="enum in io.cloudstate.javasupport.crdt">WriteConsistency</a></dt>
 <dd>
 <div class="block">Returns an array containing the constants of this enum type, in
 the order they are declared.</div>
@@ -1138,6 +1306,16 @@ the order they are declared.</div>
 <dd>
 <div class="block">Return a new CloudEvent with the given id.</div>
 </dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/crdt/CrdtEntityOptions.html#withPassivationStrategy(io.cloudstate.javasupport.PassivationStrategy)">withPassivationStrategy(PassivationStrategy)</a></span> - Method in interface io.cloudstate.javasupport.crdt.<a href="io/cloudstate/javasupport/crdt/CrdtEntityOptions.html" title="interface in io.cloudstate.javasupport.crdt">CrdtEntityOptions</a></dt>
+<dd>&nbsp;</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/entity/EntityOptions.html#withPassivationStrategy(io.cloudstate.javasupport.PassivationStrategy)">withPassivationStrategy(PassivationStrategy)</a></span> - Method in interface io.cloudstate.javasupport.entity.<a href="io/cloudstate/javasupport/entity/EntityOptions.html" title="interface in io.cloudstate.javasupport.entity">EntityOptions</a></dt>
+<dd>&nbsp;</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/EntityOptions.html#withPassivationStrategy(io.cloudstate.javasupport.PassivationStrategy)">withPassivationStrategy(PassivationStrategy)</a></span> - Method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/EntityOptions.html" title="interface in io.cloudstate.javasupport">EntityOptions</a></dt>
+<dd>
+<div class="block">Create an entity option with the given passivation strategy.</div>
+</dd>
+<dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntityOptions.html#withPassivationStrategy(io.cloudstate.javasupport.PassivationStrategy)">withPassivationStrategy(PassivationStrategy)</a></span> - Method in interface io.cloudstate.javasupport.eventsourced.<a href="io/cloudstate/javasupport/eventsourced/EventSourcedEntityOptions.html" title="interface in io.cloudstate.javasupport.eventsourced">EventSourcedEntityOptions</a></dt>
+<dd>&nbsp;</dd>
 <dt><span class="memberNameLink"><a href="io/cloudstate/javasupport/CloudEvent.html#withSource(java.net.URI)">withSource(URI)</a></span> - Method in interface io.cloudstate.javasupport.<a href="io/cloudstate/javasupport/CloudEvent.html" title="interface in io.cloudstate.javasupport">CloudEvent</a></dt>
 <dd>
 <div class="block">Return a new CloudEvent with the given source.</div>
@@ -1159,8 +1337,12 @@ the order they are declared.</div>
 <div class="block">Sets the type URL prefix to be used when serializing and deserializing types from and to
  Protobyf Any values.</div>
 </dd>
+<dt><a href="io/cloudstate/javasupport/crdt/WriteConsistency.html" title="enum in io.cloudstate.javasupport.crdt"><span class="typeNameLink">WriteConsistency</span></a> - Enum in <a href="io/cloudstate/javasupport/crdt/package-summary.html">io.cloudstate.javasupport.crdt</a></dt>
+<dd>
+<div class="block">Write consistency setting for replication of state updates for CRDTs.</div>
+</dd>
 </dl>
-<a href="#I:A">A</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:F">F</a>&nbsp;<a href="#I:G">G</a>&nbsp;<a href="#I:H">H</a>&nbsp;<a href="#I:I">I</a>&nbsp;<a href="#I:J">J</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:M">M</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:T">T</a>&nbsp;<a href="#I:V">V</a>&nbsp;<a href="#I:W">W</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes</a>&nbsp;<a href="allpackages-index.html">All&nbsp;Packages</a></div>
+<a href="#I:A">A</a>&nbsp;<a href="#I:C">C</a>&nbsp;<a href="#I:D">D</a>&nbsp;<a href="#I:E">E</a>&nbsp;<a href="#I:F">F</a>&nbsp;<a href="#I:G">G</a>&nbsp;<a href="#I:H">H</a>&nbsp;<a href="#I:I">I</a>&nbsp;<a href="#I:J">J</a>&nbsp;<a href="#I:L">L</a>&nbsp;<a href="#I:M">M</a>&nbsp;<a href="#I:N">N</a>&nbsp;<a href="#I:O">O</a>&nbsp;<a href="#I:P">P</a>&nbsp;<a href="#I:R">R</a>&nbsp;<a href="#I:S">S</a>&nbsp;<a href="#I:T">T</a>&nbsp;<a href="#I:U">U</a>&nbsp;<a href="#I:V">V</a>&nbsp;<a href="#I:W">W</a>&nbsp;<br><a href="allclasses-index.html">All&nbsp;Classes</a>&nbsp;<a href="allpackages-index.html">All&nbsp;Packages</a></div>
 </main>
 <footer role="contentinfo">
 <nav role="navigation">
