@@ -207,6 +207,12 @@ def dockerSettings: Seq[Setting[_]] = Seq(
   publishArtifact in (Compile, packageDoc) := false
 )
 
+def proxySettings: Seq[Setting[_]] = Seq(
+  // proxies are published to maven central, re-enable javadocs for sonatype requirements
+  Compile / packageDoc / publishArtifact := true,
+  Test / packageDoc / publishArtifact := false
+)
+
 def buildProxyHelp(commandName: String, name: String) =
   Help(
     (s"$commandName <task>",
@@ -422,12 +428,12 @@ lazy val `proxy-core` = (project in file("proxy/core"))
     // For Google Cloud Pubsub API
     PB.protoSources in Compile += target.value / "protobuf_external" / "google" / "pubsub" / "v1",
     mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
-    dockerSettings,
     fork in run := true,
     // In memory journal by default
     javaOptions in run ++= Seq("-Dconfig.resource=dev-mode.conf"),
     assemblySettings("akka-proxy.jar"),
-    nativeImageDockerSettings
+    nativeImageDockerSettings,
+    proxySettings
   )
 
 lazy val `proxy-spanner` = (project in file("proxy/spanner"))
@@ -451,7 +457,8 @@ lazy val `proxy-spanner` = (project in file("proxy/spanner"))
     mainClass in Compile := Some("io.cloudstate.proxy.spanner.CloudstateSpannerProxyMain"),
     assemblySettings("akka-proxy.jar"),
     nativeImageDockerSettings,
-    graalVMNativeImageOptions ++= Seq()
+    graalVMNativeImageOptions ++= Seq(),
+    proxySettings
   )
 
 lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
@@ -474,7 +481,8 @@ lazy val `proxy-cassandra` = (project in file("proxy/cassandra"))
     nativeImageDockerSettings,
     graalVMNativeImageOptions ++= Seq(
         "-H:IncludeResourceBundles=com.datastax.driver.core.Driver"
-      )
+      ),
+    proxySettings
   )
 
 lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
@@ -492,7 +500,8 @@ lazy val `proxy-jdbc` = (project in file("proxy/jdbc"))
         "org.scalatest" %% "scalatest" % ScalaTestVersion % Test
       ),
     fork in run := true,
-    mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain")
+    mainClass in Compile := Some("io.cloudstate.proxy.CloudStateProxyMain"),
+    proxySettings
   )
 
 lazy val `proxy-postgres` = (project in file("proxy/postgres"))
@@ -521,7 +530,8 @@ lazy val `proxy-postgres` = (project in file("proxy/postgres"))
           "org.postgresql.Driver",
           "org.postgresql.util.SharedTimer"
         ).mkString("=", ",", "")
-      )
+      ),
+    proxySettings
   )
 
 lazy val `proxy-tests` = (project in file("proxy/proxy-tests"))
