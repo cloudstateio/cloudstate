@@ -206,8 +206,15 @@ jobs:
           name: Load docker images
           command: docker image load < /tmp/workspace/cloudstate-proxy-native-core.tar
       - run:
+          name: Run npm install
+          command: |
+            source /opt/circleci/.nvm/nvm.sh
+            cd node-support && nvm install && npm install && cd -
+            cd node-support/tck && nvm install && npm install && cd -
+      - run:
           name: Run TCK with native image
           command: |
+            source /opt/circleci/.nvm/nvm.sh && cd node-support && nvm use && cd -
             sbt -Dconfig.resource=native-image.conf \
               'set concurrentRestrictions in Global += Tags.limitAll(1)' \
               'set scalafmtOnCompile := false' \
