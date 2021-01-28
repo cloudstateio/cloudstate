@@ -103,8 +103,10 @@ object TckProcesses {
       private val logger = new TckProcessLogger
 
       override def start(): Unit = {
-        val pullExitCode = Process(Seq("docker", "pull", spec.dockerImage)) ! logger
-        if (pullExitCode != 0) sys.error(s"Docker pull failed with exit code: $pullExitCode")
+        if (spec.dockerPull) {
+          val pullExitCode = Process(Seq("docker", "pull", spec.dockerImage)) ! logger
+          if (pullExitCode != 0) sys.error(s"Docker pull failed with exit code: $pullExitCode")
+        }
 
         val env = extraEnv ++ spec.envVars
 

@@ -30,6 +30,7 @@ final case class TckProcessConfig private (
     stopCommand: Option[List[String]],
     envVars: Map[String, String],
     dockerImage: String,
+    dockerPull: Boolean,
     dockerArgs: List[String],
 ) {
   def validate(): Unit =
@@ -56,6 +57,7 @@ object TckProcessConfig {
         case (key, value: AnyRef) => key -> value.toString
       },
       dockerImage = config.getString("docker-image"),
+      dockerPull = config.getBoolean("docker-pull"),
       dockerArgs = config.getStringList("docker-args").asScala.toList
     )
 }
