@@ -4,6 +4,9 @@ jdk:
   - openjdk11
 before_install:
   - sudo apt-get -qq -y install conntrack jq
+git:
+  # disable git clone depth for dynamic versions from tags
+  depth: false
 env:
   global:
   - CACHE_NAME=cloudstate-cache-01
