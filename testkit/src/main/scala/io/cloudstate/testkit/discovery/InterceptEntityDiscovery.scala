@@ -29,7 +29,7 @@ import io.cloudstate.testkit.InterceptService.InterceptorContext
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, Future}
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 final class InterceptEntityDiscovery(context: InterceptorContext) {
   import InterceptEntityDiscovery._
@@ -88,7 +88,13 @@ object InterceptEntityDiscovery {
 
   def expectOnline(context: InterceptorContext, timeout: FiniteDuration): Unit = {
     val client = EntityDiscoveryClient(context.clientSettings)(context.system)
-    try TestKit.awaitCond(Await.ready(client.discover(testProxyInfo), timeout).value.get.isSuccess, timeout)
-    finally client.close()
+    try {
+      var discovery: Try[EntitySpec] = null
+      if (!TestKit.awaitCond({
+            discovery = Await.ready(client.discover(testProxyInfo), timeout).value.get
+            discovery.isSuccess
+          }, timeout, noThrow = true))
+        throw new AssertionError(s"No discovery after $timeout, last error: ${discovery.failed.get.getMessage}")
+    } finally client.close()
   }
 }
