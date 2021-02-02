@@ -149,6 +149,10 @@ public final class CloudState {
       throw new IllegalArgumentException(
           entityClass + " does not declare an " + EventSourcedEntity.class + " annotation!");
     }
+    if (descriptor == null) {
+      throw new NullPointerException(
+          "The ServiceDescriptor may not be null, verify the service lookup name.");
+    }
 
     final String persistenceId;
     final int snapshotEvery;
