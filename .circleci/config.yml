@@ -392,13 +392,14 @@ workflows:
           - build-operator
           - build-sbt-images
           - build-postgres-native-image
-      - native-image-smoke-test:
-          name: Native-image Cassandra smoke test
-          proxy-store: Cassandra
-          requires:
-          - build-operator
-          - build-sbt-images
-          - build-cassandra-native-image
+      # Disabled. See https://github.com/cloudstateio/cloudstate/issues/527
+      # - native-image-smoke-test:
+      #     name: Native-image Cassandra smoke test
+      #     proxy-store: Cassandra
+      #     requires:
+      #     - build-operator
+      #     - build-sbt-images
+      #     - build-cassandra-native-image
       - publish-native-images:
           name: Publish native images to docker hub
           requires:
