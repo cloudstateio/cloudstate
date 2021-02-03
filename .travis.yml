@@ -106,6 +106,7 @@ jobs:
     name: Publish Node Support release
     if: tag =~ ^node-support-
     before_script:
+    - echo "//registry.npmjs.org/:_authToken=\${NPM_TOKEN}" >> node-support/.npmrc
     - cd node-support && nvm install && npm install && cd -
     script:
     - cd node-support && npm publish && cd -
