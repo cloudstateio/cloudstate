@@ -105,6 +105,8 @@ jobs:
   - stage: Deploy
     name: Publish Node Support release
     if: tag =~ ^node-support-
+    before_script:
+    - cd node-support && nvm install && npm install && cd -
     script:
     - cd node-support && npm publish && cd -
     - make -C node-support/docs deploy
