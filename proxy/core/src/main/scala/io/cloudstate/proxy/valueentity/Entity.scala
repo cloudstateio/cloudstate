@@ -191,7 +191,7 @@ object ValueEntity {
   private case class ReadStateFailure(cause: Throwable)
 
   private sealed trait DatabaseOperationWriteStatus
-  private case object WriteStateSuccess extends DatabaseOperationWriteStatus
+  private case class WriteStateSuccess(reply: UserFunctionReply) extends DatabaseOperationWriteStatus
   private case class WriteStateFailure(cause: Throwable) extends DatabaseOperationWriteStatus
 
   final def props(configuration: Configuration, entityId: String, relay: ActorRef, repository: Repository): Props =
@@ -343,21 +343,13 @@ final class ValueEntity(configuration: ValueEntity.Configuration,
                 s"(expected id ${currentCommand.commandId} but got ${r.commandId}) - $r")
 
         case ValueEntitySOMsg.Reply(r) =>
-          val commandId = currentCommand.commandId
-          if (r.stateAction.isEmpty) {
-            currentCommand.replyTo ! valueEntityReplyToUfReply(r)
-            commandHandled()
-          } else {
-            r.stateAction.map { a =>
-              performAction(a) { () =>
-                // Make sure that the current request is still ours
-                if (currentCommand == null || currentCommand.commandId != commandId) {
-                  crash("Unexpected Value entity behavior", "currentRequest changed before the state were persisted")
-                }
-                currentCommand.replyTo ! valueEntityReplyToUfReply(r)
-                commandHandled()
-              }.pipeTo(self)
-            }
+          r.stateAction match {
+            case None =>
+              currentCommand.replyTo ! valueEntityReplyToUfReply(r)
+              commandHandled()
+            case Some(action) =>
+              performAction(action, valueEntityReplyToUfReply(r))
+                .pipeTo(self)
           }
 
         case ValueEntitySOMsg.Failure(f) if f.commandId == 0 =>
@@ -380,8 +372,11 @@ final class ValueEntity(configuration: ValueEntity.Configuration,
           crash("Unexpected Value entity failure", "empty or unknown message from entity output stream")
       }
 
-    case ValueEntity.WriteStateSuccess =>
-    // Nothing to do, database write access the native crud database was successful
+    case ValueEntity.WriteStateSuccess(reply) =>
+      if (currentCommand == null)
+        crash("Unexpected Value entity behavior", "currentRequest changed before the state were persisted")
+      currentCommand.replyTo ! reply
+      commandHandled()
 
     case ValueEntity.WriteStateFailure(error) =>
       notifyOutstandingRequests("Unexpected Value entity failure")
@@ -406,8 +401,9 @@ final class ValueEntity(configuration: ValueEntity.Configuration,
   }
 
   private def performAction(
-      action: ValueEntityAction
-  )(handler: () => Unit): Future[ValueEntity.DatabaseOperationWriteStatus] = {
+      action: ValueEntityAction,
+      reply: UserFunctionReply
+  ): Future[ValueEntity.DatabaseOperationWriteStatus] = {
     import ValueEntityAction.Action._
 
     action.action match {
@@ -415,8 +411,7 @@ final class ValueEntity(configuration: ValueEntity.Configuration,
         repository
           .update(Key(persistenceId, entityId), value)
           .map { _ =>
-            handler()
-            ValueEntity.WriteStateSuccess
+            ValueEntity.WriteStateSuccess(reply)
           }
           .recover {
             case error => ValueEntity.WriteStateFailure(error)
@@ -426,8 +421,7 @@ final class ValueEntity(configuration: ValueEntity.Configuration,
         repository
           .delete(Key(persistenceId, entityId))
           .map { _ =>
-            handler()
-            ValueEntity.WriteStateSuccess
+            ValueEntity.WriteStateSuccess(reply)
           }
           .recover {
             case error => ValueEntity.WriteStateFailure(error)
