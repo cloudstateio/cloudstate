@@ -268,18 +268,16 @@ func SetCommonLabels(name string, labels map[string]string) map[string]string {
 	return labels
 }
 
-// if any of the conditions have changed, returns the list of conditions, otherwise returns an empty slice
+// If any of the conditions have changed, returns the list of conditions, otherwise returns an empty slice.
 func ReconcileConditions(existing, conditions []cloudstate.CloudstateCondition) []cloudstate.CloudstateCondition {
 	changed := false
-	for cdx, condition := range conditions {
+	for cdx, c := range conditions {
 		found := false
 		for i := range existing {
 			if c.Type == existing[i].Type {
 				found = true
-				if condition.Status == existing[idx].Status &&
-					condition.Reason == existing[idx].Reason &&
-					condition.Message == existing[idx].Message {
-					conditions[cdx].LastTransitionTime = existing[idx].LastTransitionTime
+				if c.Status == existing[i].Status && c.Reason == existing[i].Reason && c.Message == existing[i].Message {
+					conditions[cdx].LastTransitionTime = existing[i].LastTransitionTime
 				} else {
 					changed = true
 					conditions[cdx].LastTransitionTime = metav1.Now()
