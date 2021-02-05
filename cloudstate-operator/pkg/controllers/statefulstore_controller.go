@@ -96,11 +96,13 @@ func (r *StatefulStoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			break
 		}
 	}
-	if store.Status.Summary != summary {
+	if statefulStore.Status == nil {
+		statefulStore.Status = &cloudstate.StatefulStoreStatus{}
+	}
+	if statefulStore.Status.Summary != summary {
 		updated = true
 		store.Status.Summary = summary
 	}
-	updatedConditions := reconciliation.ReconcileStatefulServiceConditions(store.Status.Conditions, conditions)
 	if len(updatedConditions) > 0 || updated {
 		if len(updatedConditions) > 0 {
 			store.Status.Conditions = updatedConditions

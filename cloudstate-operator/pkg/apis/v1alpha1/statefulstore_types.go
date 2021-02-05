@@ -331,8 +331,8 @@ type StatefulStore struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   StatefulStoreSpec   `json:"spec,omitempty"`
-	Status StatefulStoreStatus `json:"status,omitempty"`
+	Spec   StatefulStoreSpec    `json:"spec,omitempty"`
+	Status *StatefulStoreStatus `json:"status,omitempty"`
 }
 
 // StatefulStoreList contains a list of StatefulStore.

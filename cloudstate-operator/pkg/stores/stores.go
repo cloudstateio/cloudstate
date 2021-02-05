@@ -127,7 +127,7 @@ func (m *MultiStores) ReconcileStatefulService(ctx context.Context, service *v1a
 				Type:    v1alpha1.CloudstateNotReady,
 				Status:  corev1.ConditionTrue,
 				Reason:  "StoreNotDetermined",
-				Message: "Cannot determine type of store",
+				Message: fmt.Sprintf("Cannot determine type of store"),
 			},
 		}, nil
 	}

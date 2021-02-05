@@ -268,49 +268,33 @@ func SetCommonLabels(name string, labels map[string]string) map[string]string {
 	return labels
 }
 
-// If any of the conditions have changed, returns the list of conditions, otherwise returns an empty slice.
-func ReconcileStatefulServiceConditions(existing, conditions []cloudstate.CloudstateCondition) []cloudstate.CloudstateCondition {
+// if any of the conditions have changed, returns the list of conditions, otherwise returns an empty slice
+func ReconcileConditions(existing, conditions []cloudstate.CloudstateCondition) []cloudstate.CloudstateCondition {
 	changed := false
-	cmap := make(map[cloudstate.CloudstateConditionType]bool, len(conditions)) // TODO(review comment): what is a cmap?
-	for _, c := range conditions {
-		cmap[c.Type] = true
+	for cdx, condition := range conditions {
 		found := false
 		for i := range existing {
 			if c.Type == existing[i].Type {
 				found = true
-				if c.Status != existing[i].Status || c.Reason != existing[i].Reason || c.Message != existing[i].Message {
+				if condition.Status == existing[idx].Status &&
+					condition.Reason == existing[idx].Reason &&
+					condition.Message == existing[idx].Message {
+					conditions[cdx].LastTransitionTime = existing[idx].LastTransitionTime
+				} else {
 					changed = true
-					existing[i].Status = c.Status
-					existing[i].Reason = c.Reason
-					existing[i].Message = c.Message
-					existing[i].LastTransitionTime = metav1.Now()
+					conditions[cdx].LastTransitionTime = metav1.Now()
 				}
 				break
 			}
 		}
 		if !found {
 			changed = true
-			c.LastTransitionTime = metav1.Now()
-			existing = append(existing, c)
+			conditions[cdx].LastTransitionTime = metav1.Now()
 		}
 	}
 
-	// Every condition from conditions is now in existing, so if they don't have the same length, that means that
-	// there are conditions in existing that need to be deleted.
-	if len(conditions) != len(existing) {
-		changed = true
-		// TODO(review comment): this allocates a slice of conditions of length (and capacity) of len(conditions),
-		//  but filtered then is conditionally set with existing values with zero values left. This is intented to be like so?
-		filtered := make([]cloudstate.CloudstateCondition, len(conditions))
-		for i := range existing {
-			if cmap[existing[i].Type] {
-				filtered[i] = existing[i]
-			}
-		}
-		existing = filtered
-	}
 	if changed {
-		return existing
+		return conditions
 	}
 	return nil
 }
