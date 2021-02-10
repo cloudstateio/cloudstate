@@ -122,7 +122,7 @@ func (s *SpannerStore) ReconcileStatefulService(ctx context.Context, service *cl
 	if db := service.Spec.StoreConfig.Database; db != "" {
 		deployment.Spec.Template.Annotations[CloudstateSpannerDatabaseAnnotation] = db
 	}
-	if secret := service.Spec.StoreConfig.Secret; s != nil {
+	if secret := service.Spec.StoreConfig.Secret; secret != nil {
 		deployment.Spec.Template.Annotations[CloudstateGcpSecretAnnotation] = secret.Name
 	}
 	return nil, nil
