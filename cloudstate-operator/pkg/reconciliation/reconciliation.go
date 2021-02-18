@@ -269,30 +269,32 @@ func SetCommonLabels(name string, labels map[string]string) map[string]string {
 }
 
 // If any of the conditions have changed, returns the list of conditions, otherwise returns an empty slice.
+// Updates the LastTransitionTime only if the condition is new or has changed.
 func ReconcileConditions(existing, conditions []cloudstate.CloudstateCondition) []cloudstate.CloudstateCondition {
 	changed := false
-	for cdx, c := range conditions {
+	newConditions := conditions
+	for cdx, c := range newConditions {
 		found := false
 		for i := range existing {
 			if c.Type == existing[i].Type {
 				found = true
 				if c.Status == existing[i].Status && c.Reason == existing[i].Reason && c.Message == existing[i].Message {
-					conditions[cdx].LastTransitionTime = existing[i].LastTransitionTime
+					newConditions[cdx].LastTransitionTime = existing[i].LastTransitionTime
 				} else {
 					changed = true
-					conditions[cdx].LastTransitionTime = metav1.Now()
+					newConditions[cdx].LastTransitionTime = metav1.Now()
 				}
 				break
 			}
 		}
 		if !found {
 			changed = true
-			conditions[cdx].LastTransitionTime = metav1.Now()
+			newConditions[cdx].LastTransitionTime = metav1.Now()
 		}
 	}
 
 	if changed {
-		return conditions
+		return newConditions
 	}
 	return nil
 }
