@@ -105,6 +105,7 @@ var _ = Describe("StatefulService Controller", func() {
 			waitForResource(ctx, namespace, statefulService.Name, actual)
 
 			By("deployment not ready yet")
+			Expect(actual.Status).ToNot(BeNil())
 			Expect(actual.Status.Conditions).To(HaveLen(1), "should have a status condition")
 			condition := actual.Status.Conditions[0]
 			Expect(condition.Type).To(Equal(cloudstate.CloudstateNotReady))

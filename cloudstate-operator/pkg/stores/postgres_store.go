@@ -312,6 +312,9 @@ func (s *PostgresStore) reconcileGoogleCloudSQLDeployment(ctx context.Context, s
 	}
 	secretName := postgresCredsSecretPrefix + statefulService.Name
 
+	if store.Status == nil {
+		store.Status = &cloudstate.StatefulStoreStatus{}
+	}
 	var instanceName string
 	if store.Status.Postgres != nil && store.Status.Postgres.GoogleCloudSQL != nil &&
 		store.Status.Postgres.GoogleCloudSQL.InstanceName != "" {
@@ -669,6 +672,10 @@ func (s *PostgresStore) reconcileGoogleCloudSQLInstance(ctx context.Context, sta
 	sqlInstance, err := s.reconcileSQLInstance(ctx, statefulStore, ownedSQLInstance)
 	if err != nil {
 		return nil, false, fmt.Errorf("unable to reconcile sqlinstance: %w", err)
+	}
+
+	if statefulStore.Status == nil {
+		statefulStore.Status = &cloudstate.StatefulStoreStatus{}
 	}
 
 	updated := false
