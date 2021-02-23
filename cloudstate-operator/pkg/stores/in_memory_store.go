@@ -31,9 +31,6 @@ type InMemoryStore struct {
 var _ Store = (*InMemoryStore)(nil)
 
 func (s *InMemoryStore) ReconcileStatefulStore(ctx context.Context, store *cloudstate.StatefulStore) ([]cloudstate.CloudstateCondition, bool, error) {
-	if store.Status == nil {
-		store.Status = &cloudstate.StatefulStoreStatus{}
-	}
 	return nil, false, nil
 }
 

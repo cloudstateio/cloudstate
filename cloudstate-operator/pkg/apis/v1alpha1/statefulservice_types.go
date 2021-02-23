@@ -112,8 +112,8 @@ type StatefulService struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   StatefulServiceSpec    `json:"spec,omitempty"`
-	Status *StatefulServiceStatus `json:"status,omitempty"`
+	Spec   StatefulServiceSpec   `json:"spec,omitempty"`
+	Status StatefulServiceStatus `json:"status,omitempty"`
 }
 
 // StatefulServiceList contains a list of StatefulService.

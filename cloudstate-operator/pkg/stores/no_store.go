@@ -32,9 +32,6 @@ type NoStore struct {
 var _ Store = (*NoStore)(nil)
 
 func (s *NoStore) ReconcileStatefulStore(ctx context.Context, store *cloudstate.StatefulStore) ([]cloudstate.CloudstateCondition, bool, error) {
-	if store.Status == nil {
-		store.Status = &cloudstate.StatefulStoreStatus{}
-	}
 	return nil, false, nil
 }
 

@@ -70,12 +70,12 @@ var _ = Describe("StatefulStore Controller", func() {
 			waitForResource(ctx, namespace, statefulStore.Name, actual)
 
 			By("InMemory store not ready yet")
-			Expect(actual.Status).To(BeNil(), "should not have a status condition")
+			Expect(actual.Status.Conditions).To(HaveLen(0), "should not have a status condition")
 
 			By("InMemory store ready")
 			Eventually(func() bool {
 				waitForResource(ctx, namespace, statefulStore.Name, actual)
-				return actual.Status != nil && len(actual.Status.Conditions) > 0
+				return len(actual.Status.Conditions) > 0
 			}, waitTimeout, pollInterval).Should(BeTrue(), "InMemory store has no status conditions")
 			condition := actual.Status.Conditions[0]
 			Expect(condition.Type).To(Equal(cloudstate.CloudstateNotReady))
