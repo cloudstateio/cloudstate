@@ -473,9 +473,6 @@ func (r *StatefulServiceReconciler) reconcileRoleAndBinding(ctx context.Context,
 
 func (r *StatefulServiceReconciler) updateStatus(ctx context.Context, log logr.Logger, service *cloudstate.StatefulService, deployment *appsv1.Deployment, conditions []cloudstate.CloudstateCondition) error {
 	origStatus := service.Status.DeepCopy()
-	if service.Status == nil {
-		service.Status = &cloudstate.StatefulServiceStatus{}
-	}
 	service.Status.Selector = CloudstateStatefulServiceLabel + "=" + service.Name
 	condition := cloudstate.CloudstateCondition{
 		Type: cloudstate.CloudstateNotReady,

@@ -96,9 +96,6 @@ func (r *StatefulStoreReconciler) Reconcile(req ctrl.Request) (ctrl.Result, erro
 			break
 		}
 	}
-	if store.Status == nil {
-		store.Status = &cloudstate.StatefulStoreStatus{}
-	}
 	if store.Status.Summary != summary {
 		updated = true
 		store.Status.Summary = summary
