@@ -77,6 +77,6 @@
     "jsdoc": "jsdoc -c jsdoc.json",
     "test": "mocha --recursive",
     "prepare": "bin/prepare.sh",
-    "postinstall": "bin/download-protoc.js"
+    "postinstall": "node bin/download-protoc.js"
   }
 }
