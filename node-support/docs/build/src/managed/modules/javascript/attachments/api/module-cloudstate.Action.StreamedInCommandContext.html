@@ -4,7 +4,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width">
-	<title>CloudState Class: ORMap</title>
+	<title>CloudState Interface: StreamedInCommandContext</title>
 
 	<!--[if lt IE 9]>
 	<script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
@@ -93,24 +93,16 @@
 		<div id="main">
 			
 
-	<h1 class="page-title">Class: ORMap</h1>
+	<h1 class="page-title">Interface: StreamedInCommandContext</h1>
 <section>
 
 <header>
     
         <h2>
-            <span class="ancestors"><a href="module-cloudstate.html">cloudstate</a><a href="module-cloudstate.crdt.html">.crdt</a>.</span>
+            <span class="ancestors"><a href="module-cloudstate.html">cloudstate</a><a href="module-cloudstate.Action.html">~Action</a>.</span>
         
-        ORMap
+        StreamedInCommandContext
         </h2>
-        
-            <div class="class-description"><p>An Observed-Removed Map CRDT.</p>
-<p>Observed-Removed-Map's are a mapping of keys (which can be any <a href="module-cloudstate.html#.Serializable"><code>module:cloudstate.Serializable</code></a>), to CRDTs. Values
-of the map are merged together. Elements can be added and removed, however, when an element is removed and then
-added again, it's possible that the old value will be merged with the new, depending on whether the remove was
-replicated to all nodes before the add was.</p>
-<p>Note that while the map may contain different types of CRDTs for different keys, a given key may not change its type,
-and doing so will likely result in the CRDT entering a non mergable state, from which it can't recover.</p></div>
         
     
 </header>
@@ -120,132 +112,10 @@ and doing so will likely result in the CRDT entering a non mergable state, from 
     <div class="container-overview">
     
         
-<hr>
-<dt>
-    <h4 class="name" id="ORMap"><span class="type-signature"></span>new ORMap()</h4>
-    
-    
-</dt>
-<dd>
-
-    
-
-    
-
-    
-
-    
-    
-
-    
-<dl class="details">
-    
-
-	
-
-	
-
-	
-
-    
-
-    
-
-    
-    <dt class="implements">Implements:</dt>
-    <dd class="implements"><ul>
+            <div class="description"><p>Context for a streamed in action command.</p></div>
         
-            <li><a href="module-cloudstate.crdt.CrdtState.html">module:cloudstate.crdt.CrdtState</a></li>
+
         
-    </ul></dd>
-    
-
-    
-
-	
-
-	
-
-	
-
-	
-
-	
-
-
-
-	
-
-	
-
-	
-
-	
-</dl>
-
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-</dd>
-
-    
-    </div>
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-        <h3 class="subsection-title">Members</h3>
-
-        <dl>
-            
-<hr>
-<dt class="name" id="asObject">
-    <h4 id="asObject"><span class="type-signature"></span>asObject<span class="type-signature"> :Object.&lt;String, <a href="module-cloudstate.crdt.CrdtState.html">module:cloudstate.crdt.CrdtState</a>></span></h4>
-
-    
-</dt>
-<dd>
-    
-    <div class="description">
-        <p>A representation of this map as an object.</p>
-<p>All entries whose keys are strings will be properties of this object, and setting any property of the object will
-insert that property as a key into the map.</p>
-    </div>
-    
-
-    
-        <h5>Type:</h5>
-        <ul>
-            <li>
-                
-<span class="param-type">Object.&lt;String, <a href="module-cloudstate.crdt.CrdtState.html">module:cloudstate.crdt.CrdtState</a>></span>
-
-
-
-            </li>
-        </ul>
-    
-
-    
 <dl class="details">
     
 
@@ -285,51 +155,22 @@ insert that property as a key into the map.</p>
 </dl>
 
 
+        
     
-</dd>
+    </div>
+
+    
+        <h3 class="subsection-title">Extends</h3>
 
         
-            
-<hr>
-<dt class="name" id="defaultValue">
-    <h4 id="defaultValue"><span class="type-signature"></span>defaultValue<span class="type-signature"> :<a href="module-cloudstate.crdt.ORMap.html#~defaultValueCallback">module:cloudstate.crdt.ORMap~defaultValueCallback</a></span></h4>
 
+
+    <ul>
+        <li><a href="module-cloudstate.Action.StreamedInContext.html">module:cloudstate.Action.StreamedInContext</a></li>
     
-</dt>
-<dd>
-    
-    <div class="description">
-        <p>Generator for default values.</p>
-<p>This is invoked by get when the current map has no CRDT defined for the key.</p>
-<p>If this returns a CRDT, it will be added to the map.</p>
-<p>Care should be taken when using this, since it means that the get method can trigger elements to be created.
-If using default values, the get method should not be used in queries where an empty value for the CRDT means
-the value is not present.</p>
-    </div>
-    
+        <li><a href="module-cloudstate.Action.ActionCommandContext.html">module:cloudstate.Action.ActionCommandContext</a></li>
+    </ul>
 
-    
-        <h5>Type:</h5>
-        <ul>
-            <li>
-                
-<span class="param-type"><a href="module-cloudstate.crdt.ORMap.html#~defaultValueCallback">module:cloudstate.crdt.ORMap~defaultValueCallback</a></span>
-
-
-
-            </li>
-        </ul>
-    
-
-    
-<dl class="details">
-    
-
-	
-
-	
-
-	
 
     
 
@@ -339,103 +180,8 @@ the value is not present.</p>
 
     
 
-	
-
-	
-
-	
-
-	
-
-	
-
-
-
-	
-
-	
-
-	
-
-	
-</dl>
-
-
-    
-</dd>
-
-        
-            
-<hr>
-<dt class="name" id="size">
-    <h4 id="size"><span class="type-signature">&lt;readonly> </span>size<span class="type-signature"> :number</span></h4>
-
-    
-</dt>
-<dd>
-    
-    <div class="description">
-        <p>The number of elements in this map.</p>
-    </div>
     
 
-    
-        <h5>Type:</h5>
-        <ul>
-            <li>
-                
-<span class="param-type">number</span>
-
-
-
-            </li>
-        </ul>
-    
-
-    
-<dl class="details">
-    
-
-	
-
-	
-
-	
-
-    
-
-    
-
-    
-
-    
-
-	
-
-	
-
-	
-
-	
-
-	
-
-
-
-	
-
-	
-
-	
-
-	
-</dl>
-
-
-    
-</dd>
-
-        </dl>
     
 
     
@@ -445,7 +191,7 @@ the value is not present.</p>
             
 <hr>
 <dt>
-    <h4 class="name" id="@@iterator"><span class="type-signature"></span>@@iterator()</h4>
+    <h4 class="name" id="cancel"><span class="type-signature"></span>cancel()</h4>
     
     
 </dt>
@@ -453,7 +199,7 @@ the value is not present.</p>
 
     
     <div class="description">
-        <p>Return an iterator of the entries of this map.</p>
+        <p>Cancel the incoming stream of messages.</p>
     </div>
     
 
@@ -473,6 +219,15 @@ the value is not present.</p>
 	
 
 	
+	<dt class="inherited-from method-doc-label method-doc-details-label">Inherited From:</dt>
+	<dd class="inherited-from">
+		<ul class="dummy">
+			<li>
+				<a href="module-cloudstate.Action.StreamedInContext.html#cancel">module:cloudstate.Action.StreamedInContext#cancel</a>
+			</li>
+		</ul>
+	</dd>
+	
 
     
 
@@ -515,26 +270,6 @@ the value is not present.</p>
     
 
     
-    <h5>Returns:</h5>
-    
-            
-
-
-<dl>
-    <dt>
-        Type
-    </dt>
-    <dd>
-        
-<span class="param-type">iterator.&lt;Array></span>
-
-
-
-    </dd>
-</dl>
-
-
-        
 
     
 </dd>
@@ -543,7 +278,7 @@ the value is not present.</p>
             
 <hr>
 <dt>
-    <h4 class="name" id="clear"><span class="type-signature"></span>clear()</h4>
+    <h4 class="name" id="effect"><span class="type-signature"></span>effect(method, message, synchronous, metadata)</h4>
     
     
 </dt>
@@ -551,109 +286,7 @@ the value is not present.</p>
 
     
     <div class="description">
-        <p>Clear all entries from this map.</p>
-    </div>
-    
-
-    
-
-    
-
-    
-    
-
-    
-<dl class="details">
-    
-
-	
-
-	
-
-	
-
-    
-
-    
-
-    
-
-    
-
-	
-
-	
-
-	
-
-	
-
-	
-
-
-
-	
-
-	
-
-	
-
-	
-</dl>
-
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-    <h5>Returns:</h5>
-    
-            
-<div class="param-desc">
-    <p>This map.</p>
-</div>
-
-
-
-<dl>
-    <dt>
-        Type
-    </dt>
-    <dd>
-        
-<span class="param-type"><a href="module-cloudstate.crdt.ORMap.html">module:cloudstate.crdt.ORMap</a></span>
-
-
-
-    </dd>
-</dl>
-
-
-        
-
-    
-</dd>
-
-        
-            
-<hr>
-<dt>
-    <h4 class="name" id="delete"><span class="type-signature"></span>delete(key)</h4>
-    
-    
-</dt>
-<dd>
-
-    
-    <div class="description">
-        <p>Delete the value at the given key.</p>
+        <p>Emit an effect after processing this command.</p>
     </div>
     
 
@@ -688,13 +321,31 @@ the value is not present.</p>
 
         <tr>
             
-                <td class="name"><code>key</code></td>
+                <td class="name"><code>method</code></td>
+            
+
+            <td class="type">
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>The entity service method to invoke.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>message</code></td>
             
 
             <td class="type">
             
                 
-<span class="param-type"><a href="module-cloudstate.html#.Serializable">module:cloudstate.Serializable</a></span>
+<span class="param-type">object</span>
 
 
 
@@ -705,7 +356,55 @@ the value is not present.</p>
 
             
 
-            <td class="description last"><p>The key to delete.</p></td>
+            <td class="description last"><p>The message to send to that service.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>synchronous</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">boolean</span>
+
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Whether the effect should be execute synchronously or not.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>metadata</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type"><a href="module-cloudstate.Metadata.html">module:cloudstate.Metadata</a></span>
+
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Metadata to send with the effect.</p></td>
         </tr>
 
     
@@ -723,7 +422,21 @@ the value is not present.</p>
 	
 
 	
+	<dt class="inherited-from method-doc-label method-doc-details-label">Inherited From:</dt>
+	<dd class="inherited-from">
+		<ul class="dummy">
+			<li>
+				<a href="module-cloudstate.EffectContext.html#effect">module:cloudstate.EffectContext#effect</a>
+			</li>
+		</ul>
+	</dd>
+	
 
+    
+    <dt class="tag-overrides">Overrides:</dt>
+    <dd class="tag-overrides"><ul class="dummy"><li>
+        <a href="module-cloudstate.Action.ActionCommandContext.html#effect">module:cloudstate.Action.ActionCommandContext#effect</a>
+    </li></ul></dd>
     
 
     
@@ -765,30 +478,6 @@ the value is not present.</p>
     
 
     
-    <h5>Returns:</h5>
-    
-            
-<div class="param-desc">
-    <p>This map.</p>
-</div>
-
-
-
-<dl>
-    <dt>
-        Type
-    </dt>
-    <dd>
-        
-<span class="param-type"><a href="module-cloudstate.crdt.ORMap.html">module:cloudstate.crdt.ORMap</a></span>
-
-
-
-    </dd>
-</dl>
-
-
-        
 
     
 </dd>
@@ -797,7 +486,7 @@ the value is not present.</p>
             
 <hr>
 <dt>
-    <h4 class="name" id="entries"><span class="type-signature"></span>entries()</h4>
+    <h4 class="name" id="fail"><span class="type-signature"></span>fail(msg)</h4>
     
     
 </dt>
@@ -805,105 +494,7 @@ the value is not present.</p>
 
     
     <div class="description">
-        <p>Return an iterator of the entries of this map.</p>
-    </div>
-    
-
-    
-
-    
-
-    
-    
-
-    
-<dl class="details">
-    
-
-	
-
-	
-
-	
-
-    
-
-    
-
-    
-
-    
-
-	
-
-	
-
-	
-
-	
-
-	
-
-
-
-	
-
-	
-
-	
-
-	
-</dl>
-
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-    <h5>Returns:</h5>
-    
-            
-
-
-<dl>
-    <dt>
-        Type
-    </dt>
-    <dd>
-        
-<span class="param-type">Iterator.&lt;Array></span>
-
-
-
-    </dd>
-</dl>
-
-
-        
-
-    
-</dd>
-
-        
-            
-<hr>
-<dt>
-    <h4 class="name" id="forEach"><span class="type-signature"></span>forEach(callback)</h4>
-    
-    
-</dt>
-<dd>
-
-    
-    <div class="description">
-        <p>Execute the given callback for each element.</p>
+        <p>Fail handling this command.</p>
     </div>
     
 
@@ -934,6 +525,179 @@ the value is not present.</p>
     </thead>
 
     <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>msg</code></td>
+            
+
+            <td class="type">
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>The failure message.</p></td>
+        </tr>
+
+    
+    </tbody>
+</table>
+
+    
+
+    
+<dl class="details">
+    
+
+	
+
+	
+
+	
+	<dt class="inherited-from method-doc-label method-doc-details-label">Inherited From:</dt>
+	<dd class="inherited-from">
+		<ul class="dummy">
+			<li>
+				<a href="module-cloudstate.EffectContext.html#fail">module:cloudstate.EffectContext#fail</a>
+			</li>
+		</ul>
+	</dd>
+	
+
+    
+    <dt class="tag-overrides">Overrides:</dt>
+    <dd class="tag-overrides"><ul class="dummy"><li>
+        <a href="module-cloudstate.Action.ActionCommandContext.html#fail">module:cloudstate.Action.ActionCommandContext#fail</a>
+    </li></ul></dd>
+    
+
+    
+
+    
+
+    
+
+	
+
+	
+
+	
+
+	
+
+	
+
+
+
+	
+
+	
+
+	
+
+	
+</dl>
+
+
+    
+
+    
+
+    
+
+    
+
+    
+    <h5>Throws:</h5>
+    
+            
+
+    <div class="param-desc">
+    
+        <p>An error that captures the failure message. Note that even if you catch the error thrown by this
+method, the command will still be failed with the given message.</p>
+    
+    </div>
+
+
+        
+
+    
+
+    
+</dd>
+
+        
+            
+<hr>
+<dt>
+    <h4 class="name" id="on"><span class="type-signature"></span>on(eventType, callback)</h4>
+    
+    
+</dt>
+<dd>
+
+    
+    <div class="description">
+        <p>Register an event handler.</p>
+    </div>
+    
+
+    
+
+    
+
+    
+    
+        <h5>Parameters:</h5>
+        
+
+<table class="params table table-striped">
+    <thead>
+    <tr>
+        
+        <th>Name</th>
+        
+
+        <th>Type</th>
+
+        
+
+        
+
+        <th class="last">Description</th>
+    </tr>
+    </thead>
+
+    <tbody>
+    
+
+        <tr>
+            
+                <td class="name"><code>eventType</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">string</span>
+
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>The type of the event.</p></td>
+        </tr>
+
     
 
         <tr>
@@ -944,7 +708,7 @@ the value is not present.</p>
             <td class="type">
             
                 
-<span class="param-type"><a href="module-cloudstate.crdt.ORMap.html#~forEachCallback">module:cloudstate.crdt.ORMap~forEachCallback</a></span>
+<span class="param-type">function</span>
 
 
 
@@ -955,7 +719,7 @@ the value is not present.</p>
 
             
 
-            <td class="description last"><p>The callback to handle each element.</p></td>
+            <td class="description last"><p>The callback to handle the event.</p></td>
         </tr>
 
     
@@ -973,7 +737,21 @@ the value is not present.</p>
 	
 
 	
+	<dt class="inherited-from method-doc-label method-doc-details-label">Inherited From:</dt>
+	<dd class="inherited-from">
+		<ul class="dummy">
+			<li>
+				<a href="module-cloudstate.Action.ActionCommandContext.html#on">module:cloudstate.Action.ActionCommandContext#on</a>
+			</li>
+		</ul>
+	</dd>
+	
 
+    
+    <dt class="tag-overrides">Overrides:</dt>
+    <dd class="tag-overrides"><ul class="dummy"><li>
+        <a href="module-cloudstate.Action.ActionCommandContext.html#on">module:cloudstate.Action.ActionCommandContext#on</a>
+    </li></ul></dd>
     
 
     
@@ -1023,7 +801,7 @@ the value is not present.</p>
             
 <hr>
 <dt>
-    <h4 class="name" id="has"><span class="type-signature"></span>has(key)</h4>
+    <h4 class="name" id="thenForward"><span class="type-signature"></span>thenForward(method, message, metadata)</h4>
     
     
 </dt>
@@ -1031,7 +809,7 @@ the value is not present.</p>
 
     
     <div class="description">
-        <p>Check whether this map contains a value of the given key.</p>
+        <p>Forward this command to another entity service call.</p>
     </div>
     
 
@@ -1066,13 +844,31 @@ the value is not present.</p>
 
         <tr>
             
-                <td class="name"><code>key</code></td>
+                <td class="name"><code>method</code></td>
+            
+
+            <td class="type">
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>The entity service method to invoke.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>message</code></td>
             
 
             <td class="type">
             
                 
-<span class="param-type"><a href="module-cloudstate.html#.Serializable">module:cloudstate.Serializable</a></span>
+<span class="param-type">object</span>
 
 
 
@@ -1083,7 +879,31 @@ the value is not present.</p>
 
             
 
-            <td class="description last"><p>The key to check.</p></td>
+            <td class="description last"><p>The message to send to that service.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>metadata</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type"><a href="module-cloudstate.Metadata.html">module:cloudstate.Metadata</a></span>
+
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>Metadata to send with the forward.</p></td>
         </tr>
 
     
@@ -1101,7 +921,21 @@ the value is not present.</p>
 	
 
 	
+	<dt class="inherited-from method-doc-label method-doc-details-label">Inherited From:</dt>
+	<dd class="inherited-from">
+		<ul class="dummy">
+			<li>
+				<a href="module-cloudstate.CommandContext.html#thenForward">module:cloudstate.CommandContext#thenForward</a>
+			</li>
+		</ul>
+	</dd>
+	
 
+    
+    <dt class="tag-overrides">Overrides:</dt>
+    <dd class="tag-overrides"><ul class="dummy"><li>
+        <a href="module-cloudstate.Action.ActionCommandContext.html#thenForward">module:cloudstate.Action.ActionCommandContext#thenForward</a>
+    </li></ul></dd>
     
 
     
@@ -1143,30 +977,6 @@ the value is not present.</p>
     
 
     
-    <h5>Returns:</h5>
-    
-            
-<div class="param-desc">
-    <p>True if this map contains a value of the given key.</p>
-</div>
-
-
-
-<dl>
-    <dt>
-        Type
-    </dt>
-    <dd>
-        
-<span class="param-type">boolean</span>
-
-
-
-    </dd>
-</dl>
-
-
-        
 
     
 </dd>
@@ -1175,7 +985,7 @@ the value is not present.</p>
             
 <hr>
 <dt>
-    <h4 class="name" id="keys"><span class="type-signature"></span>keys()</h4>
+    <h4 class="name" id="write"><span class="type-signature"></span>write(message, metadata)</h4>
     
     
 </dt>
@@ -1183,105 +993,7 @@ the value is not present.</p>
 
     
     <div class="description">
-        <p>Return an iterator of the keys of this map.</p>
-    </div>
-    
-
-    
-
-    
-
-    
-    
-
-    
-<dl class="details">
-    
-
-	
-
-	
-
-	
-
-    
-
-    
-
-    
-
-    
-
-	
-
-	
-
-	
-
-	
-
-	
-
-
-
-	
-
-	
-
-	
-
-	
-</dl>
-
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-    <h5>Returns:</h5>
-    
-            
-
-
-<dl>
-    <dt>
-        Type
-    </dt>
-    <dd>
-        
-<span class="param-type">iterator.&lt;<a href="module-cloudstate.html#.Serializable">module:cloudstate.Serializable</a>></span>
-
-
-
-    </dd>
-</dl>
-
-
-        
-
-    
-</dd>
-
-        
-            
-<hr>
-<dt>
-    <h4 class="name" id="set"><span class="type-signature"></span>set(key, value)</h4>
-    
-    
-</dt>
-<dd>
-
-    
-    <div class="description">
-        <p>Set the given value for the given key.</p>
+        <p>Write a message.</p>
     </div>
     
 
@@ -1316,13 +1028,13 @@ the value is not present.</p>
 
         <tr>
             
-                <td class="name"><code>key</code></td>
+                <td class="name"><code>message</code></td>
             
 
             <td class="type">
             
                 
-<span class="param-type"><a href="module-cloudstate.html#.Serializable">module:cloudstate.Serializable</a></span>
+<span class="param-type">Object</span>
 
 
 
@@ -1333,20 +1045,20 @@ the value is not present.</p>
 
             
 
-            <td class="description last"><p>The key to set.</p></td>
+            <td class="description last"><p>The protobuf message to write.</p></td>
         </tr>
 
     
 
         <tr>
             
-                <td class="name"><code>value</code></td>
+                <td class="name"><code>metadata</code></td>
             
 
             <td class="type">
             
                 
-<span class="param-type"><a href="module-cloudstate.crdt.CrdtState.html">module:cloudstate.crdt.CrdtState</a></span>
+<span class="param-type"><a href="module-cloudstate.Metadata.html">module:cloudstate.Metadata</a></span>
 
 
 
@@ -1357,7 +1069,7 @@ the value is not present.</p>
 
             
 
-            <td class="description last"><p>The value to set.</p></td>
+            <td class="description last"><p>The metadata associated with the message.</p></td>
         </tr>
 
     
@@ -1375,7 +1087,21 @@ the value is not present.</p>
 	
 
 	
+	<dt class="inherited-from method-doc-label method-doc-details-label">Inherited From:</dt>
+	<dd class="inherited-from">
+		<ul class="dummy">
+			<li>
+				<a href="module-cloudstate.Action.ActionCommandContext.html#write">module:cloudstate.Action.ActionCommandContext#write</a>
+			</li>
+		</ul>
+	</dd>
+	
 
+    
+    <dt class="tag-overrides">Overrides:</dt>
+    <dd class="tag-overrides"><ul class="dummy"><li>
+        <a href="module-cloudstate.Action.ActionCommandContext.html#write">module:cloudstate.Action.ActionCommandContext#write</a>
+    </li></ul></dd>
     
 
     
@@ -1417,128 +1143,6 @@ the value is not present.</p>
     
 
     
-    <h5>Returns:</h5>
-    
-            
-<div class="param-desc">
-    <p>This map.</p>
-</div>
-
-
-
-<dl>
-    <dt>
-        Type
-    </dt>
-    <dd>
-        
-<span class="param-type"><a href="module-cloudstate.crdt.ORMap.html">module:cloudstate.crdt.ORMap</a></span>
-
-
-
-    </dd>
-</dl>
-
-
-        
-
-    
-</dd>
-
-        
-            
-<hr>
-<dt>
-    <h4 class="name" id="values"><span class="type-signature"></span>values()</h4>
-    
-    
-</dt>
-<dd>
-
-    
-    <div class="description">
-        <p>Return an iterator of the values of this map.</p>
-    </div>
-    
-
-    
-
-    
-
-    
-    
-
-    
-<dl class="details">
-    
-
-	
-
-	
-
-	
-
-    
-
-    
-
-    
-
-    
-
-	
-
-	
-
-	
-
-	
-
-	
-
-
-
-	
-
-	
-
-	
-
-	
-</dl>
-
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-    <h5>Returns:</h5>
-    
-            
-
-
-<dl>
-    <dt>
-        Type
-    </dt>
-    <dd>
-        
-<span class="param-type">iterator.&lt;<a href="module-cloudstate.crdt.CrdtState.html">module:cloudstate.crdt.CrdtState</a>></span>
-
-
-
-    </dd>
-</dl>
-
-
-        
 
     
 </dd>
@@ -1547,13 +1151,15 @@ the value is not present.</p>
     
 
     
-        <h3 class="subsection-title">Type Definitions</h3>
+
+    
+        <h3 class="subsection-title">Events</h3>
 
         <dl>
-                
+            
 <hr>
 <dt>
-    <h4 class="name" id="~defaultValueCallback"><span class="type-signature"></span>defaultValueCallback(key)</h4>
+    <h4 class="name" id="event:data">data</h4>
     
     
 </dt>
@@ -1561,70 +1167,22 @@ the value is not present.</p>
 
     
     <div class="description">
-        <p>Generator for default values.</p>
-<p>This is invoked by get when the current map has no CRDT defined for the key.</p>
-<p>If this returns a CRDT, it will be added to the map.</p>
-<p>Care should be taken when using this, since it means that the get method can trigger elements to be created.
-If using default values, the get method should not be used in queries where an empty value for the CRDT means
-the value is not present.</p>
+        <p>A data event.</p>
+<p>Emitted when a new message arrives.</p>
     </div>
     
 
     
 
     
+        <h5>Type: 
+<span class="param-type">Object</span>
 
-    
-    
-        <h5>Parameters:</h5>
-        
 
-<table class="params table table-striped">
-    <thead>
-    <tr>
-        
-        <th>Name</th>
-        
-
-        <th>Type</th>
-
-        
-
-        
-
-        <th class="last">Description</th>
-    </tr>
-    </thead>
-
-    <tbody>
+</h5>
     
 
-        <tr>
-            
-                <td class="name"><code>key</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type"><a href="module-cloudstate.html#.Serializable">module:cloudstate.Serializable</a></span>
-
-
-
-            
-            </td>
-
-            
-
-            
-
-            <td class="description last"><p>The key the default value is being generated for.</p></td>
-        </tr>
-
     
-    </tbody>
-</table>
-
     
 
     
@@ -1636,208 +1194,14 @@ the value is not present.</p>
 	
 
 	
-
-    
-
-    
-
-    
-
-    
-
-	
-
-	
-
-	
-
-	
-
-	
-
-
-
-	
-
-	
-
-	
-
-	
-</dl>
-
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-    <h5>Returns:</h5>
-    
-            
-<div class="param-desc">
-    <p>The default value, or undefined if no default value should be returned.</p>
-</div>
-
-
-
-<dl>
-    <dt>
-        Type
-    </dt>
-    <dd>
-        
-<span class="param-type">undefined</span>
-|
-
-<span class="param-type">cloudstate.crdt.CrdtState</span>
-
-
-
-    </dd>
-</dl>
-
-
-        
-
-    
-</dd>
-
-            
-                
-<hr>
-<dt>
-    <h4 class="name" id="~forEachCallback"><span class="type-signature"></span>forEachCallback(value, key, This)</h4>
-    
-    
-</dt>
-<dd>
-
-    
-    <div class="description">
-        <p>Callback for handling elements iterated through by <a href="module-cloudstate.crdt.ORMap.html#forEach"><code>module:cloudstate.crdt.ORMap#forEach</code></a>.</p>
-    </div>
-    
-
-    
-
-    
-
-    
-    
-        <h5>Parameters:</h5>
-        
-
-<table class="params table table-striped">
-    <thead>
-    <tr>
-        
-        <th>Name</th>
-        
-
-        <th>Type</th>
-
-        
-
-        
-
-        <th class="last">Description</th>
-    </tr>
-    </thead>
-
-    <tbody>
-    
-
-        <tr>
-            
-                <td class="name"><code>value</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type"><a href="module-cloudstate.crdt.CrdtState.html">module:cloudstate.crdt.CrdtState</a></span>
-
-
-
-            
-            </td>
-
-            
-
-            
-
-            <td class="description last"><p>The CRDT value.</p></td>
-        </tr>
-
-    
-
-        <tr>
-            
-                <td class="name"><code>key</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type"><a href="module-cloudstate.html#.Serializable">module:cloudstate.Serializable</a></span>
-
-
-
-            
-            </td>
-
-            
-
-            
-
-            <td class="description last"><p>The key.</p></td>
-        </tr>
-
-    
-
-        <tr>
-            
-                <td class="name"><code>This</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">module:cloudstate.ORMap</span>
-
-
-
-            
-            </td>
-
-            
-
-            
-
-            <td class="description last"><p>map.</p></td>
-        </tr>
-
-    
-    </tbody>
-</table>
-
-    
-
-    
-<dl class="details">
-    
-
-	
-
-	
-
+	<dt class="inherited-from method-doc-label method-doc-details-label">Inherited From:</dt>
+	<dd class="inherited-from">
+		<ul class="dummy">
+			<li>
+				<a href="module-cloudstate.Action.StreamedInContext.html#event:data">module:cloudstate.Action.StreamedInContext#event:data</a>
+			</li>
+		</ul>
+	</dd>
 	
 
     
@@ -1885,9 +1249,95 @@ the value is not present.</p>
     
 </dd>
 
-            </dl>
+        
+            
+<hr>
+<dt>
+    <h4 class="name" id="event:end">end</h4>
+    
+    
+</dt>
+<dd>
+
+    
+    <div class="description">
+        <p>A stream end event.</p>
+<p>Emitted when the input stream terminates.</p>
+    </div>
     
 
+    
+
+    
+
+    
+    
+
+    
+<dl class="details">
+    
+
+	
+
+	
+
+	
+	<dt class="inherited-from method-doc-label method-doc-details-label">Inherited From:</dt>
+	<dd class="inherited-from">
+		<ul class="dummy">
+			<li>
+				<a href="module-cloudstate.Action.StreamedInContext.html#event:end">module:cloudstate.Action.StreamedInContext#event:end</a>
+			</li>
+		</ul>
+	</dd>
+	
+
+    
+
+    
+
+    
+
+    
+
+	
+
+	
+
+	
+
+	
+
+	
+
+
+
+	
+
+	
+
+	
+
+	
+</dl>
+
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+
+    
+</dd>
+
+        </dl>
     
 </article>
 

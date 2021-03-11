@@ -4,7 +4,7 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width">
-	<title>CloudState Class: Action</title>
+	<title>CloudState Interface: EntityContext</title>
 
 	<!--[if lt IE 9]>
 	<script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
@@ -33,7 +33,7 @@
 			<li class="dropdown">
 				<a href="namespaces.list.html" class="dropdown-toggle" data-toggle="dropdown">Namespaces<b class="caret"></b></a>
 				<ul class="dropdown-menu ">
-					<li><a href="module-cloudstate.action.html">cloudstate.action</a></li><li><a href="module-cloudstate.crdt.html">cloudstate.crdt</a></li>
+					<li><a href="module-cloudstate.crdt.html">cloudstate.crdt</a></li>
 				</ul>
 			</li>
 			
@@ -47,14 +47,21 @@
 			<li class="dropdown">
 				<a href="classes.list.html" class="dropdown-toggle" data-toggle="dropdown">Classes<b class="caret"></b></a>
 				<ul class="dropdown-menu ">
-					<li><a href="Action.html">Action</a></li><li><a href="module-cloudstate.CloudState.html">cloudstate.CloudState</a></li><li><a href="module-cloudstate.crdt.Crdt.html">cloudstate.crdt.Crdt</a></li><li><a href="module-cloudstate.crdt.Flag.html">cloudstate.crdt.Flag</a></li><li><a href="module-cloudstate.crdt.GCounter.html">cloudstate.crdt.GCounter</a></li><li><a href="module-cloudstate.crdt.GSet.html">cloudstate.crdt.GSet</a></li><li><a href="module-cloudstate.crdt.LWWRegister.html">cloudstate.crdt.LWWRegister</a></li><li><a href="module-cloudstate.crdt.ORMap.html">cloudstate.crdt.ORMap</a></li><li><a href="module-cloudstate.crdt.ORSet.html">cloudstate.crdt.ORSet</a></li><li><a href="module-cloudstate.crdt.PNCounter.html">cloudstate.crdt.PNCounter</a></li><li><a href="module-cloudstate.crdt.Vote.html">cloudstate.crdt.Vote</a></li><li><a href="module-cloudstate.EventSourced.html">cloudstate.EventSourced</a></li>
+					<li><a href="module-cloudstate.Action.html">cloudstate.Action</a></li><li><a href="module-cloudstate.CloudState.html">cloudstate.CloudState</a></li><li><a href="module-cloudstate.crdt.Crdt.html">cloudstate.crdt.Crdt</a></li><li><a href="module-cloudstate.crdt.Flag.html">cloudstate.crdt.Flag</a></li><li><a href="module-cloudstate.crdt.GCounter.html">cloudstate.crdt.GCounter</a></li><li><a href="module-cloudstate.crdt.GSet.html">cloudstate.crdt.GSet</a></li><li><a href="module-cloudstate.crdt.LWWRegister.html">cloudstate.crdt.LWWRegister</a></li><li><a href="module-cloudstate.crdt.ORMap.html">cloudstate.crdt.ORMap</a></li><li><a href="module-cloudstate.crdt.ORSet.html">cloudstate.crdt.ORSet</a></li><li><a href="module-cloudstate.crdt.PNCounter.html">cloudstate.crdt.PNCounter</a></li><li><a href="module-cloudstate.crdt.Vote.html">cloudstate.crdt.Vote</a></li><li><a href="module-cloudstate.EventSourced.html">cloudstate.EventSourced</a></li>
+				</ul>
+			</li>
+			
+			<li class="dropdown">
+				<a href="events.list.html" class="dropdown-toggle" data-toggle="dropdown">Events<b class="caret"></b></a>
+				<ul class="dropdown-menu ">
+					<li><a href="module-cloudstate.Action.StreamedCommandContext.html#event:cancelled">cloudstate.Action.StreamedCommandContext#event:cancelled</a></li><li><a href="module-cloudstate.Action.StreamedCommandContext.html#event:data">cloudstate.Action.StreamedCommandContext#event:data</a></li><li><a href="module-cloudstate.Action.StreamedCommandContext.html#event:end">cloudstate.Action.StreamedCommandContext#event:end</a></li><li><a href="module-cloudstate.Action.StreamedInCommandContext.html#event:data">cloudstate.Action.StreamedInCommandContext#event:data</a></li><li><a href="module-cloudstate.Action.StreamedInCommandContext.html#event:end">cloudstate.Action.StreamedInCommandContext#event:end</a></li><li><a href="module-cloudstate.Action.StreamedInContext.html#event:data">cloudstate.Action.StreamedInContext#event:data</a></li><li><a href="module-cloudstate.Action.StreamedInContext.html#event:end">cloudstate.Action.StreamedInContext#event:end</a></li><li><a href="module-cloudstate.Action.StreamedOutCommandContext.html#event:cancelled">cloudstate.Action.StreamedOutCommandContext#event:cancelled</a></li><li><a href="module-cloudstate.Action.StreamedOutContext.html#event:cancelled">cloudstate.Action.StreamedOutContext#event:cancelled</a></li>
 				</ul>
 			</li>
 			
 			<li class="dropdown">
 				<a href="interfaces.list.html" class="dropdown-toggle" data-toggle="dropdown">Interfaces<b class="caret"></b></a>
 				<ul class="dropdown-menu ">
-					<li><a href="module-cloudstate.CloudEvent.html">cloudstate.CloudEvent</a></li><li><a href="module-cloudstate.CommandContext.html">cloudstate.CommandContext</a></li><li><a href="module-cloudstate.crdt.CrdtCommandContext.html">cloudstate.crdt.CrdtCommandContext</a></li><li><a href="module-cloudstate.crdt.CrdtState.html">cloudstate.crdt.CrdtState</a></li><li><a href="module-cloudstate.crdt.StateChangedContext.html">cloudstate.crdt.StateChangedContext</a></li><li><a href="module-cloudstate.crdt.StateManagementContext.html">cloudstate.crdt.StateManagementContext</a></li><li><a href="module-cloudstate.crdt.StreamCancelledContext.html">cloudstate.crdt.StreamCancelledContext</a></li><li><a href="module-cloudstate.EffectContext.html">cloudstate.EffectContext</a></li><li><a href="module-cloudstate.Entity.html">cloudstate.Entity</a></li><li><a href="module-cloudstate.EventSourced.EventSourcedCommandContext.html">cloudstate.EventSourced.EventSourcedCommandContext</a></li><li><a href="module-cloudstate.Metadata.html">cloudstate.Metadata</a></li><li><a href="module-cloudstate.Server.html">cloudstate.Server</a></li>
+					<li><a href="module-cloudstate.Action.ActionCommandContext.html">cloudstate.Action.ActionCommandContext</a></li><li><a href="module-cloudstate.Action.StreamedCommandContext.html">cloudstate.Action.StreamedCommandContext</a></li><li><a href="module-cloudstate.Action.StreamedInCommandContext.html">cloudstate.Action.StreamedInCommandContext</a></li><li><a href="module-cloudstate.Action.StreamedInContext.html">cloudstate.Action.StreamedInContext</a></li><li><a href="module-cloudstate.Action.StreamedOutCommandContext.html">cloudstate.Action.StreamedOutCommandContext</a></li><li><a href="module-cloudstate.Action.StreamedOutContext.html">cloudstate.Action.StreamedOutContext</a></li><li><a href="module-cloudstate.Action.UnaryCommandContext.html">cloudstate.Action.UnaryCommandContext</a></li><li><a href="module-cloudstate.CloudEvent.html">cloudstate.CloudEvent</a></li><li><a href="module-cloudstate.CommandContext.html">cloudstate.CommandContext</a></li><li><a href="module-cloudstate.crdt.CrdtCommandContext.html">cloudstate.crdt.CrdtCommandContext</a></li><li><a href="module-cloudstate.crdt.CrdtState.html">cloudstate.crdt.CrdtState</a></li><li><a href="module-cloudstate.crdt.StateChangedContext.html">cloudstate.crdt.StateChangedContext</a></li><li><a href="module-cloudstate.crdt.StateManagementContext.html">cloudstate.crdt.StateManagementContext</a></li><li><a href="module-cloudstate.crdt.StreamCancelledContext.html">cloudstate.crdt.StreamCancelledContext</a></li><li><a href="module-cloudstate.EffectContext.html">cloudstate.EffectContext</a></li><li><a href="module-cloudstate.Entity.html">cloudstate.Entity</a></li><li><a href="module-cloudstate.EntityContext.html">cloudstate.EntityContext</a></li><li><a href="module-cloudstate.EventSourced.EventSourcedCommandContext.html">cloudstate.EventSourced.EventSourcedCommandContext</a></li><li><a href="module-cloudstate.Metadata.html">cloudstate.Metadata</a></li><li><a href="module-cloudstate.Server.html">cloudstate.Server</a></li>
 				</ul>
 			</li>
 			
@@ -86,13 +93,15 @@
 		<div id="main">
 			
 
-	<h1 class="page-title">Class: Action</h1>
+	<h1 class="page-title">Interface: EntityContext</h1>
 <section>
 
 <header>
     
         <h2>
-        Action
+            <span class="ancestors"><a href="module-cloudstate.html">cloudstate</a>.</span>
+        
+        EntityContext
         </h2>
         
     
@@ -103,332 +112,18 @@
     <div class="container-overview">
     
         
-<hr>
-<dt>
-    <h4 class="name" id="Action"><span class="type-signature"></span>new Action(desc, serviceName [, options])</h4>
-    
-    
-</dt>
-<dd>
-
-    
-    <div class="description">
-        <p>Create a new action.</p>
-    </div>
-    
-
-    
-
-    
-
-    
-    
-        <h5>Parameters:</h5>
-        
-
-<table class="params table table-striped">
-    <thead>
-    <tr>
-        
-        <th>Name</th>
-        
-
-        <th>Type</th>
-
-        
-        <th>Argument</th>
+            <div class="description"><p>Context for an entity.</p></div>
         
 
         
-
-        <th class="last">Description</th>
-    </tr>
-    </thead>
-
-    <tbody>
-    
-
-        <tr>
-            
-                <td class="name"><code>desc</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">string</span>
-|
-
-<span class="param-type">Array.&lt;string></span>
-
-
-
-            
-            </td>
-
-            
-                <td class="attributes">
-                
-
-                
-
-                
-                </td>
-            
-
-            
-
-            <td class="description last"><p>A descriptor or list of descriptors to parse, containing the service to serve.</p></td>
-        </tr>
-
-    
-
-        <tr>
-            
-                <td class="name"><code>serviceName</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type">string</span>
-
-
-
-            
-            </td>
-
-            
-                <td class="attributes">
-                
-
-                
-
-                
-                </td>
-            
-
-            
-
-            <td class="description last"><p>The fully qualified name of the service that provides this entities interface.</p></td>
-        </tr>
-
-    
-
-        <tr>
-            
-                <td class="name"><code>options</code></td>
-            
-
-            <td class="type">
-            
-                
-<span class="param-type"><a href="module-cloudstate.EventSourced.html#~options">module:cloudstate.EventSourced~options</a></span>
-
-
-
-            
-            </td>
-
-            
-                <td class="attributes">
-                
-                    &lt;optional><br>
-                
-
-                
-
-                
-                </td>
-            
-
-            
-
-            <td class="description last"><p>The options for this event sourced entity</p></td>
-        </tr>
-
-    
-    </tbody>
-</table>
-
-    
-
-    
 <dl class="details">
     
 
-	
+    <h5 class="subsection-title">Properties:</h5>
 
-	
+    <dl>
 
-	
-
-    
-
-    
-
-    
-
-    
-
-	
-
-	
-
-	
-
-	
-
-	
-
-
-
-	
-
-	
-
-	
-
-	
-</dl>
-
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-</dd>
-
-    
-    </div>
-
-    
-
-    
-
-    
-
-    
-
-    
-
-    
-        <h3 class="subsection-title">Members</h3>
-
-        <dl>
-            
-<hr>
-<dt class="name" id="commandHandlers">
-    <h4 id="commandHandlers"><span class="type-signature"></span>commandHandlers<span class="type-signature"> :Object.&lt;string, module:cloudstate.action.Action~commandHandler></span></h4>
-
-    
-</dt>
-<dd>
-    
-    <div class="description">
-        <p>The command handlers.</p>
-<p>The names of the properties must match the names of the service calls specified in the gRPC descriptor</p>
-    </div>
-    
-
-    
-        <h5>Type:</h5>
-        <ul>
-            <li>
-                
-<span class="param-type">Object.&lt;string, module:cloudstate.action.Action~commandHandler></span>
-
-
-
-            </li>
-        </ul>
-    
-
-    
-<dl class="details">
-    
-
-	
-
-	
-
-	
-
-    
-
-    
-
-    
-
-    
-
-	
-
-	
-
-	
-
-	
-
-	
-
-
-
-	
-
-	
-
-	
-
-	
-</dl>
-
-
-    
-</dd>
-
-        </dl>
-    
-
-    
-        <h3 class="subsection-title">Methods</h3>
-
-        <dl>
-            
-<hr>
-<dt>
-    <h4 class="name" id="lookupType"><span class="type-signature"></span>lookupType(messageType)</h4>
-    
-    
-</dt>
-<dd>
-
-    
-    <div class="description">
-        <p>Lookup a protobuf message type.</p>
-<p>This is provided as a convenience to lookup protobuf message types for use with events and snapshots.</p>
-    </div>
-    
-
-    
-
-    
-
-    
-    
-        <h5>Parameters:</h5>
-        
-
-<table class="params table table-striped">
+<table class="props table table-striped">
     <thead>
     <tr>
         
@@ -450,7 +145,7 @@
 
         <tr>
             
-                <td class="name"><code>messageType</code></td>
+                <td class="name"><code>entityId</code></td>
             
 
             <td class="type">
@@ -467,17 +162,62 @@
 
             
 
-            <td class="description last"><p>The fully qualified name of the type to lookup.</p></td>
+            <td class="description last"><p>The id of the entity that the command is for.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>commandId</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type">Long</span>
+
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>The id of the command.</p></td>
+        </tr>
+
+    
+
+        <tr>
+            
+                <td class="name"><code>replyMetadata</code></td>
+            
+
+            <td class="type">
+            
+                
+<span class="param-type"><a href="module-cloudstate.Metadata.html">module:cloudstate.Metadata</a></span>
+
+
+
+            
+            </td>
+
+            
+
+            
+
+            <td class="description last"><p>The metadata to send with a reply.</p></td>
         </tr>
 
     
     </tbody>
 </table>
+</dl>
 
-    
-
-    
-<dl class="details">
     
 
 	
@@ -516,7 +256,9 @@
 </dl>
 
 
+        
     
+    </div>
 
     
 
@@ -529,9 +271,7 @@
     
 
     
-</dd>
 
-        </dl>
     
 
     
